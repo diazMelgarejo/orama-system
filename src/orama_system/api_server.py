@@ -99,6 +99,7 @@ class BackendPriority:
 
     @classmethod
     def from_str(cls, value: str) -> str:
+        """From str."""
         v = (value or "").strip().lower()
         return v if v in cls._VALID else cls.LOCAL
 
@@ -112,6 +113,7 @@ def _detect_platform() -> str:
 
 
 def _lm_studio_base_from_env(env_key: str, default: str) -> str:
+    """Lm studio base from env."""
     raw = os.getenv(env_key, default).strip().rstrip("/")
     if raw.endswith("/v1"):
         raw = raw[: -len("/v1")]
@@ -166,6 +168,7 @@ class BackendRouter:
         override: str | None = None,
         task_type: str = "analysis",
     ) -> None:
+        """Initialise the instance."""
         self.platform: str = _detect_platform()
         self.task_type: str = task_type or "analysis"
         self._explicit_override: bool = False
@@ -225,10 +228,25 @@ CODE_MODEL = os.getenv(
     "Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-v2",  # verified Windows-only model
 )
 
-try:
-    __version__ = pkg_version("orama-system")
-except Exception:
-    __version__ = "1.1.0.0"
+def _resolve_version() -> str:
+    """Single source of truth is orama_system._version (hatch reads it too).
+
+    Falls back to installed-package metadata, then a clearly-unknown marker so
+    a broken install never reports a plausible-but-wrong release number.
+    """
+    try:
+        from orama_system._version import __version__ as v
+
+        return str(v)
+    except Exception:
+        pass
+    try:
+        return pkg_version("orama-system")
+    except Exception:
+        return "0+unknown"
+
+
+__version__ = _resolve_version()
 
 
 def _resolve_perpetua_root_env() -> str:
@@ -246,6 +264,7 @@ class PolicyUnavailableError(RuntimeError):
 
 
 def _check_policy_available_for_request(model_hint: str, policy_source: str, pt_available: bool) -> None:
+    """Check policy available for request."""
     prefixes = ("lmstudio-mac/", "lmstudio-win/", "ollama-mac/", "ollama-win/")
     if model_hint and model_hint.startswith(prefixes):
         if not pt_available and policy_source == "disabled-no-cache":
@@ -364,6 +383,7 @@ class HardwarePolicyResolver:
     """
 
     def __init__(self) -> None:
+        """Initialise the instance."""
         self._pt_available: bool = False
         self._source: str = "uninitialized"
         self._check_affinity_fn = None
@@ -410,6 +430,7 @@ class HardwarePolicyResolver:
             _mac_only     = {m.lower() for m in _policy.get("mac_only", [])}
 
             def _ca_cached(model_id: str, platform: str) -> None:
+                """Ca cached."""
                 key = model_id.lower()
                 plat = platform.lower()
                 if plat in ("win", "windows") and key in _mac_only:
@@ -418,6 +439,7 @@ class HardwarePolicyResolver:
                     raise HardwareAffinityError(f"NEVER_MAC: {model_id} is windows-only (cache)")
 
             def _ep_cached(model_id: str) -> str | None:
+                """Ep cached."""
                 key = model_id.lower()
                 if key in _windows_only:
                     return "win"
@@ -456,20 +478,24 @@ class HardwarePolicyResolver:
         return policy
 
     def check_affinity(self, model_id: str, platform: str) -> None:
+        """Check affinity."""
         if self._check_affinity_fn:
             self._check_affinity_fn(model_id, platform)
 
     def expected_platform_for_model(self, model_id: str) -> str | None:
+        """Expected platform for model."""
         if self._expected_platform_fn:
             return self._expected_platform_fn(model_id)
         return None
 
     @property
     def source(self) -> str:
+        """Source."""
         return self._source
 
     @property
     def pt_available(self) -> bool:
+        """Pt available."""
         return self._pt_available
 
 
@@ -494,14 +520,17 @@ except ImportError:
 
 
 def check_affinity(model_id: str, platform: str) -> None:
+    """Check affinity."""
     _policy_resolver.check_affinity(model_id, platform)
 
 
 def expected_platform_for_model(model_id: str) -> str | None:
+    """Expected platform for model."""
     return _policy_resolver.expected_platform_for_model(model_id)
 
 
 def _has_policy_env() -> bool:
+    """Has policy env."""
     return bool(
         os.getenv("PERPETUA_TOOLS_ROOT", "").strip()
         or os.getenv("PERPETUA_TOOLS_PATH", "").strip()
@@ -514,6 +543,7 @@ def _load_pt_runtime_state() -> dict[str, Any] | None:
     # var.  This makes the function resilient to upgrade / mixed environments
     # where PT_AGENTS_STATE may be exported but the file not yet created, while
     # the legacy PT_RUNTIME_STATE still points to a valid path.
+    """Load pt runtime state."""
     candidates = [
         os.getenv("PT_AGENTS_STATE", "").strip(),
         os.getenv("PT_RUNTIME_STATE", "").strip(),
@@ -577,12 +607,14 @@ class OramasysRequest(BaseModel):
     @field_validator("task_description")
     @classmethod
     def task_must_not_be_blank(cls, v: str) -> str:
+        """Task must not be blank."""
         if not v.strip():
             raise ValueError("task_description must not be blank or whitespace-only")
         return v.strip()
 
     @model_validator(mode="after")
     def pipeline_references_are_atomic(self) -> "OramasysRequest":
+        """Pipeline references are atomic."""
         if bool(self.pipeline_trace_id) != bool(self.pipeline_idempotency_key):
             raise ValueError(
                 "pipeline_trace_id and pipeline_idempotency_key must be supplied together"
@@ -658,6 +690,7 @@ app.add_middleware(
 
 @app.middleware("http")
 async def _control_plane_auth_middleware(request: Request, call_next):
+    """Control plane auth middleware."""
     if request.url.path in ("/oramasys", "/ultrathink", "/runtime-state"):
         failure = control_plane_auth_failure(request)
         if failure is not None:
@@ -681,6 +714,7 @@ class ControlPlaneDepthInvalid(ValueError):
 
 
 def _control_plane_depth(http_request: Request) -> int:
+    """Control plane depth."""
     raw = http_request.headers.get(CONTROL_PLANE_DEPTH_HEADER, "").strip()
     if not raw:
         return 0
@@ -698,6 +732,7 @@ def _control_plane_depth(http_request: Request) -> int:
 
 @app.post("/oramasys", response_model=OramasysResponse)
 async def run_oramasys(req: OramasysRequest, http_request: Request) -> OramasysResponse:
+    """Run oramasys."""
     start = time.perf_counter()
     try:
         inbound_depth = _control_plane_depth(http_request)
@@ -879,10 +914,12 @@ async def run_oramasys(req: OramasysRequest, http_request: Request) -> OramasysR
 
 @app.post("/ultrathink", response_model=OramasysResponse, deprecated=True, include_in_schema=False)
 async def run_ultrathink_legacy(req: OramasysRequest, http_request: Request) -> OramasysResponse:
+    """Run ultrathink legacy."""
     return await run_oramasys(req, http_request)
 
 @app.get("/health")
 async def health():
+    """Health."""
     runtime_state = _load_pt_runtime_state()
     summary = redact_runtime_section({"runtime": runtime_state}) if runtime_state else {
         "available": False,
@@ -909,6 +946,7 @@ async def health():
 
 @app.get("/runtime-state")
 async def runtime_state():
+    """Runtime state."""
     payload = _load_pt_runtime_state()
     return {
         "available": payload is not None,

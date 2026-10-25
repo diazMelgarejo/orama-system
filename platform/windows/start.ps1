@@ -194,6 +194,10 @@ if ($ListOnly) {
     exit 0
 }
 
+# F23: modes that must never install, repair venvs, or write secrets/tokens.
+# --discover is deliberately NOT here: it must (re)write .paths.ps1.
+$ReadOnlyMode = [bool]($Stop -or $Status -or $FleetStatus -or $HardwarePolicy)
+
 # ── UTF-8 everywhere ──────────────────────────────────────────────────────────
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $env:PYTHONIOENCODING = 'utf-8'
@@ -249,6 +253,135 @@ function _Info  { _Log 'INFO ' $args[0] $args[1] }
 function _Warn  { _Log 'WARN ' $args[0] $args[1] }
 function _Err   { _Log 'ERROR' $args[0] $args[1] }
 
+# ── Bootstrap helpers (venv probe / pip under a safe error policy) ────────────
+# pip writes '[notice] new release available' to stderr; under
+# $ErrorActionPreference='Stop' PowerShell 5.1 turns that into a terminating
+# NativeCommandError whenever output is captured. Run native Python calls under
+# 'Continue' and judge success by $LASTEXITCODE only. Single quotes inside
+# python -c: PS 5.1 mangles embedded double quotes.
+$script:BootstrapOutput = @()
+function Bootstrap-RunPython {
+    <#
+    .SYNOPSIS
+    Run a Python command during bootstrap, capturing output for later display.
+    #>
+    param([string]$Python, [string[]]$PyArgs)
+    if (-not (Test-Path $Python)) {
+        $script:BootstrapOutput = @("interpreter not found: $Python")
+        return 127
+    }
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $out = & $Python @PyArgs 2>&1
+        $code = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $prev
+    }
+    $script:BootstrapOutput = @($out | ForEach-Object { "$_" })
+    return $code
+}
+
+function Bootstrap-TestImports {
+    <#
+    .SYNOPSIS
+    Return $true when the given Python can import the modules in -Code.
+    #>
+    param([string]$Python, [string]$Code)
+    if (-not (Test-Path $Python)) { return $false }
+    # -I (isolated): ignore PYTHONPATH/user site left in the console by earlier
+    # runs so they can neither satisfy nor break the probe.
+    return ((Bootstrap-RunPython $Python @('-I', '-c', $Code)) -eq 0)
+}
+
+# The launcher (not the caller) resolved the PT directory: set the env vars and
+# record them in the load-local.ps1 markers so a later run in the same console
+# does not mistake them for a caller override.
+function Set-LauncherPtEnv {
+    <#
+    .SYNOPSIS
+    Point PERPETUA_TOOLS_ROOT (and optionally legacy vars) at the resolved PT checkout.
+    #>
+    param([string]$Dir, [switch]$RootOnly)
+    $env:PERPETUA_TOOLS_ROOT = $Dir
+    $env:ORAMA_LOADLOCAL_SET_PERPETUA_TOOLS_ROOT = $Dir
+    if (-not $RootOnly) {
+        $env:PERPETUA_TOOLS_PATH = $Dir
+        $env:ORAMA_LOADLOCAL_SET_PERPETUA_TOOLS_PATH = $Dir
+    }
+}
+
+function Bootstrap-ShowOutput {
+    <#
+    .SYNOPSIS
+    Print the last captured bootstrap output lines to the host.
+    #>
+    foreach ($l in ($script:BootstrapOutput | Select-Object -Last 25)) { Write-Host "    $l" }
+}
+
+$OramaImportProbe = 'import uvicorn, fastapi, httpx'
+$PtImportProbe = "import importlib.metadata as m, sys; m.version('perpetua-tools'); import requests, uvicorn; sys.exit(1 if any(((d.metadata['Name'] or '').lower().replace('_', '-') == 'orama-system') for d in m.distributions()) else 0)"
+
+function Heal-PtVenv {
+    <#
+    .SYNOPSIS
+    Repair the Perpetua-Tools virtual environment when imports fail.
+    #>
+    param([string]$PtDir)
+    $venvDir = Join-Path $PtDir '.venv'
+    $venvPy  = Join-Path $venvDir 'Scripts\python.exe'
+    if (Bootstrap-TestImports $venvPy $PtImportProbe) { return }
+    $hasPyproject = Test-Path (Join-Path $PtDir 'pyproject.toml')
+    $hasReqs      = Test-Path (Join-Path $PtDir 'requirements.txt')
+    if (-not ($hasPyproject -or $hasReqs)) {
+        _Warn 'bootstrap' "PT has neither pyproject.toml nor requirements.txt in $PtDir — PT service will likely fail to start"
+        return
+    }
+    if (Test-Path $venvPy) {
+        _Info 'bootstrap' "PT .venv at $venvDir lacks perpetua-tools/requests/uvicorn (or holds a stray orama-system) — repairing ..."
+    } else {
+        _Info 'bootstrap' "PT .venv not found — creating one at $venvDir ..."
+        $bootstrapPy = Get-BestPython $RepoRoot
+        $code = Bootstrap-RunPython $bootstrapPy @('-m', 'venv', $venvDir)
+        if ($code -ne 0) {
+            Bootstrap-ShowOutput
+            _Err 'bootstrap' "creating PT .venv failed (exit $code)"
+            exit 1
+        }
+    }
+    # A previous launcher run installed orama-system here (pip -r ran from the
+    # wrong cwd); remove it so the venv holds the right package only.
+    $null = Bootstrap-RunPython $venvPy @('-m', 'pip', 'uninstall', '-y', 'orama-system', '--disable-pip-version-check')
+    # The stray package alone may have been the only problem: re-probe and skip
+    # the (network-dependent) reinstall when the venv is already usable.
+    if (Bootstrap-TestImports $venvPy $PtImportProbe) {
+        _Info 'bootstrap' 'PT .venv ready (removed stray orama-system)'
+        return
+    }
+    # PT's requirements.txt is '-e .', which pip resolves against the CURRENT
+    # directory, so the install must run with PtDir as cwd.
+    Push-Location $PtDir
+    try {
+        if ($hasPyproject) {
+            $code = Bootstrap-RunPython $venvPy @('-m', 'pip', 'install', '--quiet', '--disable-pip-version-check', '-e', '.')
+        } else {
+            $code = Bootstrap-RunPython $venvPy @('-m', 'pip', 'install', '--quiet', '--disable-pip-version-check', '-r', 'requirements.txt')
+        }
+    } finally {
+        Pop-Location
+    }
+    if ($code -ne 0) {
+        Bootstrap-ShowOutput
+        _Err 'bootstrap' "PT dependency install failed (pip exit $code) in $PtDir"
+        exit 1
+    }
+    if (-not (Bootstrap-TestImports $venvPy $PtImportProbe)) {
+        _Err 'bootstrap' "PT .venv still unusable after install (perpetua-tools / requests / uvicorn probe failed) at $venvDir"
+        exit 1
+    }
+    _Info 'bootstrap' 'PT .venv ready'
+}
+
 # ── Fresh-install bootstrap ────────────────────────────────────────────────────
 # On a brand-new clone, .venv doesn't exist yet and Get-BestPython below throws
 # "Python not found" — the operator has to already know to run install.ps1
@@ -258,18 +391,31 @@ function _Err   { _Log 'ERROR' $args[0] $args[1] }
 # start.ps1 invocation — the Test-Path guard just skips the call entirely once
 # .venv exists.
 $VenvPythonMarker = Join-Path $RepoRoot '.venv\Scripts\python.exe'
-if (-not (Test-Path $VenvPythonMarker)) {
-    $InstallScript = Join-Path $ScriptDir 'install.ps1'
-    if (Test-Path $InstallScript) {
-        _Info 'bootstrap' '.venv not found — running install.ps1 (first-run bootstrap)...'
-        & $InstallScript
-        if (-not (Test-Path $VenvPythonMarker)) {
-            _Err 'bootstrap' 'install.ps1 completed but .venv\Scripts\python.exe still missing — see output above'
-            exit 1
+# F2: python.exe existing is not enough (a half-built venv from an aborted pip
+# run has python.exe but no uvicorn); probe the third-party imports as well.
+# Read-only modes (F23) never install or repair anything.
+if (-not $ReadOnlyMode) {
+    if (-not (Bootstrap-TestImports $VenvPythonMarker $OramaImportProbe)) {
+        $InstallScript = Join-Path $ScriptDir 'install.ps1'
+        if ($env:ORAMA_BOOTSTRAP_ACTIVE -eq '1') {
+            # install.ps1 itself launches 'start.ps1 --discover'; never recurse.
+            _Warn 'bootstrap' 'orama .venv not yet complete inside install.ps1 — skipping nested bootstrap'
+        } elseif (Test-Path $InstallScript) {
+            _Info 'bootstrap' 'orama .venv missing or incomplete — running install.ps1 (bootstrap/heal)...'
+            $env:ORAMA_BOOTSTRAP_ACTIVE = '1'
+            try {
+                & $InstallScript
+            } finally {
+                Remove-Item Env:\ORAMA_BOOTSTRAP_ACTIVE -ErrorAction SilentlyContinue
+            }
+            if (-not (Bootstrap-TestImports $VenvPythonMarker $OramaImportProbe)) {
+                _Err 'bootstrap' 'install.ps1 completed but the orama .venv still fails import probe (uvicorn, fastapi, httpx) — see output above'
+                exit 1
+            }
+            _Info 'bootstrap' 'install.ps1 complete — continuing start.ps1'
+        } else {
+            _Warn 'bootstrap' "install.ps1 not found at $InstallScript — Python detection below may fail"
         }
-        _Info 'bootstrap' 'install.ps1 complete — continuing start.ps1'
-    } else {
-        _Warn 'bootstrap' "install.ps1 not found at $InstallScript — Python detection below may fail"
     }
 }
 
@@ -336,41 +482,10 @@ if (-not $UsPython) {
 $PathsNeedRewrite = $false
 if ($PtDir) {
     $PtVenvPython = Join-Path $PtDir '.venv\Scripts\python.exe'
-    # Existence of python.exe alone doesn't mean the venv is actually
-    # usable — confirmed live: a venv can exist with 80+ packages and
-    # still be missing uvicorn specifically (partial/stale install, e.g.
-    # an interrupted first bootstrap or a requirements.txt update after
-    # the venv was created), and PT fails at startup with "No module
-    # named uvicorn" every time. Probe the actual import, not just the
-    # file's presence, so a stale venv gets healed instead of silently
-    # reused forever.
-    $PtVenvUsable = $false
-    if (Test-Path $PtVenvPython) {
-        & $PtVenvPython -c "import uvicorn" 2>$null
-        $PtVenvUsable = ($LASTEXITCODE -eq 0)
-    }
-    if (-not $PtVenvUsable) {
-        # PT has no Windows installer of its own (unlike orama-system's
-        # install.ps1) — Get-BestPython falls back to the bare system Python,
-        # which has none of PT's requirements.txt deps (uvicorn, fastapi, ...)
-        # installed, so the PT service fails at startup with "No module named
-        # uvicorn". Idempotent: skipped entirely once PtDir\.venv is usable.
-        $PtReqs = Join-Path $PtDir 'requirements.txt'
-        if (Test-Path $PtReqs) {
-            if (Test-Path $PtVenvPython) {
-                _Info 'bootstrap' "PT .venv exists but is missing required deps — reinstalling into $PtDir\.venv ..."
-            } else {
-                _Info 'bootstrap' "PT .venv not found — creating one at $PtDir\.venv ..."
-                $bootstrapPy = Get-BestPython $RepoRoot
-                & $bootstrapPy -m venv (Join-Path $PtDir '.venv')
-            }
-            $ptVenvPip = Join-Path $PtDir '.venv\Scripts\pip.exe'
-            & $ptVenvPip install -r $PtReqs --quiet
-            _Info 'bootstrap' 'PT .venv ready'
-        } else {
-            _Warn 'bootstrap' "PT requirements.txt not found at $PtReqs — PT service will likely fail to start"
-        }
-    }
+    # F11: probe/heal PT's venv (perpetua-tools metadata + requests + uvicorn,
+    # no stray orama-system); the install runs with PtDir as cwd. Read-only
+    # modes only resolve the path.
+    if (-not $ReadOnlyMode) { Heal-PtVenv -PtDir $PtDir }
     # Always prefer the venv python once it exists, even over a cached
     # $PtPython from an older .paths.ps1 written before PT had a venv —
     # otherwise a stale cache silently keeps using the dep-less system
@@ -385,7 +500,9 @@ if (-not $PtPython -and $PtDir) {
     $PtPython = Get-BestPython $PtDir
 }
 
-if ($Discover -or $PathsNeedRewrite -or -not (Test-Path $PathsFile)) {
+# F4: write .paths.ps1 exactly once. Read-only modes (F23) never write it
+# (they resolve paths in memory); --discover always does.
+if ($Discover -or (-not $ReadOnlyMode -and ($PathsNeedRewrite -or -not (Test-Path $PathsFile)))) {
     @"
 # .paths.ps1 — auto-generated by .\platform\windows\start.ps1 on $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
 # Edit to override. Regenerate: Remove-Item .paths.ps1; .\platform\windows\start.ps1 --discover
@@ -394,14 +511,6 @@ if ($Discover -or $PathsNeedRewrite -or -not (Test-Path $PathsFile)) {
 `$PtPython = '$PtPython'
 `$UsPython = '$UsPython'
 "@ | Set-Content -Path $PathsFile -Encoding UTF8
-Set-Content -Path $PathsFile -Value (@"
-# .paths.ps1 — auto-generated by .\platform\windows\start.ps1 on $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
-# Edit to override. Regenerate: Remove-Item .paths.ps1; .\platform\windows\start.ps1 --discover
-
-`$PtDir    = '$PtDir'
-`$PtPython = '$PtPython'
-`$UsPython = '$UsPython'
-"@) -Encoding UTF8
     Write-Host "  Paths written to $PathsFile"
     if ($Discover) { exit 0 }
 }
@@ -467,7 +576,7 @@ function Test-LanBindConfigured {
     return $false
 }
 
-if ($LanPeer -or (Test-LanBindConfigured)) {
+if (-not $ReadOnlyMode -and ($LanPeer -or (Test-LanBindConfigured))) {
     _Warn 'svc' 'LAN bind enabled (PT_BIND_LAN/ORAMA_BIND_LAN/PORTAL_BIND_LAN) — control-plane APIs are reachable on the network'
     $MeshScript = Join-Path $RepoRoot 'scripts\mesh\Invoke-MeshLocalCache.ps1'
     if (Test-Path $MeshScript) {
@@ -494,7 +603,7 @@ function Invoke-LanPeerProbe {
         return $false
     }
     Sync-ControlPlaneToken
-    if ($PtDir) { $env:PERPETUA_TOOLS_ROOT = $PtDir }
+    if ($PtDir) { Set-LauncherPtEnv -Dir $PtDir -RootOnly }
     _Info 'lan-peer' 'running probe_lan_peer.py --json ...'
     $probeTimeout = if ($env:LAN_PEER_PROBE_TIMEOUT) { $env:LAN_PEER_PROBE_TIMEOUT } else { '2' }
     $statusTimeout = if ($env:LAN_PEER_STATUS_TIMEOUT) { $env:LAN_PEER_STATUS_TIMEOUT } else { '3' }
@@ -514,7 +623,7 @@ function Invoke-LanPeerOutboxFlush {
         return
     }
     Sync-ControlPlaneToken
-    if ($PtDir) { $env:PERPETUA_TOOLS_ROOT = $PtDir }
+    if ($PtDir) { Set-LauncherPtEnv -Dir $PtDir -RootOnly }
     _Info 'lan-peer' 'flushing queued peer drops ...'
     $httpTimeout = if ($env:LAN_PEER_HTTP_TIMEOUT) { $env:LAN_PEER_HTTP_TIMEOUT } else { '2' }
     & $UsPython $assign flush-outbox --peer --timeout $httpTimeout
@@ -683,8 +792,7 @@ function Invoke-DiscoverEndpoints {
         return
     }
     if ($PtDir) {
-        $env:PERPETUA_TOOLS_ROOT = $PtDir
-        $env:PERPETUA_TOOLS_PATH = $PtDir
+        Set-LauncherPtEnv -Dir $PtDir
     }
     _Info 'ip' "Probing LAN topology ($([IO.Path]::GetFileName($discover)) --force)..."
     $prevEap = $ErrorActionPreference
