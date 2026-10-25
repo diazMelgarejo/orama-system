@@ -137,6 +137,18 @@ def urlopen_kwargs(url: str, timeout: float = 8.0) -> dict[str, Any]:
     return {"context": context_for(parts.hostname, port, timeout=timeout)}
 
 
+def websocket_kwargs(url: str, timeout: float = 8.0) -> dict[str, Any]:
+    """Extra kwargs for websockets.connect: the same per-stack context as
+    urlopen_kwargs, passed as ``ssl=`` for wss:// URLs, nothing for ws://.
+    With neither PEER_CA_FILE nor pins set this returns {} so the library's
+    default verified context applies (SSL_CERT_FILE still works there).
+    Raises PeerTrustError on failure; callers must not send tokens."""
+    if not url.startswith("wss://"):
+        return {}
+    kw = urlopen_kwargs("https://" + url[len("wss://"):], timeout)
+    return {"ssl": kw["context"]} if kw else {}
+
+
 def clear_cache() -> None:
     with _cache_lock:
         _cache.clear()

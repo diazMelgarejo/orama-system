@@ -393,10 +393,15 @@ def check_ws_peer(peer_ip: str, portal_port: int, tokens: list[str], *, timeout:
                 # When a token is present, require wss:// (fail-closed).
                 scheme = "wss" if tok else "ws"
                 url = f"{scheme}://{peer_ip}:{portal_port}/ws/portal-peer{qs}"
+                # Per-stack trust (PEER_CA_FILE / pins) for wss://; with none
+                # configured the default context applies (SSL_CERT_FILE works).
+                # Resolved before connecting, so a failure sends no token.
+                ssl_kw = peer_tls.websocket_kwargs(url, timeout)
                 async with websockets.connect(
                     url,
                     open_timeout=timeout,
                     additional_headers=headers,
+                    **ssl_kw,
                 ) as ws:
                     await ws.send(json.dumps({"type": "probe", "source": local_role()}))
                     raw = await asyncio.wait_for(ws.recv(), timeout=max(1, min(timeout, 5)))
@@ -419,6 +424,12 @@ def check_ws_peer(peer_ip: str, portal_port: int, tokens: list[str], *, timeout:
                     "ws-peer",
                     Status.SKIP,
                     "peer has no /ws/portal-peer yet — pull orama >= 85ec1df and restart portal",
+                )
+            if isinstance(exc, peer_tls.PeerTrustError):
+                return Check(
+                    "ws-peer",
+                    Status.FAIL,
+                    f"peer TLS verification failed: {msg[:120]} (token not sent)",
                 )
             if "401" in msg:
                 continue

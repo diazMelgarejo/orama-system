@@ -79,7 +79,9 @@ def test_authenticated_ok_is_delivered_and_removed_by_default(tls_peer, capsys):
     rc, out, err = _flush(capsys, "--strict")
     assert rc == 0 and out["results"][0]["status"] == "delivered"
     assert "delivered 1, still queued 0" in err
-    assert tls_peer.auth_headers == [f"Bearer {fx.SYNTHETIC_TOKEN}"]
+    # duplicate-safety: one authenticated listing GET precedes the POST
+    assert set(tls_peer.auth_headers) == {f"Bearer {fx.SYNTHETIC_TOKEN}"}
+    assert [m for m, _, _ in tls_peer.seen] == ["GET", "POST"]
     from orama_system.lan_peer_files import list_outbox
     assert list_outbox() == []
 
