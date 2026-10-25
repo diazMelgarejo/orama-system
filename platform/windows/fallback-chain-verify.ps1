@@ -28,10 +28,12 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 # ── Colors ────────────────────────────────────────────────────────────────────
-$Green  = "`e[32m"
-$Red    = "`e[31m"
-$Yellow = "`e[33m"
-$Reset  = "`e[0m"
+# [char]27 builds the escape character: Windows PowerShell 5.1 has no backtick-e escape.
+$Esc    = [string][char]27
+$Green  = "$Esc[32m"
+$Red    = "$Esc[31m"
+$Yellow = "$Esc[33m"
+$Reset  = "$Esc[0m"
 
 # ── Directories ───────────────────────────────────────────────────────────────
 $SecretsDir = Join-Path $env:USERPROFILE '.openclaw\secrets'
@@ -49,10 +51,10 @@ function Test-TierAvailable {
         [scriptblock]$CheckCmd
     )
 
-    # $CheckCmd blocks used to end with `exit 0`, and this function checked
+    # $CheckCmd blocks used to end with an explicit exit 0, and this function checked
     # $LASTEXITCODE afterward. Two problems: (1) cmdlets never set
     # $LASTEXITCODE — only native executables do — so the check was
-    # comparing against a stale/unrelated value; (2) `exit` inside a
+    # comparing against a stale/unrelated value; (2) exit inside a
     # scriptblock invoked via `& $CheckCmd` from a non-top-level function
     # terminates the ENTIRE PowerShell process immediately, not just this
     # check. Confirmed live: whenever a check actually succeeded, the whole
@@ -102,7 +104,9 @@ $Tier2 = Test-TierAvailable -Tier 2 -Name "LM Studio (Windows GPU)" -CheckCmd {
     # to resolve to the literal string "True" whenever $env:X was unset,
     # producing an invalid URL ("True/v1/models") and reporting LM Studio
     # OFFLINE even when it was actually up and serving models.
-    $LmStudioEndpoint = if ($env:LM_STUDIO_WIN_ENDPOINTS) { $env:LM_STUDIO_WIN_ENDPOINTS } else { 'http://localhost:1234' }
+    # Default probes the IPv4 loopback address, not the name localhost (the name
+    # costs ~2 s per attempt on IPv6-first hosts).
+    $LmStudioEndpoint = if ($env:LM_STUDIO_WIN_ENDPOINTS) { $env:LM_STUDIO_WIN_ENDPOINTS } else { 'http://' + [System.Net.IPAddress]::Loopback.IPAddressToString + ':1234' }
     # -UseBasicParsing: without it, Invoke-WebRequest routes through the IE
     # COM parsing engine, which throws "Windows PowerShell is in
     # NonInteractive mode. Read and Prompt functionality is not available."
@@ -132,9 +136,10 @@ $Tier5 = Test-TierConfigured -Tier 5 -Name "OpenRouter (cloud fallback)" -FilePa
 
 Log ""
 
-# If status-only, exit now
+# If status-only, exit now. LM Studio (Tier 2) is the hard requirement on
+# Windows: exit 0 only when it is up, non-zero when it is down.
 if ($StatusOnly) {
-    exit 0
+    if ($Tier2) { exit 0 } else { exit 1 }
 }
 
 # Check if any tier is available
