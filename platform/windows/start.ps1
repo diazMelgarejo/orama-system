@@ -488,6 +488,10 @@ if ($LanPeer -or (Test-LanBindConfigured)) {
 }
 
 function Topo-MaskSecrets([string]$Text) {
+    <#
+    .SYNOPSIS
+    Mask secret-bearing values in captured text.
+    #>
     # Mask secret-bearing values in captured child output: JSON string values
     # (keys with underscores/hyphens, escaped quotes inside the value),
     # key=value pairs, and Bearer credentials. Applied before console AND log.
@@ -499,6 +503,10 @@ function Topo-MaskSecrets([string]$Text) {
 }
 
 function Topo-WriteProbeOutput {
+    <#
+    .SYNOPSIS
+    Print captured child output to host and startup log with secrets masked.
+    #>
     # Show captured child output on the host and in the startup log; mask any
     # token-like JSON values before printing.
     param([string]$Tag, $Lines)
@@ -723,6 +731,10 @@ if ($Status) {
 $TopoLoopback = [System.Net.IPAddress]::Loopback.IPAddressToString
 
 function Topo-GetLocalIPv4 {
+    <#
+    .SYNOPSIS
+    Return every IPv4 address bound to this machine.
+    #>
     # Every IPv4 address bound on this machine.
     try {
         return @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop | Select-Object -ExpandProperty IPAddress)
@@ -736,6 +748,10 @@ function Topo-GetLocalIPv4 {
 }
 
 function Topo-GetDefaultRouteIp {
+    <#
+    .SYNOPSIS
+    Return the IPv4 address used for the default route, or empty.
+    #>
     # IPv4 of the interface that owns the lowest-metric default route.
     try {
         $route = Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction Stop |
@@ -749,6 +765,10 @@ function Topo-GetDefaultRouteIp {
 }
 
 function Topo-GetVersion {
+    <#
+    .SYNOPSIS
+    Return the orama-system version read from the version module.
+    #>
     # Single source of truth is src/orama_system/_version.py (pyproject.toml
     # reads it dynamically); pyproject.toml is the fallback.
     $candidates = @(
@@ -766,10 +786,18 @@ function Topo-GetVersion {
 }
 
 function Topo-IsKnownIp([string]$ip) {
+    <#
+    .SYNOPSIS
+    True when the value is a concrete, resolvable peer address.
+    #>
     return [bool]($ip -and $ip -notin @('unknown', 'unresolved', 'localhost', $TopoLoopback))
 }
 
 function Test-LmStudioUp([string]$ip) {
+    <#
+    .SYNOPSIS
+    Probe LM Studio on the given host with a 5 s timeout; returns bool.
+    #>
     if (-not $ip) { return $false }
     # Local checks use the loopback address object (8 ms) not 'localhost' (~2 s);
     # 5 s timeout matches the other LM Studio check in this script.
@@ -919,6 +947,10 @@ if ($PtDir) {
 
 # A configured IP is "local" when it is on any local interface (or the loopback name).
 function Topo-IsLocalIp([string]$ip) {
+    <#
+    .SYNOPSIS
+    True when the address belongs to this machine (interfaces or loopback only).
+    #>
     if (-not $ip) { return $false }
     return [bool]($ip -in $TopoLocalIps -or $ip -in @('localhost', $TopoLoopback))
 }
