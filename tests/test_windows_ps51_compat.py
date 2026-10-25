@@ -121,9 +121,9 @@ def test_install_ps1_pip_eap_continue() -> None:
     assert "$coreExit = $LASTEXITCODE" in text
 
 
-def test_api_server_version_fallback() -> None:
+def test_api_server_version_fallback_reads_repo_version() -> None:
     from orama_system import api_server
+    from orama_system._version import __version__ as repo_version
 
-    assert api_server._fallback_version() == "1.1.1.0"
-    assert api_server.__version__ == "1.1.1.0"
-
+    # Read from pyproject.toml -> hatch version path -> _version.py, never a literal.
+    assert api_server._fallback_version() == repo_version

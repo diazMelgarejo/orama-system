@@ -256,7 +256,7 @@ def _fallback_version() -> str:
                 return m.group(1)
     except Exception:
         pass
-    return "1.1.1.0"
+    return "1.1.0.0"
 
 
 try:
