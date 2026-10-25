@@ -1037,6 +1037,36 @@ function Topo-IsKnownIp([string]$ip) {
     return [bool]($ip -and $ip -notin @('unknown', 'unresolved', 'localhost', $TopoLoopback))
 }
 
+function Topo-EndpointRefersToLoopback {
+    <#
+    .SYNOPSIS
+    True when an endpoint string names only this machine (loopback host).
+    #>
+    param([string]$Endpoint)
+    if (-not $Endpoint -or -not $Endpoint.Trim()) { return $false }
+    $raw = $Endpoint.Trim()
+    if ($raw -notmatch '^(?i)https?://') {
+        $raw = "http://$raw"
+    }
+    try {
+        $uri = [System.Uri]$raw
+    } catch {
+        return $false
+    }
+    $hostText = $uri.Host
+    if (-not $hostText) { return $false }
+    $addr = $null
+    if ([System.Net.IPAddress]::TryParse($hostText, [ref]$addr)) {
+        return [System.Net.IPAddress]::IsLoopback($addr)
+    }
+    try {
+        foreach ($resolved in [System.Net.Dns]::GetHostAddresses($hostText)) {
+            if ([System.Net.IPAddress]::IsLoopback($resolved)) { return $true }
+        }
+    } catch {}
+    return $false
+}
+
 function Test-LmStudioUp([string]$ip) {
     <#
     .SYNOPSIS
@@ -1245,7 +1275,7 @@ $env:LM_STUDIO_WIN_5080_ENDPOINTS = if ($Win5080Ip) { "http://${Win5080Ip}:1234"
 # placeholder (it points at THIS machine) with the sibling when known; leave it
 # unset when the sibling is unknown so the orchestrator skips the probe rather
 # than probing this machine.
-$WinPeerIsLoopback = $env:WIN_PEER_ENDPOINT -and ($env:WIN_PEER_ENDPOINT -match '^(?:https?://)?(?:localhost|127\.\d+\.\d+\.\d+|\[?::1\]?)(?::\d+)?/?$')
+$WinPeerIsLoopback = Topo-EndpointRefersToLoopback $env:WIN_PEER_ENDPOINT
 if (-not $env:WIN_PEER_ENDPOINT -or $WinPeerIsLoopback) {
     $env:WIN_PEER_ENDPOINT = if (Topo-IsKnownIp $WinSiblingIp) { "${WinSiblingIp}:1234" } else { '' }
 }
