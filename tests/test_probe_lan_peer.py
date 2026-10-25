@@ -116,6 +116,8 @@ def test_portal_status_tries_second_token(peer_mod, monkeypatch):
             "ws-peer", peer_mod.Status.SKIP, ""
         ),
     )
+    # Token candidates only travel over https (see test_probe_status_transport_guard.py).
+    monkeypatch.setenv("PEER_PORTAL_TLS_ENABLED", "1")
     checks = peer_mod.run_checks("10.0.0.50", 1234, 8002, ["bad-token", "good-token"])
     by_name = {c.name: c for c in checks}
     assert by_name["portal-status"].status == peer_mod.Status.PASS
@@ -144,6 +146,7 @@ def test_run_checks_uses_configured_timeouts(peer_mod, monkeypatch):
         ),
     )
 
+    monkeypatch.setenv("PEER_PORTAL_TLS_ENABLED", "1")
     checks = peer_mod.run_checks(
         "10.0.0.50",
         1234,
@@ -154,9 +157,10 @@ def test_run_checks_uses_configured_timeouts(peer_mod, monkeypatch):
         ws_timeout=5,
     )
 
+    host = calls[-1][0].split("//", 1)[1].split(":", 1)[0]
     assert calls == [
-        ("http://10.0.0.50:8002/health", 3),
-        ("http://10.0.0.50:8002/api/status", 4),
+        (f"https://{host}:8002/health", 3),
+        (f"https://{host}:8002/api/status", 4),
         ("http://10.0.0.50:1234/v1/models", 3),
     ]
     assert checks[-1].detail == "timeout=5"
