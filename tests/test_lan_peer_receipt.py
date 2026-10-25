@@ -85,7 +85,7 @@ def test_receipt_missing_file_exits_2(inbox, capsys):
     assert "not found" in err
 
 
-@pytest.mark.parametrize("bad", ["../evil.md", "a/b.md", "..\evil.md", "x.json"])
+@pytest.mark.parametrize("bad", ["../evil.md", "a/b.md", "..\\evil.md","x.json"])
 def test_receipt_rejects_unsafe_names(inbox, capsys, bad):
     inbox.mkdir(parents=True)
     rc, out, _ = _receipt(capsys, bad)
