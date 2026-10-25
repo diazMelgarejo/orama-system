@@ -1,5 +1,5 @@
 # lm_link_watch.ps1 — Windows counterpart of scripts/lm_link_watch.py (PS 5.1-compatible).
-# LOCAL = LM Studio http://localhost:1234/v1/models ; PEER = Mac Ollama from
+# LOCAL = LM Studio on loopback :1234 /v1/models ; PEER = Mac Ollama from
 # last_discovery.json (endpoints.mac.ip + :11434). Same state schema/file as the
 # Python watcher: %USERPROFILE%\.openclaw\state\lm_link.json — orama AND perpetua
 # read this one file. Gossip heartbeats carry model ids + queue depth only (no prompts).
@@ -47,7 +47,9 @@ function Load-State {
 }
 
 function Run-Cycle($prev) {
-    $local = Probe-Endpoint "http://localhost:1234/v1/models"
+    # Loopback by address: the name localhost costs ~2 s per probe on IPv6-first hosts.
+    $loopHost = [System.Net.IPAddress]::Loopback.IPAddressToString
+    $local = Probe-Endpoint "http://${loopHost}:1234/v1/models"
     $purl  = Get-PeerUrl
     $peerUp = $false
     if ($purl) { $peerUp = (Probe-Endpoint $purl).up }

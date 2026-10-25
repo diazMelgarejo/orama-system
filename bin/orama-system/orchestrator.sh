@@ -12,7 +12,8 @@ set -euo pipefail
 LOG_FILE="/tmp/orchestrator.log"
 FAIL_COUNT_FILE="/tmp/orchestrator_fails"
 MAX_RETRIES=10
-WIN_PEER="${WIN_PEER_ENDPOINT:-192.168.9.18:1234}"
+# No hardcoded default: an unset peer means "no sibling known" -> skip the probe.
+WIN_PEER="${WIN_PEER_ENDPOINT:-}"
 WIN_PROBE_TIMEOUT=5
 
 log() {
@@ -31,6 +32,7 @@ alert_user() {
 # Probe the Windows peer; return 0 if PASS, 1 if down (never trips set -e).
 probe_win_peer() {
     local code
+    [ -n "$WIN_PEER" ] || return 1
     code="$(curl -s --max-time "$WIN_PROBE_TIMEOUT" -o /dev/null -w '%{http_code}' \
         "http://${WIN_PEER}/" 2>/dev/null || echo "000")"
     [ "$code" != "000" ]
@@ -46,6 +48,10 @@ dispatch_cursor() {
 dispatch_openclaw() {
     # OpenClaw+ollama -> Hermes Win path. Skip gracefully if Win peer is down
     # (Windows Coder Policy: offline -> skip silently, log WARN, do not fail).
+    if [ -z "$WIN_PEER" ]; then
+        log "WARN: no Win peer configured (WIN_PEER_ENDPOINT unset) — skipping Win dispatch."
+        return 1
+    fi
     if ! probe_win_peer; then
         log "WARN: Win peer ${WIN_PEER} not reachable — skipping Win dispatch."
         return 1

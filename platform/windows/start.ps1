@@ -27,8 +27,9 @@
       8001  orama API       (US  — Layer 3 reasoning engine)
       8002  Portal dashboard
 
-    Service processes are launched as background Jobs (Start-Job) and their
-    stdout/stderr are tee-d to .logs\<svc>.log in the repo root.
+    Service processes are launched detached (scripts\lib\spawn_detached.py), so
+    they keep running after this script exits. stdout/stderr are appended to
+    .logs\<svc>.log and the PID to .logs\<svc>.pid in the repo root.
 
     UTF-8 fix (PowerShell defaults to system ANSI codepage on Win):
       [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -194,6 +195,10 @@ if ($ListOnly) {
     exit 0
 }
 
+# F23: modes that must never install, repair venvs, or write secrets/tokens.
+# --discover is deliberately NOT here: it must (re)write .paths.ps1.
+$ReadOnlyMode = [bool]($Stop -or $Status -or $FleetStatus -or $HardwarePolicy)
+
 # ── UTF-8 everywhere ──────────────────────────────────────────────────────────
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $env:PYTHONIOENCODING = 'utf-8'
@@ -249,6 +254,135 @@ function _Info  { _Log 'INFO ' $args[0] $args[1] }
 function _Warn  { _Log 'WARN ' $args[0] $args[1] }
 function _Err   { _Log 'ERROR' $args[0] $args[1] }
 
+# ── Bootstrap helpers (venv probe / pip under a safe error policy) ────────────
+# pip writes '[notice] new release available' to stderr; under
+# $ErrorActionPreference='Stop' PowerShell 5.1 turns that into a terminating
+# NativeCommandError whenever output is captured. Run native Python calls under
+# 'Continue' and judge success by $LASTEXITCODE only. Single quotes inside
+# python -c: PS 5.1 mangles embedded double quotes.
+$script:BootstrapOutput = @()
+function Bootstrap-RunPython {
+    <#
+    .SYNOPSIS
+    Run a Python command during bootstrap, capturing output for later display.
+    #>
+    param([string]$Python, [string[]]$PyArgs)
+    if (-not (Test-Path $Python)) {
+        $script:BootstrapOutput = @("interpreter not found: $Python")
+        return 127
+    }
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $out = & $Python @PyArgs 2>&1
+        $code = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $prev
+    }
+    $script:BootstrapOutput = @($out | ForEach-Object { "$_" })
+    return $code
+}
+
+function Bootstrap-TestImports {
+    <#
+    .SYNOPSIS
+    Return $true when the given Python can import the modules in -Code.
+    #>
+    param([string]$Python, [string]$Code)
+    if (-not (Test-Path $Python)) { return $false }
+    # -I (isolated): ignore PYTHONPATH/user site left in the console by earlier
+    # runs so they can neither satisfy nor break the probe.
+    return ((Bootstrap-RunPython $Python @('-I', '-c', $Code)) -eq 0)
+}
+
+# The launcher (not the caller) resolved the PT directory: set the env vars and
+# record them in the load-local.ps1 markers so a later run in the same console
+# does not mistake them for a caller override.
+function Set-LauncherPtEnv {
+    <#
+    .SYNOPSIS
+    Point PERPETUA_TOOLS_ROOT (and optionally legacy vars) at the resolved PT checkout.
+    #>
+    param([string]$Dir, [switch]$RootOnly)
+    $env:PERPETUA_TOOLS_ROOT = $Dir
+    $env:ORAMA_LOADLOCAL_SET_PERPETUA_TOOLS_ROOT = $Dir
+    if (-not $RootOnly) {
+        $env:PERPETUA_TOOLS_PATH = $Dir
+        $env:ORAMA_LOADLOCAL_SET_PERPETUA_TOOLS_PATH = $Dir
+    }
+}
+
+function Bootstrap-ShowOutput {
+    <#
+    .SYNOPSIS
+    Print the last captured bootstrap output lines to the host.
+    #>
+    foreach ($l in ($script:BootstrapOutput | Select-Object -Last 25)) { Write-Host "    $l" }
+}
+
+$OramaImportProbe = 'import uvicorn, fastapi, httpx'
+$PtImportProbe = "import importlib.metadata as m, sys; m.version('perpetua-tools'); import requests, uvicorn; sys.exit(1 if any(((d.metadata['Name'] or '').lower().replace('_', '-') == 'orama-system') for d in m.distributions()) else 0)"
+
+function Heal-PtVenv {
+    <#
+    .SYNOPSIS
+    Repair the Perpetua-Tools virtual environment when imports fail.
+    #>
+    param([string]$PtDir)
+    $venvDir = Join-Path $PtDir '.venv'
+    $venvPy  = Join-Path $venvDir 'Scripts\python.exe'
+    if (Bootstrap-TestImports $venvPy $PtImportProbe) { return }
+    $hasPyproject = Test-Path (Join-Path $PtDir 'pyproject.toml')
+    $hasReqs      = Test-Path (Join-Path $PtDir 'requirements.txt')
+    if (-not ($hasPyproject -or $hasReqs)) {
+        _Warn 'bootstrap' "PT has neither pyproject.toml nor requirements.txt in $PtDir — PT service will likely fail to start"
+        return
+    }
+    if (Test-Path $venvPy) {
+        _Info 'bootstrap' "PT .venv at $venvDir lacks perpetua-tools/requests/uvicorn (or holds a stray orama-system) — repairing ..."
+    } else {
+        _Info 'bootstrap' "PT .venv not found — creating one at $venvDir ..."
+        $bootstrapPy = Get-BestPython $RepoRoot
+        $code = Bootstrap-RunPython $bootstrapPy @('-m', 'venv', $venvDir)
+        if ($code -ne 0) {
+            Bootstrap-ShowOutput
+            _Err 'bootstrap' "creating PT .venv failed (exit $code)"
+            exit 1
+        }
+    }
+    # A previous launcher run installed orama-system here (pip -r ran from the
+    # wrong cwd); remove it so the venv holds the right package only.
+    $null = Bootstrap-RunPython $venvPy @('-m', 'pip', 'uninstall', '-y', 'orama-system', '--disable-pip-version-check')
+    # The stray package alone may have been the only problem: re-probe and skip
+    # the (network-dependent) reinstall when the venv is already usable.
+    if (Bootstrap-TestImports $venvPy $PtImportProbe) {
+        _Info 'bootstrap' 'PT .venv ready (removed stray orama-system)'
+        return
+    }
+    # PT's requirements.txt is '-e .', which pip resolves against the CURRENT
+    # directory, so the install must run with PtDir as cwd.
+    Push-Location $PtDir
+    try {
+        if ($hasPyproject) {
+            $code = Bootstrap-RunPython $venvPy @('-m', 'pip', 'install', '--quiet', '--disable-pip-version-check', '-e', '.')
+        } else {
+            $code = Bootstrap-RunPython $venvPy @('-m', 'pip', 'install', '--quiet', '--disable-pip-version-check', '-r', 'requirements.txt')
+        }
+    } finally {
+        Pop-Location
+    }
+    if ($code -ne 0) {
+        Bootstrap-ShowOutput
+        _Err 'bootstrap' "PT dependency install failed (pip exit $code) in $PtDir"
+        exit 1
+    }
+    if (-not (Bootstrap-TestImports $venvPy $PtImportProbe)) {
+        _Err 'bootstrap' "PT .venv still unusable after install (perpetua-tools / requests / uvicorn probe failed) at $venvDir"
+        exit 1
+    }
+    _Info 'bootstrap' 'PT .venv ready'
+}
+
 # ── Fresh-install bootstrap ────────────────────────────────────────────────────
 # On a brand-new clone, .venv doesn't exist yet and Get-BestPython below throws
 # "Python not found" — the operator has to already know to run install.ps1
@@ -258,18 +392,31 @@ function _Err   { _Log 'ERROR' $args[0] $args[1] }
 # start.ps1 invocation — the Test-Path guard just skips the call entirely once
 # .venv exists.
 $VenvPythonMarker = Join-Path $RepoRoot '.venv\Scripts\python.exe'
-if (-not (Test-Path $VenvPythonMarker)) {
-    $InstallScript = Join-Path $ScriptDir 'install.ps1'
-    if (Test-Path $InstallScript) {
-        _Info 'bootstrap' '.venv not found — running install.ps1 (first-run bootstrap)...'
-        & $InstallScript
-        if (-not (Test-Path $VenvPythonMarker)) {
-            _Err 'bootstrap' 'install.ps1 completed but .venv\Scripts\python.exe still missing — see output above'
-            exit 1
+# F2: python.exe existing is not enough (a half-built venv from an aborted pip
+# run has python.exe but no uvicorn); probe the third-party imports as well.
+# Read-only modes (F23) never install or repair anything.
+if (-not $ReadOnlyMode) {
+    if (-not (Bootstrap-TestImports $VenvPythonMarker $OramaImportProbe)) {
+        $InstallScript = Join-Path $ScriptDir 'install.ps1'
+        if ($env:ORAMA_BOOTSTRAP_ACTIVE -eq '1') {
+            # install.ps1 itself launches 'start.ps1 --discover'; never recurse.
+            _Warn 'bootstrap' 'orama .venv not yet complete inside install.ps1 — skipping nested bootstrap'
+        } elseif (Test-Path $InstallScript) {
+            _Info 'bootstrap' 'orama .venv missing or incomplete — running install.ps1 (bootstrap/heal)...'
+            $env:ORAMA_BOOTSTRAP_ACTIVE = '1'
+            try {
+                & $InstallScript
+            } finally {
+                Remove-Item Env:\ORAMA_BOOTSTRAP_ACTIVE -ErrorAction SilentlyContinue
+            }
+            if (-not (Bootstrap-TestImports $VenvPythonMarker $OramaImportProbe)) {
+                _Err 'bootstrap' 'install.ps1 completed but the orama .venv still fails import probe (uvicorn, fastapi, httpx) — see output above'
+                exit 1
+            }
+            _Info 'bootstrap' 'install.ps1 complete — continuing start.ps1'
+        } else {
+            _Warn 'bootstrap' "install.ps1 not found at $InstallScript — Python detection below may fail"
         }
-        _Info 'bootstrap' 'install.ps1 complete — continuing start.ps1'
-    } else {
-        _Warn 'bootstrap' "install.ps1 not found at $InstallScript — Python detection below may fail"
     }
 }
 
@@ -336,41 +483,10 @@ if (-not $UsPython) {
 $PathsNeedRewrite = $false
 if ($PtDir) {
     $PtVenvPython = Join-Path $PtDir '.venv\Scripts\python.exe'
-    # Existence of python.exe alone doesn't mean the venv is actually
-    # usable — confirmed live: a venv can exist with 80+ packages and
-    # still be missing uvicorn specifically (partial/stale install, e.g.
-    # an interrupted first bootstrap or a requirements.txt update after
-    # the venv was created), and PT fails at startup with "No module
-    # named uvicorn" every time. Probe the actual import, not just the
-    # file's presence, so a stale venv gets healed instead of silently
-    # reused forever.
-    $PtVenvUsable = $false
-    if (Test-Path $PtVenvPython) {
-        & $PtVenvPython -c "import uvicorn" 2>$null
-        $PtVenvUsable = ($LASTEXITCODE -eq 0)
-    }
-    if (-not $PtVenvUsable) {
-        # PT has no Windows installer of its own (unlike orama-system's
-        # install.ps1) — Get-BestPython falls back to the bare system Python,
-        # which has none of PT's requirements.txt deps (uvicorn, fastapi, ...)
-        # installed, so the PT service fails at startup with "No module named
-        # uvicorn". Idempotent: skipped entirely once PtDir\.venv is usable.
-        $PtReqs = Join-Path $PtDir 'requirements.txt'
-        if (Test-Path $PtReqs) {
-            if (Test-Path $PtVenvPython) {
-                _Info 'bootstrap' "PT .venv exists but is missing required deps — reinstalling into $PtDir\.venv ..."
-            } else {
-                _Info 'bootstrap' "PT .venv not found — creating one at $PtDir\.venv ..."
-                $bootstrapPy = Get-BestPython $RepoRoot
-                & $bootstrapPy -m venv (Join-Path $PtDir '.venv')
-            }
-            $ptVenvPip = Join-Path $PtDir '.venv\Scripts\pip.exe'
-            & $ptVenvPip install -r $PtReqs --quiet
-            _Info 'bootstrap' 'PT .venv ready'
-        } else {
-            _Warn 'bootstrap' "PT requirements.txt not found at $PtReqs — PT service will likely fail to start"
-        }
-    }
+    # F11: probe/heal PT's venv (perpetua-tools metadata + requests + uvicorn,
+    # no stray orama-system); the install runs with PtDir as cwd. Read-only
+    # modes only resolve the path.
+    if (-not $ReadOnlyMode) { Heal-PtVenv -PtDir $PtDir }
     # Always prefer the venv python once it exists, even over a cached
     # $PtPython from an older .paths.ps1 written before PT had a venv —
     # otherwise a stale cache silently keeps using the dep-less system
@@ -385,7 +501,9 @@ if (-not $PtPython -and $PtDir) {
     $PtPython = Get-BestPython $PtDir
 }
 
-if ($Discover -or $PathsNeedRewrite -or -not (Test-Path $PathsFile)) {
+# F4: write .paths.ps1 exactly once. Read-only modes (F23) never write it
+# (they resolve paths in memory); --discover always does.
+if ($Discover -or (-not $ReadOnlyMode -and ($PathsNeedRewrite -or -not (Test-Path $PathsFile)))) {
     @"
 # .paths.ps1 — auto-generated by .\platform\windows\start.ps1 on $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
 # Edit to override. Regenerate: Remove-Item .paths.ps1; .\platform\windows\start.ps1 --discover
@@ -394,14 +512,6 @@ if ($Discover -or $PathsNeedRewrite -or -not (Test-Path $PathsFile)) {
 `$PtPython = '$PtPython'
 `$UsPython = '$UsPython'
 "@ | Set-Content -Path $PathsFile -Encoding UTF8
-Set-Content -Path $PathsFile -Value (@"
-# .paths.ps1 — auto-generated by .\platform\windows\start.ps1 on $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
-# Edit to override. Regenerate: Remove-Item .paths.ps1; .\platform\windows\start.ps1 --discover
-
-`$PtDir    = '$PtDir'
-`$PtPython = '$PtPython'
-`$UsPython = '$UsPython'
-"@) -Encoding UTF8
     Write-Host "  Paths written to $PathsFile"
     if ($Discover) { exit 0 }
 }
@@ -467,7 +577,7 @@ function Test-LanBindConfigured {
     return $false
 }
 
-if ($LanPeer -or (Test-LanBindConfigured)) {
+if (-not $ReadOnlyMode -and ($LanPeer -or (Test-LanBindConfigured))) {
     _Warn 'svc' 'LAN bind enabled (PT_BIND_LAN/ORAMA_BIND_LAN/PORTAL_BIND_LAN) — control-plane APIs are reachable on the network'
     $MeshScript = Join-Path $RepoRoot 'scripts\mesh\Invoke-MeshLocalCache.ps1'
     if (Test-Path $MeshScript) {
@@ -487,6 +597,41 @@ if ($LanPeer -or (Test-LanBindConfigured)) {
     }
 }
 
+function Topo-MaskSecrets([string]$Text) {
+    <#
+    .SYNOPSIS
+    Mask secret-bearing values in captured text.
+    #>
+    # Mask secret-bearing values in captured child output: JSON string values
+    # (keys with underscores/hyphens, escaped quotes inside the value),
+    # key=value pairs, and Bearer credentials. Applied before console AND log.
+    $keys = '[\w-]*(?:token|secret|authorization|api[_-]?key|password|passwd|credential)[\w-]*'
+    $Text = $Text -replace ('(?i)("' + $keys + '"\s*:\s*")(?:[^"\\]|\\.)*(")'), '$1***$2'
+    $Text = $Text -replace ('(?i)(\b' + $keys + '\s*[=:]\s*)(?:Bearer\s+)?[^\s,;"'']+'), '$1***'
+    $Text = $Text -replace '(?i)(\bBearer\s+)[A-Za-z0-9._~+/=-]+', '$1***'
+    return $Text
+}
+
+function Topo-WriteProbeOutput {
+    <#
+    .SYNOPSIS
+    Print captured child output to host and startup log with secrets masked.
+    #>
+    # Show captured child output on the host and in the startup log; mask any
+    # token-like JSON values before printing.
+    param([string]$Tag, $Lines)
+    foreach ($ln in @($Lines)) {
+        $s = "$ln"
+        if (-not $s.Trim()) { continue }
+        $s = Topo-MaskSecrets $s
+        Write-Host "  [$Tag] $s"
+        try {
+            $null = New-Item -ItemType Directory -Force -Path $LogDir
+            Add-Content -Path (Join-Path $LogDir "startup-$(Get-Date -Format yyyyMMdd).log") -Value "  [$Tag] $s"
+        } catch {}
+    }
+}
+
 function Invoke-LanPeerProbe {
     $probe = Join-Path $RepoRoot 'bin\orama-system\skills\hermes-harness\scripts\probe_lan_peer.py'
     if (-not (Test-Path $probe)) {
@@ -494,17 +639,27 @@ function Invoke-LanPeerProbe {
         return $false
     }
     Sync-ControlPlaneToken
-    if ($PtDir) { $env:PERPETUA_TOOLS_ROOT = $PtDir }
+    if ($PtDir) { Set-LauncherPtEnv -Dir $PtDir -RootOnly }
     _Info 'lan-peer' 'running probe_lan_peer.py --json ...'
     $probeTimeout = if ($env:LAN_PEER_PROBE_TIMEOUT) { $env:LAN_PEER_PROBE_TIMEOUT } else { '2' }
     $statusTimeout = if ($env:LAN_PEER_STATUS_TIMEOUT) { $env:LAN_PEER_STATUS_TIMEOUT } else { '3' }
     $wsTimeout = if ($env:LAN_PEER_WS_TIMEOUT) { $env:LAN_PEER_WS_TIMEOUT } else { '2' }
-    & $UsPython $probe --json --timeout $probeTimeout --status-timeout $statusTimeout --ws-timeout $wsTimeout
-    if ($LASTEXITCODE -ne 0) {
-        _Warn 'lan-peer' 'peer probe reported failures (Mac peer may need ./start.sh --lan-peer)'
-        return $false
+    # Capture stdout/stderr: leaving the call uncaptured leaks the JSON into this
+    # function's output stream, so the caller would see a non-empty (truthy)
+    # array even when the probe failed.
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $out = & $UsPython $probe --json --timeout $probeTimeout --status-timeout $statusTimeout --ws-timeout $wsTimeout 2>&1
+        $probeExit = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $prevEap
     }
-    return $true
+    Topo-WriteProbeOutput 'probe' $out
+    if ($probeExit -ne 0) {
+        _Warn 'lan-peer' 'peer probe reported failures (Mac peer may need ./start.sh --lan-peer)'
+    }
+    return ($probeExit -eq 0)
 }
 
 function Invoke-LanPeerOutboxFlush {
@@ -514,11 +669,19 @@ function Invoke-LanPeerOutboxFlush {
         return
     }
     Sync-ControlPlaneToken
-    if ($PtDir) { $env:PERPETUA_TOOLS_ROOT = $PtDir }
+    if ($PtDir) { Set-LauncherPtEnv -Dir $PtDir -RootOnly }
     _Info 'lan-peer' 'flushing queued peer drops ...'
     $httpTimeout = if ($env:LAN_PEER_HTTP_TIMEOUT) { $env:LAN_PEER_HTTP_TIMEOUT } else { '2' }
-    & $UsPython $assign flush-outbox --peer --timeout $httpTimeout
-    if ($LASTEXITCODE -ne 0) {
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $flushOut = & $UsPython $assign flush-outbox --peer --timeout $httpTimeout 2>&1
+        $flushExit = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $prevEap
+    }
+    Topo-WriteProbeOutput 'outbox' $flushOut
+    if ($flushExit -ne 0) {
         _Warn 'lan-peer' 'queued peer drops remain pending'
     }
 }
@@ -531,7 +694,7 @@ function Invoke-LanPeerSession {
         return $true
     }
     & $UsPython $session @LanArgs | Out-Null
-    return ($LASTEXITCODE -eq 0)
+    return [bool]($LASTEXITCODE -eq 0)
 }
 
 # ── Hardware policy check ─────────────────────────────────────────────────────
@@ -573,26 +736,122 @@ function Get-PidOnPort {
     return $null
 }
 
+# True when every LISTENING socket on the port is bound to a loopback address.
+# No listener, or an unparsable address, counts as not loopback-only (fail closed).
+function Test-PortLoopbackOnly {
+    param([int]$Port)
+    $seen = 0
+    try {
+        foreach ($nsLine in @(& netstat -ano 2>$null)) {
+            if ("$nsLine" -match '^\s*TCP\s+(\S+):(\d+)\s+\S+\s+LISTENING\s+\d+') {
+                $nsAddrText = $Matches[1].Trim('[', ']')
+                if ([int]$Matches[2] -ne $Port) { continue }
+                $seen++
+                $nsAddr = $null
+                if (-not [System.Net.IPAddress]::TryParse($nsAddrText, [ref]$nsAddr)) { return $false }
+                if (-not [System.Net.IPAddress]::IsLoopback($nsAddr)) { return $false }
+            }
+        }
+    } catch { return $false }
+    return ($seen -gt 0)
+}
+
+# Life-* helpers: service lifecycle (detached launch, readiness, stop). PS 5.1 safe.
+function Life-GetProc {
+    param([int]$ProcId)
+    if ($ProcId -le 0) { return $null }
+    try { return (Get-Process -Id $ProcId -ErrorAction Stop) } catch { return $null }
+}
+
+# True when ProcId is alive, its name matches NamePattern and (optionally) its
+# command line matches CmdPattern. Never matches on process name alone for kills.
+function Life-PidMatches {
+    param([int]$ProcId, [string]$NamePattern, [string]$CmdPattern = '')
+    $p = Life-GetProc $ProcId
+    if (-not $p) { return $false }
+    if ($p.ProcessName -notmatch $NamePattern) { return $false }
+    if ($CmdPattern) {
+        try {
+            $cim = Get-CimInstance -ClassName Win32_Process -Filter "ProcessId=$ProcId" -ErrorAction Stop
+            if (-not $cim -or -not $cim.CommandLine) { return $false }
+            if ($cim.CommandLine -notmatch $CmdPattern) { return $false }
+        } catch { return $false }
+    }
+    return $true
+}
+
+function Life-IsPythonPid {
+    param([int]$ProcId)
+    return (Life-PidMatches $ProcId '^pythonw?[0-9.]*$')
+}
+
+function Life-ReadPid {
+    param([string]$PidFile)
+    if (-not (Test-Path $PidFile)) { return 0 }
+    try {
+        $text = (Get-Content -Path $PidFile -Raw -ErrorAction Stop).Trim()
+        $n = 0
+        if ([int]::TryParse($text, [ref]$n)) { return $n }
+    } catch {}
+    return 0
+}
+
+# Probe host: the specific bind host, else IPv4 loopback by address (the name
+# localhost costs ~2 s per attempt on IPv6-first hosts).
+function Life-ProbeHost {
+    param([string]$BindHost = '')
+    if ($BindHost -and $BindHost -ne '0.0.0.0' -and $BindHost -ne '::') { return $BindHost }
+    return [System.Net.IPAddress]::Loopback.IPAddressToString
+}
+
+function Life-ShowLogTail {
+    param([string]$LogFile, [int]$Lines = 30)
+    if (Test-Path $LogFile) {
+        Write-Host "  --- last $Lines lines of $LogFile ---"
+        foreach ($l in @(Get-Content -Path $LogFile -Tail $Lines -Encoding UTF8 -ErrorAction SilentlyContinue)) {
+            Write-Host "  | $l"
+        }
+        Write-Host '  --- end of log ---'
+    } else {
+        Write-Host "  (no log file at $LogFile)"
+    }
+}
+
 function Wait-ForPort {
-    param([int]$Port, [string]$Label, [int]$MaxSeconds = 75)
+    param(
+        [int]$Port,
+        [string]$Label,
+        [int]$MaxSeconds = 75,
+        [int]$ServicePid = 0,
+        [string]$BindHost = ''
+    )
+    $probeHost = Life-ProbeHost $BindHost
+    $svcLog = Join-Path $LogDir (($Label.ToLower() -replace '\s+', '_') + '.log')
     Write-Host -NoNewline "  waiting for $Label (port $Port)"
     $deadline = (Get-Date).AddSeconds($MaxSeconds)
     while ((Get-Date) -lt $deadline) {
+        $tcp = New-Object System.Net.Sockets.TcpClient
         try {
-            $tcp = New-Object System.Net.Sockets.TcpClient
-            $conn = $tcp.ConnectAsync('localhost', $Port)
-            if ($conn.Wait(500)) {
-                $tcp.Close()
+            $conn = $tcp.ConnectAsync($probeHost, $Port)
+            if ($conn.Wait(250) -and $tcp.Connected) {
                 Write-Host ' UP'
                 return $true
             }
+        } catch {
+        } finally {
             $tcp.Close()
-        } catch {}
+        }
+        # Process-exit branch: the service died before opening its port.
+        if ($ServicePid -gt 0 -and -not (Life-GetProc $ServicePid)) {
+            Write-Host " FAILED - process $ServicePid exited before port $Port was up"
+            Life-ShowLogTail $svcLog 30
+            return $false
+        }
         Write-Host -NoNewline '.'
-        Start-Sleep -Milliseconds 500
+        Start-Sleep -Milliseconds 250
     }
-    $timeoutLog = Join-Path $LogDir ($Label.ToLower() + '.log')
-    Write-Host " TIMEOUT - check $timeoutLog"
+    Write-Host " TIMEOUT - check $svcLog"
+    Life-ShowLogTail $svcLog 30
     return $false
 }
 
@@ -600,6 +859,16 @@ function Open-Browser {
     param([string]$Url)
     try { Start-Process $Url } catch { _Warn 'browser' "Could not open browser: $_" }
 }
+
+# ── Portal TLS front end (opt-in: PORTAL_TLS_ENABLED=1/true/yes) ──────────────
+# When enabled, the Portal binds loopback only and orchestrator.portal_tls_proxy
+# (Perpetua-Tools) is the single LAN-facing listener, on PORTAL_TLS_PORT.
+$PortalTlsEnabled = $false
+if ($env:PORTAL_TLS_ENABLED) {
+    $PortalTlsEnabled = ($env:PORTAL_TLS_ENABLED.Trim().ToLower() -in @('1', 'true', 'yes'))
+}
+$PortalTlsPort = if ($env:PORTAL_TLS_PORT) { [int]$env:PORTAL_TLS_PORT } else { 8443 }
+$PortalTlsListenHost = if ($env:PORTAL_TLS_LISTEN_HOST) { $env:PORTAL_TLS_LISTEN_HOST.Trim() } else { '0.0.0.0' }
 
 # ── --stop ────────────────────────────────────────────────────────────────────
 if ($Stop) {
@@ -611,6 +880,28 @@ if ($Stop) {
             Write-Host "  killed PID $listenerPid (port $port)"
         } else {
             Write-Host "  nothing on port $port"
+        }
+    }
+    # PID files written by the detached launcher (never kill by process name).
+    if (Test-Path $LogDir) {
+        foreach ($pf in @(Get-ChildItem -Path $LogDir -Filter '*.pid' -File -ErrorAction SilentlyContinue)) {
+            $recorded = Life-ReadPid $pf.FullName
+            $isWatcher = ($pf.BaseName -eq 'lm_link_watch')
+            if ($isWatcher) {
+                $owned = Life-PidMatches $recorded '^(powershell|pwsh)$' 'lm_link_watch'
+            } elseif ($pf.BaseName -eq 'portal_tls') {
+                # Portal TLS proxy: command-line match on portal_tls_proxy, never by name.
+                $owned = Life-PidMatches $recorded '^pythonw?[0-9.]*$' 'portal_tls_proxy'
+            } else {
+                $owned = Life-PidMatches $recorded '^pythonw?[0-9.]*$' 'uvicorn'
+            }
+            if ($owned) {
+                & taskkill.exe /PID $recorded /T /F 2>$null | Out-Null
+                Write-Host "  killed PID $recorded ($($pf.BaseName) from $($pf.Name))"
+            } elseif ($recorded -gt 0) {
+                Write-Host "  $($pf.Name): PID $recorded is not a matching process (already stopped or reused); not killed"
+            }
+            Remove-Item -Path $pf.FullName -Force -ErrorAction SilentlyContinue
         }
     }
     exit 0
@@ -658,12 +949,12 @@ if ($Status) {
         @{Name='PT';     Port=$PtPort},
         @{Name='orama';  Port=$UsPort},
         @{Name='Portal'; Port=$PortalPort}
-    )) {
+    ) + $(if ($PortalTlsEnabled -or (Test-Path (Join-Path $LogDir 'portal_tls.pid'))) { @(@{Name='Portal TLS'; Port=$PortalTlsPort}) } else { @() })) {
         $listenerPid = Get-PidOnPort $entry.Port
         if ($listenerPid) {
-            Write-Host ("  {0,-8} :{1,-5}  ● UP    (PID {2})" -f $entry.Name, $entry.Port, $listenerPid)
+            Write-Host ("  {0,-10} :{1,-5}  ● UP    (PID {2})" -f $entry.Name, $entry.Port, $listenerPid)
         } else {
-            Write-Host ("  {0,-8} :{1,-5}  ○ DOWN" -f $entry.Name, $entry.Port)
+            Write-Host ("  {0,-10} :{1,-5}  ○ DOWN" -f $entry.Name, $entry.Port)
         }
     }
     Invoke-HardwarePolicyCheck
@@ -672,6 +963,90 @@ if ($Status) {
 }
 
 # ── LAN discovery (always fresh before IP resolution) ─────────────────────────
+# ── Topology helpers (Topo- prefix) ───────────────────────────────────────────
+# Loopback by address object, never by name: resolving 'localhost' tries the
+# IPv6 loopback first and costs ~2 s per probe when nothing listens there.
+$TopoLoopback = [System.Net.IPAddress]::Loopback.IPAddressToString
+
+function Topo-GetLocalIPv4 {
+    <#
+    .SYNOPSIS
+    Return every IPv4 address bound to this machine.
+    #>
+    # Every IPv4 address bound on this machine.
+    try {
+        return @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop | Select-Object -ExpandProperty IPAddress)
+    } catch {
+        try {
+            return @([System.Net.Dns]::GetHostAddresses([System.Net.Dns]::GetHostName()) |
+                Where-Object { $_.AddressFamily -eq [System.Net.Sockets.AddressFamily]::InterNetwork } |
+                ForEach-Object { $_.IPAddressToString })
+        } catch { return @() }
+    }
+}
+
+function Topo-GetDefaultRouteIp {
+    <#
+    .SYNOPSIS
+    Return the IPv4 address used for the default route, or empty.
+    #>
+    # IPv4 of the interface that owns the lowest-metric default route.
+    try {
+        $route = Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction Stop |
+            Sort-Object { $_.RouteMetric + $_.InterfaceMetric } | Select-Object -First 1
+        $addr = Get-NetIPAddress -InterfaceIndex $route.InterfaceIndex -AddressFamily IPv4 -ErrorAction Stop |
+            Select-Object -First 1
+        $ipText = [string]$addr.IPAddress
+        if ($ipText) { return $ipText }
+        return 'localhost'
+    } catch { return 'localhost' }
+}
+
+function Topo-GetVersion {
+    <#
+    .SYNOPSIS
+    Return the orama-system version read from the version module.
+    #>
+    # Single source of truth is src/orama_system/_version.py (pyproject.toml
+    # reads it dynamically); pyproject.toml is the fallback.
+    $candidates = @(
+        @{ Path = (Join-Path $RepoRoot 'src\orama_system\_version.py'); Pattern = '(?m)^__version__\s*=\s*["'']([^"'']+)["'']' },
+        @{ Path = (Join-Path $RepoRoot 'pyproject.toml');               Pattern = '(?m)^version\s*=\s*"([^"]+)"' }
+    )
+    foreach ($c in $candidates) {
+        if (-not (Test-Path $c.Path)) { continue }
+        try {
+            $m = [regex]::Match((Get-Content $c.Path -Raw -Encoding UTF8), $c.Pattern)
+            if ($m.Success) { return $m.Groups[1].Value }
+        } catch {}
+    }
+    return 'unknown'
+}
+
+function Topo-IsKnownIp([string]$ip) {
+    <#
+    .SYNOPSIS
+    True when the value is a concrete, resolvable peer address.
+    #>
+    return [bool]($ip -and $ip -notin @('unknown', 'unresolved', 'localhost', $TopoLoopback))
+}
+
+function Test-LmStudioUp([string]$ip) {
+    <#
+    .SYNOPSIS
+    Probe LM Studio on the given host with a 5 s timeout; returns bool.
+    #>
+    if (-not $ip) { return $false }
+    # Local checks use the loopback address object (8 ms) not 'localhost' (~2 s);
+    # 5 s timeout matches the other LM Studio check in this script.
+    $probeHost = if ($ip -in @('localhost', $TopoLoopback)) { $TopoLoopback } else { $ip }
+    $url = "http://${probeHost}:1234/v1/models"
+    try {
+        $resp = Invoke-WebRequest -Uri $url -TimeoutSec 5 -UseBasicParsing -ErrorAction Stop
+        return ($resp.StatusCode -eq 200)
+    } catch { return $false }
+}
+
 function Invoke-DiscoverEndpoints {
     $scripts = @(
         (Join-Path $RepoRoot 'scripts\discover.py'),
@@ -683,8 +1058,7 @@ function Invoke-DiscoverEndpoints {
         return
     }
     if ($PtDir) {
-        $env:PERPETUA_TOOLS_ROOT = $PtDir
-        $env:PERPETUA_TOOLS_PATH = $PtDir
+        Set-LauncherPtEnv -Dir $PtDir
     }
     _Info 'ip' "Probing LAN topology ($([IO.Path]::GetFileName($discover)) --force)..."
     $prevEap = $ErrorActionPreference
@@ -715,7 +1089,7 @@ function Resolve-MacLanIp {
         } else {
             try { $macIp = ([uri]$raw.Trim()).Host } catch { continue }
         }
-        if ($macIp -and $macIp -notin @('localhost', '127.0.0.1')) {
+        if ($macIp -and $macIp -notin @('localhost', $TopoLoopback)) {
             $source = $var
             break
         }
@@ -728,7 +1102,7 @@ function Resolve-MacLanIp {
             try {
                 $state = Get-Content $statePath -Raw | ConvertFrom-Json
                 $candidate = $state.endpoints.mac.ip
-                if ($candidate -and $candidate -notin @('', 'localhost', '127.0.0.1')) {
+                if ($candidate -and $candidate -notin @('', 'localhost', $TopoLoopback)) {
                     $macIp = $candidate
                     $source = 'last_discovery.json'
                 }
@@ -744,7 +1118,7 @@ function Resolve-MacLanIp {
                 $url  = $json.models.providers.'lmstudio-mac'.baseUrl
                 if ($url) {
                     $hostFromUrl = ([uri]$url).Host
-                    if ($hostFromUrl -notin @('', 'localhost', '127.0.0.1')) {
+                    if ($hostFromUrl -notin @('', 'localhost', $TopoLoopback)) {
                         $macIp = $hostFromUrl
                         $source = 'openclaw.json'
                     }
@@ -762,44 +1136,33 @@ function Resolve-MacLanIp {
     return @{ Ip = $macIp; Source = $source }
 }
 
-Invoke-DiscoverEndpoints
-$MacResolved = Resolve-MacLanIp
-$MacIp    = $MacResolved.Ip
-$IpSource = $MacResolved.Source
-
-# ── Export env vars for child processes ───────────────────────────────────────
-if ($MacIp -and $MacIp -notin @('unresolved', 'localhost', '127.0.0.1')) {
-    $env:MAC_IP = $MacIp
-}
-$env:WIN_IP = if ($env:WIN_IP) { $env:WIN_IP } else {
-    try {
-        $s = New-Object System.Net.Sockets.Socket([System.Net.Sockets.AddressFamily]::InterNetwork, [System.Net.Sockets.SocketType]::Dgram, [System.Net.Sockets.ProtocolType]::Udp)
-        $s.Connect('192.168.254.1', 80)
-        ($s.LocalEndPoint).Address.ToString()
-    } catch { 'localhost' }
-}
-$env:OLLAMA_MAC_ENDPOINT       = if ($env:OLLAMA_MAC_ENDPOINT)       { $env:OLLAMA_MAC_ENDPOINT }       elseif ($MacIp -notin @('unresolved','localhost','127.0.0.1')) { "http://${MacIp}:11434" } else { 'http://localhost:11434' }
-$env:OLLAMA_WINDOWS_ENDPOINT   = if ($env:OLLAMA_WINDOWS_ENDPOINT)   { $env:OLLAMA_WINDOWS_ENDPOINT }   else { 'http://localhost:11434' }
-$env:LM_STUDIO_MAC_ENDPOINT    = if ($env:LM_STUDIO_MAC_ENDPOINT)    { $env:LM_STUDIO_MAC_ENDPOINT }    elseif ($MacIp -notin @('unresolved','localhost','127.0.0.1')) { "http://${MacIp}:1234" } else { 'http://localhost:1234' }
-$env:LM_STUDIO_WIN_ENDPOINTS   = if ($env:LM_STUDIO_WIN_ENDPOINTS)   { $env:LM_STUDIO_WIN_ENDPOINTS }   else { "http://$($env:WIN_IP):1234" }
-# WIN_PEER_ENDPOINT - consumed by the dual-path orchestrator peer probe.
-# On Windows, the Win peer is this machine (localhost:1234).
-$env:WIN_PEER_ENDPOINT         = if ($env:WIN_PEER_ENDPOINT)         { $env:WIN_PEER_ENDPOINT }         else { 'localhost:1234' }
-$env:WIN_LM_STUDIO_HOST        = if ($env:WIN_LM_STUDIO_HOST)        { $env:WIN_LM_STUDIO_HOST }        else { 'localhost' }
-$env:WINDOWS_IP                = $env:WIN_IP
-
 # ── Dual Windows node detection (RTX 3080 + RTX 5080) ────────────────────────
 # This machine is ONE Win node; detect the SIBLING Win node on the LAN.
-# Reads PT config/devices.yml for both node IPs, identifies which is local
-# (matches WIN_IP or localhost), probes the sibling on port 1234.
+# Runs BEFORE Invoke-DiscoverEndpoints so discover.py inherits WIN_3080_IP /
+# WIN_5080_IP / WIN_IP from the environment.
+# Reads PT config/devices.yml for both node IPs and identifies which is local by
+# comparing against ALL local IPv4 addresses. Probes only a KNOWN sibling IP on
+# port 1234; an unknown sibling is reported 'unknown' and never probed.
 # Exports WIN_3080_IP, WIN_5080_IP, WIN_NODES, WIN_SIBLING_IP.
 # Coordinated with start.sh dual-node detection (same env vars).
 #
 # Priority for each node IP:
 #   1. Explicit env var (WIN_3080_IP / WIN_5080_IP) — user override
 #   2. PT config/devices.yml (win-rtx3080.lan_ip / win-rtx5080.lan_ip)
-#   3. Localhost fallback (this machine is that node)
 # Idempotent: read-only HTTP probes, no state mutation, safe to re-run.
+# A pre-set WIN_IP is trusted only when it is on a local interface; a stale one
+# (from .env.local or a previous run in this console) is warned about and replaced.
+$TopoLocalIps = @(Topo-GetLocalIPv4)
+# WIN_IP is an operator hint for the Windows-facing address, NOT proof of
+# locality: it must never be added to $TopoLocalIps (a stale or sibling value
+# would make the sibling look local). Local identity comes from interfaces only.
+if ($env:WIN_IP -and $env:WIN_IP -notin $TopoLocalIps) {
+    _Warn 'dual-win' "WIN_IP=$($env:WIN_IP) is not on any local interface - stale; using the default-route address instead"
+    $env:WIN_IP = Topo-GetDefaultRouteIp
+} elseif (-not $env:WIN_IP) {
+    $env:WIN_IP = Topo-GetDefaultRouteIp
+}
+
 $Win3080Ip = $env:WIN_3080_IP
 $Win5080Ip = $env:WIN_5080_IP
 
@@ -811,7 +1174,7 @@ if ($PtDir) {
             $yamlText = Get-Content $DevicesYaml -Raw -Encoding UTF8
             $currentId = ""
             foreach ($line in ($yamlText -split "`n")) {
-                if ($line -match '^\s+-\s+id:\s*"?(win-rtx\d+)"?') {
+                if ($line -match '^\s+-\s+id:\s*"?([A-Za-z0-9_.-]+)"?') {
                     $currentId = $Matches[1]
                 }
                 elseif ($line -match '^\s+lan_ip:\s*"([^"]*)"' -and $currentId) {
@@ -826,53 +1189,85 @@ if ($PtDir) {
     }
 }
 
-# Fallback to localhost if not found
-if (-not $Win3080Ip) { $Win3080Ip = 'localhost' }
-if (-not $Win5080Ip) { $Win5080Ip = 'localhost' }
+# A configured IP is "local" when it is on any local interface (or the loopback name).
+function Topo-IsLocalIp([string]$ip) {
+    <#
+    .SYNOPSIS
+    True when the address belongs to this machine (interfaces or loopback only).
+    #>
+    if (-not $ip) { return $false }
+    return [bool]($ip -in $TopoLocalIps -or $ip -in @('localhost', $TopoLoopback))
+}
 
-# Determine which node is local (this machine) vs sibling (remote)
 $LocalIs3080 = $false
 $LocalIs5080 = $false
-if ($env:WIN_IP -and $Win3080Ip -and $env:WIN_IP -eq $Win3080Ip) { $LocalIs3080 = $true }
-elseif ($env:WIN_IP -and $Win5080Ip -and $env:WIN_IP -eq $Win5080Ip) { $LocalIs5080 = $true }
-else { $LocalIs3080 = $true }  # default: assume 3080 if we cannot tell
-
-# Sibling is the OTHER node
-$WinSiblingIp = if ($LocalIs3080) { $Win5080Ip } else { $Win3080Ip }
-
-# Probe both nodes (local = localhost, sibling = remote IP)
-function Test-LmStudioUp([string]$ip) {
-    if (-not $ip) { return $false }
-    $url = if ($ip -in @('localhost', '127.0.0.1')) { 'http://localhost:1234/v1/models' } else { "http://${ip}:1234/v1/models" }
-    try {
-        $resp = Invoke-WebRequest -Uri $url -TimeoutSec 2 -UseBasicParsing -ErrorAction Stop
-        return ($resp.StatusCode -eq 200)
-    } catch { return $false }
+if (Topo-IsLocalIp $Win3080Ip) { $LocalIs3080 = $true }
+elseif (Topo-IsLocalIp $Win5080Ip) { $LocalIs5080 = $true }
+else {
+    # Neither configured IP is on this machine: assume the 3080 and say so.
+    $LocalIs3080 = $true
+    if ($Win3080Ip -or $Win5080Ip) {
+        _Warn 'dual-win' "Configured node IPs (3080=$Win3080Ip 5080=$Win5080Ip) match no local address - config is stale; assuming this machine is the RTX 3080 (WIN_IP=$($env:WIN_IP))"
+    } else {
+        _Warn 'dual-win' "No Win node IPs configured; assuming this machine is the RTX 3080 (WIN_IP=$($env:WIN_IP))"
+    }
+    if (Topo-IsKnownIp $env:WIN_IP) { $Win3080Ip = $env:WIN_IP }
 }
-$Win3080Up = if ($LocalIs3080) { Test-LmStudioUp 'localhost' } else { Test-LmStudioUp $Win3080Ip }
-$Win5080Up = if ($LocalIs5080) { Test-LmStudioUp 'localhost' } else { Test-LmStudioUp $Win5080Ip }
+
+# Sibling is the OTHER node; unknown when empty or identical to a local address.
+$WinSiblingIp = if ($LocalIs3080) { $Win5080Ip } else { $Win3080Ip }
+if (-not (Topo-IsKnownIp $WinSiblingIp) -or (Topo-IsLocalIp $WinSiblingIp)) {
+    $WinSiblingIp = 'unknown'
+    if ($LocalIs3080) { $Win5080Ip = '' } else { $Win3080Ip = '' }
+}
+
+# Probe: local node via loopback, sibling only when its IP is known.
+$Win3080Up = $false
+$Win5080Up = $false
+if ($LocalIs3080) { $Win3080Up = Test-LmStudioUp 'localhost' } elseif (Topo-IsKnownIp $Win3080Ip) { $Win3080Up = Test-LmStudioUp $Win3080Ip }
+if ($LocalIs5080) { $Win5080Up = Test-LmStudioUp 'localhost' } elseif (Topo-IsKnownIp $Win5080Ip) { $Win5080Up = Test-LmStudioUp $Win5080Ip }
 $WinNodes = 0; if ($Win3080Up) { $WinNodes++ }; if ($Win5080Up) { $WinNodes++ }
 
-# Export for child processes and hardware routing
+# Export for child processes and hardware routing (before discovery runs)
 $env:WIN_3080_IP = $Win3080Ip
 $env:WIN_5080_IP = $Win5080Ip
 $env:WIN_NODES   = "$WinNodes"
-$env:WIN_SIBLING_IP = $WinSiblingIp
-$env:LM_STUDIO_WIN_3080_ENDPOINTS = "http://${Win3080Ip}:1234"
-$env:LM_STUDIO_WIN_5080_ENDPOINTS = "http://${Win5080Ip}:1234"
-# WIN_PEER_ENDPOINT points at the sibling for cross-node dispatch
-if ($WinSiblingIp -and $WinSiblingIp -ne "localhost") {
-    $env:WIN_PEER_ENDPOINT = if ($env:WIN_PEER_ENDPOINT -ne 'localhost:1234') { $env:WIN_PEER_ENDPOINT } else { "${WinSiblingIp}:1234" }
+$env:WIN_SIBLING_IP = if ($WinSiblingIp -eq 'unknown') { '' } else { $WinSiblingIp }
+$env:LM_STUDIO_WIN_3080_ENDPOINTS = if ($Win3080Ip) { "http://${Win3080Ip}:1234" } else { '' }
+$env:LM_STUDIO_WIN_5080_ENDPOINTS = if ($Win5080Ip) { "http://${Win5080Ip}:1234" } else { '' }
+# Peer endpoint: keep an explicit remote override; replace a loopback
+# placeholder (it points at THIS machine) with the sibling when known; leave it
+# unset when the sibling is unknown so the orchestrator skips the probe rather
+# than probing this machine.
+$WinPeerIsLoopback = $env:WIN_PEER_ENDPOINT -and ($env:WIN_PEER_ENDPOINT -match '^(?:https?://)?(?:localhost|127\.\d+\.\d+\.\d+|\[?::1\]?)(?::\d+)?/?$')
+if (-not $env:WIN_PEER_ENDPOINT -or $WinPeerIsLoopback) {
+    $env:WIN_PEER_ENDPOINT = if (Topo-IsKnownIp $WinSiblingIp) { "${WinSiblingIp}:1234" } else { '' }
 }
+
+Invoke-DiscoverEndpoints
+$MacResolved = Resolve-MacLanIp
+$MacIp    = $MacResolved.Ip
+$IpSource = $MacResolved.Source
+
+# ── Export env vars for child processes ───────────────────────────────────────
+if ($MacIp -and $MacIp -notin @('unresolved', 'localhost', $TopoLoopback)) {
+    $env:MAC_IP = $MacIp
+}
+$env:OLLAMA_MAC_ENDPOINT       = if ($env:OLLAMA_MAC_ENDPOINT)       { $env:OLLAMA_MAC_ENDPOINT }       elseif ($MacIp -notin @('unresolved','localhost',$TopoLoopback)) { "http://${MacIp}:11434" } else { 'http://localhost:11434' }
+$env:OLLAMA_WINDOWS_ENDPOINT   = if ($env:OLLAMA_WINDOWS_ENDPOINT)   { $env:OLLAMA_WINDOWS_ENDPOINT }   else { 'http://localhost:11434' }
+$env:LM_STUDIO_MAC_ENDPOINT    = if ($env:LM_STUDIO_MAC_ENDPOINT)    { $env:LM_STUDIO_MAC_ENDPOINT }    elseif ($MacIp -notin @('unresolved','localhost',$TopoLoopback)) { "http://${MacIp}:1234" } else { 'http://localhost:1234' }
+$env:LM_STUDIO_WIN_ENDPOINTS   = if ($env:LM_STUDIO_WIN_ENDPOINTS)   { $env:LM_STUDIO_WIN_ENDPOINTS }   else { "http://$($env:WIN_IP):1234" }
+# WIN_PEER_ENDPOINT - consumed by the dual-path orchestrator peer probe
+# (set above, before discovery: sibling node when known, else empty = no probe).
+$env:WIN_LM_STUDIO_HOST        = if ($env:WIN_LM_STUDIO_HOST)        { $env:WIN_LM_STUDIO_HOST }        else { 'localhost' }
+$env:WINDOWS_IP                = $env:WIN_IP
 
 if ($WinNodes -ge 2) {
     _Info 'gpu' "Dual Win nodes detected: 3080=$Win3080Ip  5080=$Win5080Ip  ($WinNodes UP, sibling=$WinSiblingIp)"
-} elseif ($Win3080Ip -or $Win5080Ip) {
-    # $(... ?? ...) is PowerShell 7+ only -- this stack runs under Windows
-    # PowerShell 5.1 (powershell.exe, per every #Requires -Version 5.1 header
-    # in this repo), which does not have the null-coalescing operator.
-    $WinSiblingDisplay = if ($WinSiblingIp) { $WinSiblingIp } else { 'none' }
-    _Info 'gpu' "Win nodes: 3080=$Win3080Ip  5080=$Win5080Ip  ($WinNodes UP, sibling=$WinSiblingDisplay)"
+} else {
+    $Win3080Shown = if ($Win3080Ip) { $Win3080Ip } else { 'unknown' }
+    $Win5080Shown = if ($Win5080Ip) { $Win5080Ip } else { 'unknown' }
+    _Info 'gpu' "Win nodes: 3080=$Win3080Shown  5080=$Win5080Shown  ($WinNodes UP, sibling=$WinSiblingIp)"
 }
 
 _Info 'ip' "Mac LMS endpoint: ${MacIp}:1234 (source: $IpSource)"
@@ -880,25 +1275,68 @@ _Info 'ip' "Mac LMS endpoint: ${MacIp}:1234 (source: $IpSource)"
 _Info 'env' 'Endpoints exported'
 
 # ── Banner ────────────────────────────────────────────────────────────────────
+$TopoVersion = Topo-GetVersion
+$TopoTitle   = "orama-system  v$TopoVersion  (Windows)"
 Write-Host ''
 Write-Host '╔══════════════════════════════════════════════════════════════════╗'
-Write-Host '║  orama-system  v1.1.0.0  (Windows)                              ║'
+Write-Host ("║  {0}║" -f $TopoTitle.PadRight(64))
 Write-Host '║  ὅραμα — vision/revelation · Layer 3 orchestration/meta-intel   ║'
 Write-Host '╠══════════════════════════════════════════════════════════════════╣'
 Write-Host ("║  Mac  {0,-9}  LM Studio expected on port 1234              ║" -f ($MacIp + ':'))
-$Win3080Label = if ($LocalIs3080) { 'localhost' } else { $Win3080Ip }
-$Win5080Label = if ($LocalIs5080) { 'localhost' } else { $Win5080Ip }
+$Win3080Label = if ($LocalIs3080) { 'localhost' } elseif ($Win3080Ip) { $Win3080Ip } else { 'unknown' }
+$Win5080Label = if ($LocalIs5080) { 'localhost' } elseif ($Win5080Ip) { $Win5080Ip } else { 'unknown' }
 $Win3080Mark  = if ($Win3080Up) { '✓' } else { '✗' }
 $Win5080Mark  = if ($Win5080Up) { '✓' } else { '✗' }
-Write-Host ("║  Win {0}  {1,-9}  RTX 3080 · qwen3.5-27b (this machine)     ║" -f $Win3080Mark, $Win3080Label)
-Write-Host ("║  Win {0}  {1,-9}  RTX 5080 · gemma-4-26b (nvfp4)           ║" -f $Win5080Mark, $Win5080Label)
+$Win3080Desc  = 'RTX 3080 · qwen3.5-27b' + $(if ($LocalIs3080) { ' (this machine)' } else { '' })
+$Win5080Desc  = 'RTX 5080 · gemma-4-26b (nvfp4)' + $(if ($LocalIs5080) { ' (this machine)' } else { '' })
+Write-Host ("║  Win {0}  {1,-9}  {2}║" -f $Win3080Mark, $Win3080Label, $Win3080Desc.PadRight(46))
+Write-Host ("║  Win {0}  {1,-9}  {2}║" -f $Win5080Mark, $Win5080Label, $Win5080Desc.PadRight(46))
 Write-Host ('╠══════════════════════════════════════════════════════════════════╣')
 Write-Host ("║  PT   port $PtPort     orama port $UsPort     Portal port $PortalPort                      ║")
 Write-Host '╚══════════════════════════════════════════════════════════════════╝'
 Write-Host ''
 
-# ── Helper: start a service as a background process ───────────────────────────
-function Start-Service {
+# ── Helper: start a service as a detached background process ──────────────────
+# scripts\lib\spawn_detached.py starts the child detached (own process group, no
+# console, outside the launcher's job), appends stdout+stderr to the log and
+# writes the PID file, then exits. The service therefore keeps running and keeps
+# logging after this launcher exits. Secrets are inherited via the environment,
+# never put on a command line.
+$LifeSpawnScript = Join-Path $RepoRoot 'scripts\lib\spawn_detached.py'
+
+# Returns the child PID (int), or 0 when the launcher failed.
+function Life-Spawn {
+    param(
+        [string]$LogFile,
+        [string]$PidFile,
+        [string]$WorkDir,
+        [string[]]$Cmd,
+        [hashtable]$EnvExtra = @{}
+    )
+    $spawnArgs = @($LifeSpawnScript, $LogFile, $PidFile, $WorkDir)
+    foreach ($kv in $EnvExtra.GetEnumerator()) {
+        $spawnArgs += '--env'
+        $spawnArgs += ('{0}={1}' -f $kv.Key, $kv.Value)
+    }
+    $spawnArgs += '--'
+    $spawnArgs += $Cmd
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $out = @(& $UsPython @spawnArgs 2>&1 | ForEach-Object { "$_" })
+        $code = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $prevEap
+    }
+    $n = 0
+    if ($code -eq 0 -and $out.Count -gt 0 -and [int]::TryParse($out[$out.Count - 1].Trim(), [ref]$n)) {
+        return $n
+    }
+    Write-Host "  spawn failed (exit $code): $($out -join ' ')"
+    return 0
+}
+
+function Start-OramaService {
     param(
         [string]$Name,
         [int]$Port,
@@ -906,41 +1344,49 @@ function Start-Service {
         [string[]]$Cmd,
         [hashtable]$EnvExtra = @{}
     )
-    if (Get-PidOnPort $Port) {
-        Write-Host "  $Name  port $Port already running"
-        return
-    }
-    $logFile = Join-Path $LogDir "$($Name.ToLower()).log"
+    $slug    = ($Name.ToLower() -replace '\s+', '_')
+    $logFile = Join-Path $LogDir "$slug.log"
+    $pidFile = Join-Path $LogDir "$slug.pid"
     $null    = New-Item -ItemType Directory -Force -Path $LogDir
-    Write-Host "  $Name  starting → $logFile"
 
-    # Build environment block
-    $psi = New-Object System.Diagnostics.ProcessStartInfo
-    $psi.FileName               = $Cmd[0]
-    $psi.Arguments              = ($Cmd[1..($Cmd.Length-1)] | ForEach-Object { "`"$_`"" }) -join ' '
-    $psi.WorkingDirectory       = $WorkDir
-    $psi.UseShellExecute        = $false
-    $psi.RedirectStandardOutput = $true
-    $psi.RedirectStandardError  = $true
-    $psi.CreateNoWindow         = $true
-    foreach ($kv in $EnvExtra.GetEnumerator()) {
-        $psi.EnvironmentVariables[$kv.Key] = $kv.Value
-    }
-    # Inherit parent env
-    foreach ($kv in [System.Environment]::GetEnvironmentVariables('Process').GetEnumerator()) {
-        if (-not $psi.EnvironmentVariables.ContainsKey($kv.Key)) {
-            $psi.EnvironmentVariables[$kv.Key] = $kv.Value
+    $owner = Get-PidOnPort $Port
+    if ($owner) {
+        if (Life-IsPythonPid ([int]$owner)) {
+            Write-Host "  $Name  port $Port already running (python PID $owner)"
+            return [pscustomobject]@{ Name = $Name; Port = $Port; Pid = [int]$owner; Started = $false; Failed = $false }
         }
+        $ownerProc = Life-GetProc ([int]$owner)
+        $ownerName = if ($ownerProc) { $ownerProc.ProcessName } else { 'unknown' }
+        Write-Host "  $Name  port $Port is held by a non-python process ($ownerName, PID $owner); not starting"
+        return [pscustomobject]@{ Name = $Name; Port = $Port; Pid = 0; Started = $false; Failed = $true }
     }
 
-    $proc = [System.Diagnostics.Process]::Start($psi)
-    # Async tee stdout+stderr to log
-    $null = $proc.StandardOutput.BaseStream.CopyToAsync(
-        [System.IO.File]::Open($logFile, [System.IO.FileMode]::Append, [System.IO.FileAccess]::Write, [System.IO.FileShare]::ReadWrite)
-    )
-    $null = $proc.StandardError.BaseStream.CopyToAsync(
-        [System.IO.File]::Open($logFile, [System.IO.FileMode]::Append, [System.IO.FileAccess]::Write, [System.IO.FileShare]::ReadWrite)
-    )
+    # Port is free: keep the previous log instead of truncating or interleaving.
+    if ((Test-Path $logFile) -and ((Get-Item $logFile).Length -gt 0)) {
+        try { Move-Item -Path $logFile -Destination "$logFile.prev" -Force -ErrorAction Stop } catch {}
+    }
+    Write-Host "  $Name  starting -> $logFile"
+    $svcPid = Life-Spawn -LogFile $logFile -PidFile $pidFile -WorkDir $WorkDir -Cmd $Cmd -EnvExtra $EnvExtra
+    if ($svcPid -le 0) {
+        return [pscustomobject]@{ Name = $Name; Port = $Port; Pid = 0; Started = $false; Failed = $true }
+    }
+    return [pscustomobject]@{ Name = $Name; Port = $Port; Pid = $svcPid; Started = $true; Failed = $false }
+}
+
+# Wait for a started service and return its summary row.
+function Life-Settle {
+    param($Svc, [string]$BindHost)
+    if ($Svc.Failed) {
+        return [pscustomobject]@{ Name = $Svc.Name; Port = $Svc.Port; State = 'FAILED'; Detail = 'could not start' }
+    }
+    if (-not $Svc.Started) {
+        return [pscustomobject]@{ Name = $Svc.Name; Port = $Svc.Port; State = 'UP'; Detail = "already running (PID $($Svc.Pid))" }
+    }
+    $up = Wait-ForPort $Svc.Port $Svc.Name 75 $Svc.Pid $BindHost
+    if ($up) {
+        return [pscustomobject]@{ Name = $Svc.Name; Port = $Svc.Port; State = 'UP'; Detail = "started (PID $($Svc.Pid))" }
+    }
+    return [pscustomobject]@{ Name = $Svc.Name; Port = $Svc.Port; State = 'FAILED'; Detail = "not listening (PID $($Svc.Pid))" }
 }
 
 # Ensure partner CLI paths are present for this session (Hermes, Codex, AGY, cursor-agent).
@@ -951,30 +1397,86 @@ if (Test-Path "$RepoRoot\platform\windows\ensure-partner-cli-paths.ps1") {
 }
 
 # ── 1. Perpetua-Tools ─────────────────────────────────────────────────────────
+$LifeResults = @()
 if ($PtDir -and (Test-Path (Join-Path $PtDir 'orchestrator\fastapi_app.py'))) {
-    Start-Service -Name 'PT' -Port $PtPort -WorkDir $PtDir `
+    $svc = Start-OramaService -Name 'PT' -Port $PtPort -WorkDir $PtDir `
         -Cmd @($PtPython, '-m', 'uvicorn', 'orchestrator.fastapi_app:app',
                '--host', $PtHost, '--port', $PtPort.ToString()) `
         -EnvExtra @{ PYTHONPATH = "$PtDir\src;$PtDir" }
-    $null = Wait-ForPort $PtPort 'PT'
+    $LifeResults += Life-Settle $svc $PtHost
+} elseif ($PtDir) {
+    Write-Host "  PT   FAILED (orchestrator\fastapi_app.py missing under: $PtDir)"
+    $LifeResults += [pscustomobject]@{ Name = 'PT'; Port = $PtPort; State = 'FAILED'; Detail = 'PT directory resolved but fastapi_app.py missing' }
 } else {
-    Write-Host "  PT   skipped (not found at: $PtDir)"
+    Write-Host '  PT   skipped (Perpetua-Tools directory not found)'
+    $LifeResults += [pscustomobject]@{ Name = 'PT'; Port = $PtPort; State = 'SKIPPED'; Detail = 'PT directory not found' }
 }
 
 # ── 2. orama reasoning engine ─────────────────────────────────────────────────
 $oramaPyPath = "$RepoRoot\src;$RepoRoot"
-Start-Service -Name 'orama' -Port $UsPort -WorkDir $RepoRoot `
+$svc = Start-OramaService -Name 'orama' -Port $UsPort -WorkDir $RepoRoot `
     -Cmd @($UsPython, '-m', 'uvicorn', 'orama_system.api_server:app',
            '--host', $UsHost, '--port', $UsPort.ToString()) `
     -EnvExtra @{ PYTHONPATH = $oramaPyPath }
-$null = Wait-ForPort $UsPort 'orama'
+$LifeResults += Life-Settle $svc $UsHost
 
 # ── 3. Portal ─────────────────────────────────────────────────────────────────
-Start-Service -Name 'Portal' -Port $PortalPort -WorkDir $RepoRoot `
+if ($PortalTlsEnabled) {
+    # The proxy is the only LAN-facing listener: force the Portal onto loopback
+    # regardless of PORTAL_BIND_LAN / PORTAL_HOST.
+    $PortalHost = [System.Net.IPAddress]::Loopback.IPAddressToString
+    Write-Host "  Portal TLS enabled: Portal binds loopback only; TLS front end on port $PortalTlsPort"
+}
+$svc = Start-OramaService -Name 'Portal' -Port $PortalPort -WorkDir $RepoRoot `
     -Cmd @($UsPython, '-m', 'uvicorn', 'orama_system.portal_server:app',
            '--host', $PortalHost, '--port', $PortalPort.ToString()) `
     -EnvExtra @{ PYTHONPATH = $oramaPyPath }
-$null = Wait-ForPort $PortalPort 'Portal'
+$portalRow = Life-Settle $svc $PortalHost
+$PortalLoopbackOk = $true
+$PortalTlsReused = $false
+if ($PortalTlsEnabled -and $portalRow.State -eq 'UP') {
+    # A reused Portal keeps whatever bind it was started with. The TLS proxy must
+    # never sit in front of one that also serves plain HTTP on the LAN.
+    $PortalLoopbackOk = Test-PortLoopbackOnly $PortalPort
+    if (-not $PortalLoopbackOk) {
+        Write-Host "  Portal  port $PortalPort is bound to a non-loopback address; not starting the TLS front end"
+        $portalRow = [pscustomobject]@{ Name = 'Portal'; Port = $PortalPort; State = 'FAILED'; Detail = 'bound to a non-loopback address; run --stop first' }
+    }
+}
+$LifeResults += $portalRow
+
+# ── 4. Portal TLS front end (only when PORTAL_TLS_ENABLED) ────────────────────
+if ($PortalTlsEnabled -and $PortalLoopbackOk) {
+    $tlsModule = if ($PtDir) { Join-Path $PtDir 'orchestrator\portal_tls_proxy.py' } else { '' }
+    if (-not $PtDir -or -not $PtPython -or -not (Test-Path $tlsModule)) {
+        Write-Host "  Portal TLS  FAILED (PORTAL_TLS_ENABLED is set but orchestrator\portal_tls_proxy.py is missing; update Perpetua-Tools)"
+        $LifeResults += [pscustomobject]@{ Name = 'Portal TLS'; Port = $PortalTlsPort; State = 'FAILED'; Detail = 'portal_tls_proxy.py missing in PT directory' }
+    } else {
+        $svc = Start-OramaService -Name 'Portal TLS' -Port $PortalTlsPort -WorkDir $PtDir `
+            -Cmd @($PtPython, '-m', 'orchestrator.portal_tls_proxy',
+                   '--listen-port', $PortalTlsPort.ToString(),
+                   '--upstream-port', $PortalPort.ToString(),
+                   '--listen-host', $PortalTlsListenHost) `
+            -EnvExtra @{ PYTHONPATH = "$PtDir\src;$PtDir" }
+        $tlsRow = Life-Settle $svc $PortalTlsListenHost
+        if ($tlsRow.State -eq 'UP' -and -not $svc.Started) { $PortalTlsReused = $true }
+        $LifeResults += $tlsRow
+    }
+}
+
+# ── Per-service summary; a failed core service fails the launcher ─────────────
+Write-Host ''
+Write-Host '── service summary ───────────────────────────────────────────────────'
+foreach ($r in $LifeResults) {
+    Write-Host ('  {0,-10} port {1,-6} {2,-8} {3}' -f $r.Name, $r.Port, $r.State, $r.Detail)
+}
+$LifeFailed = @($LifeResults | Where-Object { $_.State -eq 'FAILED' })
+if ($LifeFailed.Count -gt 0) {
+    Write-Host ("  {0} core service(s) failed: {1}" -f $LifeFailed.Count, (($LifeFailed | ForEach-Object { $_.Name }) -join ', '))
+    Write-Host ("  Logs  : {0}\" -f $LogDir)
+    Write-Host '────────────────────────────────────────────────────────────────────'
+    exit 1
+}
 
 # ── Ready ─────────────────────────────────────────────────────────────────────
 Write-Host '── services ready ────────────────────────────────────────────────────'
@@ -982,6 +1484,42 @@ Write-Host ("  ●  PT      http://localhost:{0}/health" -f $PtPort)
 Write-Host ("  ●  orama   http://localhost:{0}/health" -f $UsPort)
 Write-Host ("  ●  Portal  {0}" -f $PortalUrl)
 Write-Host ("  ○  JSON    {0}/api/status" -f $PortalUrl)
+if ($PortalTlsEnabled -and $PortalLoopbackOk) {
+    # Fingerprint lines come from the proxy itself (ca_sha256_file=, ca_public_path=).
+    $tlsCaSha = ''
+    $tlsCaPath = ''
+    $prevEapFp = $ErrorActionPreference
+    $prevPyPath = $env:PYTHONPATH
+    $ErrorActionPreference = 'Continue'
+    Push-Location $PtDir
+    try {
+        $env:PYTHONPATH = "$PtDir\src;$PtDir"
+        $fpOut = @(& $PtPython -m orchestrator.portal_tls_proxy --print-fingerprint 2>&1 | ForEach-Object { "$_" })
+        foreach ($fpLine in $fpOut) {
+            if ($fpLine -match '^ca_sha256_file=(.+)$')  { $tlsCaSha  = $Matches[1].Trim() }
+            if ($fpLine -match '^ca_public_path=(.+)$')  { $tlsCaPath = $Matches[1].Trim() }
+        }
+    } finally {
+        Pop-Location
+        $env:PYTHONPATH = $prevPyPath
+        $ErrorActionPreference = $prevEapFp
+    }
+    Write-Host ("  ●  Portal TLS  https://localhost:{0}  (LAN-facing; Portal itself is loopback-only)" -f $PortalTlsPort)
+    if ($PortalTlsReused) {
+        Write-Host '     NOTE: the TLS front end was already running; the fingerprint below reflects the'
+        Write-Host '     current PORTAL_TLS_STATE_DIR. If it was started with another state dir, compare'
+        Write-Host '     with ca_sha256_file= in .logs\portal_tls.log, or run --stop and relaunch.'
+    }
+    if ($tlsCaSha -and $tlsCaPath) {
+        Write-Host ("     CA public cert : {0}" -f $tlsCaPath)
+        Write-Host ("     CA SHA-256     : {0}" -f $tlsCaSha)
+        Write-Host '     Send the CA public cert to the peer, then compare its SHA-256 through a'
+        Write-Host '     separate channel (voice, chat) before the peer trusts it. Never send a private key.'
+    } else {
+        Write-Host '     WARNING: could not read the CA fingerprint from --print-fingerprint output:'
+        foreach ($fpLine in $fpOut) { Write-Host "       | $fpLine" }
+    }
+}
 Write-Host ''
 Write-Host ("  Logs  : {0}\" -f $LogDir)
 Write-Host '  Stop  : .\platform\windows\start.ps1 --stop'
@@ -989,13 +1527,22 @@ Write-Host '  LAN   : .\platform\windows\start.ps1 --lan-peer'
 Write-Host '────────────────────────────────────────────────────────────────────'
 Write-Host ''
 
-# ── Verify and arm all fallback tiers on startup ────────────────────────────────
+# ── Verify model fallback tiers on startup (report the real result) ───────────
 Write-Host '── model fallback chain ────────────────────────────────────────────'
 $FallbackVerifyPs1 = Join-Path $ScriptDir 'fallback-chain-verify.ps1'
 if (Test-Path $FallbackVerifyPs1) {
-    # Run native PowerShell verification script
-    & $FallbackVerifyPs1 -StatusOnly
-    Write-Host '✅ All model tiers verified; automatic failover armed'
+    $fallbackCode = 1
+    try {
+        & $FallbackVerifyPs1 -StatusOnly
+        $fallbackCode = $LASTEXITCODE
+    } catch {
+        Write-Host "⚠️  Fallback chain verification failed to run: $($_.Exception.Message)"
+    }
+    if ($fallbackCode -eq 0) {
+        Write-Host '✅ LM Studio (hard-required tier) is up; other tiers are listed above'
+    } else {
+        Write-Host '⚠️  LM Studio (hard-required tier) is DOWN; failover is not fully armed (services stay up)'
+    }
 } else {
     Write-Host "⚠️  Fallback chain verification script not found at $FallbackVerifyPs1"
 }
@@ -1027,28 +1574,30 @@ if ($LanPeer) {
         _Warn 'lan-peer' 'skipping outbox flush until peer portal probe passes'
     }
 
-    # ── LM Link watcher autostart (background job, idempotent) ────────────────
+    # ── LM Link watcher autostart (detached process, per-repo PID file, idempotent) ──
     try {
         $LmLinkWatchScript = Join-Path $RepoRoot 'scripts\lm_link_watch.ps1'
         if (-not (Test-Path $LmLinkWatchScript)) {
             _Warn 'lan-peer' "lm_link_watch.ps1 not found at: $LmLinkWatchScript - skipping watcher autostart"
         } else {
-            $existingJob = Get-Job -Name 'lm-link-watch' -ErrorAction SilentlyContinue
-            if ($existingJob -and $existingJob.State -in @('Running', 'NotStarted')) {
-                _Info 'lan-peer' "lm-link-watch job already running (State=$($existingJob.State))"
+            $watchPidFile = Join-Path $LogDir 'lm_link_watch.pid'
+            $watchPid = Life-ReadPid $watchPidFile
+            if ($watchPid -gt 0 -and (Life-PidMatches $watchPid '^(powershell|pwsh)$' 'lm_link_watch')) {
+                _Info 'lan-peer' "lm-link-watch already running (PID $watchPid)"
             } else {
-                if ($existingJob) {
-                    Remove-Job -Name 'lm-link-watch' -Force -ErrorAction SilentlyContinue
+                $null = New-Item -ItemType Directory -Force -Path $LogDir
+                $watchLog = Join-Path $LogDir 'lm_link_watch.log'
+                $newWatchPid = Life-Spawn -LogFile $watchLog -PidFile $watchPidFile -WorkDir $RepoRoot `
+                    -Cmd @('powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $LmLinkWatchScript)
+                if ($newWatchPid -gt 0) {
+                    _Info 'lan-peer' "lm-link-watch started detached (PID $newWatchPid, log $watchLog)"
+                } else {
+                    _Warn 'lan-peer' 'lm-link-watch failed to start'
                 }
-                Start-Job -Name 'lm-link-watch' -ScriptBlock {
-                    param($ScriptPath)
-                    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $ScriptPath
-                } -ArgumentList $LmLinkWatchScript | Out-Null
-                _Info 'lan-peer' 'lm-link-watch background job started'
             }
         }
     } catch {
-        _Warn 'lan-peer' "failed to start lm-link-watch job: $($_.Exception.Message)"
+        _Warn 'lan-peer' "failed to start lm-link-watch: $($_.Exception.Message)"
     }
 }
 
