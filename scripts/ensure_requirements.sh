@@ -33,9 +33,11 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-STAMP_FILE="${SCRIPT_DIR}/.requirements.stamp"
+source "$SCRIPT_DIR/scripts/lib/node-global-path.sh"
 OLLAMA_ENDPOINT="${OLLAMA_MAC_ENDPOINT:-http://localhost:11434}"
 LOG_DIR="${SCRIPT_DIR}/.logs"
+VENV_DIR="${ORAMA_VENV_DIR:-${SCRIPT_DIR}/.venv}"
+STAMP_FILE="${VENV_DIR}/.orama-requirements.stamp"
 mkdir -p "$LOG_DIR"
 
 # ── flags ─────────────────────────────────────────────────────────────────────
@@ -75,7 +77,9 @@ _os_label() {
 # ── stamp helpers ─────────────────────────────────────────────────────────────
 _req_hash() {
   local req="${SCRIPT_DIR}/requirements.txt"
-  [ -f "$req" ] && sha256sum "$req" 2>/dev/null | cut -d' ' -f1 || echo "none"
+  if [ ! -f "$req" ]; then echo "none"
+  elif command -v sha256sum >/dev/null 2>&1; then sha256sum "$req" | awk '{print $1}'
+  else shasum -a 256 "$req" | awk '{print $1}'; fi
 }
 _stamp_current() { cat "$STAMP_FILE" 2>/dev/null | grep "^python_req=" | cut -d= -f2 || echo ""; }
 _stamp_write() {
@@ -268,10 +272,10 @@ fi
 _info "Phase 6 — Python venv + dependencies"
 
 VENV_FRESH=0
-if [ ! -d "${SCRIPT_DIR}/.venv" ]; then
+if [ ! -d "$VENV_DIR" ]; then
   if [ "$MODE_CHECK" -eq 0 ]; then
     _info "Creating Python venv..."
-    python3 -m venv "${SCRIPT_DIR}/.venv" >>"${LOG_DIR}/install.log" 2>&1 \
+    python3 -m venv "$VENV_DIR" >>"${LOG_DIR}/install.log" 2>&1 \
       || { _warn "venv creation failed — see ${LOG_DIR}/install.log"; }
     VENV_FRESH=1
   else
@@ -281,21 +285,18 @@ else
   _ok "Python venv exists"
 fi
 
-if [ -d "${SCRIPT_DIR}/.venv" ]; then
+if [ -d "$VENV_DIR" ]; then
   CURRENT_HASH="$(_stamp_current)"
   EXPECTED_HASH="$(_req_hash)"
   if [ "$MODE_FORCE" -eq 1 ] || [ "$VENV_FRESH" -eq 1 ] || [ "$CURRENT_HASH" != "$EXPECTED_HASH" ]; then
     if [ "$MODE_CHECK" -eq 0 ]; then
       _info "Installing Python deps (requirements.txt changed)..."
       _pip_ok=0
-      if [ -x "${SCRIPT_DIR}/.venv/bin/pip" ]; then
-        "${SCRIPT_DIR}/.venv/bin/pip" install -q -r "${SCRIPT_DIR}/requirements.txt" \
+      if "$VENV_DIR/bin/python" -m pip --version >/dev/null 2>&1; then
+        "$VENV_DIR/bin/python" -m pip install -q -r "${SCRIPT_DIR}/requirements.txt" \
           >>"${LOG_DIR}/install.log" 2>&1 && _pip_ok=1
       elif command -v uv >/dev/null 2>&1; then
-        (cd "${SCRIPT_DIR}" && uv pip install -q -r requirements.txt) \
-          >>"${LOG_DIR}/install.log" 2>&1 && _pip_ok=1
-      elif "${SCRIPT_DIR}/.venv/bin/python" -m pip --version >/dev/null 2>&1; then
-        "${SCRIPT_DIR}/.venv/bin/python" -m pip install -q -r "${SCRIPT_DIR}/requirements.txt" \
+        uv pip install --python "$VENV_DIR/bin/python" -q -r "$SCRIPT_DIR/requirements.txt" \
           >>"${LOG_DIR}/install.log" 2>&1 && _pip_ok=1
       fi
       if [ "$_pip_ok" -eq 1 ]; then

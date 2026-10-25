@@ -272,6 +272,7 @@ fi
 [ -n "$ORAMA_COORD_PULSE_REQUESTED" ] && export ORAMA_COORD_PULSE="$ORAMA_COORD_PULSE_REQUESTED"
 
 # Gitignored env (.env → .env.local) before gateway/profile reads ${env:...} config
+_PT_SOURCE_REQUESTED="${PERPETUA_TOOLS_ROOT:-${PERPETUATOOLSROOT:-${PERPETUA_TOOLS_PATH:-${PT_HOME:-}}}}"
 if [ -f "$SCRIPT_DIR/scripts/env/load-local.sh" ]; then
   # shellcheck source=scripts/env/load-local.sh
   source "$SCRIPT_DIR/scripts/env/load-local.sh"
@@ -322,6 +323,11 @@ _discover_pt_dir() {
 _best_python() {
   local dir="$1"
   local venv_py="${dir}/.venv/bin/python"
+  if [ "$dir" = "${PT_DIR:-}" ] && [ -n "${PT_VENV_DIR:-}" ]; then
+    venv_py="${PT_VENV_DIR}/bin/python"
+  elif [ "$dir" = "$SCRIPT_DIR" ] && [ -n "${ORAMA_VENV_DIR:-}" ]; then
+    venv_py="${ORAMA_VENV_DIR}/bin/python"
+  fi
   if [ -x "$venv_py" ]; then echo "$venv_py"
   else which python3 2>/dev/null || which python
   fi
@@ -336,6 +342,28 @@ if [ -f "$PATHS_FILE" ]; then
 else
   _debug "path" ".paths not found — will discover"
 fi
+
+# Explicit source selection beats a historical cache; changing source also
+# invalidates its cached interpreter. Never update or switch a source implicitly.
+if [ -n "${_PT_SOURCE_REQUESTED:-}" ]; then
+  export PERPETUA_TOOLS_ROOT="$_PT_SOURCE_REQUESTED"
+fi
+for _pt_var in PERPETUA_TOOLS_ROOT PERPETUATOOLSROOT PERPETUA_TOOLS_PATH PT_HOME; do
+  _pt_override="${!_pt_var:-}"
+  if [ -n "$_pt_override" ]; then
+    [ -f "$_pt_override/orchestrator/fastapi_app.py" ] || {
+      _err "path" "Explicit PT source lacks orchestrator/fastapi_app.py"; exit 1;
+    }
+    PT_DIR="$(cd "$_pt_override" && pwd -P)"
+    PT_PYTHON=""
+    break
+  fi
+done
+if [ -n "${PT_DIR:-}" ] && [ -d "$PT_DIR" ]; then
+  PT_DIR="$(cd "$PT_DIR" && pwd -P)"
+fi
+if [ -n "${PT_VENV_DIR:-}" ] || [ ! -x "${PT_PYTHON:-}" ]; then PT_PYTHON=""; fi
+if [ -n "${ORAMA_VENV_DIR:-}" ] || [ ! -x "${US_PYTHON:-}" ]; then US_PYTHON=""; fi
 
 # Fill in any missing values via discovery
 if [ -z "${PT_DIR:-}" ]; then
@@ -555,6 +583,8 @@ if [ ! -f "$PATHS_FILE" ] || [ "$DISCOVER_ONLY" = "1" ]; then
 PT_DIR="${PT_DIR}"
 PT_PYTHON="${PT_PYTHON}"
 US_PYTHON="${US_PYTHON}"
+export PT_VENV_DIR="${PT_VENV_DIR:-}"
+export ORAMA_VENV_DIR="${ORAMA_VENV_DIR:-}"
 PATHSEOF
   echo "  Paths written to .paths (gitignored)"
   [ "$DISCOVER_ONLY" = "1" ] && exit 0
@@ -730,6 +760,7 @@ PY
 
 LOG_DIR="$SCRIPT_DIR/.logs"
 mkdir -p "$LOG_DIR"
+source "$SCRIPT_DIR/scripts/lib/node-global-path.sh"
 
 # ── hard requirements probe (fail closed on Ollama + models) ─────────────────
 # Runs before any service logic. Idempotent — fast when already satisfied.
@@ -747,7 +778,7 @@ if [[ "${ORAMA_SKIP_ENSURE:-0}" != "1" ]] && [ -f "$SCRIPT_DIR/scripts/ensure_re
   if [ -n "${PT_DIR:-}" ] && [ -f "${PT_DIR}/scripts/ensure_requirements.sh" ]; then
     _info "ensure" "probing PT (Perpetua-Tools) requirements..."
     bash "${PT_DIR}/scripts/ensure_requirements.sh" --quiet \
-      2>&1 | tee -a "$LOG_DIR/startup-$(date +%Y%m%d).log" | sed 's/^/  [pt-ensure] /' || true
+      2>&1 | tee -a "$LOG_DIR/startup-$(date +%Y%m%d).log" | sed 's/^/  [pt-ensure] /'
   fi
 fi
 
@@ -842,7 +873,10 @@ fi
 #   • Writes updated IPs to ~/.openclaw/openclaw.json and state/discovery.json
 #   • Patches Perpetua-Tools config/ YAML files
 #   • Total time: ~0.5s if Win offline, ~4-5s if Win online (model fetch)
-_DISCOVER_SCRIPT="$HOME/.openclaw/scripts/discover.py"
+_DISCOVER_SCRIPT="$SCRIPT_DIR/scripts/discover.py"
+if [ ! -f "$_DISCOVER_SCRIPT" ]; then
+  _DISCOVER_SCRIPT="$HOME/.openclaw/scripts/discover.py"
+fi
 if [ -f "$_DISCOVER_SCRIPT" ]; then
   _info "ip" "probing LAN topology (discover.py --force)..."
   if _run_discover_force_with_timeout 30 \
@@ -1512,11 +1546,15 @@ _print_banner() {
   _win3080_f="$(mktemp /tmp/.orama_probe_win3080_XXXXXX)"
   _win5080_f="$(mktemp /tmp/.orama_probe_win5080_XXXXXX)"
   _oc_f="$(mktemp /tmp/.orama_probe_oc_XXXXXX)"
-  # _nc_probe: cross-platform 1-second TCP probe (nc -w1 on macOS/Linux, /dev/tcp fallback)
+  # Darwin requires -G for the connect deadline; -w only bounds idle I/O.
   _nc_probe() {
     local host="$1" port="$2"
     if command -v nc &>/dev/null; then
-      nc -z -w 1 "$host" "$port" >/dev/null 2>&1
+      if [ "${_OS_NAME:-}" = "Darwin" ]; then
+        nc -z -G 1 -w 1 "$host" "$port" >/dev/null 2>&1
+      else
+        nc -z -w 1 "$host" "$port" >/dev/null 2>&1
+      fi
     else
       python3 - "$host" "$port" <<'PY' >/dev/null 2>&1
 import socket

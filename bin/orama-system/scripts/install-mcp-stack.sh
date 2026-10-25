@@ -75,7 +75,11 @@ _safe_path() {
 }
 
 _SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-_REPO_ROOT="$(cd "$_SCRIPT_DIR/../../.." && pwd)"
+_REPO_ROOT="$(cd "$_SCRIPT_DIR/.." && pwd)"
+if [ ! -f "$_REPO_ROOT/scripts/ensure_ai_cli_mcp.py" ]; then
+  _REPO_ROOT="$(cd "$_SCRIPT_DIR/../../.." && pwd)"
+fi
+source "$_REPO_ROOT/scripts/lib/node-global-path.sh"
 _READINESS="$_REPO_ROOT/scripts/ensure_ai_cli_mcp.py"
 [ -f "$_READINESS" ] || _fail "shared MCP readiness helper missing: $_READINESS"
 AI_CLI_MCP_VERSION="$(python3 -c 'import runpy,sys; print(runpy.run_path(sys.argv[1])["AI_CLI_MCP_VERSION"])' "$_READINESS")"
