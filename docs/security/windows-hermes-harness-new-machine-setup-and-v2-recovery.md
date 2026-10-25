@@ -136,7 +136,10 @@ directory when Hermes uses a different active home.
 ```powershell
 $HermesHome = Split-Path -Parent (hermes config path)
 $env:HERMES_HOME = $HermesHome
+# Resolve the Perpetua-Tools checkout first; fail fast if it is unset or wrong.
+if (-not $env:PERPETUA_TOOLS_PATH) { throw 'Set PERPETUA_TOOLS_PATH to your Perpetua-Tools checkout before continuing.' }
 $EccRoot = Join-Path $env:PERPETUA_TOOLS_PATH 'vendor\ecc-tools'
+if (-not (Test-Path (Join-Path $EccRoot 'scripts\install-apply.js'))) { throw "ECC checkout not found at $EccRoot (run: git submodule update --init vendor/ecc-tools)" }
 
 # Run from a trusted ECC checkout. Confirm the reported install root equals $env:HERMES_HOME.
 node "$EccRoot\scripts\install-apply.js" --target hermes --profile minimal --dry-run --json
