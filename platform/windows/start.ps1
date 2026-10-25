@@ -596,6 +596,41 @@ if (-not $ReadOnlyMode -and ($LanPeer -or (Test-LanBindConfigured))) {
     }
 }
 
+function Topo-MaskSecrets([string]$Text) {
+    <#
+    .SYNOPSIS
+    Mask secret-bearing values in captured text.
+    #>
+    # Mask secret-bearing values in captured child output: JSON string values
+    # (keys with underscores/hyphens, escaped quotes inside the value),
+    # key=value pairs, and Bearer credentials. Applied before console AND log.
+    $keys = '[\w-]*(?:token|secret|authorization|api[_-]?key|password|passwd|credential)[\w-]*'
+    $Text = $Text -replace ('(?i)("' + $keys + '"\s*:\s*")(?:[^"\\]|\\.)*(")'), '$1***$2'
+    $Text = $Text -replace ('(?i)(\b' + $keys + '\s*[=:]\s*)(?:Bearer\s+)?[^\s,;"'']+'), '$1***'
+    $Text = $Text -replace '(?i)(\bBearer\s+)[A-Za-z0-9._~+/=-]+', '$1***'
+    return $Text
+}
+
+function Topo-WriteProbeOutput {
+    <#
+    .SYNOPSIS
+    Print captured child output to host and startup log with secrets masked.
+    #>
+    # Show captured child output on the host and in the startup log; mask any
+    # token-like JSON values before printing.
+    param([string]$Tag, $Lines)
+    foreach ($ln in @($Lines)) {
+        $s = "$ln"
+        if (-not $s.Trim()) { continue }
+        $s = Topo-MaskSecrets $s
+        Write-Host "  [$Tag] $s"
+        try {
+            $null = New-Item -ItemType Directory -Force -Path $LogDir
+            Add-Content -Path (Join-Path $LogDir "startup-$(Get-Date -Format yyyyMMdd).log") -Value "  [$Tag] $s"
+        } catch {}
+    }
+}
+
 function Invoke-LanPeerProbe {
     $probe = Join-Path $RepoRoot 'bin\orama-system\skills\hermes-harness\scripts\probe_lan_peer.py'
     if (-not (Test-Path $probe)) {
@@ -608,12 +643,22 @@ function Invoke-LanPeerProbe {
     $probeTimeout = if ($env:LAN_PEER_PROBE_TIMEOUT) { $env:LAN_PEER_PROBE_TIMEOUT } else { '2' }
     $statusTimeout = if ($env:LAN_PEER_STATUS_TIMEOUT) { $env:LAN_PEER_STATUS_TIMEOUT } else { '3' }
     $wsTimeout = if ($env:LAN_PEER_WS_TIMEOUT) { $env:LAN_PEER_WS_TIMEOUT } else { '2' }
-    & $UsPython $probe --json --timeout $probeTimeout --status-timeout $statusTimeout --ws-timeout $wsTimeout
-    if ($LASTEXITCODE -ne 0) {
-        _Warn 'lan-peer' 'peer probe reported failures (Mac peer may need ./start.sh --lan-peer)'
-        return $false
+    # Capture stdout/stderr: leaving the call uncaptured leaks the JSON into this
+    # function's output stream, so the caller would see a non-empty (truthy)
+    # array even when the probe failed.
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $out = & $UsPython $probe --json --timeout $probeTimeout --status-timeout $statusTimeout --ws-timeout $wsTimeout 2>&1
+        $probeExit = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $prevEap
     }
-    return $true
+    Topo-WriteProbeOutput 'probe' $out
+    if ($probeExit -ne 0) {
+        _Warn 'lan-peer' 'peer probe reported failures (Mac peer may need ./start.sh --lan-peer)'
+    }
+    return ($probeExit -eq 0)
 }
 
 function Invoke-LanPeerOutboxFlush {
@@ -626,8 +671,16 @@ function Invoke-LanPeerOutboxFlush {
     if ($PtDir) { Set-LauncherPtEnv -Dir $PtDir -RootOnly }
     _Info 'lan-peer' 'flushing queued peer drops ...'
     $httpTimeout = if ($env:LAN_PEER_HTTP_TIMEOUT) { $env:LAN_PEER_HTTP_TIMEOUT } else { '2' }
-    & $UsPython $assign flush-outbox --peer --timeout $httpTimeout
-    if ($LASTEXITCODE -ne 0) {
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $flushOut = & $UsPython $assign flush-outbox --peer --timeout $httpTimeout 2>&1
+        $flushExit = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $prevEap
+    }
+    Topo-WriteProbeOutput 'outbox' $flushOut
+    if ($flushExit -ne 0) {
         _Warn 'lan-peer' 'queued peer drops remain pending'
     }
 }
@@ -640,7 +693,7 @@ function Invoke-LanPeerSession {
         return $true
     }
     & $UsPython $session @LanArgs | Out-Null
-    return ($LASTEXITCODE -eq 0)
+    return [bool]($LASTEXITCODE -eq 0)
 }
 
 # ── Hardware policy check ─────────────────────────────────────────────────────
@@ -781,6 +834,90 @@ if ($Status) {
 }
 
 # ── LAN discovery (always fresh before IP resolution) ─────────────────────────
+# ── Topology helpers (Topo- prefix) ───────────────────────────────────────────
+# Loopback by address object, never by name: resolving 'localhost' tries the
+# IPv6 loopback first and costs ~2 s per probe when nothing listens there.
+$TopoLoopback = [System.Net.IPAddress]::Loopback.IPAddressToString
+
+function Topo-GetLocalIPv4 {
+    <#
+    .SYNOPSIS
+    Return every IPv4 address bound to this machine.
+    #>
+    # Every IPv4 address bound on this machine.
+    try {
+        return @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop | Select-Object -ExpandProperty IPAddress)
+    } catch {
+        try {
+            return @([System.Net.Dns]::GetHostAddresses([System.Net.Dns]::GetHostName()) |
+                Where-Object { $_.AddressFamily -eq [System.Net.Sockets.AddressFamily]::InterNetwork } |
+                ForEach-Object { $_.IPAddressToString })
+        } catch { return @() }
+    }
+}
+
+function Topo-GetDefaultRouteIp {
+    <#
+    .SYNOPSIS
+    Return the IPv4 address used for the default route, or empty.
+    #>
+    # IPv4 of the interface that owns the lowest-metric default route.
+    try {
+        $route = Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction Stop |
+            Sort-Object { $_.RouteMetric + $_.InterfaceMetric } | Select-Object -First 1
+        $addr = Get-NetIPAddress -InterfaceIndex $route.InterfaceIndex -AddressFamily IPv4 -ErrorAction Stop |
+            Select-Object -First 1
+        $ipText = [string]$addr.IPAddress
+        if ($ipText) { return $ipText }
+        return 'localhost'
+    } catch { return 'localhost' }
+}
+
+function Topo-GetVersion {
+    <#
+    .SYNOPSIS
+    Return the orama-system version read from the version module.
+    #>
+    # Single source of truth is src/orama_system/_version.py (pyproject.toml
+    # reads it dynamically); pyproject.toml is the fallback.
+    $candidates = @(
+        @{ Path = (Join-Path $RepoRoot 'src\orama_system\_version.py'); Pattern = '(?m)^__version__\s*=\s*["'']([^"'']+)["'']' },
+        @{ Path = (Join-Path $RepoRoot 'pyproject.toml');               Pattern = '(?m)^version\s*=\s*"([^"]+)"' }
+    )
+    foreach ($c in $candidates) {
+        if (-not (Test-Path $c.Path)) { continue }
+        try {
+            $m = [regex]::Match((Get-Content $c.Path -Raw -Encoding UTF8), $c.Pattern)
+            if ($m.Success) { return $m.Groups[1].Value }
+        } catch {}
+    }
+    return 'unknown'
+}
+
+function Topo-IsKnownIp([string]$ip) {
+    <#
+    .SYNOPSIS
+    True when the value is a concrete, resolvable peer address.
+    #>
+    return [bool]($ip -and $ip -notin @('unknown', 'unresolved', 'localhost', $TopoLoopback))
+}
+
+function Test-LmStudioUp([string]$ip) {
+    <#
+    .SYNOPSIS
+    Probe LM Studio on the given host with a 5 s timeout; returns bool.
+    #>
+    if (-not $ip) { return $false }
+    # Local checks use the loopback address object (8 ms) not 'localhost' (~2 s);
+    # 5 s timeout matches the other LM Studio check in this script.
+    $probeHost = if ($ip -in @('localhost', $TopoLoopback)) { $TopoLoopback } else { $ip }
+    $url = "http://${probeHost}:1234/v1/models"
+    try {
+        $resp = Invoke-WebRequest -Uri $url -TimeoutSec 5 -UseBasicParsing -ErrorAction Stop
+        return ($resp.StatusCode -eq 200)
+    } catch { return $false }
+}
+
 function Invoke-DiscoverEndpoints {
     $scripts = @(
         (Join-Path $RepoRoot 'scripts\discover.py'),
@@ -823,7 +960,7 @@ function Resolve-MacLanIp {
         } else {
             try { $macIp = ([uri]$raw.Trim()).Host } catch { continue }
         }
-        if ($macIp -and $macIp -notin @('localhost', '127.0.0.1')) {
+        if ($macIp -and $macIp -notin @('localhost', $TopoLoopback)) {
             $source = $var
             break
         }
@@ -836,7 +973,7 @@ function Resolve-MacLanIp {
             try {
                 $state = Get-Content $statePath -Raw | ConvertFrom-Json
                 $candidate = $state.endpoints.mac.ip
-                if ($candidate -and $candidate -notin @('', 'localhost', '127.0.0.1')) {
+                if ($candidate -and $candidate -notin @('', 'localhost', $TopoLoopback)) {
                     $macIp = $candidate
                     $source = 'last_discovery.json'
                 }
@@ -852,7 +989,7 @@ function Resolve-MacLanIp {
                 $url  = $json.models.providers.'lmstudio-mac'.baseUrl
                 if ($url) {
                     $hostFromUrl = ([uri]$url).Host
-                    if ($hostFromUrl -notin @('', 'localhost', '127.0.0.1')) {
+                    if ($hostFromUrl -notin @('', 'localhost', $TopoLoopback)) {
                         $macIp = $hostFromUrl
                         $source = 'openclaw.json'
                     }
@@ -870,44 +1007,33 @@ function Resolve-MacLanIp {
     return @{ Ip = $macIp; Source = $source }
 }
 
-Invoke-DiscoverEndpoints
-$MacResolved = Resolve-MacLanIp
-$MacIp    = $MacResolved.Ip
-$IpSource = $MacResolved.Source
-
-# ── Export env vars for child processes ───────────────────────────────────────
-if ($MacIp -and $MacIp -notin @('unresolved', 'localhost', '127.0.0.1')) {
-    $env:MAC_IP = $MacIp
-}
-$env:WIN_IP = if ($env:WIN_IP) { $env:WIN_IP } else {
-    try {
-        $s = New-Object System.Net.Sockets.Socket([System.Net.Sockets.AddressFamily]::InterNetwork, [System.Net.Sockets.SocketType]::Dgram, [System.Net.Sockets.ProtocolType]::Udp)
-        $s.Connect('192.168.254.1', 80)
-        ($s.LocalEndPoint).Address.ToString()
-    } catch { 'localhost' }
-}
-$env:OLLAMA_MAC_ENDPOINT       = if ($env:OLLAMA_MAC_ENDPOINT)       { $env:OLLAMA_MAC_ENDPOINT }       elseif ($MacIp -notin @('unresolved','localhost','127.0.0.1')) { "http://${MacIp}:11434" } else { 'http://localhost:11434' }
-$env:OLLAMA_WINDOWS_ENDPOINT   = if ($env:OLLAMA_WINDOWS_ENDPOINT)   { $env:OLLAMA_WINDOWS_ENDPOINT }   else { 'http://localhost:11434' }
-$env:LM_STUDIO_MAC_ENDPOINT    = if ($env:LM_STUDIO_MAC_ENDPOINT)    { $env:LM_STUDIO_MAC_ENDPOINT }    elseif ($MacIp -notin @('unresolved','localhost','127.0.0.1')) { "http://${MacIp}:1234" } else { 'http://localhost:1234' }
-$env:LM_STUDIO_WIN_ENDPOINTS   = if ($env:LM_STUDIO_WIN_ENDPOINTS)   { $env:LM_STUDIO_WIN_ENDPOINTS }   else { "http://$($env:WIN_IP):1234" }
-# WIN_PEER_ENDPOINT - consumed by the dual-path orchestrator peer probe.
-# On Windows, the Win peer is this machine (localhost:1234).
-$env:WIN_PEER_ENDPOINT         = if ($env:WIN_PEER_ENDPOINT)         { $env:WIN_PEER_ENDPOINT }         else { 'localhost:1234' }
-$env:WIN_LM_STUDIO_HOST        = if ($env:WIN_LM_STUDIO_HOST)        { $env:WIN_LM_STUDIO_HOST }        else { 'localhost' }
-$env:WINDOWS_IP                = $env:WIN_IP
-
 # ── Dual Windows node detection (RTX 3080 + RTX 5080) ────────────────────────
 # This machine is ONE Win node; detect the SIBLING Win node on the LAN.
-# Reads PT config/devices.yml for both node IPs, identifies which is local
-# (matches WIN_IP or localhost), probes the sibling on port 1234.
+# Runs BEFORE Invoke-DiscoverEndpoints so discover.py inherits WIN_3080_IP /
+# WIN_5080_IP / WIN_IP from the environment.
+# Reads PT config/devices.yml for both node IPs and identifies which is local by
+# comparing against ALL local IPv4 addresses. Probes only a KNOWN sibling IP on
+# port 1234; an unknown sibling is reported 'unknown' and never probed.
 # Exports WIN_3080_IP, WIN_5080_IP, WIN_NODES, WIN_SIBLING_IP.
 # Coordinated with start.sh dual-node detection (same env vars).
 #
 # Priority for each node IP:
 #   1. Explicit env var (WIN_3080_IP / WIN_5080_IP) — user override
 #   2. PT config/devices.yml (win-rtx3080.lan_ip / win-rtx5080.lan_ip)
-#   3. Localhost fallback (this machine is that node)
 # Idempotent: read-only HTTP probes, no state mutation, safe to re-run.
+# A pre-set WIN_IP is trusted only when it is on a local interface; a stale one
+# (from .env.local or a previous run in this console) is warned about and replaced.
+$TopoLocalIps = @(Topo-GetLocalIPv4)
+# WIN_IP is an operator hint for the Windows-facing address, NOT proof of
+# locality: it must never be added to $TopoLocalIps (a stale or sibling value
+# would make the sibling look local). Local identity comes from interfaces only.
+if ($env:WIN_IP -and $env:WIN_IP -notin $TopoLocalIps) {
+    _Warn 'dual-win' "WIN_IP=$($env:WIN_IP) is not on any local interface - stale; using the default-route address instead"
+    $env:WIN_IP = Topo-GetDefaultRouteIp
+} elseif (-not $env:WIN_IP) {
+    $env:WIN_IP = Topo-GetDefaultRouteIp
+}
+
 $Win3080Ip = $env:WIN_3080_IP
 $Win5080Ip = $env:WIN_5080_IP
 
@@ -919,7 +1045,7 @@ if ($PtDir) {
             $yamlText = Get-Content $DevicesYaml -Raw -Encoding UTF8
             $currentId = ""
             foreach ($line in ($yamlText -split "`n")) {
-                if ($line -match '^\s+-\s+id:\s*"?(win-rtx\d+)"?') {
+                if ($line -match '^\s+-\s+id:\s*"?([A-Za-z0-9_.-]+)"?') {
                     $currentId = $Matches[1]
                 }
                 elseif ($line -match '^\s+lan_ip:\s*"([^"]*)"' -and $currentId) {
@@ -934,53 +1060,85 @@ if ($PtDir) {
     }
 }
 
-# Fallback to localhost if not found
-if (-not $Win3080Ip) { $Win3080Ip = 'localhost' }
-if (-not $Win5080Ip) { $Win5080Ip = 'localhost' }
+# A configured IP is "local" when it is on any local interface (or the loopback name).
+function Topo-IsLocalIp([string]$ip) {
+    <#
+    .SYNOPSIS
+    True when the address belongs to this machine (interfaces or loopback only).
+    #>
+    if (-not $ip) { return $false }
+    return [bool]($ip -in $TopoLocalIps -or $ip -in @('localhost', $TopoLoopback))
+}
 
-# Determine which node is local (this machine) vs sibling (remote)
 $LocalIs3080 = $false
 $LocalIs5080 = $false
-if ($env:WIN_IP -and $Win3080Ip -and $env:WIN_IP -eq $Win3080Ip) { $LocalIs3080 = $true }
-elseif ($env:WIN_IP -and $Win5080Ip -and $env:WIN_IP -eq $Win5080Ip) { $LocalIs5080 = $true }
-else { $LocalIs3080 = $true }  # default: assume 3080 if we cannot tell
-
-# Sibling is the OTHER node
-$WinSiblingIp = if ($LocalIs3080) { $Win5080Ip } else { $Win3080Ip }
-
-# Probe both nodes (local = localhost, sibling = remote IP)
-function Test-LmStudioUp([string]$ip) {
-    if (-not $ip) { return $false }
-    $url = if ($ip -in @('localhost', '127.0.0.1')) { 'http://localhost:1234/v1/models' } else { "http://${ip}:1234/v1/models" }
-    try {
-        $resp = Invoke-WebRequest -Uri $url -TimeoutSec 2 -UseBasicParsing -ErrorAction Stop
-        return ($resp.StatusCode -eq 200)
-    } catch { return $false }
+if (Topo-IsLocalIp $Win3080Ip) { $LocalIs3080 = $true }
+elseif (Topo-IsLocalIp $Win5080Ip) { $LocalIs5080 = $true }
+else {
+    # Neither configured IP is on this machine: assume the 3080 and say so.
+    $LocalIs3080 = $true
+    if ($Win3080Ip -or $Win5080Ip) {
+        _Warn 'dual-win' "Configured node IPs (3080=$Win3080Ip 5080=$Win5080Ip) match no local address - config is stale; assuming this machine is the RTX 3080 (WIN_IP=$($env:WIN_IP))"
+    } else {
+        _Warn 'dual-win' "No Win node IPs configured; assuming this machine is the RTX 3080 (WIN_IP=$($env:WIN_IP))"
+    }
+    if (Topo-IsKnownIp $env:WIN_IP) { $Win3080Ip = $env:WIN_IP }
 }
-$Win3080Up = if ($LocalIs3080) { Test-LmStudioUp 'localhost' } else { Test-LmStudioUp $Win3080Ip }
-$Win5080Up = if ($LocalIs5080) { Test-LmStudioUp 'localhost' } else { Test-LmStudioUp $Win5080Ip }
+
+# Sibling is the OTHER node; unknown when empty or identical to a local address.
+$WinSiblingIp = if ($LocalIs3080) { $Win5080Ip } else { $Win3080Ip }
+if (-not (Topo-IsKnownIp $WinSiblingIp) -or (Topo-IsLocalIp $WinSiblingIp)) {
+    $WinSiblingIp = 'unknown'
+    if ($LocalIs3080) { $Win5080Ip = '' } else { $Win3080Ip = '' }
+}
+
+# Probe: local node via loopback, sibling only when its IP is known.
+$Win3080Up = $false
+$Win5080Up = $false
+if ($LocalIs3080) { $Win3080Up = Test-LmStudioUp 'localhost' } elseif (Topo-IsKnownIp $Win3080Ip) { $Win3080Up = Test-LmStudioUp $Win3080Ip }
+if ($LocalIs5080) { $Win5080Up = Test-LmStudioUp 'localhost' } elseif (Topo-IsKnownIp $Win5080Ip) { $Win5080Up = Test-LmStudioUp $Win5080Ip }
 $WinNodes = 0; if ($Win3080Up) { $WinNodes++ }; if ($Win5080Up) { $WinNodes++ }
 
-# Export for child processes and hardware routing
+# Export for child processes and hardware routing (before discovery runs)
 $env:WIN_3080_IP = $Win3080Ip
 $env:WIN_5080_IP = $Win5080Ip
 $env:WIN_NODES   = "$WinNodes"
-$env:WIN_SIBLING_IP = $WinSiblingIp
-$env:LM_STUDIO_WIN_3080_ENDPOINTS = "http://${Win3080Ip}:1234"
-$env:LM_STUDIO_WIN_5080_ENDPOINTS = "http://${Win5080Ip}:1234"
-# WIN_PEER_ENDPOINT points at the sibling for cross-node dispatch
-if ($WinSiblingIp -and $WinSiblingIp -ne "localhost") {
-    $env:WIN_PEER_ENDPOINT = if ($env:WIN_PEER_ENDPOINT -ne 'localhost:1234') { $env:WIN_PEER_ENDPOINT } else { "${WinSiblingIp}:1234" }
+$env:WIN_SIBLING_IP = if ($WinSiblingIp -eq 'unknown') { '' } else { $WinSiblingIp }
+$env:LM_STUDIO_WIN_3080_ENDPOINTS = if ($Win3080Ip) { "http://${Win3080Ip}:1234" } else { '' }
+$env:LM_STUDIO_WIN_5080_ENDPOINTS = if ($Win5080Ip) { "http://${Win5080Ip}:1234" } else { '' }
+# Peer endpoint: keep an explicit remote override; replace a loopback
+# placeholder (it points at THIS machine) with the sibling when known; leave it
+# unset when the sibling is unknown so the orchestrator skips the probe rather
+# than probing this machine.
+$WinPeerIsLoopback = $env:WIN_PEER_ENDPOINT -and ($env:WIN_PEER_ENDPOINT -match '^(?:https?://)?(?:localhost|127\.\d+\.\d+\.\d+|\[?::1\]?)(?::\d+)?/?$')
+if (-not $env:WIN_PEER_ENDPOINT -or $WinPeerIsLoopback) {
+    $env:WIN_PEER_ENDPOINT = if (Topo-IsKnownIp $WinSiblingIp) { "${WinSiblingIp}:1234" } else { '' }
 }
+
+Invoke-DiscoverEndpoints
+$MacResolved = Resolve-MacLanIp
+$MacIp    = $MacResolved.Ip
+$IpSource = $MacResolved.Source
+
+# ── Export env vars for child processes ───────────────────────────────────────
+if ($MacIp -and $MacIp -notin @('unresolved', 'localhost', $TopoLoopback)) {
+    $env:MAC_IP = $MacIp
+}
+$env:OLLAMA_MAC_ENDPOINT       = if ($env:OLLAMA_MAC_ENDPOINT)       { $env:OLLAMA_MAC_ENDPOINT }       elseif ($MacIp -notin @('unresolved','localhost',$TopoLoopback)) { "http://${MacIp}:11434" } else { 'http://localhost:11434' }
+$env:OLLAMA_WINDOWS_ENDPOINT   = if ($env:OLLAMA_WINDOWS_ENDPOINT)   { $env:OLLAMA_WINDOWS_ENDPOINT }   else { 'http://localhost:11434' }
+$env:LM_STUDIO_MAC_ENDPOINT    = if ($env:LM_STUDIO_MAC_ENDPOINT)    { $env:LM_STUDIO_MAC_ENDPOINT }    elseif ($MacIp -notin @('unresolved','localhost',$TopoLoopback)) { "http://${MacIp}:1234" } else { 'http://localhost:1234' }
+$env:LM_STUDIO_WIN_ENDPOINTS   = if ($env:LM_STUDIO_WIN_ENDPOINTS)   { $env:LM_STUDIO_WIN_ENDPOINTS }   else { "http://$($env:WIN_IP):1234" }
+# WIN_PEER_ENDPOINT - consumed by the dual-path orchestrator peer probe
+# (set above, before discovery: sibling node when known, else empty = no probe).
+$env:WIN_LM_STUDIO_HOST        = if ($env:WIN_LM_STUDIO_HOST)        { $env:WIN_LM_STUDIO_HOST }        else { 'localhost' }
+$env:WINDOWS_IP                = $env:WIN_IP
 
 if ($WinNodes -ge 2) {
     _Info 'gpu' "Dual Win nodes detected: 3080=$Win3080Ip  5080=$Win5080Ip  ($WinNodes UP, sibling=$WinSiblingIp)"
-} elseif ($Win3080Ip -or $Win5080Ip) {
-    # $(... ?? ...) is PowerShell 7+ only -- this stack runs under Windows
-    # PowerShell 5.1 (powershell.exe, per every #Requires -Version 5.1 header
-    # in this repo), which does not have the null-coalescing operator.
-    $WinSiblingDisplay = if ($WinSiblingIp) { $WinSiblingIp } else { 'none' }
-    _Info 'gpu' "Win nodes: 3080=$Win3080Ip  5080=$Win5080Ip  ($WinNodes UP, sibling=$WinSiblingDisplay)"
+} else {
+    $Win3080Shown = if ($Win3080Ip) { $Win3080Ip } else { 'unknown' }
+    $Win5080Shown = if ($Win5080Ip) { $Win5080Ip } else { 'unknown' }
+    _Info 'gpu' "Win nodes: 3080=$Win3080Shown  5080=$Win5080Shown  ($WinNodes UP, sibling=$WinSiblingIp)"
 }
 
 _Info 'ip' "Mac LMS endpoint: ${MacIp}:1234 (source: $IpSource)"
@@ -988,18 +1146,22 @@ _Info 'ip' "Mac LMS endpoint: ${MacIp}:1234 (source: $IpSource)"
 _Info 'env' 'Endpoints exported'
 
 # ── Banner ────────────────────────────────────────────────────────────────────
+$TopoVersion = Topo-GetVersion
+$TopoTitle   = "orama-system  v$TopoVersion  (Windows)"
 Write-Host ''
 Write-Host '╔══════════════════════════════════════════════════════════════════╗'
-Write-Host '║  orama-system  v1.1.0.0  (Windows)                              ║'
+Write-Host ("║  {0}║" -f $TopoTitle.PadRight(64))
 Write-Host '║  ὅραμα — vision/revelation · Layer 3 orchestration/meta-intel   ║'
 Write-Host '╠══════════════════════════════════════════════════════════════════╣'
 Write-Host ("║  Mac  {0,-9}  LM Studio expected on port 1234              ║" -f ($MacIp + ':'))
-$Win3080Label = if ($LocalIs3080) { 'localhost' } else { $Win3080Ip }
-$Win5080Label = if ($LocalIs5080) { 'localhost' } else { $Win5080Ip }
+$Win3080Label = if ($LocalIs3080) { 'localhost' } elseif ($Win3080Ip) { $Win3080Ip } else { 'unknown' }
+$Win5080Label = if ($LocalIs5080) { 'localhost' } elseif ($Win5080Ip) { $Win5080Ip } else { 'unknown' }
 $Win3080Mark  = if ($Win3080Up) { '✓' } else { '✗' }
 $Win5080Mark  = if ($Win5080Up) { '✓' } else { '✗' }
-Write-Host ("║  Win {0}  {1,-9}  RTX 3080 · qwen3.5-27b (this machine)     ║" -f $Win3080Mark, $Win3080Label)
-Write-Host ("║  Win {0}  {1,-9}  RTX 5080 · gemma-4-26b (nvfp4)           ║" -f $Win5080Mark, $Win5080Label)
+$Win3080Desc  = 'RTX 3080 · qwen3.5-27b' + $(if ($LocalIs3080) { ' (this machine)' } else { '' })
+$Win5080Desc  = 'RTX 5080 · gemma-4-26b (nvfp4)' + $(if ($LocalIs5080) { ' (this machine)' } else { '' })
+Write-Host ("║  Win {0}  {1,-9}  {2}║" -f $Win3080Mark, $Win3080Label, $Win3080Desc.PadRight(46))
+Write-Host ("║  Win {0}  {1,-9}  {2}║" -f $Win5080Mark, $Win5080Label, $Win5080Desc.PadRight(46))
 Write-Host ('╠══════════════════════════════════════════════════════════════════╣')
 Write-Host ("║  PT   port $PtPort     orama port $UsPort     Portal port $PortalPort                      ║")
 Write-Host '╚══════════════════════════════════════════════════════════════════╝'
