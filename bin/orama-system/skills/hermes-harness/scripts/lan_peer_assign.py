@@ -28,13 +28,17 @@ Manifest JSON::
 from __future__ import annotations
 
 import argparse
+import hashlib
+import ipaddress
 import json
 import logging
 import os
 import re
 import sys
 import time
+import unicodedata
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -97,12 +101,29 @@ def _peer_portal_tls_enabled() -> bool:
     return v in ("1", "true", "yes", "on")
 
 
+def _bracketed_host(peer_ip: str) -> str:
+    """Return the URL-authority form of a peer host. Only a real IPv6 literal
+    is bracketed; anything else containing ':' (e.g. 'host:8002') is a
+    --peer-ip typo and is refused rather than turned into a malformed URL."""
+    host = (peer_ip or "").strip()
+    bracketed = host.startswith("[") and host.endswith("]")
+    inner = host[1:-1] if bracketed else host
+    if ":" not in inner:
+        if "[" in host or "]" in host:
+            raise SystemExit("--peer-ip has unbalanced brackets; give a host or an IPv6 literal")
+        return host
+    try:
+        addr = ipaddress.ip_address(inner)
+    except ValueError:
+        raise SystemExit("--peer-ip must be a host or IPv6 literal, not host:port") from None
+    if addr.version != 6:
+        raise SystemExit("--peer-ip must be a host or IPv6 literal, not host:port")
+    return f"[{inner}]"
+
+
 def _peer_base(peer_ip: str, portal_port: int) -> str:
     scheme = "https" if _peer_portal_tls_enabled() else "http"
-    host = peer_ip
-    if ":" in host and not host.startswith("["):
-        host = f"[{host}]"  # bare IPv6 literal needs brackets in a URL authority
-    return f"{scheme}://{host}:{portal_port}"
+    return f"{scheme}://{_bracketed_host(peer_ip)}:{portal_port}"
 
 
 def _http_json(method: str, url: str, payload: dict[str, Any] | None = None, timeout: int = 30) -> Any:
@@ -380,13 +401,21 @@ def _clean_evidence(text: str) -> str:
     """Control chars stripped, whitespace collapsed, length-limited. Refuses
     anything that looks like a credential (evidence is stored in clear)."""
     raw = text or ""
-    cleaned = " ".join(_CTRL_RE.sub(" ", raw).split())
-    # Check both the raw and the cleaned text: a control character between
-    # "Bearer" and the value must not defeat the credential filter.
-    if _CRED_RE.search(raw) or _CRED_RE.search(cleaned):
+    # Control (Cc) AND invisible format/separator (Cf, Zl, Zp: zero-width
+    # space, word joiner, soft hyphen, ...) characters become spaces, so
+    # "Bearer<ZWSP>value" cannot slip past the credential filter.
+    spaced = "".join(
+        " " if unicodedata.category(c) in ("Cc", "Cf", "Zl", "Zp") else c
+        for c in _CTRL_RE.sub(" ", raw)
+    )
+    cleaned = " ".join(spaced.split())
+    # Check the raw, cleaned and NFKC-folded text: neither a control nor an
+    # invisible character between "Bearer" and the value may defeat the filter.
+    folded = unicodedata.normalize("NFKC", cleaned)
+    if _CRED_RE.search(raw) or _CRED_RE.search(cleaned) or _CRED_RE.search(folded):
         raise SystemExit("--evidence looks like it contains a credential; refusing (never store secrets)")
     for tok in probe.outbound_control_plane_tokens():
-        if tok and len(tok) >= 8 and (tok in raw or tok in cleaned):
+        if tok and len(tok) >= 8 and (tok in raw or tok in cleaned or tok in folded):
             raise SystemExit("--evidence contains a local token value; refusing (never store secrets)")
     if not cleaned:
         raise SystemExit("--evidence must not be empty")
@@ -461,6 +490,40 @@ def _listed_entry(data: Any, filename: str) -> dict[str, Any] | None:
     return None
 
 
+_COLLISION_ADVICE = (
+    "same name present on peer with different or unverifiable content; "
+    "operator must resolve (outbox-resolve, or outbox-resubmit with a new explicit remote filename)"
+)
+
+
+def _sha256_text(text: str) -> str:
+    lf = text.replace("\r\n", "\n")
+    return hashlib.sha256(lf.encode("utf-8")).hexdigest()
+
+
+def _remote_content_verdict(
+    ip: str, port: int, filename: str, lf_body: str, timeout: int
+) -> tuple[str, str]:
+    """('match'|'mismatch'|'unverifiable', reason). Fetches the remote file via
+    the authenticated read path (GET /api/peer-inbox/{name}); only a body
+    fetched with a token over verified https can prove the content matches."""
+    url = f"{_peer_base(ip, port)}/api/peer-inbox/{urllib.parse.quote(filename, safe='')}"
+    if not _is_authenticated_transport(url):
+        return "unverifiable", "remote content cannot be fetched over https"
+    try:
+        result, authed = _http_json_ex("GET", url, None, timeout)
+    except SystemExit as exc:
+        return "unverifiable", f"remote content fetch failed: {str(exc)[:120]}"
+    if not authed:
+        return "unverifiable", "remote content fetch was not authenticated"
+    remote = result.get("body") if isinstance(result, dict) else None
+    if not isinstance(remote, str):
+        return "unverifiable", "remote content fetch returned no body"
+    if _sha256_text(remote) == _sha256_text(lf_body):
+        return "match", ""
+    return "mismatch", "remote content sha256 differs from local"
+
+
 def _deliver_item(
     item: dict[str, Any],
     body: str,
@@ -527,37 +590,45 @@ def _deliver_item(
         local_size = len(lf_body.encode("utf-8"))
         crlf_size = len(lf_body.replace("\n", "\r\n").encode("utf-8"))
         size_ok = str(size) in (str(local_size), str(crlf_size))
-        if list_authed and not size_ok:
-            # Same name, different (or unverifiable) size: do not resend, do not
-            # declare delivered. Operator decides (outbox-resolve or rename).
-            why = (
-                f"name collision: listed size {size!r} differs from local "
-                f"{local_size}/{crlf_size} bytes; not resent, resolve or rename"
-            )
-            entry["status"] = "error"
-            entry["state"] = "queued"
-            entry["detail"] = why
-            entry["listed_size"] = size
-            entry["size_matches"] = False
-            _set_state(
-                filename, "queued", last_error=why, listed_size=size, local_size=local_size,
-                size_matches=False, **_hist("error: name collision")
-            )
-            return entry
         if list_authed:
+            # Name and size alone are not proof of delivery: a regenerated file
+            # often keeps its length. Fetch the remote body over the same
+            # verified authenticated channel and compare SHA-256.
+            verdict, why_not = ("mismatch", "")
+            if size_ok:
+                verdict, why_not = _remote_content_verdict(ip, port, filename, lf_body, timeout)
+            if verdict != "match":
+                why = (
+                    f"name collision: listed size {size!r} vs local {local_size}/{crlf_size} bytes"
+                    + (f"; {why_not}" if why_not else "")
+                    + f"; {_COLLISION_ADVICE}"
+                )
+                entry["status"] = "error"
+                entry["state"] = "queued"
+                entry["detail"] = why
+                entry["listed_size"] = size
+                entry["size_matches"] = size_ok
+                entry["content_verified"] = False
+                _set_state(
+                    filename, "queued", last_error=why[:500], listed_size=size, local_size=local_size,
+                    size_matches=size_ok, content_verified=False, **_hist("error: name collision")
+                )
+                return entry
             entry["status"] = "delivered"
             entry["state"] = "delivered"
-            entry["detail"] = "present in peer inbox listing"
+            entry["detail"] = "present in peer inbox listing; content sha256 verified"
+            entry["content_verified"] = True
             _set_state(
                 filename,
                 "delivered",
                 last_error="",
                 delivered_at=int(time.time()),
                 resolved_at=_utc_now_iso(),
-                evidence="present in peer inbox listing",
+                evidence="present in peer inbox listing; content sha256 verified",
                 listed_size=size,
                 local_size=local_size,
                 size_matches=True,
+                content_verified=True,
                 **_hist("present"),
             )
         else:
@@ -620,6 +691,7 @@ def cmd_outbox_resubmit(args: argparse.Namespace) -> int:
         raise SystemExit("--portal-port must be an integer") from None
     if not 1 <= port <= 65535:
         raise SystemExit("--portal-port must be between 1 and 65535")
+    _bracketed_host(ip)  # refuses host:port typos before anything is touched
     _ensure_orama_src()
     from orama_system.lan_peer_files import read_outbox_file
 
@@ -682,14 +754,12 @@ def cmd_flush_outbox(args: argparse.Namespace) -> int:
             continue
         hist = meta.get("history")
         last_hop = hist[-1] if isinstance(hist, list) and hist and isinstance(hist[-1], dict) else {}
-        if (
-            not only
-            and prior == "sent"
-            and last_hop.get("to")
-            and last_hop.get("to") != last_hop.get("from")
-        ):
-            # An unconfirmed resubmit went to a different destination; resending
-            # to the original address could duplicate it. Require --only.
+        redirected = bool(last_hop.get("to")) and last_hop.get("to") != last_hop.get("from")
+        if redirected and not only:
+            # A resubmit approved another destination (whatever came of it: sent,
+            # failed duplicate check, name collision, a timeout that may have
+            # landed). Resending to the original address could duplicate it or
+            # hit a stale address; require --only.
             skipped = {
                 "filename": filename,
                 "status": "skipped",
@@ -700,16 +770,31 @@ def cmd_flush_outbox(args: argparse.Namespace) -> int:
             print(f"{skipped['status']:9s} {filename} ({skipped['detail']})", file=sys.stderr)
             continue
         stored_ip = str(meta.get("peer_ip") or "").strip()
-        if stored_ip:
-            item_port_raw = str(meta.get("portal_port") or "").strip()
-            item_ip, item_port = stored_ip, (int(item_port_raw) if item_port_raw else int(args.portal_port))
-        else:
-            if default_peer is None:
-                default_peer = _resolve_peer(args)
-            item_ip, item_port = default_peer
+        record_history = False
+        item_ip, item_port = "", 0
+        if redirected:
+            # --only: resend to the last operator-approved destination, not the
+            # stale original; keep the history trail.
+            to = last_hop["to"] if isinstance(last_hop["to"], dict) else {}
+            hop_ip = str(to.get("peer_ip") or "").strip()
+            try:
+                hop_port = int(str(to.get("portal_port") or "").strip())
+            except ValueError:
+                hop_port = 0
+            if hop_ip and 1 <= hop_port <= 65535:
+                item_ip, item_port, record_history = hop_ip, hop_port, True
+        if not record_history:
+            if stored_ip:
+                item_port_raw = str(meta.get("portal_port") or "").strip()
+                item_ip, item_port = stored_ip, (int(item_port_raw) if item_port_raw else int(args.portal_port))
+            else:
+                if default_peer is None:
+                    default_peer = _resolve_peer(args)
+                item_ip, item_port = default_peer
         entry = _deliver_item(
             item, body, meta, item_ip, item_port,
-            timeout=args.timeout, keep=keep, listing_cache=listing_cache,
+            timeout=args.timeout, keep=keep or record_history, listing_cache=listing_cache,
+            record_history=record_history,
         )
         results.append(entry)
         detail = f" ({entry['detail'][:120]})" if entry.get("detail") else ""

@@ -193,12 +193,14 @@ def test_resubmit_does_not_send_when_peer_already_has_file(tls_peer, capsys):
     body = "# body\n"
     _queue("k.md", 1, body=body)
     tls_peer.reply = {"ok": True, "files": [{"filename": "k.md", "bytes": len(body)}]}
+    tls_peer.replies["/api/peer-inbox/k.md"] = {"ok": True, "body": body}
     rc, out, _ = _run(capsys, "outbox-resubmit", "--only", "k.md", "--peer-ip", "localhost",
                       "--portal-port", str(tls_peer.port), "--timeout", "3")
     assert rc == 0 and out["results"][0]["status"] == "delivered"
-    assert [m for m, _, _ in tls_peer.seen] == ["GET"]  # never POSTed
+    assert [m for m, _, _ in tls_peer.seen] == ["GET", "GET"]  # listing + content check, never POSTed
+    assert tls_peer.seen[1][1] == "/api/peer-inbox/k.md"
     m = _meta("k.md")
-    assert m["state"] == "delivered" and m["evidence"] == "present in peer inbox listing"
+    assert m["state"] == "delivered" and "sha256 verified" in m["evidence"]
     assert m["listed_size"] == len(body) and m["size_matches"] is True
     assert _outbox_has("k.md")
 
@@ -206,9 +208,10 @@ def test_resubmit_does_not_send_when_peer_already_has_file(tls_peer, capsys):
 def test_flush_does_not_send_duplicate_and_keeps_evidence(tls_peer, capsys):
     _queue("l.md", tls_peer.port, host="localhost")
     tls_peer.reply = {"ok": True, "files": [{"filename": "l.md", "bytes": 7}]}
+    tls_peer.replies["/api/peer-inbox/l.md"] = {"ok": True, "body": "# body\n"}
     rc, out, _ = _run(capsys, "flush-outbox", "--timeout", "3", "--strict")
-    assert rc == 0 and out["results"][0]["detail"] == "present in peer inbox listing"
-    assert [m for m, _, _ in tls_peer.seen] == ["GET"]
+    assert rc == 0 and "sha256 verified" in out["results"][0]["detail"]
+    assert [m for m, _, _ in tls_peer.seen] == ["GET", "GET"]
     assert _meta("l.md")["state"] == "delivered" and _outbox_has("l.md")
 
 
@@ -245,6 +248,7 @@ def test_crlf_receiver_size_counts_as_same_content(tls_peer, capsys):
     _queue("o.md", 1, body=body)
     crlf_len = len(body.replace("\n", "\r\n").encode("utf-8"))
     tls_peer.reply = {"ok": True, "files": [{"filename": "o.md", "bytes": crlf_len}]}
+    tls_peer.replies["/api/peer-inbox/o.md"] = {"ok": True, "body": body.replace("\n", "\r\n")}
     rc, out, _ = _run(capsys, "outbox-resubmit", "--only", "o.md", "--peer-ip", "localhost",
                       "--portal-port", str(tls_peer.port), "--timeout", "3")
     assert rc == 0 and out["results"][0]["status"] == "delivered"
@@ -278,3 +282,115 @@ def test_urlopen_kwargs_bad_port_is_trust_error(env, monkeypatch, tmp_path):
     monkeypatch.setenv("PEER_CA_FILE", str(tmp_path / "ca.pem"))
     with pytest.raises(peer_tls.PeerTrustError):
         peer_tls.urlopen_kwargs("https://host.invalid:70000/x")
+
+
+# ---- round-2 review fixes (content proof, redirect skip, host typo, Cf chars) -
+
+def _resubmit(capsys, name, port):
+    return _run(capsys, "outbox-resubmit", "--only", name, "--peer-ip", "localhost",
+                "--portal-port", str(port), "--timeout", "3")
+
+
+def test_equal_size_different_content_is_not_delivered(tls_peer, capsys):
+    new_body, old_body = "date: 2026-10-25\n", "date: 2026-10-24\n"
+    assert len(new_body) == len(old_body)
+    _queue("r.md", 1, body=new_body)
+    tls_peer.reply = {"ok": True, "files": [{"filename": "r.md", "bytes": len(old_body)}]}
+    tls_peer.replies["/api/peer-inbox/r.md"] = {"ok": True, "body": old_body}
+    rc, out, _ = _resubmit(capsys, "r.md", tls_peer.port)
+    assert rc == 1 and out["results"][0]["status"] == "error"
+    assert [m for m, _, _ in tls_peer.seen] == ["GET", "GET"]  # never POSTed
+    m = _meta("r.md")
+    assert m["state"] == "queued" and m["content_verified"] is False
+    assert "different or unverifiable content; operator must resolve" in m["last_error"]
+    assert _outbox_has("r.md")
+
+
+def test_equal_size_unfetchable_content_stays_queued(tls_peer, capsys):
+    body = "# body\n"
+    _queue("s.md", 1, body=body)
+    tls_peer.reply = {"ok": True, "files": [{"filename": "s.md", "bytes": len(body)}]}
+    # content endpoint answers without a body -> unverifiable
+    tls_peer.replies["/api/peer-inbox/s.md"] = {"ok": True}
+    rc, out, _ = _resubmit(capsys, "s.md", tls_peer.port)
+    assert rc == 1 and out["results"][0]["status"] == "error"
+    m = _meta("s.md")
+    assert m["state"] == "queued" and "unverifiable content" in m["last_error"]
+    assert "POST" not in [x for x, _, _ in tls_peer.seen]
+
+
+def test_equal_size_over_http_is_not_delivered(env, tmp_path, capsys):
+    srv = fx.start_server(tmp_path, tls=False)
+    try:
+        body = "# body\n"
+        _queue("t.md", 1, body=body)
+        srv.reply = {"ok": True, "files": [{"filename": "t.md", "bytes": len(body)}]}
+        rc, out, _ = _run(capsys, "outbox-resubmit", "--only", "t.md", "--peer-ip", "localhost",
+                          "--portal-port", str(srv.port), "--timeout", "3")
+        assert out["results"][0]["status"] == "sent"  # unauthenticated listing: never delivered
+        assert _meta("t.md")["state"] == "sent" and srv.auth_headers == []
+    finally:
+        srv.stop()
+
+
+def _redirect_hop():
+    return [{"from": {"peer_ip": fx.LOOPBACK_V4, "portal_port": "1"},
+             "to": {"peer_ip": "localhost", "portal_port": "2"}, "at": "x", "result": "error"}]
+
+
+def test_flush_skips_queued_item_with_redirected_history(env, capsys):
+    _queue("u.md", 1)
+    lpa._set_state("u.md", "queued", history=_redirect_hop())
+    rc, out, _ = _run(capsys, "flush-outbox", "--timeout", "2")
+    assert out["results"][0]["status"] == "skipped" and "--only" in out["results"][0]["detail"]
+
+
+def test_flush_only_resends_to_last_approved_destination(tls_peer, capsys):
+    _queue("v.md", 1)  # stale original: loopback port 1
+    lpa._set_state("v.md", "queued", history=[
+        {"from": {"peer_ip": fx.LOOPBACK_V4, "portal_port": "1"},
+         "to": {"peer_ip": "localhost", "portal_port": str(tls_peer.port)}, "at": "x", "result": "error"}])
+    rc, out, _ = _run(capsys, "flush-outbox", "--only", "v.md", "--timeout", "3")
+    assert rc == 0 and out["results"][0]["status"] == "delivered"
+    assert out["results"][0]["peer_ip"] == "localhost" and out["results"][0]["portal_port"] == tls_peer.port
+    assert [m for m, _, _ in tls_peer.seen] == ["GET", "POST"]
+    m = _meta("v.md")
+    assert m["state"] == "delivered" and len(m["history"]) == 2 and _outbox_has("v.md")
+
+
+def test_peer_base_brackets_only_real_ipv6():
+    assert lpa._peer_base("2001:db8::1", 8002) == "http://[2001:db8::1]:8002"
+    assert lpa._peer_base("[2001:db8::1]", 8002) == "http://[2001:db8::1]:8002"
+    assert lpa._peer_base("peer.example.test", 8002) == "http://peer.example.test:8002"
+    for bad in ("host:8002", "192.0.2.5:8002", "[host:8002]", "[2001:db8::1", "host]"):
+        with pytest.raises(SystemExit):
+            lpa._peer_base(bad, 8002)
+
+
+def test_host_port_typo_is_clean_systemexit_not_traceback(env, capsys):
+    _queue("w.md", 1)
+    with pytest.raises(SystemExit) as ei:
+        lpa.main(["outbox-resubmit", "--only", "w.md", "--peer-ip", "host:8002", "--portal-port", "8002"])
+    assert "host:port" in str(ei.value)
+    assert _meta("w.md").get("state", "queued") == "queued"
+    # a stored host:port peer_ip on a flush is reported per item, no traceback
+    _queue("w2.md", 1, host="host:8002")
+    rc, out, _ = _run(capsys, "flush-outbox", "--timeout", "2", "--only", "w2.md")
+    assert rc == 1 and out["results"][0]["status"] == "error"
+
+
+def test_urlopen_kwargs_malformed_url_is_trust_error(env, monkeypatch, tmp_path):
+    monkeypatch.setenv("PEER_CA_FILE", str(tmp_path / "ca.pem"))
+    with pytest.raises(peer_tls.PeerTrustError):
+        peer_tls.urlopen_kwargs("https://[host:8002]:8002/x")
+
+
+def test_evidence_filter_sees_through_format_characters(env):
+    for bad in ("Bearer" + chr(0x200B) + "eyJhbGciOiJIUzI1NiJ9.secret",
+                "api_key" + chr(0x2060) + "= sk-live-abc",
+                "Bearer" + chr(0xAD) + "abc123def",
+                "token" + chr(0x2028) + "= abc123"):
+        with pytest.raises(SystemExit):
+            lpa._clean_evidence(bad)
+    out = lpa._clean_evidence("receipt" + chr(0x200B) + "ok" + chr(0xAD) + "fine")
+    assert out == "receipt ok fine"

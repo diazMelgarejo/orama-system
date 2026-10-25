@@ -99,6 +99,7 @@ class PeerServer:
     port: int
     seen: list = field(default_factory=list)  # (method, path, authorization or "")
     reply: dict = field(default_factory=lambda: {"ok": True})
+    replies: dict = field(default_factory=dict)  # exact request path -> reply dict
     httpd: ThreadingHTTPServer | None = None
 
     def stop(self) -> None:
@@ -119,7 +120,7 @@ def start_server(tmp_path: Path, leaf=None, tls: bool = True) -> PeerServer:
             if n:
                 self.rfile.read(n)
             srv.seen.append((self.command, self.path, self.headers.get("Authorization", "")))
-            body = json.dumps(srv.reply).encode()
+            body = json.dumps(srv.replies.get(self.path, srv.reply)).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))

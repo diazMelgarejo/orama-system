@@ -128,8 +128,12 @@ def context_for(host: str, port: int, timeout: float = 8.0) -> ssl.SSLContext:
 def urlopen_kwargs(url: str, timeout: float = 8.0) -> dict[str, Any]:
     """Extra kwargs for urllib.request.urlopen: a per-request context for
     https peer URLs, nothing for http. Raises PeerTrustError on failure."""
-    parts = urlsplit(url)
-    if parts.scheme != "https" or not parts.hostname:
+    try:
+        parts = urlsplit(url)
+        hostname = parts.hostname
+    except ValueError as exc:
+        raise PeerTrustError(f"invalid peer URL: {exc}") from None
+    if parts.scheme != "https" or not hostname:
         return {}
     if not peer_ca_file() and not pinned_fingerprints():
         return {}  # nothing configured: urllib's own default verified context
@@ -137,7 +141,7 @@ def urlopen_kwargs(url: str, timeout: float = 8.0) -> dict[str, Any]:
         port = parts.port or 443
     except ValueError as exc:
         raise PeerTrustError(f"invalid peer URL port: {exc}") from None
-    return {"context": context_for(parts.hostname, port, timeout=timeout)}
+    return {"context": context_for(hostname, port, timeout=timeout)}
 
 
 def websocket_kwargs(url: str, timeout: float = 8.0) -> dict[str, Any]:

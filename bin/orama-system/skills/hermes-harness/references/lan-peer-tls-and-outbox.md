@@ -50,18 +50,26 @@ Before any send, flush and resubmit list the destination inbox
 remote filename is already there, nothing is sent:
 
 - Authenticated listing and the listed size equals the body size (LF or CRLF
-  line endings, since a Windows receiver translates newlines): marked
-  `delivered` with evidence "present in peer inbox listing". These items are
-  always kept in the outbox as evidence, regardless of `--keep-delivered`.
-- Authenticated listing but the size differs: a name collision. The item stays
-  `queued` with last_error "name collision", is not resent, and needs
-  `outbox-resolve` or a renamed resubmit. `outbox-status` shows `size_matches`.
+  line endings, since a Windows receiver translates newlines): the remote file
+  is then fetched through the authenticated read path (GET
+  /api/peer-inbox/NAME, verified https only) and its SHA-256 is compared with
+  the local body (newlines normalized). Only an equal digest is marked
+  `delivered`, with evidence "present in peer inbox listing; content sha256
+  verified". These items are always kept in the outbox as evidence, regardless
+  of `--keep-delivered`.
+- Authenticated listing but the size differs, or the content differs or cannot
+  be fetched or verified: a name collision. The item stays `queued` with
+  last_error "same name present on peer with different or unverifiable
+  content; operator must resolve", is not resent automatically, and needs
+  `outbox-resolve` or `outbox-resubmit` with a new explicit remote filename.
+  `outbox-status` shows `size_matches` and `content_verified`.
 - Unauthenticated listing: marked `sent`, not resent.
 
 If the listing cannot be fetched, nothing is sent and the item stays queued.
 A failed attempt never removes the outbox file. A plain `flush-outbox` skips
-items whose last unconfirmed resubmit went to another destination; use
-`--only` to resend those explicitly.
+any unresolved item whose last resubmit went to another destination (whatever
+its state). `flush-outbox --only FILE` resends such an item to that last
+approved destination, not the original address, and records history.
 
 ## Recording out-of-band evidence
 
