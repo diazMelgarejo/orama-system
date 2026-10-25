@@ -26,7 +26,7 @@
 
 - Read the SSoT guide before any fresh-machine or v2 migration work.
 - Use the encrypted archive only through an explicitly approved encrypted out-of-band operator transfer.
-- Do not request, post, commit, or relay its passphrase, raw secret values, `.env.local`, `.local/`, `.state/`, Hermes `auth/`, or native backup contents.
+- Do not request, post, commit, or relay its passphrase, raw secret values, gitignored dotenv-local overlays, `.local/`, `.state/`, Hermes `auth/`, or native backup contents.
 - Resolve the preserved Orama control-plane-token candidate mismatch against the running service before enabling LAN/v2 services.
 
 ## Open / deferred
