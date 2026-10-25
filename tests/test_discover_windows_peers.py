@@ -652,3 +652,74 @@ def test_no_change_path_removes_localhost_lmstudio_mac_when_mac_down(tmp_path):
     D.patch_openclaw_json = _real_patch(D)
     assert D.run_discovery() == 0
     assert "lmstudio-mac" not in json.loads(oc.read_text())["models"]["providers"]
+
+
+# ── ranked Mac evidence (strong vs weak) ─────────────────────────────────────
+
+WIN2_GGUF = ["qwen3-8b-q4_k_m.gguf"]
+
+
+def test_gguf_peer_with_ollama_bge_m3_sorting_before_mac_is_not_the_mac():
+    # WIN2 sorts before MAC: weak (bge-m3) + Windows (gguf) evidence is a win_peer,
+    # and the scan must keep going to find the real Mac.
+    D = _windows_host(
+        probes={
+            f"http://{WIN2}:1234": WIN2_GGUF,
+            f"http://{WIN2}:11434": ["bge-m3:latest"],
+            f"http://{MAC}:1234": ["qwen3.5-9b-mlx"],
+        },
+        scan_hits=[WIN2, MAC],
+    )
+    result = D.discover_endpoints()
+    assert result["mac"]["ip"] == MAC
+    assert [p["ip"] for p in result["win_peers"]] == [WIN2]
+
+
+def test_lm_link_mac_sorting_after_gguf_peer_is_still_discovered():
+    # Strong Mac evidence (mlx) wins even though the list mirrors Windows ids.
+    D = _lmlink_host(scan_hits=[WIN2, MAC])
+    base = D.probe_models
+    D.probe_models = lambda url: WIN2_GGUF if url == f"http://{WIN2}:1234" else base(url)
+    result = D.discover_endpoints()
+    assert result["mac"]["ip"] == MAC
+    assert [p["ip"] for p in result["win_peers"]] == [WIN2]
+
+
+def test_strong_without_windows_evidence_beats_strong_with_it():
+    D = _windows_host(
+        probes={
+            f"http://{WIN2}:1234": ["qwen3.5-9b-mlx", "x-q4.gguf"],
+            f"http://{MAC}:1234": ["qwen3.5-9b-mlx"],
+        },
+        scan_hits=[WIN2, MAC],
+    )
+    assert D.discover_endpoints()["mac"]["ip"] == MAC
+
+
+def test_weak_only_mac_without_windows_evidence_is_accepted_when_nothing_better():
+    D = _windows_host(
+        probes={f"http://{MAC}:1234": ["plain-model"], f"http://{MAC}:11434": ["bge-m3:latest"]},
+        scan_hits=[MAC],
+    )
+    assert D.discover_endpoints()["mac"]["ip"] == MAC
+
+
+def test_cached_weak_mac_with_windows_evidence_is_not_accepted(tmp_path):
+    cache = {"endpoints": {"mac": {"ip": WIN2}, "win": {"ip": "localhost"}},
+             "models": {"mac": [], "win": []}}
+    D = _windows_host(
+        probes={f"http://{WIN2}:1234": WIN2_GGUF, f"http://{WIN2}:11434": ["bge-m3:latest"]},
+        cache=cache,
+    )
+    result = D.discover_endpoints()
+    assert result["mac"] is None
+    assert [p["ip"] for p in result["win_peers"]] == [WIN2]
+
+
+def test_ties_are_broken_by_numeric_address_order():
+    other = "192.0.2.9"
+    D = _windows_host(
+        probes={f"http://{MAC}:1234": ["a-mlx"], f"http://{other}:1234": ["b-mlx"]},
+        scan_hits=[MAC, other],
+    )
+    assert D.discover_endpoints()["mac"]["ip"] == other

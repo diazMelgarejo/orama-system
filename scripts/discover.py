@@ -345,6 +345,8 @@ def _endpoints_for_hash(endpoints: dict) -> dict:
 
 _MAC_MODEL_DEFAULTS = ("bge-m3", "qwen3.5:9b-nvfp4")
 _MLX_MARKERS = ("-mlx", "mlx-community/")
+# Embedding-only ids are cross-platform (Windows boxes run bge-m3 too): weak Mac evidence.
+_EMBEDDING_MARKERS = ("bge-", "embed", "nomic", "minilm", "e5-")
 
 
 def _is_loopback_host(host: str) -> bool:
@@ -440,20 +442,64 @@ def _has_win_evidence(models: list, win_only: set[str]) -> bool:
     return False
 
 
+def _is_embedding_only(name: str) -> bool:
+    """True for embedding model ids, which are not platform-specific."""
+    return any(mk in name.lower() for mk in _EMBEDDING_MARKERS)
+
+
+def _has_strong_mac_evidence(lms: list, ollama: list, mac_only: set[str]) -> bool:
+    """MLX markers on either port, or a non-embedding mac-only model on :1234."""
+    for raw in list(lms or []) + list(ollama or []):
+        name = str(raw).lower()
+        if any(mk in name for mk in _MLX_MARKERS) or re.search(r"-\d+bit", name):
+            return True
+    for raw in lms or []:
+        name = str(raw).lower()
+        if not _is_embedding_only(name) and any(_model_matches(name, p) for p in mac_only):
+            return True
+    return False
+
+
 def _probe_mac_candidate(ip: str, mac_only: set[str], win_only: set[str]) -> dict | None:
-    """Probe :1234 (LM Studio) and :11434 (Ollama) on a candidate; classify it."""
+    """Probe :1234 (LM Studio) and :11434 (Ollama) on a candidate; classify it.
+
+    mac_strong: MLX markers or a non-embedding mac-only LM Studio model.
+    mac_weak: any other Mac evidence (embedding defaults, anything only on :11434).
+    win_evidence: gguf markers or windows_only ids on :1234.
+    """
     lms = probe_models(f"http://{ip}:{LM_STUDIO_PORT}")
     ollama = probe_models(f"http://{ip}:{OLLAMA_PORT}")
     if not lms and not ollama:
         return None
     combined = list(lms or []) + list(ollama or [])
+    strong = _has_strong_mac_evidence(lms, ollama, mac_only)
+    any_mac = strong or _has_mac_evidence(combined, mac_only)
     return {
         "ip": ip,
         "models": list(lms) if lms else list(ollama),
         "ollama": list(ollama) if ollama else None,
-        "mac_evidence": _has_mac_evidence(combined, mac_only),
-        "win_evidence": _has_win_evidence(combined, win_only),
+        "mac_strong": strong,
+        "mac_weak": any_mac and not strong,
+        "mac_evidence": any_mac,
+        "win_evidence": _has_win_evidence(list(lms or []), win_only),
     }
+
+
+def _mac_tier(cand: dict) -> int | None:
+    """Rank a candidate as the Mac: 0 best; None when it cannot be the Mac."""
+    if cand.get("mac_strong"):
+        return 1 if cand.get("win_evidence") else 0
+    if cand.get("mac_weak") and not cand.get("win_evidence"):
+        return 2
+    return None
+
+
+def _ip_sort_key(ip: str):
+    """Numeric address order, falling back to the string."""
+    try:
+        return (0, int(ipaddress.ip_address(ip)), ip)
+    except ValueError:
+        return (1, 0, ip)
 
 
 def _mac_entry(cand: dict) -> dict:
@@ -543,7 +589,7 @@ def discover_endpoints() -> dict:
         if mac_ip:
             cand = _probe_mac_candidate(mac_ip, policy_mac, policy_win)
             # Named explicitly: refuse only on Windows evidence with no Mac evidence.
-            if cand and (cand["mac_evidence"] or not cand["win_evidence"]):
+            if cand and (cand["mac_strong"] or not cand["win_evidence"]):
                 result["mac"] = _mac_entry(cand)
             elif cand:
                 print(f"  ⚠️  $MAC_IP={mac_ip} serves Windows-only models — not labelling it as the Mac",
@@ -559,7 +605,7 @@ def discover_endpoints() -> dict:
                     and mac_last_ip not in win_known and mac_last_ip != mac_ip):
                 cache_probed.add(mac_last_ip)
                 cand = _probe_mac_candidate(mac_last_ip, policy_mac, policy_win)
-                if cand and cand["mac_evidence"]:
+                if cand and _mac_tier(cand) is not None:
                     result["mac"] = _mac_entry(cand)
                     hint = " (update $MAC_IP)" if mac_ip else " (set $MAC_IP to avoid scan)"
                     print(f"  ℹ️  Mac found at cached IP {mac_last_ip}{hint}", file=sys.stderr)
@@ -572,21 +618,22 @@ def discover_endpoints() -> dict:
             subnets = get_local_subnets()
             if not subnets:
                 subnets = [win_lan.rsplit(".", 1)[0] if win_lan else SUBNET]
-            found_mac = False
+            cands: list[dict] = []
             for subnet in subnets:
-                for ip in asyncio.run(scan_subnet_async(subnet, LM_STUDIO_PORT, exclude)):
+                for ip in sorted(asyncio.run(scan_subnet_async(subnet, LM_STUDIO_PORT, exclude)),
+                                 key=_ip_sort_key):
                     cand = _probe_mac_candidate(ip, policy_mac, policy_win)
-                    if not cand:
-                        continue
-                    if cand["mac_evidence"]:
-                        result["mac"] = _mac_entry(cand)
-                        print(f"  ℹ️  Mac LM Studio found at {ip} (subnet scan)", file=sys.stderr)
-                        found_mac = True
-                        break
-                    if cand["win_evidence"]:
-                        _note_win(cand)
-                if found_mac:
-                    break
+                    if cand:
+                        cands.append(cand)
+            ranked = sorted((c for c in cands if _mac_tier(c) is not None),
+                            key=lambda c: (_mac_tier(c), _ip_sort_key(c["ip"])))
+            if ranked:
+                best = ranked[0]
+                result["mac"] = _mac_entry(best)
+                print(f"  ℹ️  Mac LM Studio found at {best['ip']} (subnet scan)", file=sys.stderr)
+            for cand in cands:
+                if cand["win_evidence"] and not cand["mac_strong"] and cand["ip"] != (result["mac"] or {}).get("ip"):
+                    _note_win(cand)
 
         # Additional Windows peers: $WIN_PEER_IPS + $WIN_3080_IP + $WIN_5080_IP
         # minus this host and the primary win; plus scan/MAC_IP hits that
