@@ -7,8 +7,9 @@ Idempotent: writes nothing if state hash is unchanged.
 """
 
 from __future__ import annotations
-import argparse, asyncio, hashlib, json, logging, os, shutil, socket, sys, time
+import argparse, asyncio, hashlib, ipaddress, json, logging, os, re, shutil, socket, sys, time
 import urllib.error, urllib.request
+from urllib.parse import urlsplit
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -35,6 +36,7 @@ DEFAULT_LOCK_FILE   = LOCK_FILE
 OPENCLAW_JSON       = OPENCLAW_DIR / "openclaw.json"
 
 LM_STUDIO_PORT     = 1234
+OLLAMA_PORT        = 11434
 SUBNET             = "192.168.254"
 PROBE_TIMEOUT      = 0.2
 MODEL_API_TIMEOUT  = 4
@@ -66,18 +68,19 @@ def _resolve_perpetua_root_env() -> Path | None:
       2) PERPETUA_TOOLS_PATH (legacy compatibility)
     """
     root = (
-        os.environ.get("PERPETUATOOLSROOT", "").strip()
-        or os.environ.get("PERPETUA_TOOLS_ROOT", "").strip()
+        os.getenv("PERPETUATOOLSROOT", "").strip()
+        or os.getenv("PERPETUA_TOOLS_ROOT", "").strip()
     )
-    legacy = os.environ.get("PERPETUA_TOOLS_PATH", "").strip()
+    legacy = os.getenv("PERPETUA_TOOLS_PATH", "").strip()
     selected = root or legacy
     return Path(selected).expanduser() if selected else None
 
 
 def get_repo_paths() -> dict:
+    """Get repo paths."""
     base = Path.home() / "Documents" / "Terminal xCode" / "claude" / "OpenClaw"
     candidates = {
-        "alphaclaw": [Path(os.environ.get("ALPHACLAW_INSTALL_DIR", "~/.alphaclaw")).expanduser()],
+        "alphaclaw": [Path(os.getenv("ALPHACLAW_INSTALL_DIR", "~/.alphaclaw")).expanduser()],
         "perpetua_tools": [
             base / "perplexity-api" / "Perpetua-Tools",
             Path.home() / "Perpetua-Tools",
@@ -92,7 +95,7 @@ def get_repo_paths() -> dict:
         env_key = name.upper() + "_PATH"
         if name == "perpetua_tools":
             result[name] = _resolve_perpetua_root_env() or next((p for p in paths if p.exists()), None)
-        elif env_val := os.environ.get(env_key):
+        elif env_val := os.getenv(env_key):
             result[name] = Path(env_val).expanduser()
         else:
             result[name] = next((p for p in paths if p.exists()), None)
@@ -101,6 +104,7 @@ def get_repo_paths() -> dict:
 # ── Hardware affinity policy ──────────────────────────────────────────────────
 
 def _simple_policy_parse(text: str) -> dict[str, list[str]]:
+    """Simple policy parse."""
     parsed: dict[str, list[str]] = {
         "windows_only": [],
         "mac_only": [],
@@ -164,16 +168,32 @@ def load_policy(policy_path: Path | None = None) -> dict[str, Any]:
     return _normalize_policy(loaded)
 
 def _import_pt_hardware_policy():
+    """Import pt hardware policy."""
     pt_root = _resolve_perpetua_root_env()
     if not pt_root:
         raise ImportError("PERPETUATOOLSROOT/PERPETUA_TOOLS_ROOT not set")
-    if str(pt_root) not in sys.path:
-        sys.path.insert(0, str(pt_root))
-    import importlib
-    return importlib.import_module("utils.hardware_policy")
+    # Load by file path under a private name. orama has its own src/utils
+    # package (already first on sys.path), so `import utils.hardware_policy`
+    # would resolve to orama's, not Perpetua-Tools'.
+    hp_path = Path(pt_root) / "src" / "utils" / "hardware_policy.py"
+    if not hp_path.is_file():
+        raise ImportError(f"PT hardware_policy not found at {hp_path}")
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("_pt_hardware_policy", str(hp_path))
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot build import spec for {hp_path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["_pt_hardware_policy"] = module
+    try:
+        spec.loader.exec_module(module)
+    except Exception:
+        sys.modules.pop("_pt_hardware_policy", None)
+        raise
+    return module
 
 
 def _filter_models_for_platform_local(models: list, platform: str, policy: dict) -> list:
+    """Filter models for platform local."""
     normalized = platform.lower().strip()
     if normalized == "mac":
         forbidden = {m.lower() for m in policy.get("windows_only", [])}
@@ -187,7 +207,7 @@ def _filter_models_for_platform_local(models: list, platform: str, policy: dict)
 try:
     _hw_policy = _import_pt_hardware_policy()
     filter_models_for_platform = _hw_policy.filter_models_for_platform
-except (ImportError, OSError) as exc:
+except Exception as exc:
     # OSError [Errno 11] "Resource deadlock avoided" can occur in launchd context
     # on macOS when sys.path contains directories with spaces (known VFS quirk).
     # Fall back gracefully — discover.py runs fine without the PT policy module.
@@ -218,6 +238,7 @@ def filter_endpoints_for_policy(endpoints: dict, policy: dict | None = None) -> 
 # ── Probing ───────────────────────────────────────────────────────────────────
 
 def probe_models(base_url: str, timeout: float = MODEL_API_TIMEOUT):
+    """Probe models."""
     try:
         safe_url = validate_model_endpoint_url(base_url)
     except ModelEndpointPolicyError as exc:
@@ -236,6 +257,7 @@ def probe_models(base_url: str, timeout: float = MODEL_API_TIMEOUT):
         return None
 
 async def _check_port(ip: str, port: int):
+    """Check port."""
     try:
         _, w = await asyncio.wait_for(asyncio.open_connection(ip, port), timeout=PROBE_TIMEOUT)
         w.close(); await w.wait_closed()
@@ -244,11 +266,13 @@ async def _check_port(ip: str, port: int):
         return None
 
 async def scan_subnet_async(subnet: str, port: int, exclude: set):
+    """Scan subnet async."""
     tasks = [_check_port(f"{subnet}.{i}", port) for i in range(1, 255)
              if f"{subnet}.{i}" not in exclude]
     return [ip for ip in await asyncio.gather(*tasks) if ip]
 
 def get_local_subnets() -> list[str]:
+    """Get local subnets."""
     subnets = []
     try:
         import netifaces
@@ -291,10 +315,12 @@ def _lan_ip_on_subnet(subnet_prefix: str | None = None) -> str | None:
 
 
 def _mac_lan_ip():
+    """Mac lan ip."""
     return _lan_ip_on_subnet()
 
 
 def _win_lan_ip():
+    """Win lan ip."""
     return _lan_ip_on_subnet()
 
 
@@ -314,6 +340,196 @@ def _endpoints_for_hash(endpoints: dict) -> dict:
     if patch_ip == win.get("ip", ""):
         return endpoints
     return {**endpoints, "win": {**win, "ip": patch_ip}}
+
+# ── Windows-host peer identification (F12) ────────────────────────────────────
+
+_MAC_MODEL_DEFAULTS = ("bge-m3", "qwen3.5:9b-nvfp4")
+_MLX_MARKERS = ("-mlx", "mlx-community/")
+# Embedding-only ids are cross-platform (Windows boxes run bge-m3 too): weak Mac evidence.
+_EMBEDDING_MARKERS = ("bge-", "embed", "nomic", "minilm", "e5-")
+
+
+def _is_loopback_host(host: str) -> bool:
+    """True for localhost and any loopback IP literal."""
+    host = (host or "").strip().lower()
+    if host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
+def _local_ipv4s() -> set[str]:
+    """This host's non-loopback IPv4 addresses (best effort, never raises)."""
+    ips: set[str] = set()
+    try:
+        host = socket.gethostname()
+        for info in socket.getaddrinfo(host, None, socket.AF_INET):
+            ips.add(info[4][0])
+        ips.update(socket.gethostbyname_ex(host)[2])
+    except Exception:
+        pass
+    try:
+        import netifaces  # type: ignore
+        for iface in netifaces.interfaces():
+            for addr in netifaces.ifaddresses(iface).get(netifaces.AF_INET, []):
+                if addr.get("addr"):
+                    ips.add(addr["addr"])
+    except Exception:
+        pass
+    try:
+        lan = _win_lan_ip()
+        if lan:
+            ips.add(lan)
+    except Exception:
+        pass
+    return {ip for ip in ips if ip and not _is_loopback_host(ip)}
+
+
+def _env_ip_list(key: str) -> list[str]:
+    """Env ip list."""
+    return [p.strip() for p in os.getenv(key, "").split(",") if p.strip()]
+
+
+def _known_windows_ips() -> set[str]:
+    """Addresses that are Windows boxes: this host plus the configured peers."""
+    known = {"localhost"} | set(_local_ipv4s())
+    known.update(_env_ip_list("WIN_PEER_IPS"))
+    for key in ("WIN_3080_IP", "WIN_5080_IP"):
+        known.update(_env_ip_list(key))
+    return known
+
+
+def _policy_model_sets() -> tuple[set[str], set[str]]:
+    """(mac_only, windows_only) model names; static Mac defaults always apply."""
+    try:
+        pol = load_policy()
+    except Exception:
+        pol = {}
+    mac = {str(m).lower() for m in (pol.get("mac_only") or [])} | set(_MAC_MODEL_DEFAULTS)
+    win = {str(m).lower() for m in (pol.get("windows_only") or [])}
+    return mac, win
+
+
+def _model_matches(model: str, policy_name: str) -> bool:
+    """Tag-insensitive match: 'bge-m3' matches 'bge-m3:latest'."""
+    m, p = model.lower(), policy_name.lower()
+    if m == p:
+        return True
+    if ":" not in p or p.endswith(":latest"):
+        return m.split(":", 1)[0] == p.split(":", 1)[0]
+    return False
+
+
+def _has_mac_evidence(models: list, mac_only: set[str]) -> bool:
+    """Has mac evidence."""
+    for raw in models or []:
+        name = str(raw).lower()
+        if any(mk in name for mk in _MLX_MARKERS) or re.search(r"-\d+bit", name):
+            return True
+        if any(_model_matches(name, p) for p in mac_only):
+            return True
+    return False
+
+
+def _has_win_evidence(models: list, win_only: set[str]) -> bool:
+    """Has win evidence."""
+    for raw in models or []:
+        name = str(raw).lower()
+        if "gguf" in name or any(_model_matches(name, p) for p in win_only):
+            return True
+    return False
+
+
+def _is_embedding_only(name: str) -> bool:
+    """True for embedding model ids, which are not platform-specific."""
+    return any(mk in name.lower() for mk in _EMBEDDING_MARKERS)
+
+
+def _has_strong_mac_evidence(lms: list, ollama: list, mac_only: set[str]) -> bool:
+    """MLX markers on either port, or a non-embedding mac-only model on :1234."""
+    for raw in list(lms or []) + list(ollama or []):
+        name = str(raw).lower()
+        if any(mk in name for mk in _MLX_MARKERS) or re.search(r"-\d+bit", name):
+            return True
+    for raw in lms or []:
+        name = str(raw).lower()
+        if not _is_embedding_only(name) and any(_model_matches(name, p) for p in mac_only):
+            return True
+    return False
+
+
+def _probe_mac_candidate(ip: str, mac_only: set[str], win_only: set[str]) -> dict | None:
+    """Probe :1234 (LM Studio) and :11434 (Ollama) on a candidate; classify it.
+
+    mac_strong: MLX markers or a non-embedding mac-only LM Studio model.
+    mac_weak: any other Mac evidence (embedding defaults, anything only on :11434).
+    win_evidence: gguf markers or windows_only ids on :1234.
+    """
+    lms = probe_models(f"http://{ip}:{LM_STUDIO_PORT}")
+    ollama = probe_models(f"http://{ip}:{OLLAMA_PORT}")
+    if not lms and not ollama:
+        return None
+    combined = list(lms or []) + list(ollama or [])
+    strong = _has_strong_mac_evidence(lms, ollama, mac_only)
+    any_mac = strong or _has_mac_evidence(combined, mac_only)
+    return {
+        "ip": ip,
+        "models": list(lms) if lms else list(ollama),
+        "ollama": list(ollama) if ollama else None,
+        "mac_strong": strong,
+        "mac_weak": any_mac and not strong,
+        "mac_evidence": any_mac,
+        "win_evidence": _has_win_evidence(list(lms or []), win_only),
+    }
+
+
+def _mac_tier(cand: dict) -> int | None:
+    """Rank a candidate as the Mac: 0 best; None when it cannot be the Mac."""
+    if cand.get("mac_strong"):
+        return 1 if cand.get("win_evidence") else 0
+    if cand.get("mac_weak") and not cand.get("win_evidence"):
+        return 2
+    return None
+
+
+def _ip_sort_key(ip: str):
+    """Numeric address order, falling back to the string."""
+    try:
+        return (0, int(ipaddress.ip_address(ip)), ip)
+    except ValueError:
+        return (1, 0, ip)
+
+
+def _mac_entry(cand: dict) -> dict:
+    """Mac entry."""
+    entry = {"ip": cand["ip"], "models": cand["models"]}
+    if cand.get("ollama"):
+        entry["ollama"] = cand["ollama"]
+    return entry
+
+
+def _run_windows_ips(endpoints: dict) -> set[str]:
+    """Hosts this run classified as Windows (win_peers: Windows evidence, no Mac evidence)."""
+    seen = {p.get("ip", "") for p in endpoints.get("win_peers") or []}
+    seen.discard("")
+    return seen
+
+
+def _drop_windows_mac(endpoints: dict, extra: set[str] | None = None) -> tuple[dict, bool]:
+    """Drop a cached/back-filled Mac entry whose IP is a known Windows address.
+
+    `extra` carries addresses observed as Windows in the current run, so a stale cache cannot resurrect them as the Mac.
+    """
+    mac = endpoints.get("mac")
+    mac_ip = (mac or {}).get("ip", "")
+    if mac and (mac_ip in _known_windows_ips() or mac_ip in (extra or set())
+                or _is_loopback_host(mac_ip)):
+        print(f"  ⚠️  discarding mac {mac_ip}: known Windows address", file=sys.stderr)
+        return {**endpoints, "mac": None}, True
+    return endpoints, False
+
 
 def discover_endpoints() -> dict:
     """Probe Mac and Windows LM Studio instances.
@@ -341,56 +557,97 @@ def discover_endpoints() -> dict:
 
     if RUNNING_ON_WINDOWS:
         # ── Windows host: localhost = win, $MAC_IP = mac ────────────────────
+        # Every Mac candidate is checked against the known Windows IPs (this
+        # host's own addresses, $WIN_PEER_IPS, $WIN_3080_IP, $WIN_5080_IP) and
+        # against model evidence, so a second Windows LM Studio on :1234 is never
+        # labelled as the Mac.
         win_models = probe_models("http://localhost:1234")
         if win_models:
             result["win"] = {"ip": "localhost", "models": win_models}
         else:
             print("  ⚠️  Windows LM Studio not reachable at localhost:1234", file=sys.stderr)
 
+        win_known = _known_windows_ips()
+        policy_mac, policy_win = _policy_model_sets()
+        win_extra: list[dict] = []
+        # LM Studio mirrors the peer's models (LM Link), so a Mac's list can
+        # contain Windows-only ids. Mac evidence therefore wins; only a host with
+        # Windows evidence and NO Mac evidence is a win_peer, and known Windows
+        # addresses are excluded before any probe.
+        cache_probed: set[str] = set()
+
+        def _note_win(cand: dict) -> None:
+            """Note win."""
+            if cand["ip"] not in {p["ip"] for p in win_extra}:
+                win_extra.append({"ip": cand["ip"], "models": cand["models"]})
+
         mac_ip = os.getenv("MAC_IP", "").strip()
+        if mac_ip and (mac_ip in win_known or _is_loopback_host(mac_ip)):
+            print(f"  ⚠️  $MAC_IP={mac_ip} is a known Windows address — refusing to use it as the Mac",
+                  file=sys.stderr)
+            mac_ip = ""
         if mac_ip:
-            mac_models = probe_models(f"http://{mac_ip}:1234")
-            if mac_models:
-                result["mac"] = {"ip": mac_ip, "models": mac_models}
+            cand = _probe_mac_candidate(mac_ip, policy_mac, policy_win)
+            # Named explicitly: refuse only on Windows evidence with no Mac evidence.
+            if cand and (cand["mac_strong"] or not cand["win_evidence"]):
+                result["mac"] = _mac_entry(cand)
+            elif cand:
+                print(f"  ⚠️  $MAC_IP={mac_ip} serves Windows-only models — not labelling it as the Mac",
+                      file=sys.stderr)
+                _note_win(cand)
             else:
                 print(f"  ⚠️  Mac LM Studio not reachable at {mac_ip}:1234 ($MAC_IP) — trying cache", file=sys.stderr)
-                # MAC_IP set but unreachable: fall back to last-known-good cache
-                last = _load_json(LAST_DISCOVERY_JSON)
-                mac_last_ip = (last or {}).get("endpoints", {}).get("mac", {}).get("ip", "")
-                if mac_last_ip and mac_last_ip not in ("", "localhost", "127.0.0.1", mac_ip):
-                    mac_models_cached = probe_models(f"http://{mac_last_ip}:1234")
-                    if mac_models_cached:
-                        result["mac"] = {"ip": mac_last_ip, "models": mac_models_cached}
-                        print(f"  ℹ️  Mac found at cached IP {mac_last_ip} (update $MAC_IP)", file=sys.stderr)
-        else:
-            # MAC_IP not set: fall back to last-known-good mac IP from cache
-            last = _load_json(LAST_DISCOVERY_JSON)
-            mac_last_ip = (last or {}).get("endpoints", {}).get("mac", {}).get("ip", "")
-            if mac_last_ip and mac_last_ip not in ("", "localhost", "127.0.0.1"):
-                mac_models_cached = probe_models(f"http://{mac_last_ip}:1234")
-                if mac_models_cached:
-                    result["mac"] = {"ip": mac_last_ip, "models": mac_models_cached}
-                    print(f"  ℹ️  Mac LM Studio found at cached IP {mac_last_ip} (set $MAC_IP to avoid scan)", file=sys.stderr)
         if not result["mac"]:
-            # Fresh subnet scan — never guess .110; find any remote LM Studio on the LAN.
+            # Last-known-good mac IP from cache (needs Mac evidence).
+            last = _load_json(LAST_DISCOVERY_JSON)
+            mac_last_ip = ((last or {}).get("endpoints", {}).get("mac", {}) or {}).get("ip", "")
+            if (mac_last_ip and not _is_loopback_host(mac_last_ip)
+                    and mac_last_ip not in win_known and mac_last_ip != mac_ip):
+                cache_probed.add(mac_last_ip)
+                cand = _probe_mac_candidate(mac_last_ip, policy_mac, policy_win)
+                if cand and _mac_tier(cand) is not None:
+                    result["mac"] = _mac_entry(cand)
+                    hint = " (update $MAC_IP)" if mac_ip else " (set $MAC_IP to avoid scan)"
+                    print(f"  ℹ️  Mac found at cached IP {mac_last_ip}{hint}", file=sys.stderr)
+                elif cand and cand["win_evidence"]:
+                    _note_win(cand)
+        if not result["mac"]:
+            # Fresh subnet scan — never guess .110; find a remote LM Studio with Mac evidence.
             win_lan = _win_lan_ip() or ""
-            exclude = {"localhost", "127.0.0.1"}
-            if win_lan:
-                exclude.add(win_lan)
+            exclude = {"localhost"} | win_known | cache_probed
             subnets = get_local_subnets()
             if not subnets:
                 subnets = [win_lan.rsplit(".", 1)[0] if win_lan else SUBNET]
-            found_mac = False
+            cands: list[dict] = []
             for subnet in subnets:
-                for ip in asyncio.run(scan_subnet_async(subnet, LM_STUDIO_PORT, exclude)):
-                    models = probe_models(f"http://{ip}:1234")
-                    if models:
-                        result["mac"] = {"ip": ip, "models": models}
-                        print(f"  ℹ️  Mac LM Studio found at {ip} (subnet scan)", file=sys.stderr)
-                        found_mac = True
-                        break
-                if found_mac:
-                    break
+                for ip in sorted(asyncio.run(scan_subnet_async(subnet, LM_STUDIO_PORT, exclude)),
+                                 key=_ip_sort_key):
+                    cand = _probe_mac_candidate(ip, policy_mac, policy_win)
+                    if cand:
+                        cands.append(cand)
+            ranked = sorted((c for c in cands if _mac_tier(c) is not None),
+                            key=lambda c: (_mac_tier(c), _ip_sort_key(c["ip"])))
+            if ranked:
+                best = ranked[0]
+                result["mac"] = _mac_entry(best)
+                print(f"  ℹ️  Mac LM Studio found at {best['ip']} (subnet scan)", file=sys.stderr)
+            for cand in cands:
+                if cand["win_evidence"] and not cand["mac_strong"] and cand["ip"] != (result["mac"] or {}).get("ip"):
+                    _note_win(cand)
+
+        # Additional Windows peers: $WIN_PEER_IPS + $WIN_3080_IP + $WIN_5080_IP
+        # minus this host and the primary win; plus scan/MAC_IP hits that
+        # carried Windows evidence.
+        peer_exclude = {"localhost"} | _local_ipv4s()
+        if result["mac"]:
+            peer_exclude.add(result["mac"]["ip"])
+        peers = probe_extra_win_peers(peer_exclude, include_node_ips=True)
+        seen_peer_ips = {p["ip"] for p in peers}
+        for extra in win_extra:
+            if extra["ip"] not in seen_peer_ips and extra["ip"] not in peer_exclude:
+                peers.append(extra)
+                seen_peer_ips.add(extra["ip"])
+        result["win_peers"] = peers
         return result
 
     # ── Mac/Linux host: localhost = mac, subnet scan = win ──────────────────
@@ -460,7 +717,7 @@ def discover_endpoints() -> dict:
     return result
 
 
-def probe_extra_win_peers(exclude: set[str]) -> list[dict]:
+def probe_extra_win_peers(exclude: set[str], include_node_ips: bool = False) -> list[dict]:
     """Probe additional Windows LM Studio peers named in $WIN_PEER_IPS.
 
     MVP for tracking more than one Windows GPU box (e.g. RTX 3080 + RTX
@@ -469,12 +726,16 @@ def probe_extra_win_peers(exclude: set[str]) -> list[dict]:
     env var only — no subnet scan, no persistence beyond what
     save_discovery_state() already does for the returned list.
     """
-    raw = os.getenv("WIN_PEER_IPS", "").strip()
-    if not raw:
+    candidates = _env_ip_list("WIN_PEER_IPS")
+    if include_node_ips:
+        # Windows host: sibling GPU nodes configured by the launcher.
+        for key in ("WIN_3080_IP", "WIN_5080_IP"):
+            candidates.extend(_env_ip_list(key))
+    if not candidates:
         return []
     peers: list[dict] = []
     seen: set[str] = set()
-    for ip in (p.strip() for p in raw.split(",")):
+    for ip in candidates:
         if not ip or ip in exclude or ip in seen:
             continue
         seen.add(ip)
@@ -482,12 +743,13 @@ def probe_extra_win_peers(exclude: set[str]) -> list[dict]:
         if models:
             peers.append({"ip": ip, "models": models})
         else:
-            print(f"  ⚠️  Windows peer {ip} (from $WIN_PEER_IPS) not reachable", file=sys.stderr)
+            print(f"  ⚠️  Windows peer {ip} (configured Windows peer) not reachable", file=sys.stderr)
     return peers
 
 # ── Hash & state ──────────────────────────────────────────────────────────────
 
 def compute_hash(endpoints: dict) -> str:
+    """Compute hash."""
     mac = endpoints.get("mac") or {}
     win = endpoints.get("win") or {}
     win_peers = sorted(
@@ -503,6 +765,7 @@ def compute_hash(endpoints: dict) -> str:
     return hashlib.sha1(key.encode()).hexdigest()
 
 def _load_json(path: Path):
+    """Load json."""
     try:
         with open(str(path), "r", encoding="utf-8") as fh:
             return json.loads(fh.read())
@@ -510,11 +773,13 @@ def _load_json(path: Path):
         return None
 
 def _lock_path() -> Path:
+    """Lock path."""
     if LOCK_FILE != DEFAULT_LOCK_FILE:
         return LOCK_FILE
     return STATE_DIR / ".discover.lock"
 
 def save_discovery_state(endpoints: dict, tier: int = 1):
+    """Save discovery state."""
     endpoints = filter_endpoints_for_policy(endpoints)
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     mac = endpoints.get("mac") or {}
@@ -549,6 +814,7 @@ def save_discovery_state(endpoints: dict, tier: int = 1):
 # ── Backup / archive ──────────────────────────────────────────────────────────
 
 def backup_current_state():
+    """Backup current state."""
     if not LAST_DISCOVERY_JSON.exists(): return
     BACKUPS_DIR.mkdir(parents=True, exist_ok=True)
     ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
@@ -557,6 +823,7 @@ def backup_current_state():
     _enforce_backup_limits()
 
 def _enforce_backup_limits():
+    """Enforce backup limits."""
     BACKUPS_DIR.mkdir(parents=True, exist_ok=True)
     ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
     cutoff = time.time() - (ARCHIVE_DAYS * 86400)
@@ -575,6 +842,7 @@ def _enforce_backup_limits():
 def patch_openclaw_json(endpoints: dict):
     # PERPETUATOOLSROOT is only needed for PT-specific policy operations.
     # openclaw.json IP patching works fine without it — just warn if absent.
+    """Patch openclaw json."""
     if not _resolve_perpetua_root_env():
         logging.warning(
             "PERPETUATOOLSROOT/PERPETUA_TOOLS_ROOT not set — skipping PT-specific policy "
@@ -587,7 +855,28 @@ def patch_openclaw_json(endpoints: dict):
     providers = cfg.setdefault("models", {}).setdefault("providers", {})
     mac = endpoints.get("mac")
     win = endpoints.get("win")
-    if mac:
+    if mac and RUNNING_ON_WINDOWS:
+        # On a Windows host localhost is the Windows box: never write it (or any
+        # known Windows address) as lmstudio-mac; use the discovered Mac IP only.
+        mac_host = str(mac.get("ip") or "")
+        if mac_host and mac_host not in _known_windows_ips() and not _is_loopback_host(mac_host):
+            providers.setdefault("lmstudio-mac", {})["baseUrl"] = f"http://{mac_host}:1234/v1"
+            providers["lmstudio-mac"]["models"] = [
+                {"id": m, "name": f"Mac LMS — {m}", "contextWindow": 32768,
+                 "maxTokens": 8192, "cost": {"input": 0, "output": 0}}
+                for m in mac["models"] if "embed" not in m.lower()
+            ]
+    elif RUNNING_ON_WINDOWS:
+        # No valid remote Mac this run. A stale lmstudio-mac that points at
+        # loopback or a known Windows host would route to the local Windows
+        # LM Studio under the Mac's name, so drop it.
+        stale = providers.get("lmstudio-mac")
+        stale_url = str(stale.get("baseUrl") or "") if isinstance(stale, dict) else ""
+        stale_host = (urlsplit(stale_url).hostname or "") if stale_url else ""
+        if stale_host and (stale_host in _known_windows_ips() or _is_loopback_host(stale_host)):
+            print(f"  ⚠️  removing stale lmstudio-mac -> {stale_host} (not a remote Mac)", file=sys.stderr)
+            providers.pop("lmstudio-mac", None)
+    elif mac:
         # lmstudio-mac ALWAYS uses localhost — the LAN IP is discovery metadata only.
         # Native Mac processes must never route to themselves via the LAN interface.
         providers.setdefault("lmstudio-mac", {})["baseUrl"] = "http://localhost:1234/v1"
@@ -623,7 +912,7 @@ def patch_openclaw_json(endpoints: dict):
 # (grep across orchestrator/, src/perpetua/) — it was write-only, dead
 # metadata. models.yml's `${LM_STUDIO_WIN_ENDPOINT:-<default>}` literal is
 # consulted by ModelRegistry._expand_env_default only when the env var itself
-# is unset (os.environ.get(var, default)) — and lan_discovery.detect_active_
+# is unset (os.getenv(var, default)) — and lan_discovery.detect_active_
 # tilting_ip() / _sync_win_endpoint_env() already set that env var from the
 # same authoritative, UNTRACKED ~/.openclaw/state/last_discovery.json this
 # module writes below via save_discovery_state(). Tracked config now stays a
@@ -631,14 +920,17 @@ def patch_openclaw_json(endpoints: dict):
 # .env.lmstudio (gitignored), and process env — never in git-tracked YAML.
 
 def write_env_lmstudio(endpoints: dict, repo_paths: dict):
+    """Write env lmstudio."""
     endpoints = filter_endpoints_for_policy(endpoints)
     mac = endpoints.get("mac") or {}
     win = endpoints.get("win") or {}
     win_ip = (win.get("ip") or "")
     mac_ip = (mac.get("ip") or "")
     # On Windows host, Mac is remote — persist LAN IP for cross-machine routing.
-    if RUNNING_ON_WINDOWS and mac_ip not in ("", "localhost", "127.0.0.1"):
-        mac_url = f"http://{mac_ip}:1234"
+    if RUNNING_ON_WINDOWS:
+        # localhost is the Windows box here: never fall back to it as the Mac.
+        valid = bool(mac_ip) and mac_ip not in _known_windows_ips() and not _is_loopback_host(mac_ip)
+        mac_url = f"http://{mac_ip}:1234" if valid else ""
     else:
         mac_url = "http://localhost:1234"
     win_url = f"http://{win_ip}:1234" if win_ip else ""
@@ -671,6 +963,7 @@ def write_env_lmstudio(endpoints: dict, repo_paths: dict):
 # ── Recovery tiers ────────────────────────────────────────────────────────────
 
 def _state_to_ep(state):
+    """State to ep."""
     if not state or not state.get("endpoints"): return None
     return {
         "mac": {"ip": state["endpoints"]["mac"]["ip"], "models": state["models"]["mac"]}
@@ -679,19 +972,24 @@ def _state_to_ep(state):
               if state["endpoints"]["win"]["reachable"] else None,
     }
 
-def _load_tier2(): return _state_to_ep(_load_json(LAST_DISCOVERY_JSON))
+def _load_tier2():
+    """Load tier2 (last discovery state)."""
+    return _state_to_ep(_load_json(LAST_DISCOVERY_JSON))
 def _load_tier3():
+    """Load tier3."""
     if not BACKUPS_DIR.exists(): return None
     for b in sorted(BACKUPS_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
         ep = _state_to_ep(_load_json(b))
         if ep: return ep
     return None
 def _load_tier4(profile="lan-full"):
+    """Load tier4."""
     return _state_to_ep(_load_json(PROFILES_DIR / f"{profile}.json"))
 
 # ── File lock ─────────────────────────────────────────────────────────────────
 
 def _try_lock_file(handle) -> None:
+    """Try lock file."""
     if fcntl is not None:
         fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
         return
@@ -703,6 +1001,7 @@ def _try_lock_file(handle) -> None:
 
 
 def _unlock_file(handle) -> None:
+    """Unlock file."""
     if fcntl is not None:
         fcntl.flock(handle, fcntl.LOCK_UN)
         return
@@ -711,9 +1010,12 @@ def _unlock_file(handle) -> None:
 
 
 class _Lock:
+    """Helper: Lock."""
     def __init__(self, timeout=10.0):
+        """Initialise the instance."""
         self._timeout = timeout; self._fd = None
     def __enter__(self):
+        """Enter the context manager."""
         STATE_DIR.mkdir(parents=True, exist_ok=True)
         lock_path = _lock_path()
         lock_path.parent.mkdir(parents=True, exist_ok=True)
@@ -742,12 +1044,44 @@ class _Lock:
                     self._fd = None
                 raise
     def __exit__(self, *_):
+        """Exit the context manager."""
         if self._fd:
             _unlock_file(self._fd); self._fd.close()
             try: _lock_path().unlink()
             except FileNotFoundError: pass
 
 # ── Main discovery flow ───────────────────────────────────────────────────────
+
+def _host_is_windows_box(host: str) -> bool:
+    """True when `host` is loopback or a known Windows address."""
+    return bool(host) and (host in _known_windows_ips() or _is_loopback_host(host))
+
+
+def _windows_mac_config_stale(repo_paths: dict) -> bool:
+    """True when openclaw.json or a .env.lmstudio names a Windows box as the Mac.
+
+    Hosts upgraded from older versions hold lmstudio-mac / LM_STUDIO_MAC_ENDPOINT
+    pointing at localhost; the topology hash does not change, so the normal
+    change path never repairs them.
+    """
+    cfg = _load_json(OPENCLAW_JSON) if OPENCLAW_JSON.exists() else None
+    prov = ((cfg or {}).get("models", {}) or {}).get("providers", {}) or {}
+    url = str((prov.get("lmstudio-mac") or {}).get("baseUrl") or "") if isinstance(prov.get("lmstudio-mac"), dict) else ""
+    if url and _host_is_windows_box(urlsplit(url).hostname or ""):
+        return True
+    for repo_path in repo_paths.values():
+        env_path = Path(repo_path) / ".env.lmstudio" if repo_path else None
+        try:
+            text = env_path.read_text(encoding="utf-8") if env_path and env_path.exists() else ""
+        except OSError:
+            continue
+        for line in text.splitlines():
+            if line.startswith("LM_STUDIO_MAC_ENDPOINT="):
+                val = line.split("=", 1)[1].strip()
+                if val and _host_is_windows_box(urlsplit(val).hostname or ""):
+                    return True
+    return False
+
 
 def run_discovery(force: bool = True, cached: bool = False) -> int:
     """Probe endpoints and update configs.
@@ -769,6 +1103,8 @@ def run_discovery(force: bool = True, cached: bool = False) -> int:
         print("🔍 Probing LM Studio endpoints...", file=sys.stderr)
         endpoints = discover_endpoints()
         tier = 1
+        # Windows evidence from THIS run must also veto stale-cache Mac entries.
+        run_win_ips = _run_windows_ips(endpoints) if RUNNING_ON_WINDOWS else set()
 
         if not endpoints["mac"] and not endpoints["win"]:
             print("⚠️  No live endpoints — trying recovery tiers...", file=sys.stderr)
@@ -776,6 +1112,10 @@ def run_discovery(force: bool = True, cached: bool = False) -> int:
                                   (_load_tier3, 3, "newest backup"),
                                   (lambda: _load_tier4("lan-full"), 4, "lan-full profile")]:
                 ep = fn()
+                if ep and RUNNING_ON_WINDOWS:
+                    ep, dropped = _drop_windows_mac(ep, run_win_ips)
+                    if dropped and not ep["mac"] and not ep["win"]:
+                        continue
                 if ep: endpoints = ep; tier = t; print(f"  → tier {t}: {name}", file=sys.stderr); break
             if not endpoints["mac"] and not endpoints["win"]:
                 print("❌ All tiers failed.", file=sys.stderr)
@@ -784,8 +1124,14 @@ def run_discovery(force: bool = True, cached: bool = False) -> int:
         else:
             last = _load_json(LAST_DISCOVERY_JSON)
             if last:
+                win_known = (_known_windows_ips() | run_win_ips) if RUNNING_ON_WINDOWS else set()
                 for role in ("mac", "win"):
                     if not endpoints[role] and last["endpoints"][role]["reachable"]:
+                        role_ip = last["endpoints"][role].get("ip", "")
+                        if role == "mac" and (role_ip in win_known or _is_loopback_host(role_ip)):
+                            print("⚠️  mac last-good is a known Windows address — not preserving",
+                                  file=sys.stderr)
+                            continue
                         endpoints[role] = {"ip": last["endpoints"][role]["ip"],
                                            "models": last["models"][role]}
                         print(f"⚠️  {role} unreachable — preserving last-good", file=sys.stderr)
@@ -809,6 +1155,13 @@ def run_discovery(force: bool = True, cached: bool = False) -> int:
                 RECOVERY_SOURCE_TXT.write_text(f"tier{tier}\n")
             DISCOVERY_JSON.write_text(json.dumps(last, indent=2))
             LAST_DISCOVERY_JSON.write_text(json.dumps(last, indent=2))
+            if RUNNING_ON_WINDOWS:
+                repo_paths = get_repo_paths()
+                if _windows_mac_config_stale(repo_paths):
+                    # Idempotent: after the rewrite nothing points at a Windows box.
+                    print("🔧 Repairing stale lmstudio-mac (Windows box named as Mac)...", file=sys.stderr)
+                    patch_openclaw_json(endpoints)
+                    write_env_lmstudio(endpoints, repo_paths)
             print("✅ No changes. Config is current.", file=sys.stderr)
             return 0
 
@@ -832,17 +1185,24 @@ def run_discovery(force: bool = True, cached: bool = False) -> int:
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 def _cmd_status():
+    """Cmd status."""
     state = _load_json(LAST_DISCOVERY_JSON) or _load_json(DISCOVERY_JSON)
     if not state: print("No discovery state. Run: discover.py --status (after a probe)"); return
     print(f"Tier:    {state.get('recovery_tier', '?')}")
     print(f"Updated: {state.get('timestamp', '?')}")
     for role, ep in state.get("endpoints", {}).items():
+        if not isinstance(ep, dict) or "reachable" not in ep:
+            # e.g. win_peers is a list of peers, not a single endpoint
+            if isinstance(ep, list):
+                print(f"  {role}: {len(ep)} peer(s)")
+            continue
         ok = "✅" if ep["reachable"] else "❌"
         print(f"  {role}: {ok} {ep['ip']}:{ep['port']} — {len(state['models'].get(role, []))} models")
     src = RECOVERY_SOURCE_TXT.read_text().strip() if RECOVERY_SOURCE_TXT.exists() else "unknown"
     print(f"Source:  {src}")
 
 def _cmd_restore(target: str):
+    """Cmd restore."""
     if target == "latest":
         ep = _load_tier3()
     elif target.startswith("profile:"):
@@ -851,6 +1211,8 @@ def _cmd_restore(target: str):
         matches = sorted(BACKUPS_DIR.glob(f"{target}*.json")) if BACKUPS_DIR.exists() else []
         ep = _state_to_ep(_load_json(matches[-1])) if matches else None
     if not ep: print(f"Nothing found for '{target}'."); return
+    if RUNNING_ON_WINDOWS:
+        ep, _ = _drop_windows_mac(ep)
     ep = filter_endpoints_for_policy(ep)
     backup_current_state()
     repo_paths = get_repo_paths()
@@ -907,7 +1269,9 @@ def _watch_loop(interval: int = 30) -> None:
 
     _stop = threading.Event()
 
-    def _sig(*_): _stop.set()
+    def _sig(*_):
+        """Signal handler: request loop stop."""
+        _stop.set()
     signal.signal(signal.SIGINT,  _sig)
     signal.signal(signal.SIGTERM, _sig)
 
@@ -924,6 +1288,7 @@ def _watch_loop(interval: int = 30) -> None:
             return False
 
     def _current_liveness() -> dict:
+        """Current liveness."""
         state = _load_json(LAST_DISCOVERY_JSON) or {}
         ep = state.get("endpoints", {})
         mac_ip = (ep.get("mac") or {}).get("ip", "")
@@ -995,6 +1360,7 @@ def _watch_loop(interval: int = 30) -> None:
 
 
 def main():
+    """Main."""
     p = argparse.ArgumentParser(
         description="LM Studio Auto-Discovery (always probes by default; use --cached to skip when warm)",
     )
