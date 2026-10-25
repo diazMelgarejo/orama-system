@@ -26,6 +26,7 @@ WIN_MODELS = ["qwen3.5-27b-q4_k_m-gguf", "gemma-4-26b-gguf"]
 
 
 def _load_discover(stub_policy: bool = True):
+    """Load discover."""
     spec = importlib.util.spec_from_file_location("discover_win_peers_test", DISCOVER_SCRIPT)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
@@ -54,6 +55,7 @@ def _windows_host(env=None, probes=None, cache=None, scan_hits=None, local=(LOCA
     D.probe_calls = []
 
     def fake_probe(url):
+        """Fake probe."""
         D.probe_calls.append(url)
         if "localhost" in url:
             return ["qwen3.5-27b-distilled"] if url.endswith(":1234") else None
@@ -63,6 +65,7 @@ def _windows_host(env=None, probes=None, cache=None, scan_hits=None, local=(LOCA
     D.scan_calls = []
 
     async def fake_scan(subnet, port, exclude):
+        """Fake scan."""
         D.scan_calls.append((subnet, set(exclude)))
         return [ip for ip in (scan_hits or []) if ip not in exclude]
 
@@ -73,6 +76,7 @@ def _windows_host(env=None, probes=None, cache=None, scan_hits=None, local=(LOCA
 # ── F12: Mac vs Windows identification ───────────────────────────────────────
 
 def test_win2_on_1234_is_never_labelled_mac():
+    """Check that win2 on 1234 is never labelled mac."""
     D = _windows_host(
         probes={f"http://{WIN2}:1234": WIN_MODELS},
         scan_hits=[WIN2],
@@ -84,6 +88,7 @@ def test_win2_on_1234_is_never_labelled_mac():
 
 
 def test_scan_hit_without_any_evidence_is_not_mac():
+    """Check that scan hit without any evidence is not mac."""
     D = _windows_host(
         probes={f"http://{WIN2}:1234": ["some-unknown-model"]},
         scan_hits=[WIN2],
@@ -92,6 +97,7 @@ def test_scan_hit_without_any_evidence_is_not_mac():
 
 
 def test_scan_hit_with_mac_evidence_is_mac_and_known_windows_ips_not_scanned():
+    """Check that scan hit with mac evidence is mac and known windows ips not scanned."""
     D = _windows_host(
         env={"WIN_PEER_IPS": WIN2},
         probes={f"http://{MAC}:1234": MAC_MODELS},
@@ -105,6 +111,7 @@ def test_scan_hit_with_mac_evidence_is_mac_and_known_windows_ips_not_scanned():
 
 
 def test_explicit_mac_ip_in_windows_set_is_refused(capsys):
+    """Check that explicit mac ip in windows set is refused."""
     D = _windows_host(
         env={"MAC_IP": WIN2, "WIN_PEER_IPS": WIN2},
         probes={f"http://{WIN2}:1234": MAC_MODELS},  # even with Mac-looking models
@@ -115,16 +122,19 @@ def test_explicit_mac_ip_in_windows_set_is_refused(capsys):
 
 
 def test_explicit_mac_ip_equal_to_local_ip_is_refused():
+    """Check that explicit mac ip equal to local ip is refused."""
     D = _windows_host(env={"MAC_IP": LOCAL}, probes={f"http://{LOCAL}:1234": MAC_MODELS})
     assert D.discover_endpoints()["mac"] is None
 
 
 def test_explicit_mac_ip_accepted_without_evidence():
+    """Check that explicit mac ip accepted without evidence."""
     D = _windows_host(env={"MAC_IP": MAC}, probes={f"http://{MAC}:1234": ["plain-model"]})
     assert D.discover_endpoints()["mac"] == {"ip": MAC, "models": ["plain-model"]}
 
 
 def test_explicit_mac_ip_with_windows_evidence_goes_to_win_peers():
+    """Check that explicit mac ip with windows evidence goes to win peers."""
     D = _windows_host(env={"MAC_IP": MAC}, probes={f"http://{MAC}:1234": WIN_MODELS})
     result = D.discover_endpoints()
     assert result["mac"] is None
@@ -132,6 +142,7 @@ def test_explicit_mac_ip_with_windows_evidence_goes_to_win_peers():
 
 
 def test_ollama_answer_adds_optional_key_and_counts_as_evidence():
+    """Check that ollama answer adds optional key and counts as evidence."""
     D = _windows_host(
         env={"MAC_IP": MAC},
         probes={
@@ -145,6 +156,7 @@ def test_ollama_answer_adds_optional_key_and_counts_as_evidence():
 
 
 def test_cached_mac_in_windows_set_is_not_probed_or_used():
+    """Check that cached mac in windows set is not probed or used."""
     cache = {"endpoints": {"mac": {"ip": WIN2}, "win": {"ip": "localhost"}},
              "models": {"mac": MAC_MODELS, "win": []}}
     D = _windows_host(env={"WIN_PEER_IPS": WIN2},
@@ -155,6 +167,7 @@ def test_cached_mac_in_windows_set_is_not_probed_or_used():
 
 
 def test_cached_mac_needs_mac_evidence():
+    """Check that cached mac needs mac evidence."""
     cache = {"endpoints": {"mac": {"ip": MAC}, "win": {"ip": "localhost"}},
              "models": {"mac": [], "win": []}}
     D = _windows_host(probes={f"http://{MAC}:1234": ["plain-model"]}, cache=cache)
@@ -162,6 +175,7 @@ def test_cached_mac_needs_mac_evidence():
 
 
 def test_cached_mac_with_tagged_mac_only_model_is_accepted():
+    """Check that cached mac with tagged mac only model is accepted."""
     cache = {"endpoints": {"mac": {"ip": MAC}, "win": {"ip": "localhost"}},
              "models": {"mac": [], "win": []}}
     D = _windows_host(probes={f"http://{MAC}:11434": ["bge-m3:latest"]}, cache=cache)
@@ -171,6 +185,7 @@ def test_cached_mac_with_tagged_mac_only_model_is_accepted():
 # ── evidence helpers ─────────────────────────────────────────────────────────
 
 def test_mac_evidence_is_tag_insensitive():
+    """Check that mac evidence is tag insensitive."""
     D = _load_discover()
     assert D._has_mac_evidence(["bge-m3:latest"], {"bge-m3"})
     assert D._has_mac_evidence(["BGE-M3"], {"bge-m3"})
@@ -180,11 +195,13 @@ def test_mac_evidence_is_tag_insensitive():
 
 @pytest.mark.parametrize("name", ["foo-mlx", "mlx-community/bar", "baz-4bit", "baz-8bit"])
 def test_mac_evidence_mlx_markers(name):
+    """Check that mac evidence mlx markers."""
     D = _load_discover()
     assert D._has_mac_evidence([name], set())
 
 
 def test_win_evidence_markers():
+    """Check that win evidence markers."""
     D = _load_discover()
     assert D._has_win_evidence(["Foo-GGUF"], set())
     assert D._has_win_evidence(["gemma-4-26b:latest"], {"gemma-4-26b"})
@@ -194,6 +211,7 @@ def test_win_evidence_markers():
 # ── win_peers on a Windows host ──────────────────────────────────────────────
 
 def test_win_peers_from_env_minus_local():
+    """Check that win peers from env minus local."""
     D = _windows_host(
         env={"WIN_PEER_IPS": EXTRA_A, "WIN_3080_IP": LOCAL, "WIN_5080_IP": EXTRA_B},
         probes={
@@ -208,6 +226,7 @@ def test_win_peers_from_env_minus_local():
 
 
 def test_mac_path_win_peers_ignores_node_ips():
+    """Check that mac path win peers ignores node ips."""
     D = _load_discover()
     D.os = MagicMock()
     D.os.getenv = lambda key, default="": {"WIN_PEER_IPS": EXTRA_A, "WIN_5080_IP": EXTRA_B}.get(key, default)
@@ -218,6 +237,7 @@ def test_mac_path_win_peers_ignores_node_ips():
 # ── run_discovery back-fill / recovery tiers ─────────────────────────────────
 
 def _run_discovery_host(tmp_path, last, tier2=None, live=None, env=None):
+    """Run discovery host."""
     D = _windows_host(env=env or {"WIN_PEER_IPS": WIN2})
     live = live if live is not None else {"mac": None, "win": {"ip": "localhost", "models": ["m"]}}
     D.discover_endpoints = lambda: dict(live)
@@ -234,10 +254,13 @@ def _run_discovery_host(tmp_path, last, tier2=None, live=None, env=None):
     D.write_env_lmstudio = lambda endpoints, paths: None
 
     class _NoLock:
+        """Helper: NoLock."""
         def __enter__(self):
+            """Enter the context manager."""
             return self
 
         def __exit__(self, *a):
+            """Exit the context manager."""
             return False
 
     D._Lock = _NoLock
@@ -247,6 +270,7 @@ def _run_discovery_host(tmp_path, last, tier2=None, live=None, env=None):
 
 
 def test_backfill_does_not_preserve_windows_ip_as_mac(tmp_path):
+    """Check that backfill does not preserve windows ip as mac."""
     last = {
         "endpoints": {"mac": {"ip": WIN2, "reachable": True},
                       "win": {"ip": "localhost", "reachable": True}},
@@ -258,6 +282,7 @@ def test_backfill_does_not_preserve_windows_ip_as_mac(tmp_path):
 
 
 def test_backfill_still_preserves_a_real_mac(tmp_path):
+    """Check that backfill still preserves a real mac."""
     last = {
         "endpoints": {"mac": {"ip": MAC, "reachable": True},
                       "win": {"ip": "localhost", "reachable": True}},
@@ -269,6 +294,7 @@ def test_backfill_still_preserves_a_real_mac(tmp_path):
 
 
 def test_recovery_tier_drops_windows_ip_mac(tmp_path):
+    """Check that recovery tier drops windows ip mac."""
     tier2 = {"mac": {"ip": WIN2, "models": MAC_MODELS}, "win": {"ip": "localhost", "models": ["m"]}}
     D = _run_discovery_host(tmp_path, None, tier2=tier2, live={"mac": None, "win": None})
     assert D.run_discovery() == 0
@@ -277,6 +303,7 @@ def test_recovery_tier_drops_windows_ip_mac(tmp_path):
 
 
 def test_recovery_tier_with_only_windows_mac_fails(tmp_path):
+    """Check that recovery tier with only windows mac fails."""
     tier2 = {"mac": {"ip": WIN2, "models": MAC_MODELS}, "win": None}
     D = _run_discovery_host(tmp_path, None, tier2=tier2, live={"mac": None, "win": None})
     assert D.run_discovery() == 1
@@ -285,6 +312,7 @@ def test_recovery_tier_with_only_windows_mac_fails(tmp_path):
 # ── --status ─────────────────────────────────────────────────────────────────
 
 def test_status_tolerates_win_peers_list(tmp_path, capsys):
+    """Check that status tolerates win peers list."""
     D = _load_discover()
     state = {
         "recovery_tier": 1,
@@ -306,6 +334,7 @@ def test_status_tolerates_win_peers_list(tmp_path, capsys):
 # ── F13: load PT hardware_policy by path ─────────────────────────────────────
 
 def _fake_pt_root(tmp_path: Path) -> Path:
+    """Fake pt root."""
     utils = tmp_path / "pt" / "src" / "utils"
     utils.mkdir(parents=True)
     (utils / "hardware_policy.py").write_text(
@@ -318,6 +347,7 @@ def _fake_pt_root(tmp_path: Path) -> Path:
 
 
 def test_import_pt_hardware_policy_loads_by_path(tmp_path, monkeypatch):
+    """Check that import pt hardware policy loads by path."""
     root = _fake_pt_root(tmp_path)
     monkeypatch.delenv("PERPETUATOOLSROOT", raising=False)
     monkeypatch.delenv("PERPETUA_TOOLS_PATH", raising=False)
@@ -331,6 +361,7 @@ def test_import_pt_hardware_policy_loads_by_path(tmp_path, monkeypatch):
 
 
 def test_import_pt_hardware_policy_missing_file_falls_back(tmp_path, monkeypatch):
+    """Check that import pt hardware policy missing file falls back."""
     monkeypatch.delenv("PERPETUATOOLSROOT", raising=False)
     monkeypatch.delenv("PERPETUA_TOOLS_PATH", raising=False)
     monkeypatch.setenv("PERPETUA_TOOLS_ROOT", str(tmp_path / "nothing"))
@@ -341,6 +372,7 @@ def test_import_pt_hardware_policy_missing_file_falls_back(tmp_path, monkeypatch
 
 
 def test_broken_pt_policy_module_falls_back(tmp_path, monkeypatch):
+    """Check that broken pt policy module falls back."""
     root = _fake_pt_root(tmp_path)
     (root / "src" / "utils" / "hardware_policy.py").write_text("raise RuntimeError('boom')\n")
     monkeypatch.delenv("PERPETUATOOLSROOT", raising=False)
@@ -357,6 +389,7 @@ OLD_MAC_URL = "http://mac.invalid:1234/v1"
 
 
 def _patch_host(tmp_path, monkeypatch):
+    """Patch host."""
     oc = tmp_path / "openclaw.json"
     oc.write_text(json.dumps({
         "models": {"providers": {"lmstudio-mac": {"baseUrl": OLD_MAC_URL, "models": []}}},
@@ -373,6 +406,7 @@ def _patch_host(tmp_path, monkeypatch):
 
 
 def test_patch_openclaw_skips_local_box_as_mac_on_windows(tmp_path, monkeypatch):
+    """Check that patch openclaw skips local box as mac on windows."""
     D, oc = _patch_host(tmp_path, monkeypatch)
     for ip in ("localhost", LOCAL):
         D.patch_openclaw_json({"mac": {"ip": ip, "models": MAC_MODELS}, "win": None})
@@ -381,6 +415,7 @@ def test_patch_openclaw_skips_local_box_as_mac_on_windows(tmp_path, monkeypatch)
 
 
 def test_patch_openclaw_uses_discovered_mac_ip_on_windows(tmp_path, monkeypatch):
+    """Check that patch openclaw uses discovered mac ip on windows."""
     D, oc = _patch_host(tmp_path, monkeypatch)
     D.patch_openclaw_json({"mac": {"ip": MAC, "models": MAC_MODELS}, "win": None})
     prov = json.loads(oc.read_text())["models"]["providers"]["lmstudio-mac"]
@@ -389,6 +424,7 @@ def test_patch_openclaw_uses_discovered_mac_ip_on_windows(tmp_path, monkeypatch)
 
 
 def test_patch_openclaw_mac_host_still_uses_localhost(tmp_path, monkeypatch):
+    """Check that patch openclaw mac host still uses localhost."""
     D, oc = _patch_host(tmp_path, monkeypatch)
     D.RUNNING_ON_WINDOWS = False
     D.patch_openclaw_json({"mac": {"ip": MAC, "models": MAC_MODELS}, "win": None})

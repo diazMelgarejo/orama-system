@@ -76,6 +76,7 @@ def _resolve_perpetua_root_env() -> Path | None:
 
 
 def get_repo_paths() -> dict:
+    """Get repo paths."""
     base = Path.home() / "Documents" / "Terminal xCode" / "claude" / "OpenClaw"
     candidates = {
         "alphaclaw": [Path(os.getenv("ALPHACLAW_INSTALL_DIR", "~/.alphaclaw")).expanduser()],
@@ -102,6 +103,7 @@ def get_repo_paths() -> dict:
 # ── Hardware affinity policy ──────────────────────────────────────────────────
 
 def _simple_policy_parse(text: str) -> dict[str, list[str]]:
+    """Simple policy parse."""
     parsed: dict[str, list[str]] = {
         "windows_only": [],
         "mac_only": [],
@@ -165,6 +167,7 @@ def load_policy(policy_path: Path | None = None) -> dict[str, Any]:
     return _normalize_policy(loaded)
 
 def _import_pt_hardware_policy():
+    """Import pt hardware policy."""
     pt_root = _resolve_perpetua_root_env()
     if not pt_root:
         raise ImportError("PERPETUATOOLSROOT/PERPETUA_TOOLS_ROOT not set")
@@ -189,6 +192,7 @@ def _import_pt_hardware_policy():
 
 
 def _filter_models_for_platform_local(models: list, platform: str, policy: dict) -> list:
+    """Filter models for platform local."""
     normalized = platform.lower().strip()
     if normalized == "mac":
         forbidden = {m.lower() for m in policy.get("windows_only", [])}
@@ -233,6 +237,7 @@ def filter_endpoints_for_policy(endpoints: dict, policy: dict | None = None) -> 
 # ── Probing ───────────────────────────────────────────────────────────────────
 
 def probe_models(base_url: str, timeout: float = MODEL_API_TIMEOUT):
+    """Probe models."""
     try:
         safe_url = validate_model_endpoint_url(base_url)
     except ModelEndpointPolicyError as exc:
@@ -251,6 +256,7 @@ def probe_models(base_url: str, timeout: float = MODEL_API_TIMEOUT):
         return None
 
 async def _check_port(ip: str, port: int):
+    """Check port."""
     try:
         _, w = await asyncio.wait_for(asyncio.open_connection(ip, port), timeout=PROBE_TIMEOUT)
         w.close(); await w.wait_closed()
@@ -259,11 +265,13 @@ async def _check_port(ip: str, port: int):
         return None
 
 async def scan_subnet_async(subnet: str, port: int, exclude: set):
+    """Scan subnet async."""
     tasks = [_check_port(f"{subnet}.{i}", port) for i in range(1, 255)
              if f"{subnet}.{i}" not in exclude]
     return [ip for ip in await asyncio.gather(*tasks) if ip]
 
 def get_local_subnets() -> list[str]:
+    """Get local subnets."""
     subnets = []
     try:
         import netifaces
@@ -306,10 +314,12 @@ def _lan_ip_on_subnet(subnet_prefix: str | None = None) -> str | None:
 
 
 def _mac_lan_ip():
+    """Mac lan ip."""
     return _lan_ip_on_subnet()
 
 
 def _win_lan_ip():
+    """Win lan ip."""
     return _lan_ip_on_subnet()
 
 
@@ -375,6 +385,7 @@ def _local_ipv4s() -> set[str]:
 
 
 def _env_ip_list(key: str) -> list[str]:
+    """Env ip list."""
     return [p.strip() for p in os.getenv(key, "").split(",") if p.strip()]
 
 
@@ -409,6 +420,7 @@ def _model_matches(model: str, policy_name: str) -> bool:
 
 
 def _has_mac_evidence(models: list, mac_only: set[str]) -> bool:
+    """Has mac evidence."""
     for raw in models or []:
         name = str(raw).lower()
         if any(mk in name for mk in _MLX_MARKERS) or re.search(r"-\d+bit", name):
@@ -419,6 +431,7 @@ def _has_mac_evidence(models: list, mac_only: set[str]) -> bool:
 
 
 def _has_win_evidence(models: list, win_only: set[str]) -> bool:
+    """Has win evidence."""
     for raw in models or []:
         name = str(raw).lower()
         if "gguf" in name or any(_model_matches(name, p) for p in win_only):
@@ -443,6 +456,7 @@ def _probe_mac_candidate(ip: str, mac_only: set[str], win_only: set[str]) -> dic
 
 
 def _mac_entry(cand: dict) -> dict:
+    """Mac entry."""
     entry = {"ip": cand["ip"], "models": cand["models"]}
     if cand.get("ollama"):
         entry["ollama"] = cand["ollama"]
@@ -500,6 +514,7 @@ def discover_endpoints() -> dict:
         win_extra: list[dict] = []
 
         def _note_win(cand: dict) -> None:
+            """Note win."""
             if cand["ip"] not in {p["ip"] for p in win_extra}:
                 win_extra.append({"ip": cand["ip"], "models": cand["models"]})
 
@@ -668,6 +683,7 @@ def probe_extra_win_peers(exclude: set[str], include_node_ips: bool = False) -> 
 # ── Hash & state ──────────────────────────────────────────────────────────────
 
 def compute_hash(endpoints: dict) -> str:
+    """Compute hash."""
     mac = endpoints.get("mac") or {}
     win = endpoints.get("win") or {}
     win_peers = sorted(
@@ -683,6 +699,7 @@ def compute_hash(endpoints: dict) -> str:
     return hashlib.sha1(key.encode()).hexdigest()
 
 def _load_json(path: Path):
+    """Load json."""
     try:
         with open(str(path), "r", encoding="utf-8") as fh:
             return json.loads(fh.read())
@@ -690,11 +707,13 @@ def _load_json(path: Path):
         return None
 
 def _lock_path() -> Path:
+    """Lock path."""
     if LOCK_FILE != DEFAULT_LOCK_FILE:
         return LOCK_FILE
     return STATE_DIR / ".discover.lock"
 
 def save_discovery_state(endpoints: dict, tier: int = 1):
+    """Save discovery state."""
     endpoints = filter_endpoints_for_policy(endpoints)
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     mac = endpoints.get("mac") or {}
@@ -729,6 +748,7 @@ def save_discovery_state(endpoints: dict, tier: int = 1):
 # ── Backup / archive ──────────────────────────────────────────────────────────
 
 def backup_current_state():
+    """Backup current state."""
     if not LAST_DISCOVERY_JSON.exists(): return
     BACKUPS_DIR.mkdir(parents=True, exist_ok=True)
     ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
@@ -737,6 +757,7 @@ def backup_current_state():
     _enforce_backup_limits()
 
 def _enforce_backup_limits():
+    """Enforce backup limits."""
     BACKUPS_DIR.mkdir(parents=True, exist_ok=True)
     ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
     cutoff = time.time() - (ARCHIVE_DAYS * 86400)
@@ -755,6 +776,7 @@ def _enforce_backup_limits():
 def patch_openclaw_json(endpoints: dict):
     # PERPETUATOOLSROOT is only needed for PT-specific policy operations.
     # openclaw.json IP patching works fine without it — just warn if absent.
+    """Patch openclaw json."""
     if not _resolve_perpetua_root_env():
         logging.warning(
             "PERPETUATOOLSROOT/PERPETUA_TOOLS_ROOT not set — skipping PT-specific policy "
@@ -822,6 +844,7 @@ def patch_openclaw_json(endpoints: dict):
 # .env.lmstudio (gitignored), and process env — never in git-tracked YAML.
 
 def write_env_lmstudio(endpoints: dict, repo_paths: dict):
+    """Write env lmstudio."""
     endpoints = filter_endpoints_for_policy(endpoints)
     mac = endpoints.get("mac") or {}
     win = endpoints.get("win") or {}
@@ -862,6 +885,7 @@ def write_env_lmstudio(endpoints: dict, repo_paths: dict):
 # ── Recovery tiers ────────────────────────────────────────────────────────────
 
 def _state_to_ep(state):
+    """State to ep."""
     if not state or not state.get("endpoints"): return None
     return {
         "mac": {"ip": state["endpoints"]["mac"]["ip"], "models": state["models"]["mac"]}
@@ -870,19 +894,24 @@ def _state_to_ep(state):
               if state["endpoints"]["win"]["reachable"] else None,
     }
 
-def _load_tier2(): return _state_to_ep(_load_json(LAST_DISCOVERY_JSON))
+def _load_tier2():
+    """Load tier2 (last discovery state)."""
+    return _state_to_ep(_load_json(LAST_DISCOVERY_JSON))
 def _load_tier3():
+    """Load tier3."""
     if not BACKUPS_DIR.exists(): return None
     for b in sorted(BACKUPS_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
         ep = _state_to_ep(_load_json(b))
         if ep: return ep
     return None
 def _load_tier4(profile="lan-full"):
+    """Load tier4."""
     return _state_to_ep(_load_json(PROFILES_DIR / f"{profile}.json"))
 
 # ── File lock ─────────────────────────────────────────────────────────────────
 
 def _try_lock_file(handle) -> None:
+    """Try lock file."""
     if fcntl is not None:
         fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
         return
@@ -894,6 +923,7 @@ def _try_lock_file(handle) -> None:
 
 
 def _unlock_file(handle) -> None:
+    """Unlock file."""
     if fcntl is not None:
         fcntl.flock(handle, fcntl.LOCK_UN)
         return
@@ -902,9 +932,12 @@ def _unlock_file(handle) -> None:
 
 
 class _Lock:
+    """Helper: Lock."""
     def __init__(self, timeout=10.0):
+        """Initialise the instance."""
         self._timeout = timeout; self._fd = None
     def __enter__(self):
+        """Enter the context manager."""
         STATE_DIR.mkdir(parents=True, exist_ok=True)
         lock_path = _lock_path()
         lock_path.parent.mkdir(parents=True, exist_ok=True)
@@ -933,6 +966,7 @@ class _Lock:
                     self._fd = None
                 raise
     def __exit__(self, *_):
+        """Exit the context manager."""
         if self._fd:
             _unlock_file(self._fd); self._fd.close()
             try: _lock_path().unlink()
@@ -1033,6 +1067,7 @@ def run_discovery(force: bool = True, cached: bool = False) -> int:
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 def _cmd_status():
+    """Cmd status."""
     state = _load_json(LAST_DISCOVERY_JSON) or _load_json(DISCOVERY_JSON)
     if not state: print("No discovery state. Run: discover.py --status (after a probe)"); return
     print(f"Tier:    {state.get('recovery_tier', '?')}")
@@ -1049,6 +1084,7 @@ def _cmd_status():
     print(f"Source:  {src}")
 
 def _cmd_restore(target: str):
+    """Cmd restore."""
     if target == "latest":
         ep = _load_tier3()
     elif target.startswith("profile:"):
@@ -1113,7 +1149,9 @@ def _watch_loop(interval: int = 30) -> None:
 
     _stop = threading.Event()
 
-    def _sig(*_): _stop.set()
+    def _sig(*_):
+        """Signal handler: request loop stop."""
+        _stop.set()
     signal.signal(signal.SIGINT,  _sig)
     signal.signal(signal.SIGTERM, _sig)
 
@@ -1130,6 +1168,7 @@ def _watch_loop(interval: int = 30) -> None:
             return False
 
     def _current_liveness() -> dict:
+        """Current liveness."""
         state = _load_json(LAST_DISCOVERY_JSON) or {}
         ep = state.get("endpoints", {})
         mac_ip = (ep.get("mac") or {}).get("ip", "")
@@ -1201,6 +1240,7 @@ def _watch_loop(interval: int = 30) -> None:
 
 
 def main():
+    """Main."""
     p = argparse.ArgumentParser(
         description="LM Studio Auto-Discovery (always probes by default; use --cached to skip when warm)",
     )
