@@ -223,3 +223,58 @@ def test_listing_failure_blocks_send_and_keeps_item(env, monkeypatch, tmp_path, 
         assert srv.seen == [] and _outbox_has("m.md")
     finally:
         srv.stop()
+
+
+# ---- review-fix regressions -------------------------------------------------
+
+def test_same_name_different_size_is_collision_not_delivered(tls_peer, capsys):
+    _queue("n.md", 1, body="# body\nline2\n")
+    tls_peer.reply = {"ok": True, "files": [{"filename": "n.md", "bytes": 999}]}
+    rc, out, _ = _run(capsys, "outbox-resubmit", "--only", "n.md", "--peer-ip", "localhost",
+                      "--portal-port", str(tls_peer.port), "--timeout", "3")
+    assert rc == 1 and out["results"][0]["status"] == "error"
+    assert "name collision" in out["results"][0]["detail"]
+    assert [m for m, _, _ in tls_peer.seen] == ["GET"]  # never POSTed
+    m = _meta("n.md")
+    assert m["state"] == "queued" and m["size_matches"] is False
+    assert _outbox_has("n.md")
+
+
+def test_crlf_receiver_size_counts_as_same_content(tls_peer, capsys):
+    body = "# body\nline2\n"
+    _queue("o.md", 1, body=body)
+    crlf_len = len(body.replace("\n", "\r\n").encode("utf-8"))
+    tls_peer.reply = {"ok": True, "files": [{"filename": "o.md", "bytes": crlf_len}]}
+    rc, out, _ = _run(capsys, "outbox-resubmit", "--only", "o.md", "--peer-ip", "localhost",
+                      "--portal-port", str(tls_peer.port), "--timeout", "3")
+    assert rc == 0 and out["results"][0]["status"] == "delivered"
+    assert _meta("o.md")["size_matches"] is True
+
+
+def test_evidence_filter_sees_through_control_characters(env):
+    for bad in ("Bearer" + chr(0) + "eyJhbGciOiJIUzI1NiJ9.x", "api_key" + chr(0) + "= sk-live-abc",
+                "Bearer" + chr(27) + "[0m abc123"):
+        with pytest.raises(SystemExit):
+            lpa._clean_evidence(bad)
+
+
+def test_resubmit_rejects_out_of_range_port(env):
+    _queue("p.md", 1)
+    with pytest.raises(SystemExit):
+        lpa.main(["outbox-resubmit", "--only", "p.md", "--peer-ip", "localhost",
+                  "--portal-port", "70000"])
+
+
+def test_flush_skips_item_resubmitted_elsewhere(env, capsys):
+    _queue("q.md", 1)
+    lpa._set_state("q.md", "sent", history=[
+        {"from": {"peer_ip": fx.LOOPBACK_V4, "portal_port": "1"},
+         "to": {"peer_ip": "localhost", "portal_port": "2"}, "at": "x", "result": "sent"}])
+    rc, out, _ = _run(capsys, "flush-outbox", "--timeout", "2")
+    assert out["results"][0]["status"] == "skipped" and "--only" in out["results"][0]["detail"]
+
+
+def test_urlopen_kwargs_bad_port_is_trust_error(env, monkeypatch, tmp_path):
+    monkeypatch.setenv("PEER_CA_FILE", str(tmp_path / "ca.pem"))
+    with pytest.raises(peer_tls.PeerTrustError):
+        peer_tls.urlopen_kwargs("https://host.invalid:70000/x")

@@ -419,17 +419,17 @@ def check_ws_peer(peer_ip: str, portal_port: int, tokens: list[str], *, timeout:
         except Exception as exc:
             msg = str(exc)
             last_detail = msg[:80]
-            if "404" in msg or "HTTP 404" in msg:
-                return Check(
-                    "ws-peer",
-                    Status.SKIP,
-                    "peer has no /ws/portal-peer yet — pull orama >= 85ec1df and restart portal",
-                )
             if isinstance(exc, peer_tls.PeerTrustError):
                 return Check(
                     "ws-peer",
                     Status.FAIL,
                     f"peer TLS verification failed: {msg[:120]} (token not sent)",
+                )
+            if "404" in msg or "HTTP 404" in msg:
+                return Check(
+                    "ws-peer",
+                    Status.SKIP,
+                    "peer has no /ws/portal-peer yet — pull orama >= 85ec1df and restart portal",
                 )
             if "401" in msg:
                 continue

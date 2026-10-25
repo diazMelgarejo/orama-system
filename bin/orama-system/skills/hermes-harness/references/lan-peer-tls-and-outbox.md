@@ -45,12 +45,23 @@ https with a token, is recorded as `sent`, never `delivered`.
 
 ## Duplicate safety
 
-Before any send, flush and resubmit do an authenticated listing of the
-destination inbox. If the same remote filename is already there, nothing is
-sent: the item is marked `delivered` with evidence "present in peer inbox
-listing" and the listed size. If the listing cannot be fetched, nothing is
-sent and the item stays queued. A failed attempt never removes the outbox
-file.
+Before any send, flush and resubmit list the destination inbox
+(authenticated when a token and verified https are available). If the same
+remote filename is already there, nothing is sent:
+
+- Authenticated listing and the listed size equals the body size (LF or CRLF
+  line endings, since a Windows receiver translates newlines): marked
+  `delivered` with evidence "present in peer inbox listing". These items are
+  always kept in the outbox as evidence, regardless of `--keep-delivered`.
+- Authenticated listing but the size differs: a name collision. The item stays
+  `queued` with last_error "name collision", is not resent, and needs
+  `outbox-resolve` or a renamed resubmit. `outbox-status` shows `size_matches`.
+- Unauthenticated listing: marked `sent`, not resent.
+
+If the listing cannot be fetched, nothing is sent and the item stays queued.
+A failed attempt never removes the outbox file. A plain `flush-outbox` skips
+items whose last unconfirmed resubmit went to another destination; use
+`--only` to resend those explicitly.
 
 ## Recording out-of-band evidence
 

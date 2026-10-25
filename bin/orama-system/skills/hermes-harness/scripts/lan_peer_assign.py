@@ -99,7 +99,10 @@ def _peer_portal_tls_enabled() -> bool:
 
 def _peer_base(peer_ip: str, portal_port: int) -> str:
     scheme = "https" if _peer_portal_tls_enabled() else "http"
-    return f"{scheme}://{peer_ip}:{portal_port}"
+    host = peer_ip
+    if ":" in host and not host.startswith("["):
+        host = f"[{host}]"  # bare IPv6 literal needs brackets in a URL authority
+    return f"{scheme}://{host}:{portal_port}"
 
 
 def _http_json(method: str, url: str, payload: dict[str, Any] | None = None, timeout: int = 30) -> Any:
@@ -359,6 +362,7 @@ def cmd_outbox_status(args: argparse.Namespace) -> int:
                 "queued_at": meta.get("queued_at", ""),
                 "state_at": meta.get("state_at", ""),
                 "last_error": str(meta.get("last_error") or "")[:300],
+                "size_matches": meta.get("size_matches", ""),
             }
         )
     counts = {s: sum(1 for r in rows if r["state"] == s) for s in _STATES}
@@ -376,12 +380,14 @@ def _clean_evidence(text: str) -> str:
     """Control chars stripped, whitespace collapsed, length-limited. Refuses
     anything that looks like a credential (evidence is stored in clear)."""
     raw = text or ""
-    if _CRED_RE.search(raw):
+    cleaned = " ".join(_CTRL_RE.sub(" ", raw).split())
+    # Check both the raw and the cleaned text: a control character between
+    # "Bearer" and the value must not defeat the credential filter.
+    if _CRED_RE.search(raw) or _CRED_RE.search(cleaned):
         raise SystemExit("--evidence looks like it contains a credential; refusing (never store secrets)")
     for tok in probe.outbound_control_plane_tokens():
-        if tok and len(tok) >= 8 and tok in raw:
+        if tok and len(tok) >= 8 and (tok in raw or tok in cleaned):
             raise SystemExit("--evidence contains a local token value; refusing (never store secrets)")
-    cleaned = " ".join(_CTRL_RE.sub(" ", raw).split())
     if not cleaned:
         raise SystemExit("--evidence must not be empty")
     return cleaned[:_EVIDENCE_MAX]
@@ -514,7 +520,30 @@ def _deliver_item(
     found = _listed_entry(data, filename)
     if found is not None:
         size = found.get("bytes", found.get("size", ""))
-        local_size = len(body.encode("utf-8"))
+        # The receiver may be Windows (write_text turns LF into CRLF), so a
+        # listed size equal to either the LF or the CRLF encoding of the body
+        # counts as the same content.
+        lf_body = body.replace("\r\n", "\n")
+        local_size = len(lf_body.encode("utf-8"))
+        crlf_size = len(lf_body.replace("\n", "\r\n").encode("utf-8"))
+        size_ok = str(size) in (str(local_size), str(crlf_size))
+        if list_authed and not size_ok:
+            # Same name, different (or unverifiable) size: do not resend, do not
+            # declare delivered. Operator decides (outbox-resolve or rename).
+            why = (
+                f"name collision: listed size {size!r} differs from local "
+                f"{local_size}/{crlf_size} bytes; not resent, resolve or rename"
+            )
+            entry["status"] = "error"
+            entry["state"] = "queued"
+            entry["detail"] = why
+            entry["listed_size"] = size
+            entry["size_matches"] = False
+            _set_state(
+                filename, "queued", last_error=why, listed_size=size, local_size=local_size,
+                size_matches=False, **_hist("error: name collision")
+            )
+            return entry
         if list_authed:
             entry["status"] = "delivered"
             entry["state"] = "delivered"
@@ -528,7 +557,7 @@ def _deliver_item(
                 evidence="present in peer inbox listing",
                 listed_size=size,
                 local_size=local_size,
-                size_matches=(str(size) == str(local_size)),
+                size_matches=True,
                 **_hist("present"),
             )
         else:
@@ -537,6 +566,7 @@ def _deliver_item(
             entry["detail"] = "present in peer inbox listing, but listing was not authenticated; not resent"
             _set_state(filename, "sent", last_error=entry["detail"], listed_size=size, **_hist("present-unauthenticated"))
         entry["listed_size"] = size
+        entry["size_matches"] = size_ok
         return entry
 
     url = f"{_peer_base(ip, port)}/api/peer-file"
@@ -584,7 +614,12 @@ def cmd_outbox_resubmit(args: argparse.Namespace) -> int:
     ip = (args.peer_ip or "").strip()
     if not ip or not _HOST_RE.match(ip):
         raise SystemExit("--peer-ip must be an explicit host")
-    port = int(args.portal_port)
+    try:
+        port = int(args.portal_port)
+    except (TypeError, ValueError):
+        raise SystemExit("--portal-port must be an integer") from None
+    if not 1 <= port <= 65535:
+        raise SystemExit("--portal-port must be between 1 and 65535")
     _ensure_orama_src()
     from orama_system.lan_peer_files import read_outbox_file
 
@@ -644,6 +679,25 @@ def cmd_flush_outbox(args: argparse.Namespace) -> int:
         if prior in _TERMINAL_STATES:
             continue  # delivered/superseded are never resent, even by --state
         if state_filter and prior not in state_filter:
+            continue
+        hist = meta.get("history")
+        last_hop = hist[-1] if isinstance(hist, list) and hist and isinstance(hist[-1], dict) else {}
+        if (
+            not only
+            and prior == "sent"
+            and last_hop.get("to")
+            and last_hop.get("to") != last_hop.get("from")
+        ):
+            # An unconfirmed resubmit went to a different destination; resending
+            # to the original address could duplicate it. Require --only.
+            skipped = {
+                "filename": filename,
+                "status": "skipped",
+                "state": prior,
+                "detail": "resubmitted to another destination; use --only to resend explicitly",
+            }
+            results.append(skipped)
+            print(f"{skipped['status']:9s} {filename} ({skipped['detail']})", file=sys.stderr)
             continue
         stored_ip = str(meta.get("peer_ip") or "").strip()
         if stored_ip:

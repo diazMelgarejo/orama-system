@@ -133,7 +133,10 @@ def urlopen_kwargs(url: str, timeout: float = 8.0) -> dict[str, Any]:
         return {}
     if not peer_ca_file() and not pinned_fingerprints():
         return {}  # nothing configured: urllib's own default verified context
-    port = parts.port or 443
+    try:
+        port = parts.port or 443
+    except ValueError as exc:
+        raise PeerTrustError(f"invalid peer URL port: {exc}") from None
     return {"context": context_for(parts.hostname, port, timeout=timeout)}
 
 
