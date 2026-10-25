@@ -10,6 +10,12 @@
 #   - US_PYTHON: python binary with US's deps installed (its .venv preferred)
 #   - All paths are absolute. Env vars and ~ are NOT expanded here.
 #   - This file is documentation only; .paths is generated/runtime-local.
+#   - Explicit PERPETUA_TOOLS_ROOT overrides the cached PT source at startup.
+#   - PT_VENV_DIR / ORAMA_VENV_DIR select reusable environments for installers
+#     and runtime together. Existing repo-local .venv remains the default.
+#     Suggested reusable location: $XDG_DATA_HOME/oramasys/venvs/<repo-name>
+#     (use $HOME/.local/share when XDG_DATA_HOME is unset).
+#     Keep separate environments per application; never use a global pip.
 
 # Quote paths that contain spaces (common on macOS with "Terminal xCode" etc.)
 # PT_DIR="/Users/you/projects/Perplexity-Tools"
