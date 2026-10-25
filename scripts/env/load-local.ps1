@@ -1,4 +1,23 @@
-# load-local.ps1 — Load gitignored repo env (.env then .env.local). Idempotent.
+<#
+.SYNOPSIS
+    Load the gitignored repo env files (.env, then .env.local, then the per-user env file).
+
+.DESCRIPTION
+    Dot-source this script to export KEY=VALUE pairs into the current process
+    environment. Files are read in order: .env and .env.local under the repo
+    root, then the orama-system env file in the user profile. Later files
+    override earlier ones. Idempotent: running it again re-applies the same
+    values.
+
+    PERPETUA_TOOLS_PATH and PERPETUA_TOOLS_ROOT are caller-wins keys: a value
+    the caller set for this invocation is never overridden by a file. A value
+    left over from a previous run of this script is not a caller choice (see the
+    ORAMA_LOADLOCAL_SET_ markers below).
+
+.PARAMETER RepoRoot
+    Repo root holding .env and .env.local. Defaults to two levels above this
+    script.
+#>
 param(
     [string]$RepoRoot = ''
 )
@@ -35,6 +54,10 @@ function ConvertFrom-LocalEnvValue {
     <#
     .SYNOPSIS
     Normalise a raw .env.local value (strip quotes and trailing comments).
+    .PARAMETER Raw
+    Text after the first equals sign of an env line.
+    .OUTPUTS
+    System.String: the unquoted value, or an empty string for a comment-only value.
     #>
     param([string]$Raw)
     $v = $Raw.Trim()
@@ -51,6 +74,16 @@ function ConvertFrom-LocalEnvValue {
 }
 
 function Import-LocalEnvFile {
+    <#
+    .SYNOPSIS
+    Export every KEY=VALUE line of one env file into the process environment.
+    .DESCRIPTION
+    Skips a missing file, blank lines, comment lines and lines without a key.
+    Caller-set keys captured in the snapshot are left untouched, and each value
+    set for a caller-wins key is recorded in its ORAMA_LOADLOCAL_SET_ marker.
+    .PARAMETER Path
+    Env file to read.
+    #>
     param([string]$Path)
     if (-not (Test-Path $Path)) { return }
     Get-Content $Path | ForEach-Object {
