@@ -1,3 +1,4 @@
+"""Unit tests for scripts/discover.py: hashing, model filtering, state files, config patching, root resolution and probe safety."""
 import json, sys, time
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
