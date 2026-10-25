@@ -54,3 +54,63 @@ reservation inside the same transaction as the send marker. Real destinations
 remain unchanged on refusal. Tests also reopen the database and prove that a
 send marker without settlement remains unknown and cannot be retried. The
 restart test is not a substitute for the remaining subprocess crash matrix.
+
+## Successor batch: subprocess evidence and memory preservation
+
+The operator requested continuation through the existing draft PRs. This batch
+reuses Orama #454 and Oramasys #77; it creates no additional implementation PR.
+PT #465 received the supplied qualification-gates patch and was converted to a
+draft. Its memory commit is
+`851c2f7971d9667ab57a415e12004e6b75ca0b92`. The patch was applied intact, with
+one new candidate, one semantic lesson, its rendered view, and one episodic
+append. The remote-content preservation gate confirms that all 1,195 historical
+episodes remain the exact byte prefix; 18 focused memory tests pass.
+
+Oramasys #77 at `bb234b4b7e72e8038fbffdf91daf68e961171a81` now includes seven
+subprocess crash cases and a two-process send race. The detailed matrix,
+reproducer and limits are in the
+[candidate evidence receipt](https://github.com/oramasys/oramasys/blob/bb234b4b7e72e8038fbffdf91daf68e961171a81/docs/release12-process-crash-evidence.md).
+Crash injection uses `os._exit` without cleanup. For transaction interruptions,
+a trace callback observes the target write, then exits before COMMIT executes.
+After reopening, the tests prove atomic authorization rollback, uncommitted
+marker rollback, durable UNKNOWN after a committed marker, durable inert
+settlement, and refusal of duplicate sends. The process race yields exactly one
+sender and one refusal.
+
+Fresh Python 3.11 and 3.12 environments installed the candidate non-editably and
+passed the existing isolated production-install verifier from outside the
+checkout. The declared immutable Core/Telos/Agate pins were retained. Each
+interpreter passed the full source suite: **2,001 passed, 3 skipped**. The Telos
+network-authority check and production compile check passed. Pytest's configured
+source path means these are source-suite and clean-install checks, not a sealed
+installed-set release qualification. The eight subprocess cases qualify only
+the inert simulation seam with synthetic verifier/gate ports.
+
+## Remaining gates after this batch
+
+Releases 1–2 remain **not fully qualified**. No capability was activated.
+
+| Gate | Current evidence | Required next result |
+| --- | --- | --- |
+| Trusted effect-grant composition | Consumer value object and recovery verifier are present | Reviewed producer effect-verifier API and bound consumer adapter |
+| Final-boundary authorization | Existing Step 4.3 tested with synthetic ports | Authenticated scoped approval and verified grant/event composition at dispatch |
+| Inert crash/replay behavior | Seven process-death cases and one sender race pass | Independent review at the final candidate SHA |
+| Serving isolation | Developer subprocesses only | Seed-read and issuer-write denial under the actual serving identity |
+| Installed release evidence | Non-editable install smoke and source tests on 3.11/3.12 | Complete registry/manifest/config digests, sealed matrix and post-merge repin rerun |
+| Activation | Absent | Separate operator decision naming capability, scope and disablement |
+
+The grant-serving extra still pins Phylax
+`0c3e860749b3ff8f62e102679f1f415f8acf0a61`, the recovery verifier. Phylax's
+`DispatchIssuerSigner` at inspected head
+`31afe7f485bec9d305531d9edc3460ab066dc8c5` provides issuer signing, not trusted
+consumer effect-grant verification. A request payload or a newly constructed
+`VerifiedDispatchGrant` must not stand in for that missing producer boundary.
+Until it exists and is qualified, exposing an effect route would cross an
+unverified authority boundary.
+
+The attached roadmap's T4 transport, T5 continuation and C4 autonomy releases
+remain downstream gates. They require their own frozen contracts, pinned
+qualification and operator decisions. Real isolation cannot be inferred from
+same-user subprocess success; a green draft cannot activate serving. Preserve
+the original roadmap and historical receipts as evidence rather than rewriting
+their earlier observations as current qualification.
