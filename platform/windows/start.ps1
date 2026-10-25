@@ -27,8 +27,9 @@
       8001  orama API       (US  — Layer 3 reasoning engine)
       8002  Portal dashboard
 
-    Service processes are launched as background Jobs (Start-Job) and their
-    stdout/stderr are tee-d to .logs\<svc>.log in the repo root.
+    Service processes are launched detached (scripts\lib\spawn_detached.py), so
+    they keep running after this script exits. stdout/stderr are appended to
+    .logs\<svc>.log and the PID to .logs\<svc>.pid in the repo root.
 
     UTF-8 fix (PowerShell defaults to system ANSI codepage on Win):
       [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -735,26 +736,122 @@ function Get-PidOnPort {
     return $null
 }
 
+# True when every LISTENING socket on the port is bound to a loopback address.
+# No listener, or an unparsable address, counts as not loopback-only (fail closed).
+function Test-PortLoopbackOnly {
+    param([int]$Port)
+    $seen = 0
+    try {
+        foreach ($nsLine in @(& netstat -ano 2>$null)) {
+            if ("$nsLine" -match '^\s*TCP\s+(\S+):(\d+)\s+\S+\s+LISTENING\s+\d+') {
+                $nsAddrText = $Matches[1].Trim('[', ']')
+                if ([int]$Matches[2] -ne $Port) { continue }
+                $seen++
+                $nsAddr = $null
+                if (-not [System.Net.IPAddress]::TryParse($nsAddrText, [ref]$nsAddr)) { return $false }
+                if (-not [System.Net.IPAddress]::IsLoopback($nsAddr)) { return $false }
+            }
+        }
+    } catch { return $false }
+    return ($seen -gt 0)
+}
+
+# Life-* helpers: service lifecycle (detached launch, readiness, stop). PS 5.1 safe.
+function Life-GetProc {
+    param([int]$ProcId)
+    if ($ProcId -le 0) { return $null }
+    try { return (Get-Process -Id $ProcId -ErrorAction Stop) } catch { return $null }
+}
+
+# True when ProcId is alive, its name matches NamePattern and (optionally) its
+# command line matches CmdPattern. Never matches on process name alone for kills.
+function Life-PidMatches {
+    param([int]$ProcId, [string]$NamePattern, [string]$CmdPattern = '')
+    $p = Life-GetProc $ProcId
+    if (-not $p) { return $false }
+    if ($p.ProcessName -notmatch $NamePattern) { return $false }
+    if ($CmdPattern) {
+        try {
+            $cim = Get-CimInstance -ClassName Win32_Process -Filter "ProcessId=$ProcId" -ErrorAction Stop
+            if (-not $cim -or -not $cim.CommandLine) { return $false }
+            if ($cim.CommandLine -notmatch $CmdPattern) { return $false }
+        } catch { return $false }
+    }
+    return $true
+}
+
+function Life-IsPythonPid {
+    param([int]$ProcId)
+    return (Life-PidMatches $ProcId '^pythonw?[0-9.]*$')
+}
+
+function Life-ReadPid {
+    param([string]$PidFile)
+    if (-not (Test-Path $PidFile)) { return 0 }
+    try {
+        $text = (Get-Content -Path $PidFile -Raw -ErrorAction Stop).Trim()
+        $n = 0
+        if ([int]::TryParse($text, [ref]$n)) { return $n }
+    } catch {}
+    return 0
+}
+
+# Probe host: the specific bind host, else IPv4 loopback by address (the name
+# localhost costs ~2 s per attempt on IPv6-first hosts).
+function Life-ProbeHost {
+    param([string]$BindHost = '')
+    if ($BindHost -and $BindHost -ne '0.0.0.0' -and $BindHost -ne '::') { return $BindHost }
+    return [System.Net.IPAddress]::Loopback.IPAddressToString
+}
+
+function Life-ShowLogTail {
+    param([string]$LogFile, [int]$Lines = 30)
+    if (Test-Path $LogFile) {
+        Write-Host "  --- last $Lines lines of $LogFile ---"
+        foreach ($l in @(Get-Content -Path $LogFile -Tail $Lines -Encoding UTF8 -ErrorAction SilentlyContinue)) {
+            Write-Host "  | $l"
+        }
+        Write-Host '  --- end of log ---'
+    } else {
+        Write-Host "  (no log file at $LogFile)"
+    }
+}
+
 function Wait-ForPort {
-    param([int]$Port, [string]$Label, [int]$MaxSeconds = 75)
+    param(
+        [int]$Port,
+        [string]$Label,
+        [int]$MaxSeconds = 75,
+        [int]$ServicePid = 0,
+        [string]$BindHost = ''
+    )
+    $probeHost = Life-ProbeHost $BindHost
+    $svcLog = Join-Path $LogDir (($Label.ToLower() -replace '\s+', '_') + '.log')
     Write-Host -NoNewline "  waiting for $Label (port $Port)"
     $deadline = (Get-Date).AddSeconds($MaxSeconds)
     while ((Get-Date) -lt $deadline) {
+        $tcp = New-Object System.Net.Sockets.TcpClient
         try {
-            $tcp = New-Object System.Net.Sockets.TcpClient
-            $conn = $tcp.ConnectAsync('localhost', $Port)
-            if ($conn.Wait(500)) {
-                $tcp.Close()
+            $conn = $tcp.ConnectAsync($probeHost, $Port)
+            if ($conn.Wait(250) -and $tcp.Connected) {
                 Write-Host ' UP'
                 return $true
             }
+        } catch {
+        } finally {
             $tcp.Close()
-        } catch {}
+        }
+        # Process-exit branch: the service died before opening its port.
+        if ($ServicePid -gt 0 -and -not (Life-GetProc $ServicePid)) {
+            Write-Host " FAILED - process $ServicePid exited before port $Port was up"
+            Life-ShowLogTail $svcLog 30
+            return $false
+        }
         Write-Host -NoNewline '.'
-        Start-Sleep -Milliseconds 500
+        Start-Sleep -Milliseconds 250
     }
-    $timeoutLog = Join-Path $LogDir ($Label.ToLower() + '.log')
-    Write-Host " TIMEOUT - check $timeoutLog"
+    Write-Host " TIMEOUT - check $svcLog"
+    Life-ShowLogTail $svcLog 30
     return $false
 }
 
@@ -762,6 +859,16 @@ function Open-Browser {
     param([string]$Url)
     try { Start-Process $Url } catch { _Warn 'browser' "Could not open browser: $_" }
 }
+
+# ── Portal TLS front end (opt-in: PORTAL_TLS_ENABLED=1/true/yes) ──────────────
+# When enabled, the Portal binds loopback only and orchestrator.portal_tls_proxy
+# (Perpetua-Tools) is the single LAN-facing listener, on PORTAL_TLS_PORT.
+$PortalTlsEnabled = $false
+if ($env:PORTAL_TLS_ENABLED) {
+    $PortalTlsEnabled = ($env:PORTAL_TLS_ENABLED.Trim().ToLower() -in @('1', 'true', 'yes'))
+}
+$PortalTlsPort = if ($env:PORTAL_TLS_PORT) { [int]$env:PORTAL_TLS_PORT } else { 8443 }
+$PortalTlsListenHost = if ($env:PORTAL_TLS_LISTEN_HOST) { $env:PORTAL_TLS_LISTEN_HOST.Trim() } else { '0.0.0.0' }
 
 # ── --stop ────────────────────────────────────────────────────────────────────
 if ($Stop) {
@@ -773,6 +880,28 @@ if ($Stop) {
             Write-Host "  killed PID $listenerPid (port $port)"
         } else {
             Write-Host "  nothing on port $port"
+        }
+    }
+    # PID files written by the detached launcher (never kill by process name).
+    if (Test-Path $LogDir) {
+        foreach ($pf in @(Get-ChildItem -Path $LogDir -Filter '*.pid' -File -ErrorAction SilentlyContinue)) {
+            $recorded = Life-ReadPid $pf.FullName
+            $isWatcher = ($pf.BaseName -eq 'lm_link_watch')
+            if ($isWatcher) {
+                $owned = Life-PidMatches $recorded '^(powershell|pwsh)$' 'lm_link_watch'
+            } elseif ($pf.BaseName -eq 'portal_tls') {
+                # Portal TLS proxy: command-line match on portal_tls_proxy, never by name.
+                $owned = Life-PidMatches $recorded '^pythonw?[0-9.]*$' 'portal_tls_proxy'
+            } else {
+                $owned = Life-PidMatches $recorded '^pythonw?[0-9.]*$' 'uvicorn'
+            }
+            if ($owned) {
+                & taskkill.exe /PID $recorded /T /F 2>$null | Out-Null
+                Write-Host "  killed PID $recorded ($($pf.BaseName) from $($pf.Name))"
+            } elseif ($recorded -gt 0) {
+                Write-Host "  $($pf.Name): PID $recorded is not a matching process (already stopped or reused); not killed"
+            }
+            Remove-Item -Path $pf.FullName -Force -ErrorAction SilentlyContinue
         }
     }
     exit 0
@@ -820,12 +949,12 @@ if ($Status) {
         @{Name='PT';     Port=$PtPort},
         @{Name='orama';  Port=$UsPort},
         @{Name='Portal'; Port=$PortalPort}
-    )) {
+    ) + $(if ($PortalTlsEnabled -or (Test-Path (Join-Path $LogDir 'portal_tls.pid'))) { @(@{Name='Portal TLS'; Port=$PortalTlsPort}) } else { @() })) {
         $listenerPid = Get-PidOnPort $entry.Port
         if ($listenerPid) {
-            Write-Host ("  {0,-8} :{1,-5}  ● UP    (PID {2})" -f $entry.Name, $entry.Port, $listenerPid)
+            Write-Host ("  {0,-10} :{1,-5}  ● UP    (PID {2})" -f $entry.Name, $entry.Port, $listenerPid)
         } else {
-            Write-Host ("  {0,-8} :{1,-5}  ○ DOWN" -f $entry.Name, $entry.Port)
+            Write-Host ("  {0,-10} :{1,-5}  ○ DOWN" -f $entry.Name, $entry.Port)
         }
     }
     Invoke-HardwarePolicyCheck
@@ -1167,8 +1296,47 @@ Write-Host ("║  PT   port $PtPort     orama port $UsPort     Portal port $Port
 Write-Host '╚══════════════════════════════════════════════════════════════════╝'
 Write-Host ''
 
-# ── Helper: start a service as a background process ───────────────────────────
-function Start-Service {
+# ── Helper: start a service as a detached background process ──────────────────
+# scripts\lib\spawn_detached.py starts the child detached (own process group, no
+# console, outside the launcher's job), appends stdout+stderr to the log and
+# writes the PID file, then exits. The service therefore keeps running and keeps
+# logging after this launcher exits. Secrets are inherited via the environment,
+# never put on a command line.
+$LifeSpawnScript = Join-Path $RepoRoot 'scripts\lib\spawn_detached.py'
+
+# Returns the child PID (int), or 0 when the launcher failed.
+function Life-Spawn {
+    param(
+        [string]$LogFile,
+        [string]$PidFile,
+        [string]$WorkDir,
+        [string[]]$Cmd,
+        [hashtable]$EnvExtra = @{}
+    )
+    $spawnArgs = @($LifeSpawnScript, $LogFile, $PidFile, $WorkDir)
+    foreach ($kv in $EnvExtra.GetEnumerator()) {
+        $spawnArgs += '--env'
+        $spawnArgs += ('{0}={1}' -f $kv.Key, $kv.Value)
+    }
+    $spawnArgs += '--'
+    $spawnArgs += $Cmd
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $out = @(& $UsPython @spawnArgs 2>&1 | ForEach-Object { "$_" })
+        $code = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $prevEap
+    }
+    $n = 0
+    if ($code -eq 0 -and $out.Count -gt 0 -and [int]::TryParse($out[$out.Count - 1].Trim(), [ref]$n)) {
+        return $n
+    }
+    Write-Host "  spawn failed (exit $code): $($out -join ' ')"
+    return 0
+}
+
+function Start-OramaService {
     param(
         [string]$Name,
         [int]$Port,
@@ -1176,41 +1344,49 @@ function Start-Service {
         [string[]]$Cmd,
         [hashtable]$EnvExtra = @{}
     )
-    if (Get-PidOnPort $Port) {
-        Write-Host "  $Name  port $Port already running"
-        return
-    }
-    $logFile = Join-Path $LogDir "$($Name.ToLower()).log"
+    $slug    = ($Name.ToLower() -replace '\s+', '_')
+    $logFile = Join-Path $LogDir "$slug.log"
+    $pidFile = Join-Path $LogDir "$slug.pid"
     $null    = New-Item -ItemType Directory -Force -Path $LogDir
-    Write-Host "  $Name  starting → $logFile"
 
-    # Build environment block
-    $psi = New-Object System.Diagnostics.ProcessStartInfo
-    $psi.FileName               = $Cmd[0]
-    $psi.Arguments              = ($Cmd[1..($Cmd.Length-1)] | ForEach-Object { "`"$_`"" }) -join ' '
-    $psi.WorkingDirectory       = $WorkDir
-    $psi.UseShellExecute        = $false
-    $psi.RedirectStandardOutput = $true
-    $psi.RedirectStandardError  = $true
-    $psi.CreateNoWindow         = $true
-    foreach ($kv in $EnvExtra.GetEnumerator()) {
-        $psi.EnvironmentVariables[$kv.Key] = $kv.Value
-    }
-    # Inherit parent env
-    foreach ($kv in [System.Environment]::GetEnvironmentVariables('Process').GetEnumerator()) {
-        if (-not $psi.EnvironmentVariables.ContainsKey($kv.Key)) {
-            $psi.EnvironmentVariables[$kv.Key] = $kv.Value
+    $owner = Get-PidOnPort $Port
+    if ($owner) {
+        if (Life-IsPythonPid ([int]$owner)) {
+            Write-Host "  $Name  port $Port already running (python PID $owner)"
+            return [pscustomobject]@{ Name = $Name; Port = $Port; Pid = [int]$owner; Started = $false; Failed = $false }
         }
+        $ownerProc = Life-GetProc ([int]$owner)
+        $ownerName = if ($ownerProc) { $ownerProc.ProcessName } else { 'unknown' }
+        Write-Host "  $Name  port $Port is held by a non-python process ($ownerName, PID $owner); not starting"
+        return [pscustomobject]@{ Name = $Name; Port = $Port; Pid = 0; Started = $false; Failed = $true }
     }
 
-    $proc = [System.Diagnostics.Process]::Start($psi)
-    # Async tee stdout+stderr to log
-    $null = $proc.StandardOutput.BaseStream.CopyToAsync(
-        [System.IO.File]::Open($logFile, [System.IO.FileMode]::Append, [System.IO.FileAccess]::Write, [System.IO.FileShare]::ReadWrite)
-    )
-    $null = $proc.StandardError.BaseStream.CopyToAsync(
-        [System.IO.File]::Open($logFile, [System.IO.FileMode]::Append, [System.IO.FileAccess]::Write, [System.IO.FileShare]::ReadWrite)
-    )
+    # Port is free: keep the previous log instead of truncating or interleaving.
+    if ((Test-Path $logFile) -and ((Get-Item $logFile).Length -gt 0)) {
+        try { Move-Item -Path $logFile -Destination "$logFile.prev" -Force -ErrorAction Stop } catch {}
+    }
+    Write-Host "  $Name  starting -> $logFile"
+    $svcPid = Life-Spawn -LogFile $logFile -PidFile $pidFile -WorkDir $WorkDir -Cmd $Cmd -EnvExtra $EnvExtra
+    if ($svcPid -le 0) {
+        return [pscustomobject]@{ Name = $Name; Port = $Port; Pid = 0; Started = $false; Failed = $true }
+    }
+    return [pscustomobject]@{ Name = $Name; Port = $Port; Pid = $svcPid; Started = $true; Failed = $false }
+}
+
+# Wait for a started service and return its summary row.
+function Life-Settle {
+    param($Svc, [string]$BindHost)
+    if ($Svc.Failed) {
+        return [pscustomobject]@{ Name = $Svc.Name; Port = $Svc.Port; State = 'FAILED'; Detail = 'could not start' }
+    }
+    if (-not $Svc.Started) {
+        return [pscustomobject]@{ Name = $Svc.Name; Port = $Svc.Port; State = 'UP'; Detail = "already running (PID $($Svc.Pid))" }
+    }
+    $up = Wait-ForPort $Svc.Port $Svc.Name 75 $Svc.Pid $BindHost
+    if ($up) {
+        return [pscustomobject]@{ Name = $Svc.Name; Port = $Svc.Port; State = 'UP'; Detail = "started (PID $($Svc.Pid))" }
+    }
+    return [pscustomobject]@{ Name = $Svc.Name; Port = $Svc.Port; State = 'FAILED'; Detail = "not listening (PID $($Svc.Pid))" }
 }
 
 # Ensure partner CLI paths are present for this session (Hermes, Codex, AGY, cursor-agent).
@@ -1221,30 +1397,86 @@ if (Test-Path "$RepoRoot\platform\windows\ensure-partner-cli-paths.ps1") {
 }
 
 # ── 1. Perpetua-Tools ─────────────────────────────────────────────────────────
+$LifeResults = @()
 if ($PtDir -and (Test-Path (Join-Path $PtDir 'orchestrator\fastapi_app.py'))) {
-    Start-Service -Name 'PT' -Port $PtPort -WorkDir $PtDir `
+    $svc = Start-OramaService -Name 'PT' -Port $PtPort -WorkDir $PtDir `
         -Cmd @($PtPython, '-m', 'uvicorn', 'orchestrator.fastapi_app:app',
                '--host', $PtHost, '--port', $PtPort.ToString()) `
         -EnvExtra @{ PYTHONPATH = "$PtDir\src;$PtDir" }
-    $null = Wait-ForPort $PtPort 'PT'
+    $LifeResults += Life-Settle $svc $PtHost
+} elseif ($PtDir) {
+    Write-Host "  PT   FAILED (orchestrator\fastapi_app.py missing under: $PtDir)"
+    $LifeResults += [pscustomobject]@{ Name = 'PT'; Port = $PtPort; State = 'FAILED'; Detail = 'PT directory resolved but fastapi_app.py missing' }
 } else {
-    Write-Host "  PT   skipped (not found at: $PtDir)"
+    Write-Host '  PT   skipped (Perpetua-Tools directory not found)'
+    $LifeResults += [pscustomobject]@{ Name = 'PT'; Port = $PtPort; State = 'SKIPPED'; Detail = 'PT directory not found' }
 }
 
 # ── 2. orama reasoning engine ─────────────────────────────────────────────────
 $oramaPyPath = "$RepoRoot\src;$RepoRoot"
-Start-Service -Name 'orama' -Port $UsPort -WorkDir $RepoRoot `
+$svc = Start-OramaService -Name 'orama' -Port $UsPort -WorkDir $RepoRoot `
     -Cmd @($UsPython, '-m', 'uvicorn', 'orama_system.api_server:app',
            '--host', $UsHost, '--port', $UsPort.ToString()) `
     -EnvExtra @{ PYTHONPATH = $oramaPyPath }
-$null = Wait-ForPort $UsPort 'orama'
+$LifeResults += Life-Settle $svc $UsHost
 
 # ── 3. Portal ─────────────────────────────────────────────────────────────────
-Start-Service -Name 'Portal' -Port $PortalPort -WorkDir $RepoRoot `
+if ($PortalTlsEnabled) {
+    # The proxy is the only LAN-facing listener: force the Portal onto loopback
+    # regardless of PORTAL_BIND_LAN / PORTAL_HOST.
+    $PortalHost = [System.Net.IPAddress]::Loopback.IPAddressToString
+    Write-Host "  Portal TLS enabled: Portal binds loopback only; TLS front end on port $PortalTlsPort"
+}
+$svc = Start-OramaService -Name 'Portal' -Port $PortalPort -WorkDir $RepoRoot `
     -Cmd @($UsPython, '-m', 'uvicorn', 'orama_system.portal_server:app',
            '--host', $PortalHost, '--port', $PortalPort.ToString()) `
     -EnvExtra @{ PYTHONPATH = $oramaPyPath }
-$null = Wait-ForPort $PortalPort 'Portal'
+$portalRow = Life-Settle $svc $PortalHost
+$PortalLoopbackOk = $true
+$PortalTlsReused = $false
+if ($PortalTlsEnabled -and $portalRow.State -eq 'UP') {
+    # A reused Portal keeps whatever bind it was started with. The TLS proxy must
+    # never sit in front of one that also serves plain HTTP on the LAN.
+    $PortalLoopbackOk = Test-PortLoopbackOnly $PortalPort
+    if (-not $PortalLoopbackOk) {
+        Write-Host "  Portal  port $PortalPort is bound to a non-loopback address; not starting the TLS front end"
+        $portalRow = [pscustomobject]@{ Name = 'Portal'; Port = $PortalPort; State = 'FAILED'; Detail = 'bound to a non-loopback address; run --stop first' }
+    }
+}
+$LifeResults += $portalRow
+
+# ── 4. Portal TLS front end (only when PORTAL_TLS_ENABLED) ────────────────────
+if ($PortalTlsEnabled -and $PortalLoopbackOk) {
+    $tlsModule = if ($PtDir) { Join-Path $PtDir 'orchestrator\portal_tls_proxy.py' } else { '' }
+    if (-not $PtDir -or -not $PtPython -or -not (Test-Path $tlsModule)) {
+        Write-Host "  Portal TLS  FAILED (PORTAL_TLS_ENABLED is set but orchestrator\portal_tls_proxy.py is missing; update Perpetua-Tools)"
+        $LifeResults += [pscustomobject]@{ Name = 'Portal TLS'; Port = $PortalTlsPort; State = 'FAILED'; Detail = 'portal_tls_proxy.py missing in PT directory' }
+    } else {
+        $svc = Start-OramaService -Name 'Portal TLS' -Port $PortalTlsPort -WorkDir $PtDir `
+            -Cmd @($PtPython, '-m', 'orchestrator.portal_tls_proxy',
+                   '--listen-port', $PortalTlsPort.ToString(),
+                   '--upstream-port', $PortalPort.ToString(),
+                   '--listen-host', $PortalTlsListenHost) `
+            -EnvExtra @{ PYTHONPATH = "$PtDir\src;$PtDir" }
+        $tlsRow = Life-Settle $svc $PortalTlsListenHost
+        if ($tlsRow.State -eq 'UP' -and -not $svc.Started) { $PortalTlsReused = $true }
+        $LifeResults += $tlsRow
+    }
+}
+
+# ── Per-service summary; a failed core service fails the launcher ─────────────
+Write-Host ''
+Write-Host '── service summary ───────────────────────────────────────────────────'
+foreach ($r in $LifeResults) {
+    Write-Host ('  {0,-10} port {1,-6} {2,-8} {3}' -f $r.Name, $r.Port, $r.State, $r.Detail)
+}
+$LifeFailed = @($LifeResults | Where-Object { $_.State -eq 'FAILED' })
+if ($LifeFailed.Count -gt 0) {
+    Write-Host ("  {0} core service(s) failed: {1}" -f $LifeFailed.Count, (($LifeFailed | ForEach-Object { $_.Name }) -join ', '))
+    Write-Host ("  Logs  : {0}\" -f $LogDir)
+    Write-Host '────────────────────────────────────────────────────────────────────'
+    exit 1
+}
 
 # ── Ready ─────────────────────────────────────────────────────────────────────
 Write-Host '── services ready ────────────────────────────────────────────────────'
@@ -1252,6 +1484,42 @@ Write-Host ("  ●  PT      http://localhost:{0}/health" -f $PtPort)
 Write-Host ("  ●  orama   http://localhost:{0}/health" -f $UsPort)
 Write-Host ("  ●  Portal  {0}" -f $PortalUrl)
 Write-Host ("  ○  JSON    {0}/api/status" -f $PortalUrl)
+if ($PortalTlsEnabled -and $PortalLoopbackOk) {
+    # Fingerprint lines come from the proxy itself (ca_sha256_file=, ca_public_path=).
+    $tlsCaSha = ''
+    $tlsCaPath = ''
+    $prevEapFp = $ErrorActionPreference
+    $prevPyPath = $env:PYTHONPATH
+    $ErrorActionPreference = 'Continue'
+    Push-Location $PtDir
+    try {
+        $env:PYTHONPATH = "$PtDir\src;$PtDir"
+        $fpOut = @(& $PtPython -m orchestrator.portal_tls_proxy --print-fingerprint 2>&1 | ForEach-Object { "$_" })
+        foreach ($fpLine in $fpOut) {
+            if ($fpLine -match '^ca_sha256_file=(.+)$')  { $tlsCaSha  = $Matches[1].Trim() }
+            if ($fpLine -match '^ca_public_path=(.+)$')  { $tlsCaPath = $Matches[1].Trim() }
+        }
+    } finally {
+        Pop-Location
+        $env:PYTHONPATH = $prevPyPath
+        $ErrorActionPreference = $prevEapFp
+    }
+    Write-Host ("  ●  Portal TLS  https://localhost:{0}  (LAN-facing; Portal itself is loopback-only)" -f $PortalTlsPort)
+    if ($PortalTlsReused) {
+        Write-Host '     NOTE: the TLS front end was already running; the fingerprint below reflects the'
+        Write-Host '     current PORTAL_TLS_STATE_DIR. If it was started with another state dir, compare'
+        Write-Host '     with ca_sha256_file= in .logs\portal_tls.log, or run --stop and relaunch.'
+    }
+    if ($tlsCaSha -and $tlsCaPath) {
+        Write-Host ("     CA public cert : {0}" -f $tlsCaPath)
+        Write-Host ("     CA SHA-256     : {0}" -f $tlsCaSha)
+        Write-Host '     Send the CA public cert to the peer, then compare its SHA-256 through a'
+        Write-Host '     separate channel (voice, chat) before the peer trusts it. Never send a private key.'
+    } else {
+        Write-Host '     WARNING: could not read the CA fingerprint from --print-fingerprint output:'
+        foreach ($fpLine in $fpOut) { Write-Host "       | $fpLine" }
+    }
+}
 Write-Host ''
 Write-Host ("  Logs  : {0}\" -f $LogDir)
 Write-Host '  Stop  : .\platform\windows\start.ps1 --stop'
@@ -1259,13 +1527,22 @@ Write-Host '  LAN   : .\platform\windows\start.ps1 --lan-peer'
 Write-Host '────────────────────────────────────────────────────────────────────'
 Write-Host ''
 
-# ── Verify and arm all fallback tiers on startup ────────────────────────────────
+# ── Verify model fallback tiers on startup (report the real result) ───────────
 Write-Host '── model fallback chain ────────────────────────────────────────────'
 $FallbackVerifyPs1 = Join-Path $ScriptDir 'fallback-chain-verify.ps1'
 if (Test-Path $FallbackVerifyPs1) {
-    # Run native PowerShell verification script
-    & $FallbackVerifyPs1 -StatusOnly
-    Write-Host '✅ All model tiers verified; automatic failover armed'
+    $fallbackCode = 1
+    try {
+        & $FallbackVerifyPs1 -StatusOnly
+        $fallbackCode = $LASTEXITCODE
+    } catch {
+        Write-Host "⚠️  Fallback chain verification failed to run: $($_.Exception.Message)"
+    }
+    if ($fallbackCode -eq 0) {
+        Write-Host '✅ LM Studio (hard-required tier) is up; other tiers are listed above'
+    } else {
+        Write-Host '⚠️  LM Studio (hard-required tier) is DOWN; failover is not fully armed (services stay up)'
+    }
 } else {
     Write-Host "⚠️  Fallback chain verification script not found at $FallbackVerifyPs1"
 }
@@ -1297,28 +1574,30 @@ if ($LanPeer) {
         _Warn 'lan-peer' 'skipping outbox flush until peer portal probe passes'
     }
 
-    # ── LM Link watcher autostart (background job, idempotent) ────────────────
+    # ── LM Link watcher autostart (detached process, per-repo PID file, idempotent) ──
     try {
         $LmLinkWatchScript = Join-Path $RepoRoot 'scripts\lm_link_watch.ps1'
         if (-not (Test-Path $LmLinkWatchScript)) {
             _Warn 'lan-peer' "lm_link_watch.ps1 not found at: $LmLinkWatchScript - skipping watcher autostart"
         } else {
-            $existingJob = Get-Job -Name 'lm-link-watch' -ErrorAction SilentlyContinue
-            if ($existingJob -and $existingJob.State -in @('Running', 'NotStarted')) {
-                _Info 'lan-peer' "lm-link-watch job already running (State=$($existingJob.State))"
+            $watchPidFile = Join-Path $LogDir 'lm_link_watch.pid'
+            $watchPid = Life-ReadPid $watchPidFile
+            if ($watchPid -gt 0 -and (Life-PidMatches $watchPid '^(powershell|pwsh)$' 'lm_link_watch')) {
+                _Info 'lan-peer' "lm-link-watch already running (PID $watchPid)"
             } else {
-                if ($existingJob) {
-                    Remove-Job -Name 'lm-link-watch' -Force -ErrorAction SilentlyContinue
+                $null = New-Item -ItemType Directory -Force -Path $LogDir
+                $watchLog = Join-Path $LogDir 'lm_link_watch.log'
+                $newWatchPid = Life-Spawn -LogFile $watchLog -PidFile $watchPidFile -WorkDir $RepoRoot `
+                    -Cmd @('powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $LmLinkWatchScript)
+                if ($newWatchPid -gt 0) {
+                    _Info 'lan-peer' "lm-link-watch started detached (PID $newWatchPid, log $watchLog)"
+                } else {
+                    _Warn 'lan-peer' 'lm-link-watch failed to start'
                 }
-                Start-Job -Name 'lm-link-watch' -ScriptBlock {
-                    param($ScriptPath)
-                    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $ScriptPath
-                } -ArgumentList $LmLinkWatchScript | Out-Null
-                _Info 'lan-peer' 'lm-link-watch background job started'
             }
         }
     } catch {
-        _Warn 'lan-peer' "failed to start lm-link-watch job: $($_.Exception.Message)"
+        _Warn 'lan-peer' "failed to start lm-link-watch: $($_.Exception.Message)"
     }
 }
 
