@@ -465,9 +465,8 @@ def _mac_entry(cand: dict) -> dict:
 
 
 def _run_windows_ips(endpoints: dict) -> set[str]:
-    """Hosts this run saw as Windows (win_peers) or could not classify (ambiguous)."""
+    """Hosts this run classified as Windows (win_peers: Windows evidence, no Mac evidence)."""
     seen = {p.get("ip", "") for p in endpoints.get("win_peers") or []}
-    seen.update(endpoints.get("ambiguous") or [])
     seen.discard("")
     return seen
 
@@ -475,8 +474,7 @@ def _run_windows_ips(endpoints: dict) -> set[str]:
 def _drop_windows_mac(endpoints: dict, extra: set[str] | None = None) -> tuple[dict, bool]:
     """Drop a cached/back-filled Mac entry whose IP is a known Windows address.
 
-    `extra` carries addresses observed as Windows (or unclassifiable) in the
-    current run, so a stale cache cannot resurrect them as the Mac.
+    `extra` carries addresses observed as Windows in the current run, so a stale cache cannot resurrect them as the Mac.
     """
     mac = endpoints.get("mac")
     mac_ip = (mac or {}).get("ip", "")
@@ -526,20 +524,16 @@ def discover_endpoints() -> dict:
         win_known = _known_windows_ips()
         policy_mac, policy_win = _policy_model_sets()
         win_extra: list[dict] = []
-        ambiguous: list[str] = []
+        # LM Studio mirrors the peer's models (LM Link), so a Mac's list can
+        # contain Windows-only ids. Mac evidence therefore wins; only a host with
+        # Windows evidence and NO Mac evidence is a win_peer, and known Windows
+        # addresses are excluded before any probe.
+        cache_probed: set[str] = set()
 
         def _note_win(cand: dict) -> None:
             """Note win."""
             if cand["ip"] not in {p["ip"] for p in win_extra}:
                 win_extra.append({"ip": cand["ip"], "models": cand["models"]})
-
-        def _note_ambiguous(cand: dict) -> None:
-            # LM Link lists the other machine's models as local, so a host with
-            # both kinds of evidence cannot be labelled Mac or Windows.
-            print(f"  ⚠️  {cand['ip']} serves both Mac and Windows model evidence "
-                  "(LM Link?) — not labelling it as mac or win_peer", file=sys.stderr)
-            if cand["ip"] not in ambiguous:
-                ambiguous.append(cand["ip"])
 
         mac_ip = os.getenv("MAC_IP", "").strip()
         if mac_ip and (mac_ip in win_known or _is_loopback_host(mac_ip)):
@@ -563,19 +557,18 @@ def discover_endpoints() -> dict:
             mac_last_ip = ((last or {}).get("endpoints", {}).get("mac", {}) or {}).get("ip", "")
             if (mac_last_ip and not _is_loopback_host(mac_last_ip)
                     and mac_last_ip not in win_known and mac_last_ip != mac_ip):
+                cache_probed.add(mac_last_ip)
                 cand = _probe_mac_candidate(mac_last_ip, policy_mac, policy_win)
-                if cand and cand["mac_evidence"] and not cand["win_evidence"]:
+                if cand and cand["mac_evidence"]:
                     result["mac"] = _mac_entry(cand)
                     hint = " (update $MAC_IP)" if mac_ip else " (set $MAC_IP to avoid scan)"
                     print(f"  ℹ️  Mac found at cached IP {mac_last_ip}{hint}", file=sys.stderr)
-                elif cand and cand["win_evidence"] and cand["mac_evidence"]:
-                    _note_ambiguous(cand)
                 elif cand and cand["win_evidence"]:
                     _note_win(cand)
         if not result["mac"]:
             # Fresh subnet scan — never guess .110; find a remote LM Studio with Mac evidence.
             win_lan = _win_lan_ip() or ""
-            exclude = {"localhost"} | win_known
+            exclude = {"localhost"} | win_known | cache_probed
             subnets = get_local_subnets()
             if not subnets:
                 subnets = [win_lan.rsplit(".", 1)[0] if win_lan else SUBNET]
@@ -585,15 +578,13 @@ def discover_endpoints() -> dict:
                     cand = _probe_mac_candidate(ip, policy_mac, policy_win)
                     if not cand:
                         continue
-                    if cand["win_evidence"] and cand["mac_evidence"]:
-                        _note_ambiguous(cand)
-                    elif cand["win_evidence"]:
-                        _note_win(cand)
-                    elif cand["mac_evidence"]:
+                    if cand["mac_evidence"]:
                         result["mac"] = _mac_entry(cand)
                         print(f"  ℹ️  Mac LM Studio found at {ip} (subnet scan)", file=sys.stderr)
                         found_mac = True
                         break
+                    if cand["win_evidence"]:
+                        _note_win(cand)
                 if found_mac:
                     break
 
@@ -610,7 +601,6 @@ def discover_endpoints() -> dict:
                 peers.append(extra)
                 seen_peer_ips.add(extra["ip"])
         result["win_peers"] = peers
-        result["ambiguous"] = [ip for ip in ambiguous if ip not in seen_peer_ips]
         return result
 
     # ── Mac/Linux host: localhost = mac, subnet scan = win ──────────────────
@@ -1015,6 +1005,37 @@ class _Lock:
 
 # ── Main discovery flow ───────────────────────────────────────────────────────
 
+def _host_is_windows_box(host: str) -> bool:
+    """True when `host` is loopback or a known Windows address."""
+    return bool(host) and (host in _known_windows_ips() or _is_loopback_host(host))
+
+
+def _windows_mac_config_stale(repo_paths: dict) -> bool:
+    """True when openclaw.json or a .env.lmstudio names a Windows box as the Mac.
+
+    Hosts upgraded from older versions hold lmstudio-mac / LM_STUDIO_MAC_ENDPOINT
+    pointing at localhost; the topology hash does not change, so the normal
+    change path never repairs them.
+    """
+    cfg = _load_json(OPENCLAW_JSON) if OPENCLAW_JSON.exists() else None
+    prov = ((cfg or {}).get("models", {}) or {}).get("providers", {}) or {}
+    url = str((prov.get("lmstudio-mac") or {}).get("baseUrl") or "") if isinstance(prov.get("lmstudio-mac"), dict) else ""
+    if url and _host_is_windows_box(urlsplit(url).hostname or ""):
+        return True
+    for repo_path in repo_paths.values():
+        env_path = Path(repo_path) / ".env.lmstudio" if repo_path else None
+        try:
+            text = env_path.read_text(encoding="utf-8") if env_path and env_path.exists() else ""
+        except OSError:
+            continue
+        for line in text.splitlines():
+            if line.startswith("LM_STUDIO_MAC_ENDPOINT="):
+                val = line.split("=", 1)[1].strip()
+                if val and _host_is_windows_box(urlsplit(val).hostname or ""):
+                    return True
+    return False
+
+
 def run_discovery(force: bool = True, cached: bool = False) -> int:
     """Probe endpoints and update configs.
 
@@ -1087,6 +1108,13 @@ def run_discovery(force: bool = True, cached: bool = False) -> int:
                 RECOVERY_SOURCE_TXT.write_text(f"tier{tier}\n")
             DISCOVERY_JSON.write_text(json.dumps(last, indent=2))
             LAST_DISCOVERY_JSON.write_text(json.dumps(last, indent=2))
+            if RUNNING_ON_WINDOWS:
+                repo_paths = get_repo_paths()
+                if _windows_mac_config_stale(repo_paths):
+                    # Idempotent: after the rewrite nothing points at a Windows box.
+                    print("🔧 Repairing stale lmstudio-mac (Windows box named as Mac)...", file=sys.stderr)
+                    patch_openclaw_json(endpoints)
+                    write_env_lmstudio(endpoints, repo_paths)
             print("✅ No changes. Config is current.", file=sys.stderr)
             return 0
 

@@ -457,23 +457,64 @@ def test_explicit_mac_ip_with_lm_link_models_is_still_the_mac():
     assert result["win_peers"] == []
 
 
-def test_scan_hit_with_both_evidence_is_neither_mac_nor_win_peer(capsys):
+def test_scan_hit_with_both_evidence_is_the_mac():
+    # LM Link mirrors the peer's models: Mac evidence wins over Windows ids.
     D = _lmlink_host(scan_hits=[MAC])
     result = D.discover_endpoints()
-    assert result["mac"] is None
+    assert result["mac"]["ip"] == MAC
     assert result["win_peers"] == []
-    assert result["ambiguous"] == [MAC]
-    assert "LM Link" in capsys.readouterr().err
 
 
-def test_cached_mac_with_both_evidence_is_neither_mac_nor_win_peer():
+def test_cached_mac_with_both_evidence_is_kept_and_probed_once(capsys):
     cache = {"endpoints": {"mac": {"ip": MAC}, "win": {"ip": "localhost"}},
              "models": {"mac": [], "win": []}}
     D = _lmlink_host(cache=cache)
     result = D.discover_endpoints()
-    assert result["mac"] is None
+    assert result["mac"]["ip"] == MAC
     assert result["win_peers"] == []
-    assert result["ambiguous"] == [MAC]
+    assert D.probe_calls.count(f"http://{MAC}:1234") == 1
+
+
+def test_cache_probed_address_is_excluded_from_scan():
+    cache = {"endpoints": {"mac": {"ip": WIN2}, "win": {"ip": "localhost"}},
+             "models": {"mac": [], "win": []}}
+    D = _windows_host(probes={f"http://{WIN2}:1234": WIN_MODELS}, cache=cache, scan_hits=[WIN2])
+    result = D.discover_endpoints()
+    assert result["mac"] is None
+    assert [p["ip"] for p in result["win_peers"]] == [WIN2]
+    assert all(WIN2 in excl for _, excl in D.scan_calls)
+    assert D.probe_calls.count(f"http://{WIN2}:1234") == 1
+
+
+def test_known_windows_address_with_mac_evidence_is_never_the_mac():
+    D = _lmlink_host(env={"WIN_PEER_IPS": MAC}, scan_hits=[MAC])
+    assert D.discover_endpoints()["mac"] is None
+
+
+def test_run_discovery_keeps_cached_lm_link_mac_when_mac_ip_unset(tmp_path):
+    last = {
+        "endpoints": {"mac": {"ip": MAC, "reachable": True},
+                      "win": {"ip": "localhost", "reachable": True}},
+        "models": {"mac": LMLINK_MODELS, "win": ["m"]},
+    }
+    D = _lmlink_host(cache=last, env={})
+    live = D.discover_endpoints()
+    assert live["mac"]["ip"] == MAC
+    D2 = _run_discovery_host(tmp_path, last, live=live, env={})
+    assert D2.run_discovery() == 0
+    assert D2.saved["endpoints"]["mac"]["ip"] == MAC
+
+
+def test_backfill_preserves_last_good_mac_not_known_windows(tmp_path):
+    last = {
+        "endpoints": {"mac": {"ip": MAC, "reachable": True},
+                      "win": {"ip": "localhost", "reachable": True}},
+        "models": {"mac": LMLINK_MODELS, "win": ["m"]},
+    }
+    live = {"mac": None, "win": {"ip": "localhost", "models": ["m"]}, "win_peers": []}
+    D = _run_discovery_host(tmp_path, last, live=live, env={})
+    assert D.run_discovery() == 0
+    assert D.saved["endpoints"]["mac"]["ip"] == MAC
 
 
 def test_backfill_ignores_stale_mac_that_is_a_win_peer_this_run(tmp_path):
@@ -489,19 +530,6 @@ def test_backfill_ignores_stale_mac_that_is_a_win_peer_this_run(tmp_path):
     assert D.run_discovery() == 0
     assert D.saved["endpoints"]["mac"] is None
     assert [p["ip"] for p in D.saved["endpoints"]["win_peers"]] == [WIN2]
-
-
-def test_backfill_ignores_stale_mac_that_is_ambiguous_this_run(tmp_path):
-    last = {
-        "endpoints": {"mac": {"ip": MAC, "reachable": True},
-                      "win": {"ip": "localhost", "reachable": True}},
-        "models": {"mac": LMLINK_MODELS, "win": ["m"]},
-    }
-    live = {"mac": None, "win": {"ip": "localhost", "models": ["m"]},
-            "win_peers": [], "ambiguous": [MAC]}
-    D = _run_discovery_host(tmp_path, last, live=live, env={})
-    assert D.run_discovery() == 0
-    assert D.saved["endpoints"]["mac"] is None
 
 
 def test_recovery_tier_ignores_stale_mac_seen_as_win_peer_this_run(tmp_path):
@@ -548,3 +576,79 @@ def test_write_env_never_falls_back_to_localhost_mac_on_windows(tmp_path):
     assert "LM_STUDIO_MAC_ENDPOINT=\n" in (tmp_path / ".env.lmstudio").read_text()
     D.write_env_lmstudio({"mac": {"ip": MAC, "models": []}, "win": None}, {"r": str(tmp_path)})
     assert f"LM_STUDIO_MAC_ENDPOINT=http://{MAC}:1234\n" in (tmp_path / ".env.lmstudio").read_text()
+
+
+def _real_patch(D):
+    """Return the module's real patch_openclaw_json (the harness stubs it)."""
+    return _bind(D, "patch_openclaw_json")
+
+
+def _real_env(D):
+    """Return the module's real write_env_lmstudio."""
+    return _bind(D, "write_env_lmstudio")
+
+
+def _bind(D, name):
+    """Rebuild a function from the pristine module source bound to D's globals."""
+    import types
+    pristine = _load_discover()
+    fn = getattr(pristine, name)
+    import os
+    D.os.replace = os.replace  # the harness mocks D.os; the real writers need replace()
+    return types.FunctionType(fn.__code__, D.__dict__, name, fn.__defaults__, fn.__closure__)
+
+
+def test_no_change_path_repairs_stale_localhost_lmstudio_mac(tmp_path, monkeypatch):
+    oc = tmp_path / "openclaw.json"
+    oc.write_text(json.dumps({
+        "models": {"providers": {"lmstudio-mac": {"baseUrl": "http://localhost:1234/v1", "models": []}}},
+        "meta": {},
+    }))
+    env_dir = tmp_path / "repo"
+    env_dir.mkdir()
+    (env_dir / ".env.lmstudio").write_text("LM_STUDIO_MAC_ENDPOINT=http://localhost:1234\n")
+    live = {"mac": {"ip": MAC, "models": MAC_MODELS}, "win": {"ip": "localhost", "models": ["m"]},
+            "win_peers": []}
+    D = _run_discovery_host(tmp_path, None, live=live, env={})
+    first = D.compute_hash(D._endpoints_for_hash(live))
+    state = {"hash": first, "timestamp": "2026-01-01T00:00:00+00:00", "recovery_tier": 1,
+             "endpoints": {"mac": {"ip": MAC, "reachable": True},
+                           "win": {"ip": "localhost", "reachable": True}},
+             "models": {"mac": MAC_MODELS, "win": ["m"]}}
+    D._load_json = lambda path: json.loads(oc.read_text()) if path == oc else state
+    D.OPENCLAW_JSON = oc
+    D.LAST_DISCOVERY_JSON = tmp_path / "last.json"
+    D.DISCOVERY_JSON = tmp_path / "disc.json"
+    D.get_repo_paths = lambda: {"r": str(env_dir)}
+    D.patch_openclaw_json = _real_patch(D)
+    D.write_env_lmstudio = _real_env(D)
+    assert D.run_discovery() == 0
+    url = json.loads(oc.read_text())["models"]["providers"]["lmstudio-mac"]["baseUrl"]
+    assert url == f"http://{MAC}:1234/v1"
+    assert f"LM_STUDIO_MAC_ENDPOINT=http://{MAC}:1234\n" in (env_dir / ".env.lmstudio").read_text()
+    # Second run: nothing stale, so nothing is rewritten.
+    before = oc.read_text()
+    assert D.run_discovery() == 0
+    assert oc.read_text() == before
+
+
+def test_no_change_path_removes_localhost_lmstudio_mac_when_mac_down(tmp_path):
+    oc = tmp_path / "openclaw.json"
+    oc.write_text(json.dumps({
+        "models": {"providers": {"lmstudio-mac": {"baseUrl": "http://localhost:1234/v1", "models": []}}},
+        "meta": {},
+    }))
+    live = {"mac": None, "win": {"ip": "localhost", "models": ["m"]}, "win_peers": []}
+    D = _run_discovery_host(tmp_path, None, live=live, env={})
+    state = {"hash": D.compute_hash(D._endpoints_for_hash(live)), "timestamp": "2026-01-01T00:00:00+00:00",
+             "recovery_tier": 1,
+             "endpoints": {"mac": {"ip": "", "reachable": False},
+                           "win": {"ip": "localhost", "reachable": True}},
+             "models": {"mac": [], "win": ["m"]}}
+    D._load_json = lambda path: json.loads(oc.read_text()) if path == oc else state
+    D.OPENCLAW_JSON = oc
+    D.LAST_DISCOVERY_JSON = tmp_path / "last.json"
+    D.DISCOVERY_JSON = tmp_path / "disc.json"
+    D.patch_openclaw_json = _real_patch(D)
+    assert D.run_discovery() == 0
+    assert "lmstudio-mac" not in json.loads(oc.read_text())["models"]["providers"]
