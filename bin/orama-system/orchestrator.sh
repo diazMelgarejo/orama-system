@@ -16,10 +16,12 @@ MAX_RETRIES=10
 WIN_PEER="${WIN_PEER_ENDPOINT:-}"
 WIN_PROBE_TIMEOUT=5
 
+# Print a timestamped message to stdout and append it to LOG_FILE.
 log() {
     echo "$(date -Iseconds) - $1" | tee -a "$LOG_FILE"
 }
 
+# Log the max-retries pause notice and, if OPENCLAW_ALERT_SCRIPT is executable, notify through it (best effort).
 alert_user() {
     log "ALERT: Max retries ($MAX_RETRIES) reached. Orchestrator paused."
     log "  Logs: $LOG_FILE  Fail counter: $FAIL_COUNT_FILE"
@@ -38,6 +40,7 @@ probe_win_peer() {
     [ "$code" != "000" ]
 }
 
+# Cursor dispatch path (currently a placeholder that simulates work); returns 0 on success.
 dispatch_cursor() {
     log "Dispatching cursor-agent..."
     # TODO: real cursor-agent CLI dispatch (placeholder: simulate work)
@@ -45,6 +48,7 @@ dispatch_cursor() {
     return 0
 }
 
+# OpenClaw+ollama dispatch to the Windows peer; returns 1 if no peer is configured or it is down, else 0.
 dispatch_openclaw() {
     # OpenClaw+ollama -> Hermes Win path. Skip gracefully if Win peer is down
     # (Windows Coder Policy: offline -> skip silently, log WARN, do not fail).
