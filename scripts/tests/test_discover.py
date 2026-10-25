@@ -133,9 +133,16 @@ def test_patch_openclaw_json(tmp_path, monkeypatch):
     }
     D.patch_openclaw_json(endpoints)
     cfg = json.loads(oc.read_text())
-    # Mac always routes to localhost — the LAN IP is discovery metadata only.
-    assert "localhost" in cfg["models"]["providers"]["lmstudio-mac"]["baseUrl"]
-    assert "192.168.254.107" not in cfg["models"]["providers"]["lmstudio-mac"]["baseUrl"]
+    mac_url = cfg["models"]["providers"]["lmstudio-mac"]["baseUrl"]
+    if D.RUNNING_ON_WINDOWS:
+        # On a Windows host localhost is the Windows box, so lmstudio-mac must
+        # use the discovered (remote) Mac address, never localhost.
+        assert "localhost" not in mac_url
+        assert endpoints["mac"]["ip"] in mac_url
+    else:
+        # Mac always routes to localhost — the LAN IP is discovery metadata only.
+        assert "localhost" in mac_url
+        assert endpoints["mac"]["ip"] not in mac_url
     assert "192.168.254.101" in cfg["models"]["providers"]["lmstudio-win"]["baseUrl"]
     mac_ids = [m["id"] for m in cfg["models"]["providers"]["lmstudio-mac"]["models"]]
     assert "text-embedding-nomic" not in mac_ids  # embedding models always excluded
