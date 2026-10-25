@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
+import itertools
+import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -560,11 +563,19 @@ def test_vector_direct_xai_requires_medium_effort(effort: str | None) -> None:
             assert_launch_allowed(spec)
 
 
+def test_direct_xai_accepts_effort_alias_without_reasoning_effort() -> None:
+    """The accepted effort alias satisfies the direct-xAI policy row."""
+    spec = LaunchSpec(path="direct_xai", launch_id="grok-4.7", effort="medium")
+
+    plan_launch(spec)
+    assert_launch_allowed(spec)
+
+
 def test_vector_direct_xai_refuses_fast_mode() -> None:
     fast = LaunchSpec(
         path="direct_xai", launch_id="grok-4.7", reasoning_effort="medium", fast=True
     )
-    with pytest.raises(ModelGovernanceError, match="fast mode off"):
+    with pytest.raises(ModelGovernanceError, match="fast mode is refused"):
         assert_launch_allowed(fast)
     assert_launch_allowed(
         LaunchSpec(path="direct_xai", launch_id="grok-4.7", reasoning_effort="medium", fast=False)
@@ -679,3 +690,121 @@ def test_vector_fable_requires_budget_cap_on_every_path(path: str) -> None:
         proof=_vec_proof("claude-fable-5-1", "medium", None, "max_tokens=8192"),
         now=_VEC_NOW,
     )
+
+
+# --- Cross-repo parity vectors (F1/F2): keep byte-identical in both v1 repositories. ---
+
+_PARITY_NOW = datetime(2026, 10, 25, tzinfo=timezone.utc)
+
+
+@pytest.mark.parametrize("entry", ["plan", "assert"])
+@pytest.mark.parametrize(
+    "effort,reasoning",
+    [("medium", "high"), ("high", "medium"), ("low", "medium"), ("", "medium")],
+)
+def test_parity_conflicting_effort_aliases_refuse_at_both_entry_points(
+    entry: str, effort: str, reasoning: str
+) -> None:
+    """Contradictory effort aliases refuse before any model-family branch."""
+    for path, launch_id in (
+        ("direct_xai", "grok-4.7"),
+        ("cursor_grok_bot", "grok-4.7"),
+        ("anthropic", "claude-sonnet-5-5"),
+    ):
+        spec = LaunchSpec(
+            path=path, launch_id=launch_id, effort=effort, reasoning_effort=reasoning, fast=False
+        )
+        with pytest.raises(ModelGovernanceError, match="conflicting effort"):
+            if entry == "plan":
+                plan_launch(spec)
+            else:
+                assert_launch_allowed(spec)
+
+
+@pytest.mark.parametrize("entry", ["plan", "assert"])
+def test_parity_identical_effort_aliases_behave_consistently(entry: str) -> None:
+    """Equal aliases are one effort; the intended default launch stays allowed."""
+    spec = LaunchSpec(
+        path="direct_xai", launch_id="grok-4.7", effort="medium", reasoning_effort="medium",
+        fast=False,
+    )
+    if entry == "plan":
+        plan_launch(spec)
+    else:
+        assert_launch_allowed(spec)
+
+
+@pytest.mark.parametrize("fast", [False, None])
+def test_parity_direct_xai_fast_false_or_absent_stays_allowed(fast: bool | None) -> None:
+    """Absent or false fast is the default direct-xAI launch."""
+    spec = LaunchSpec(path="direct_xai", launch_id="grok-4.7", reasoning_effort="medium", fast=fast)
+    plan_launch(spec)
+    assert_launch_allowed(spec)
+
+
+@pytest.mark.parametrize("with_metadata_proof", [False, True])
+def test_parity_direct_xai_fast_true_refuses_at_both_entry_points(
+    with_metadata_proof: bool,
+) -> None:
+    """Fast mode needs a trusted one-use P5 approval; no metadata helper can grant it."""
+    spec = LaunchSpec(path="direct_xai", launch_id="grok-4.7", reasoning_effort="medium", fast=True)
+    proof = None
+    if with_metadata_proof:
+        proof = EscalationProof(
+            kind="offline_gpg",
+            reference="synthetic-operator-reference",
+            model_id="grok-4.7",
+            effort="medium",
+            fast=True,
+            expires_at=_PARITY_NOW + timedelta(minutes=5),
+        )
+    with pytest.raises(ModelGovernanceError, match="fast mode"):
+        plan_launch(spec)
+    with pytest.raises(ModelGovernanceError, match="fast mode"):
+        assert_launch_allowed(spec, proof=proof, now=_PARITY_NOW)
+
+
+# --- Cross-repo differential (F1/F2): keep byte-identical in both v1 repositories. ---
+_DIFF_PATHS = (
+    ("direct_xai", "grok-4.7"),
+    ("direct_xai", "grok-4.6"),
+    ("cursor_grok_bot", "grok-4.7"),
+    ("cursor_grok_bot", "composer-2.5"),
+    ("anthropic", "claude-sonnet-5-5"),
+    ("anthropic", "claude-opus-5-5"),
+)
+_DIFF_EFFORTS = (None, "", "low", "medium", "high", "xhigh", "max")
+_DIFF_FASTS = (None, False, True)
+# SHA-256 of the sorted-key JSON outcome table below; identical in PT and orama-system.
+_DIFF_DIGEST = "295b8ab1496bf4e8ee63a2cf49e77bf1d444478b93ab302cb14cdac4358a072d"
+
+
+def _diff_outcomes() -> dict[str, str]:
+    """Run both entry points over every path/alias/fast combination (1,764 cases)."""
+    outcomes: dict[str, str] = {}
+    for (path, model), effort, reasoning, fast in itertools.product(
+        _DIFF_PATHS, _DIFF_EFFORTS, _DIFF_EFFORTS, _DIFF_FASTS
+    ):
+        key = f"{path}|{model}|e={effort!r}|r={reasoning!r}|f={fast}"
+        for name, entry in (("plan", plan_launch), ("assert", assert_launch_allowed)):
+            spec = LaunchSpec(
+                path=path,
+                launch_id=model,
+                effort=effort,
+                reasoning_effort=reasoning,
+                fast=fast,
+            )
+            try:
+                entry(spec)
+                outcomes[f"{key}|{name}"] = "ALLOW"
+            except ModelGovernanceError:
+                outcomes[f"{key}|{name}"] = "REFUSE"
+    return outcomes
+
+
+def test_differential_policy_outcomes_match_across_repositories() -> None:
+    """Every case is a clean allow or refusal and the whole table matches the pinned digest."""
+    outcomes = _diff_outcomes()
+    assert len(outcomes) == 1764
+    blob = json.dumps(outcomes, sort_keys=True, separators=(",", ":")).encode()
+    assert hashlib.sha256(blob).hexdigest() == _DIFF_DIGEST

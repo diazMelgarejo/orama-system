@@ -202,6 +202,7 @@ def default_launch(path: str, *, config: Mapping[str, Any] | None = None) -> Lau
             path=path,
             launch_id=str(row["launch_id"]),
             reasoning_effort=str(row["reasoning_effort"]),
+            fast=bool(row.get("fast", False)),
         )
     raise ModelGovernanceError("unknown harness path")
 
@@ -242,7 +243,11 @@ def _require_consistent_effort(spec: LaunchSpec) -> None:
     for effort in (spec.effort, spec.reasoning_effort):
         if effort in ("xhigh", "max"):
             raise ModelGovernanceError(f"effort is forbidden: {effort}")
-    if spec.effort and spec.reasoning_effort and spec.effort != spec.reasoning_effort:
+    if (
+        spec.effort is not None
+        and spec.reasoning_effort is not None
+        and spec.effort != spec.reasoning_effort
+    ):
         raise ModelGovernanceError("conflicting effort fields")
 
 
@@ -434,13 +439,20 @@ def _assert_anthropic_launch(
 
 
 def _assert_direct_xai_launch(spec: LaunchSpec, cfg: Mapping[str, Any]) -> None:
+    """Enforce the fixed direct-xAI default and reject fast-mode metadata bypasses."""
     row = cfg["direct_xai"]["default"]
     if spec.launch_id != str(row["launch_id"]):
         raise ModelGovernanceError("direct-xAI launch is default-deny without a listed default")
-    if spec.reasoning_effort != str(row["reasoning_effort"]):
+    if _named_effort(spec) != str(row["reasoning_effort"]):
         raise ModelGovernanceError("direct-xAI default is grok-4.7 with reasoning_effort medium")
     if spec.fast is True:
-        raise ModelGovernanceError("direct-xAI launches must have fast mode off")
+        # Metadata cannot prove an operator decision. Fast mode is an exception
+        # only through a one-use P5 operator approval that the trusted dispatcher
+        # verifies and consumes before provider invocation; this helper refuses.
+        raise ModelGovernanceError(
+            "direct-xAI fast mode is refused here; it requires a one-use P5 operator "
+            "approval enforced at the trusted dispatch boundary"
+        )
 
 
 def evaluate_cost_gate(*, cap_evaluable: bool, remaining: int | None) -> None:
