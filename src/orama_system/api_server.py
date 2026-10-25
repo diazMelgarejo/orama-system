@@ -225,44 +225,25 @@ CODE_MODEL = os.getenv(
     "Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-v2",  # verified Windows-only model
 )
 
-def _fallback_version() -> str:
-    """Version from the repo when the package is not installed (F21).
+def _resolve_version() -> str:
+    """Single source of truth is orama_system._version (hatch reads it too).
 
-    pyproject.toml declares the version dynamically (hatch reads
-    src/orama_system/_version.py), so follow that pointer; accept a static
-    [project] version too. Stdlib only; tomllib when available, else regex.
+    Falls back to installed-package metadata, then a clearly-unknown marker so
+    a broken install never reports a plausible-but-wrong release number.
     """
-    root = Path(__file__).resolve().parents[2]
     try:
-        text = (root / "pyproject.toml").read_text(encoding="utf-8")
-        static = vpath = None
-        try:
-            import tomllib
+        from orama_system._version import __version__ as v
 
-            data = tomllib.loads(text)
-            static = data.get("project", {}).get("version")
-            vpath = data.get("tool", {}).get("hatch", {}).get("version", {}).get("path")
-        except Exception:
-            m = re.search(r'(?m)^version\s*=\s*"([^"]+)"', text)
-            static = m.group(1) if m else None
-            m = re.search(r'(?m)^path\s*=\s*"([^"]+)"', text)
-            vpath = m.group(1) if m else None
-        if static:
-            return str(static)
-        if vpath:
-            vtext = (root / vpath).read_text(encoding="utf-8")
-            m = re.search(r'(?m)^__version__\s*=\s*"([^"]+)"', vtext)
-            if m:
-                return m.group(1)
+        return str(v)
     except Exception:
         pass
-    return "1.1.0.0"
+    try:
+        return pkg_version("orama-system")
+    except Exception:
+        return "0+unknown"
 
 
-try:
-    __version__ = pkg_version("orama-system")
-except Exception:
-    __version__ = _fallback_version()
+__version__ = _resolve_version()
 
 
 def _resolve_perpetua_root_env() -> str:

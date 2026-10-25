@@ -7,7 +7,11 @@ mangles the box-drawing characters in them).
 
 from __future__ import annotations
 
+import os
 import re
+import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -121,9 +125,121 @@ def test_install_ps1_pip_eap_continue() -> None:
     assert "$coreExit = $LASTEXITCODE" in text
 
 
-def test_api_server_version_fallback_reads_repo_version() -> None:
+def test_api_server_version_comes_from_version_module() -> None:
     from orama_system import api_server
     from orama_system._version import __version__ as repo_version
 
-    # Read from pyproject.toml -> hatch version path -> _version.py, never a literal.
-    assert api_server._fallback_version() == repo_version
+    assert api_server._resolve_version() == repo_version
+
+
+def test_api_server_version_survives_missing_metadata_and_module() -> None:
+    """Stale/absent package metadata must not change the reported version."""
+    code = (
+        "import importlib.metadata as m, sys\n"
+        "def _boom(*a, **k): raise m.PackageNotFoundError('orama-system')\n"
+        "m.version = _boom\n"
+        "from orama_system import api_server\n"
+        "from orama_system._version import __version__ as v\n"
+        "assert api_server.__version__ == v, (api_server.__version__, v)\n"
+        "sys.modules['orama_system._version'] = None\n"
+        "assert api_server._resolve_version() == '0+unknown'\n"
+    )
+    env = dict(os.environ)
+    env["PYTHONPATH"] = os.pathsep.join([str(REPO), str(REPO / "src")])
+    r = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr[-800:]
+
+
+# --- load-local.ps1 behaviour (child powershell.exe) -------------------------
+
+_PS = shutil.which("powershell.exe") or shutil.which("powershell")
+needs_ps = pytest.mark.skipif(_PS is None, reason="powershell not available")
+
+
+def _run_load_local(tmp_path: Path, env_text: str, extra_env: dict | None = None, keys=()):
+    """Run load-local.ps1 against a temp repo root; return {key: value|None}."""
+    (tmp_path / ".env").write_bytes(env_text.encode("utf-8"))
+    home = tmp_path / "home"
+    home.mkdir(exist_ok=True)
+    names = ",".join("'%s'" % k for k in keys)
+    script = (
+        "$ErrorActionPreference='Stop'; "
+        "& '%s' -RepoRoot '%s'; "
+        "foreach ($n in @(%s)) { $v=[Environment]::GetEnvironmentVariable($n,'Process'); "
+        "if ($null -eq $v) { Write-Output ($n + '=<unset>') } else { Write-Output ($n + '=[' + $v + ']') } }"
+    ) % (LOAD_LOCAL, tmp_path, names)
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if not k.startswith(("LLT_", "ORAMA_LOADLOCAL_", "PERPETUA_TOOLS_"))
+    }
+    env["USERPROFILE"] = env["HOME"] = str(home)
+    env.update(extra_env or {})
+    r = subprocess.run(
+        [_PS, "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert r.returncode == 0, r.stderr[-800:]
+    out = {}
+    for line in r.stdout.splitlines():
+        k, _, v = line.partition("=")
+        out[k] = None if v == "<unset>" else v[1:-1]
+    return out
+
+
+@needs_ps
+def test_load_local_comment_only_values_are_empty(tmp_path: Path) -> None:
+    text = (
+        "LLT_A= # comment\n"
+        "LLT_B=\t#x\n"
+        "LLT_C=#x\n"
+        "LLT_D=val # tail\n"
+        "LLT_E=a#b\n"
+        'LLT_F="q # kept" ignored\n'
+    )
+    got = _run_load_local(tmp_path, text, keys=[f"LLT_{c}" for c in "ABCDEF"])
+    assert not got["LLT_A"]  # empty or unset, never the comment text
+    assert not got["LLT_B"]  # empty or unset, never the comment text
+    assert not got["LLT_C"]  # empty or unset, never the comment text
+    assert got["LLT_D"] == "val"
+    assert got["LLT_E"] == "a#b"
+    assert got["LLT_F"] == "q # kept"
+
+
+@needs_ps
+def test_load_local_caller_value_wins(tmp_path: Path) -> None:
+    got = _run_load_local(
+        tmp_path,
+        "PERPETUA_TOOLS_PATH=from-file\n",
+        extra_env={"PERPETUA_TOOLS_PATH": "from-caller"},
+        keys=["PERPETUA_TOOLS_PATH"],
+    )
+    assert got["PERPETUA_TOOLS_PATH"] == "from-caller"
+
+
+@needs_ps
+def test_load_local_stale_value_from_previous_run_is_not_caller_set(tmp_path: Path) -> None:
+    # A previous run (or the launcher) left the value and its marker behind.
+    got = _run_load_local(
+        tmp_path,
+        "PERPETUA_TOOLS_PATH=from-file\n",
+        extra_env={
+            "PERPETUA_TOOLS_PATH": "stale",
+            "ORAMA_LOADLOCAL_SET_PERPETUA_TOOLS_PATH": "stale",
+        },
+        keys=["PERPETUA_TOOLS_PATH", "ORAMA_LOADLOCAL_SET_PERPETUA_TOOLS_PATH"],
+    )
+    assert got["PERPETUA_TOOLS_PATH"] == "from-file"
+    assert got["ORAMA_LOADLOCAL_SET_PERPETUA_TOOLS_PATH"] == "from-file"
+
+
+def test_launcher_scripts_hardening_present() -> None:
+    start = _read(START)
+    assert "'-I', '-c', $Code" in start
+    assert "Set-LauncherPtEnv" in start
+    assert "removed stray orama-system" in start
+    assert "interpreter not found" in start
+    assert "$discoverExit = $LASTEXITCODE" in _read(INSTALL)

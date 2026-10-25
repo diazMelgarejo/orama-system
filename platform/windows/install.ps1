@@ -190,7 +190,12 @@ if (Test-Path $PathScript) {
 # final banner) run.
 _Step 'Generating .paths.ps1...'
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ScriptDir 'start.ps1') --discover
-_OK '.paths.ps1 written'
+$discoverExit = $LASTEXITCODE
+if ($discoverExit -eq 0) {
+    _OK '.paths.ps1 written'
+} else {
+    _Warn ".paths.ps1 NOT written: start.ps1 --discover exited $discoverExit (see the output above; re-run start.ps1 --discover once fixed)"
+}
 
 # ── gstack brain-sync Windows shim (fix #1731) ───────────────────────────────
 # gstack-brain-sync is a bash shebang script. bun/Node.js spawns it via

@@ -262,6 +262,10 @@ function _Err   { _Log 'ERROR' $args[0] $args[1] }
 $script:BootstrapOutput = @()
 function Bootstrap-RunPython {
     param([string]$Python, [string[]]$PyArgs)
+    if (-not (Test-Path $Python)) {
+        $script:BootstrapOutput = @("interpreter not found: $Python")
+        return 127
+    }
     $prev = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
@@ -277,7 +281,22 @@ function Bootstrap-RunPython {
 function Bootstrap-TestImports {
     param([string]$Python, [string]$Code)
     if (-not (Test-Path $Python)) { return $false }
-    return ((Bootstrap-RunPython $Python @('-c', $Code)) -eq 0)
+    # -I (isolated): ignore PYTHONPATH/user site left in the console by earlier
+    # runs so they can neither satisfy nor break the probe.
+    return ((Bootstrap-RunPython $Python @('-I', '-c', $Code)) -eq 0)
+}
+
+# The launcher (not the caller) resolved the PT directory: set the env vars and
+# record them in the load-local.ps1 markers so a later run in the same console
+# does not mistake them for a caller override.
+function Set-LauncherPtEnv {
+    param([string]$Dir, [switch]$RootOnly)
+    $env:PERPETUA_TOOLS_ROOT = $Dir
+    $env:ORAMA_LOADLOCAL_SET_PERPETUA_TOOLS_ROOT = $Dir
+    if (-not $RootOnly) {
+        $env:PERPETUA_TOOLS_PATH = $Dir
+        $env:ORAMA_LOADLOCAL_SET_PERPETUA_TOOLS_PATH = $Dir
+    }
 }
 
 function Bootstrap-ShowOutput {
@@ -313,6 +332,12 @@ function Heal-PtVenv {
     # A previous launcher run installed orama-system here (pip -r ran from the
     # wrong cwd); remove it so the venv holds the right package only.
     $null = Bootstrap-RunPython $venvPy @('-m', 'pip', 'uninstall', '-y', 'orama-system', '--disable-pip-version-check')
+    # The stray package alone may have been the only problem: re-probe and skip
+    # the (network-dependent) reinstall when the venv is already usable.
+    if (Bootstrap-TestImports $venvPy $PtImportProbe) {
+        _Info 'bootstrap' 'PT .venv ready (removed stray orama-system)'
+        return
+    }
     # PT's requirements.txt is '-e .', which pip resolves against the CURRENT
     # directory, so the install must run with PtDir as cwd.
     Push-Location $PtDir
@@ -558,7 +583,7 @@ function Invoke-LanPeerProbe {
         return $false
     }
     Sync-ControlPlaneToken
-    if ($PtDir) { $env:PERPETUA_TOOLS_ROOT = $PtDir }
+    if ($PtDir) { Set-LauncherPtEnv -Dir $PtDir -RootOnly }
     _Info 'lan-peer' 'running probe_lan_peer.py --json ...'
     $probeTimeout = if ($env:LAN_PEER_PROBE_TIMEOUT) { $env:LAN_PEER_PROBE_TIMEOUT } else { '2' }
     $statusTimeout = if ($env:LAN_PEER_STATUS_TIMEOUT) { $env:LAN_PEER_STATUS_TIMEOUT } else { '3' }
@@ -578,7 +603,7 @@ function Invoke-LanPeerOutboxFlush {
         return
     }
     Sync-ControlPlaneToken
-    if ($PtDir) { $env:PERPETUA_TOOLS_ROOT = $PtDir }
+    if ($PtDir) { Set-LauncherPtEnv -Dir $PtDir -RootOnly }
     _Info 'lan-peer' 'flushing queued peer drops ...'
     $httpTimeout = if ($env:LAN_PEER_HTTP_TIMEOUT) { $env:LAN_PEER_HTTP_TIMEOUT } else { '2' }
     & $UsPython $assign flush-outbox --peer --timeout $httpTimeout
@@ -747,8 +772,7 @@ function Invoke-DiscoverEndpoints {
         return
     }
     if ($PtDir) {
-        $env:PERPETUA_TOOLS_ROOT = $PtDir
-        $env:PERPETUA_TOOLS_PATH = $PtDir
+        Set-LauncherPtEnv -Dir $PtDir
     }
     _Info 'ip' "Probing LAN topology ($([IO.Path]::GetFileName($discover)) --force)..."
     $prevEap = $ErrorActionPreference
