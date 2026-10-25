@@ -457,7 +457,11 @@ def run_checks(
         return [Check("peer-ip", Status.FAIL, "no peer IP in discovery or env")]
 
     checks: list[Check] = []
-    health_url = f"http://{peer_ip}:{portal_port}/health"
+    # Same scheme rule as relay_probe() and lan_peer_assign: https once the
+    # peer portal has TLS in front of it. The authenticated /api/status check
+    # below must never carry a bearer over plain http://.
+    scheme = "https" if _peer_portal_tls_enabled() else "http"
+    health_url = f"{scheme}://{peer_ip}:{portal_port}/health"
     code, body = http_get(health_url, timeout=timeout)
     if code == 200 and "ok" in body.lower():
         checks.append(Check("portal-health", Status.PASS, health_url))
@@ -465,8 +469,18 @@ def run_checks(
         hint = "set PORTAL_BIND_LAN=1 on peer and restart portal" if code == -1 else f"http {code}"
         checks.append(Check("portal-health", Status.FAIL, f"{health_url} — {hint}: {body[:80]}"))
 
-    if tokens:
-        status_url = f"http://{peer_ip}:{portal_port}/api/status"
+    status_url = f"{scheme}://{peer_ip}:{portal_port}/api/status"
+    if tokens and [t for t in tokens if t] and not _is_authenticated_transport(status_url):
+        checks.append(
+            Check(
+                "portal-status",
+                Status.FAIL,
+                "SECURITY_STOP: refusing to send control-plane token candidates over "
+                "unauthenticated http://; set PEER_PORTAL_TLS_ENABLED=1 once the peer "
+                "portal has TLS in front of it",
+            )
+        )
+    elif tokens:
         status_pass = False
         last_code = -1
         last_body = ""
