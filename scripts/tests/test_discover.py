@@ -9,26 +9,31 @@ from mesh import discovery_trust
 
 @pytest.fixture(autouse=True)
 def _set_pt_root_env(monkeypatch, tmp_path):
+    """Set pt root env."""
     monkeypatch.setenv("PERPETUA_TOOLS_ROOT", str(tmp_path))
     yield
 
 
 def test_hash_deterministic():
+    """Check that hash deterministic."""
     ep = {"mac": {"ip": "127.0.0.1", "models": ["m1", "m2"]},
           "win": {"ip": "192.168.254.101", "models": ["m3"]}}
     assert D.compute_hash(ep) == D.compute_hash(ep)
 
 def test_hash_changes_on_ip_change():
+    """Check that hash changes on ip change."""
     ep1 = {"mac": {"ip": "127.0.0.1", "models": ["m1"]}, "win": None}
     ep2 = {"mac": {"ip": "192.168.254.107", "models": ["m1"]}, "win": None}
     assert D.compute_hash(ep1) != D.compute_hash(ep2)
 
 def test_hash_model_order_independent():
+    """Check that hash model order independent."""
     ep1 = {"mac": {"ip": "x", "models": ["b", "a"]}, "win": None}
     ep2 = {"mac": {"ip": "x", "models": ["a", "b"]}, "win": None}
     assert D.compute_hash(ep1) == D.compute_hash(ep2)
 
 def test_hash_none_endpoint():
+    """Check that hash none endpoint."""
     ep = {"mac": None, "win": None}
     assert isinstance(D.compute_hash(ep), str)
     assert len(D.compute_hash(ep)) == 40
@@ -52,6 +57,7 @@ POLICY = {
 
 
 def test_filter_models_for_mac_strips_windows_only_models():
+    """Check that filter models for mac strips windows only models."""
     models = [
         "Qwen3.5-9B-MLX-4bit",
         "gemma-4-e4b-it",
@@ -65,6 +71,7 @@ def test_filter_models_for_mac_strips_windows_only_models():
 
 
 def test_filter_models_for_win_strips_mac_only_models():
+    """Check that filter models for win strips mac only models."""
     models = [
         "Qwen3.5-9B-MLX-4bit",
         "qwen3.5-9b-mlx-4bit",
@@ -78,16 +85,19 @@ def test_filter_models_for_win_strips_mac_only_models():
 
 
 def test_filter_models_clean_input_no_change():
+    """Check that filter models clean input no change."""
     models = ["Qwen3.5-9B-MLX-4bit", "gemma-4-e4b-it"]
     assert D.filter_models_for_platform(models, "mac", POLICY) == models
 
 
 def test_filter_models_unknown_model_passes_through():
+    """Check that filter models unknown model passes through."""
     models = ["unknown-local-experiment"]
     assert D.filter_models_for_platform(models, "mac", POLICY) == models
 
 
 def test_backup_limit_enforced(tmp_path, monkeypatch):
+    """Check that backup limit enforced."""
     monkeypatch.setattr(D, "BACKUPS_DIR", tmp_path / "backups")
     monkeypatch.setattr(D, "ARCHIVE_DIR", tmp_path / "archive")
     (tmp_path / "backups").mkdir()
@@ -102,6 +112,7 @@ def test_backup_limit_enforced(tmp_path, monkeypatch):
     assert len(remaining) <= D.MAX_BACKUPS
 
 def test_old_files_archived_not_deleted(tmp_path, monkeypatch):
+    """Check that old files archived not deleted."""
     monkeypatch.setattr(D, "BACKUPS_DIR", tmp_path / "backups")
     monkeypatch.setattr(D, "ARCHIVE_DIR", tmp_path / "archive")
     (tmp_path / "backups").mkdir()
@@ -117,6 +128,7 @@ def test_old_files_archived_not_deleted(tmp_path, monkeypatch):
 
 
 def test_patch_openclaw_json(tmp_path, monkeypatch):
+    """Check that patch openclaw json."""
     oc = tmp_path / "openclaw.json"
     oc.write_text(json.dumps({
         "models": {"providers": {
@@ -133,9 +145,16 @@ def test_patch_openclaw_json(tmp_path, monkeypatch):
     }
     D.patch_openclaw_json(endpoints)
     cfg = json.loads(oc.read_text())
-    # Mac always routes to localhost — the LAN IP is discovery metadata only.
-    assert "localhost" in cfg["models"]["providers"]["lmstudio-mac"]["baseUrl"]
-    assert "192.168.254.107" not in cfg["models"]["providers"]["lmstudio-mac"]["baseUrl"]
+    mac_url = cfg["models"]["providers"]["lmstudio-mac"]["baseUrl"]
+    if D.RUNNING_ON_WINDOWS:
+        # On a Windows host localhost is the Windows box, so lmstudio-mac must
+        # use the discovered (remote) Mac address, never localhost.
+        assert "localhost" not in mac_url
+        assert endpoints["mac"]["ip"] in mac_url
+    else:
+        # Mac always routes to localhost — the LAN IP is discovery metadata only.
+        assert "localhost" in mac_url
+        assert endpoints["mac"]["ip"] not in mac_url
     assert "192.168.254.101" in cfg["models"]["providers"]["lmstudio-win"]["baseUrl"]
     mac_ids = [m["id"] for m in cfg["models"]["providers"]["lmstudio-mac"]["models"]]
     assert "text-embedding-nomic" not in mac_ids  # embedding models always excluded
@@ -202,6 +221,7 @@ def test_disaster_recovery_tier2(tmp_path, monkeypatch):
 
 
 def test_no_write_when_hash_unchanged(tmp_path, monkeypatch):
+    """Check that no write when hash unchanged."""
     monkeypatch.setattr(D, "STATE_DIR", tmp_path)
     monkeypatch.setattr(D, "BACKUPS_DIR", tmp_path / "backups")
     monkeypatch.setattr(D, "ARCHIVE_DIR", tmp_path / "archive")
@@ -226,18 +246,21 @@ def test_no_write_when_hash_unchanged(tmp_path, monkeypatch):
 
 
 def test_perpetua_root_precedence_root_over_legacy(monkeypatch):
+    """Check that perpetua root precedence root over legacy."""
     monkeypatch.setenv("PERPETUA_TOOLS_ROOT", "/tmp/pt-root")
     monkeypatch.setenv("PERPETUA_TOOLS_PATH", "/tmp/pt-legacy")
     assert D._resolve_perpetua_root_env() == Path("/tmp/pt-root")
 
 
 def test_perpetua_root_falls_back_to_legacy(monkeypatch):
+    """Check that perpetua root falls back to legacy."""
     monkeypatch.delenv("PERPETUA_TOOLS_ROOT", raising=False)
     monkeypatch.setenv("PERPETUA_TOOLS_PATH", "/tmp/pt-legacy")
     assert D._resolve_perpetua_root_env() == Path("/tmp/pt-legacy")
 
 
 def test_get_repo_paths_uses_resolved_perpetua_root(monkeypatch):
+    """Check that get repo paths uses resolved perpetua root."""
     monkeypatch.setenv("PERPETUA_TOOLS_ROOT", "/tmp/pt-root")
     paths = D.get_repo_paths()
     assert paths["perpetua_tools"] == Path("/tmp/pt-root")
@@ -246,6 +269,7 @@ def test_get_repo_paths_uses_resolved_perpetua_root(monkeypatch):
 def test_discover_skips_pt_checks_when_perpetuatoolsroot_missing(monkeypatch, tmp_path, caplog):
     # PT root is only needed for PT-specific policy operations; openclaw.json
     # IP patching proceeds with a warning when PT root is absent.
+    """Check that discover skips pt checks when perpetuatoolsroot missing."""
     import logging
     monkeypatch.delenv("PERPETUATOOLSROOT", raising=False)
     monkeypatch.delenv("PERPETUA_TOOLS_ROOT", raising=False)
@@ -259,6 +283,7 @@ def test_discover_skips_pt_checks_when_perpetuatoolsroot_missing(monkeypatch, tm
 
 
 def test_perpetuatoolsroot_takes_precedence_over_legacy_path(monkeypatch, tmp_path):
+    """Check that perpetuatoolsroot takes precedence over legacy path."""
     canonical = tmp_path / "canonical_pt"
     legacy = tmp_path / "legacy_pt"
     canonical.mkdir()
@@ -269,6 +294,7 @@ def test_perpetuatoolsroot_takes_precedence_over_legacy_path(monkeypatch, tmp_pa
 
 
 def test_legacy_path_works_as_fallback_when_root_absent(monkeypatch, tmp_path):
+    """Check that legacy path works as fallback when root absent."""
     legacy = tmp_path / "legacy_pt"
     legacy.mkdir()
     monkeypatch.delenv("PERPETUATOOLSROOT", raising=False)
@@ -278,6 +304,7 @@ def test_legacy_path_works_as_fallback_when_root_absent(monkeypatch, tmp_path):
 
 
 def test_load_policy_merges_windows_only_aliases(tmp_path, monkeypatch):
+    """Check that load policy merges windows only aliases."""
     policy_dir = tmp_path / "config"
     policy_dir.mkdir()
     (policy_dir / "model_hardware_policy.yml").write_text(
@@ -319,6 +346,7 @@ def test_probe_models_rejects_link_local_metadata_target():
 
 
 def test_probe_models_rejects_public_target_by_default():
+    """Check that probe models rejects public target by default."""
     import unittest.mock
 
     with unittest.mock.patch("urllib.request.urlopen") as mock_urlopen:
