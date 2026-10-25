@@ -770,17 +770,18 @@ _DIFF_PATHS = (
     ("direct_xai", "grok-4.6"),
     ("cursor_grok_bot", "grok-4.7"),
     ("cursor_grok_bot", "composer-2.5"),
+    ("cursor_grok_bot", "gpt-5.6-terra"),
     ("anthropic", "claude-sonnet-5-5"),
     ("anthropic", "claude-opus-5-5"),
 )
 _DIFF_EFFORTS = (None, "", "low", "medium", "high", "xhigh", "max")
 _DIFF_FASTS = (None, False, True)
 # SHA-256 of the sorted-key JSON outcome table below; identical in PT and orama-system.
-_DIFF_DIGEST = "295b8ab1496bf4e8ee63a2cf49e77bf1d444478b93ab302cb14cdac4358a072d"
+_DIFF_DIGEST = "1cc81a581e5308850876e167412f948beb4a6d51a4c34c108ab1af5b481500c7"
 
 
 def _diff_outcomes() -> dict[str, str]:
-    """Run both entry points over every path/alias/fast combination (1,764 cases)."""
+    """Run both entry points over every path/alias/fast combination (2,058 cases)."""
     outcomes: dict[str, str] = {}
     for (path, model), effort, reasoning, fast in itertools.product(
         _DIFF_PATHS, _DIFF_EFFORTS, _DIFF_EFFORTS, _DIFF_FASTS
@@ -805,6 +806,6 @@ def _diff_outcomes() -> dict[str, str]:
 def test_differential_policy_outcomes_match_across_repositories() -> None:
     """Every case is a clean allow or refusal and the whole table matches the pinned digest."""
     outcomes = _diff_outcomes()
-    assert len(outcomes) == 1764
+    assert len(outcomes) == 2058
     blob = json.dumps(outcomes, sort_keys=True, separators=(",", ":")).encode()
     assert hashlib.sha256(blob).hexdigest() == _DIFF_DIGEST
