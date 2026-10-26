@@ -16,6 +16,14 @@ LIB = ROOT / "scripts/git/banned_attribution_lib.sh"
 pytestmark = pytest.mark.unit
 
 
+def _symlink_or_skip(link: Path, target: Path) -> None:
+    """Create ``link`` -> ``target`` or skip when symlinks are not permitted."""
+    try:
+        link.symlink_to(target)
+    except (OSError, NotImplementedError) as exc:
+        pytest.skip(f"symlink creation not permitted on this platform: {exc}")
+
+
 def _init_fixture_repo(tmp_path: Path) -> tuple[Path, Path, Path]:
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -155,7 +163,7 @@ def test_fails_loudly_when_ripgrep_is_missing(tmp_path: Path) -> None:
     tool_dir = tmp_path / "tools"
     tool_dir.mkdir()
     for name, resolved in (("bash", bash_bin), ("git", git_bin), ("tr", tr_bin)):
-        (tool_dir / name).symlink_to(resolved)
+        _symlink_or_skip(tool_dir / name, Path(resolved))
 
     result = _run_scan(repo, patterns, home, path_dirs=[str(tool_dir)])
 
