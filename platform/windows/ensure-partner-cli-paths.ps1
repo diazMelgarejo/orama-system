@@ -101,6 +101,9 @@ foreach ($c in $candidates) {
 if ($added -eq 0) {
     $scope = if ($SessionOnly) { 'process PATH' } else { 'User PATH' }
     Write-Host "  OK - all existing partner CLI paths already on $scope"
+} elseif ($WhatIf) {
+    $scope = if ($SessionOnly) { 'process PATH' } else { 'User PATH' }
+    Write-Host "  [whatif] would add $added path(s) to the $scope; nothing was changed."
 } else {
     if ($SessionOnly) {
         Write-Host "  OK - added $added path(s) to the current process."
