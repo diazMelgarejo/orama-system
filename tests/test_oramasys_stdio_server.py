@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -134,6 +135,7 @@ def test_executor_env_loader_rejects_malformed_specs_and_defaults_to_none():
 
 
 def test_stdio_process_is_clean_and_fails_closed_end_to_end():
+    """Stdio process is clean and fails closed end to end."""
     lines = [
         {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
         {"jsonrpc": "2.0", "method": "notifications/initialized"},
@@ -144,7 +146,9 @@ def test_stdio_process_is_clean_and_fails_closed_end_to_end():
         [sys.executable, "-m", "bin.mcp_servers.oramasys_orchestration_server"],
         input="\n".join(json.dumps(m) for m in lines) + "\nnot-json\n",
         capture_output=True, text=True, cwd=_ROOT, timeout=30,
-        env={"PATH": "/usr/bin:/bin", "PYTHONPATH": str(_ROOT)},
+        # Windows needs SYSTEMROOT for the interpreter to load winsock.
+        env={"PATH": "/usr/bin:/bin", "PYTHONPATH": str(_ROOT),
+             **({"SYSTEMROOT": os.environ["SYSTEMROOT"]} if "SYSTEMROOT" in os.environ else {})},
     )
     out = [json.loads(line) for line in proc.stdout.splitlines()]  # stdout is pure JSON-RPC
     by_id = {m["id"]: m for m in out}

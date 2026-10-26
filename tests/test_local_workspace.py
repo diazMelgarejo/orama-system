@@ -1,8 +1,10 @@
 """Observable workspace contracts shared by the v1/v2 proof of concept."""
 import hashlib
 import importlib
+import ipaddress
 import json
 import socket
+import sys
 
 import pytest
 from fastapi.testclient import TestClient
@@ -26,7 +28,17 @@ def client(monkeypatch):
 
 
 def test_offline_run_delivers_bound_csv_and_canonical_receipt(client, monkeypatch):
-    def forbidden(*args, **kwargs):
+    """Offline run delivers bound csv and canonical receipt."""
+    real_connect = socket.socket.connect
+
+    def forbidden(self, address, *args, **kwargs):
+        """Fail on any outbound connect; Windows' asyncio self-pipe socketpair is exempt."""
+        if sys.platform == "win32" and isinstance(address, tuple):
+            try:
+                if ipaddress.ip_address(address[0]).is_loopback:
+                    return real_connect(self, address, *args, **kwargs)
+            except ValueError:
+                pass
         pytest.fail("Offline task attempted a network connection")
     monkeypatch.setattr(socket.socket, "connect", forbidden)
     response = client.post("/api/workspace/run", json=FIXTURE)
