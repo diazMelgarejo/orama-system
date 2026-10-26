@@ -11,6 +11,19 @@ from pathlib import Path
 
 ROOT   = Path(__file__).parent.parent
 MULTI  = ROOT / "bin"
+
+
+def _read_json_file(path: Path):
+    """Parse a JSON file, following a git symlink checked out as a plain-text stub.
+
+    Without symlink privilege (Windows, core.symlinks=false) git writes a symlink
+    as a regular file whose content is the relative link target.
+    """
+    if path.is_file() and not path.is_symlink():
+        raw = path.read_text(encoding="utf-8").strip()
+        if raw and not raw.startswith(("{", "[")) and "\n" not in raw:
+            path = (path.parent / raw).resolve()
+    return json.loads(path.read_text(encoding="utf-8"))
 AGENTS = ["orchestrator", "context", "architect", "refiner", "executor", "verifier", "crystallizer"]
 SKILL_NAMES = {
     "orchestrator": "agent.md",
@@ -89,19 +102,19 @@ class TestConfig:
     def test_agent_registry_valid_json(self):
         path = MULTI / "config" / "agent_registry.json"
         assert path.exists()
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = _read_json_file(path)
         assert "agents" in data
         assert len(data["agents"]) == 7
 
     def test_all_agents_in_registry(self):
-        data = json.loads((MULTI / "config" / "agent_registry.json").read_text(encoding="utf-8"))
+        data = _read_json_file(MULTI / "config" / "agent_registry.json")
         ids = [a["id"] for a in data["agents"]]
         for agent in ["orchestrator", "context-agent", "architect-agent",
                       "refiner-agent", "executor-agent", "verifier-agent", "crystallizer-agent"]:
             assert agent in ids, f"{agent} missing from registry"
 
     def test_qwen_priority_subagent_registered(self):
-        data = json.loads((MULTI / "config" / "agent_registry.json").read_text(encoding="utf-8"))
+        data = _read_json_file(MULTI / "config" / "agent_registry.json")
         openclaw_agents = data["openclaw_agents"]
 
         assert openclaw_agents["coder"]["model"] == QWEN_PRIORITY_MODEL
@@ -112,7 +125,7 @@ class TestConfig:
     def test_routing_rules_valid_json(self):
         path = MULTI / "config" / "routing_rules.json"
         assert path.exists()
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = _read_json_file(path)
         assert "rules" in data
         assert len(data["rules"]) > 5
 
