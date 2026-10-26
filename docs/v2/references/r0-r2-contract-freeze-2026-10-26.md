@@ -140,8 +140,11 @@ One rule set; the activation plan restates it and must not differ.
 2. **Record shape.** The existing attempt store holds one refusal record per `attempt_id` with the
    discriminator `disposition: "authorization_refused"` and exactly these contract fields:
    `attempt_id`, `disposition`, `refusal_code` (one Section 3 `deny.*` code), opaque `receipt_ref`,
-   and `recorded_at`. It stores no grant id, key id, target, payload, or internal verifier reason.
-   Internal reasons appear only in logs, never in the record or a response.
+   and `recorded_at`. It stores no grant id, key id, target or payload. One rule covers internal
+   detail: an attempt refusal record may store the internal kind, rule or reason for audit only,
+   and never exposes it. The public fields are exactly `disposition`, `refusal_code`,
+   `receipt_ref` and `recorded_at`; internal reasons otherwise appear only in logs, never in a
+   response.
 3. **Written in the authorization transaction.** Within the existing `BEGIN IMMEDIATE`
    authorization transaction, the consumer first looks up the bound attempt identity. If no row
    exists and final authorization refuses the attempt, that same transaction writes the refusal
@@ -200,11 +203,14 @@ existing attempt store; no second ledger is created.
   `{attempt_ref, outcome, receipt_digest, recorded_at}` carrying no payload, no grant id and no
   key id.
 - **Replay.** An exact replay returns the stored receipt. A second dispatch for the same
-  identity is refused.
+  identity is refused. Replay of a settled successful send returns the stored receipt before any
+  re-authorization. The consumer lease check runs in the shared send-time helper inside the send
+  transaction and fails closed when no lease view is available.
 - **Sealed command envelope (inert driver input).** Canonical JSON
   `{"v":1,"attempt_id":..., "operation_digest":"sha256:..", "target":"inert://simulation",
-  "epoch":<int>, "expires_at":..}` plus its sha256. The driver rejects anything else and never
-  executes text.
+  "epoch":<int>, "expires_at":..}` plus its sha256. The `epoch` field is the fencing epoch
+  (distinct from the consumer lease epoch, which is never carried in the envelope). The driver
+  rejects anything else and never executes text.
 - **Redaction envelope.** Public surfaces carry only the Section 3 body shape and the receipt
   record above.
 

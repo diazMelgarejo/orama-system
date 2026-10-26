@@ -245,6 +245,21 @@ def test_lease_epoch_and_fencing_epoch_are_defined_and_distinct() -> None:
     assert "no second path sends" in section
 
 
+def test_envelope_epoch_replay_and_refusal_audit_rules() -> None:
+    """Envelope epoch is the fencing epoch; replay and audit-only reasons are stated once."""
+    text = DOCS[1].read_text(encoding="utf-8")
+    start = text.index("## 5. Release 2 frozen items")
+    section = " ".join(text[start : text.index("## 6. Out of scope", start)].split())
+    assert "The `epoch` field is the fencing epoch (distinct from the consumer lease epoch" in section
+    assert "Replay of a settled successful send returns the stored receipt before any re-authorization" in section
+    assert "lease check runs in the shared send-time helper inside the send transaction" in section
+    assert "fails closed when no lease view is available" in section
+    refusal = " ".join(_pre_dispatch_refusal_section(text).split())
+    assert "may store the internal kind, rule or reason for audit only, and never exposes it" in refusal
+    assert "exactly `disposition`, `refusal_code`, `receipt_ref` and `recorded_at`" in refusal
+    assert "It stores no grant id, key id, target or payload." in refusal
+
+
 @pytest.mark.parametrize("doc", DOCS, ids=lambda p: p.name)
 def test_docs_contain_no_ip_literals_or_workstation_paths(doc: Path) -> None:
     """Documents carry no IP literals or workstation paths."""
