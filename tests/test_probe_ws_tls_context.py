@@ -21,26 +21,34 @@ PEER = "192.0.2.10"  # TEST-NET-1
 
 @pytest.fixture
 def captured(monkeypatch):
+    """Stub the websockets module and clear trust variables; returns the list of (url, kwargs) connection calls."""
     for var in ("PEER_CA_FILE", "PEER_PINNED_FINGERPRINTS", "SSL_CERT_FILE"):
         monkeypatch.delenv(var, raising=False)
     peer_tls.clear_cache()
     calls: list[tuple[str, dict]] = []
 
     class _WS:
+        """Fake WebSocket that acknowledges the probe."""
         async def send(self, _msg):
+            """Accept and ignore the outgoing message."""
             return None
 
         async def recv(self):
+            """Return a probe acknowledgement message."""
             return '{"type": "probe-ack"}'
 
     class _Conn:
+        """Fake connection that records its URL and keyword arguments."""
         def __init__(self, url, **kw):
+            """Record the connection URL and keyword arguments."""
             calls.append((url, kw))
 
         async def __aenter__(self):
+            """Enter the connection context and return the fake WebSocket."""
             return _WS()
 
         async def __aexit__(self, *exc):
+            """Leave the connection context without suppressing exceptions."""
             return False
 
     mod = types.ModuleType("websockets")
@@ -50,6 +58,7 @@ def captured(monkeypatch):
 
 
 def test_peer_ca_file_context_is_passed_to_wss(captured, monkeypatch, tmp_path):
+    """A configured CA file yields a verifying SSL context passed to the wss connection."""
     ca = fx.make_ca()
     monkeypatch.setenv("PEER_CA_FILE", str(fx.write_pem(tmp_path / "ca.pem", ca[1])))
     chk = probe.check_ws_peer(PEER, 8002, ["synthetic-token"], timeout=2)
@@ -61,6 +70,7 @@ def test_peer_ca_file_context_is_passed_to_wss(captured, monkeypatch, tmp_path):
 
 
 def test_no_peer_trust_leaves_default_context_so_ssl_cert_file_applies(captured, monkeypatch, tmp_path):
+    """With no peer trust configured no ssl argument is passed, so the default context (and SSL_CERT_FILE) applies."""
     monkeypatch.setenv("SSL_CERT_FILE", str(fx.write_pem(tmp_path / "roots.pem", fx.make_ca()[1])))
     chk = probe.check_ws_peer(PEER, 8002, ["synthetic-token"], timeout=2)
     assert chk.status == probe.Status.PASS
@@ -71,6 +81,7 @@ def test_no_peer_trust_leaves_default_context_so_ssl_cert_file_applies(captured,
 
 
 def test_trust_failure_fails_closed_without_connecting(captured, monkeypatch, tmp_path):
+    """A trust failure fails the check closed with no connection and no token."""
     monkeypatch.setenv("PEER_CA_FILE", str(tmp_path / "missing.pem"))
     chk = probe.check_ws_peer(PEER, 8002, ["synthetic-token"], timeout=2)
     assert chk.status == probe.Status.FAIL and "token not sent" in chk.detail
@@ -78,6 +89,7 @@ def test_trust_failure_fails_closed_without_connecting(captured, monkeypatch, tm
 
 
 def test_websocket_kwargs_selection(monkeypatch, tmp_path):
+    """websocket_kwargs returns a context only for wss URLs when trust is configured."""
     monkeypatch.delenv("PEER_PINNED_FINGERPRINTS", raising=False)
     monkeypatch.delenv("PEER_CA_FILE", raising=False)
     peer_tls.clear_cache()

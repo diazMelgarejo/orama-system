@@ -18,6 +18,7 @@ import sys
 
 
 def _parse(argv: list[str]) -> tuple[str, str, str, dict[str, str], list[str]]:
+    """Split argv into (log, pidfile, cwd, env extras, command); exit with usage text if malformed."""
     if "--" not in argv:
         raise SystemExit("usage: spawn_detached.py LOG PIDFILE CWD [--env K=V ...] -- CMD ...")
     split = argv.index("--")
@@ -39,6 +40,11 @@ def _parse(argv: list[str]) -> tuple[str, str, str, dict[str, str], list[str]]:
 
 
 def spawn(log: str, pidfile: str, cwd: str, extras: dict[str, str], cmd: list[str]) -> int:
+    """Launch cmd detached with output appended to log, write its PID to pidfile and return the PID.
+
+    On Windows the child gets no console and its own process group, and tries to break away from the
+    caller's job object, retrying without breakaway when that is denied.
+    """
     env = {**os.environ, **extras, "PYTHONUNBUFFERED": "1"}
     os.makedirs(os.path.dirname(os.path.abspath(log)), exist_ok=True)
     os.makedirs(os.path.dirname(os.path.abspath(pidfile)), exist_ok=True)
@@ -76,6 +82,7 @@ def spawn(log: str, pidfile: str, cwd: str, extras: dict[str, str], cmd: list[st
 
 
 def main(argv: list[str]) -> int:
+    """Parse argv, spawn the service, print its PID and return exit status 0."""
     log, pidfile, cwd, extras, cmd = _parse(argv)
     pid = spawn(log, pidfile, cwd, extras, cmd)
     print(pid)

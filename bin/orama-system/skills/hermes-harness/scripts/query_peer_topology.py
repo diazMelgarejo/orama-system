@@ -591,6 +591,7 @@ def run_topology_query(timeout: float = DEFAULT_TIMEOUT) -> int:
 
 
 def main():
+    """Command-line entry point: query peer topology with the given timeout and exit 0 when events were emitted, 1 when nothing changed, 2 on interrupt or error."""
     parser = argparse.ArgumentParser(
         description="Query peer fleet topology and re-classify fleet mode (Phase 4)"
     )

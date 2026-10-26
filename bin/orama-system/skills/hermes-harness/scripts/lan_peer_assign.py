@@ -34,6 +34,7 @@ import json
 import logging
 import os
 import re
+import socket
 import sys
 import time
 import unicodedata
@@ -60,11 +61,13 @@ logger = logging.getLogger("lan_peer_assign")
 
 
 def _ensure_orama_src() -> None:
+    """Put the repo src directory on sys.path (once) so orama_system can be imported lazily."""
     if _SRC_ROOT.is_dir() and str(_SRC_ROOT) not in sys.path:
         sys.path.insert(0, str(_SRC_ROOT))
 
 
 def _auth_header(token: str) -> dict[str, str]:
+    """Return bearer and JSON headers for a token, or an empty dict when the token is empty."""
     if not token:
         return {}
     return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
@@ -122,11 +125,13 @@ def _bracketed_host(peer_ip: str) -> str:
 
 
 def _peer_base(peer_ip: str, portal_port: int) -> str:
+    """Return the peer portal base URL, https when peer TLS is enabled and http otherwise."""
     scheme = "https" if _peer_portal_tls_enabled() else "http"
     return f"{scheme}://{_bracketed_host(peer_ip)}:{portal_port}"
 
 
 def _http_json(method: str, url: str, payload: dict[str, Any] | None = None, timeout: int = 30) -> Any:
+    """Send one request and return only the decoded JSON body, discarding the authenticated flag."""
     return _http_json_ex(method, url, payload, timeout)[0]
 
 
@@ -198,6 +203,7 @@ def _http_json_ex(
 
 
 def _resolve_peer(args: argparse.Namespace) -> tuple[str, int]:
+    """Resolve the peer host and portal port from CLI args or the discovery file; exit when no host is known."""
     if args.peer_ip:
         ip = args.peer_ip.strip()
     else:
@@ -210,6 +216,7 @@ def _resolve_peer(args: argparse.Namespace) -> tuple[str, int]:
 
 
 def cmd_drop(args: argparse.Namespace) -> int:
+    """Drop a file to the peer portal (or the local inbox) and queue it in the local outbox when the peer drop fails; returns 0, or 2 when queued."""
     body = Path(args.file).read_text(encoding="utf-8")
     filename = args.filename or Path(args.file).name
     payload = {
@@ -274,6 +281,7 @@ def cmd_drop(args: argparse.Namespace) -> int:
 
 
 def cmd_list(args: argparse.Namespace) -> int:
+    """List the peer inbox (with --peer) or the local inbox as JSON; returns 0."""
     if args.peer:
         ip, port = _resolve_peer(args)
         url = f"{_peer_base(ip, port)}/api/peer-inbox"
@@ -288,6 +296,7 @@ def cmd_list(args: argparse.Namespace) -> int:
 
 
 def cmd_read(args: argparse.Namespace) -> int:
+    """Print one inbox file, from the peer portal (with --peer) or the local inbox; requires --name; returns 0."""
     if not args.name:
         raise SystemExit("--name required for read")
     if args.peer:
@@ -310,6 +319,41 @@ def cmd_read(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_receipt(args: argparse.Namespace) -> int:
+    """Print local, read-only receipt evidence for one file in this node's inbox."""
+    _ensure_orama_src()
+    from orama_system.lan_peer_files import _resolve_within, inbox_dir, list_inbox
+
+    try:
+        path = _resolve_within(inbox_dir(), args.name)
+    except ValueError as exc:
+        print(f"receipt: {exc}", file=sys.stderr)
+        return 2
+    if not path.is_file():
+        print(f"receipt: not found in inbox: {path.name}", file=sys.stderr)
+        return 2
+    raw = path.read_bytes()
+    received = int(path.stat().st_mtime)
+    for entry in list_inbox():
+        if entry.get("filename") == path.name:
+            received = int(entry.get("received_at", received))
+            break
+    receipt = {
+        "filename": path.name,
+        "bytes": len(raw),
+        "sha256": hashlib.sha256(raw).hexdigest(),
+        "sha256_lf": _sha256_text(raw.decode("utf-8", errors="replace")),
+        "received_utc": datetime.fromtimestamp(received, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "host": socket.gethostname(),
+    }
+    if args.json:
+        print(json.dumps(receipt, indent=2))
+    else:
+        for key, value in receipt.items():
+            print(f"{key}: {value}")
+    return 0
+
+
 _STATES = ("queued", "sent", "delivered")
 # States an operator may record out of band (outbox-resolve). Both are
 # terminal: flush/resubmit never resend them.
@@ -324,6 +368,7 @@ _HOST_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9.\-:\[\]]*$")
 
 
 def _meta_file(filename: str) -> Path:
+    """Return the path of the metadata sidecar for a named outbox file, validating the name."""
     _ensure_orama_src()
     from orama_system.lan_peer_files import _meta_path, _resolve_within, outbox_dir
 
@@ -337,6 +382,7 @@ def _item_state(meta: dict[str, Any]) -> str:
 
 
 def _set_state(filename: str, state: str, **fields: Any) -> None:
+    """Record a delivery state and timestamp (plus extra fields) in an outbox item's metadata sidecar, preserving existing fields."""
     path = _meta_file(filename)
     meta: dict[str, Any] = {}
     if path.is_file():
@@ -351,6 +397,7 @@ def _set_state(filename: str, state: str, **fields: Any) -> None:
 
 
 def _select_items(items: list[dict[str, Any]], only: list[str]) -> list[dict[str, Any]]:
+    """Filter outbox entries to those whose filename or stem is listed in only; all entries when only is empty."""
     wanted = {Path(o).name for o in only}
     out = []
     for item in items:
@@ -394,6 +441,7 @@ def cmd_outbox_status(args: argparse.Namespace) -> int:
 
 
 def _utc_now_iso() -> str:
+    """Return the current UTC time as ISO-8601 with a trailing Z."""
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
@@ -475,6 +523,7 @@ def _peer_listing(
 
 
 def _listed_entry(data: Any, filename: str) -> dict[str, Any] | None:
+    """Find a filename in a peer inbox listing of any supported shape and return its row, or None when absent."""
     rows: Any = data
     if isinstance(data, dict):
         rows = data.get("files")
@@ -497,6 +546,7 @@ _COLLISION_ADVICE = (
 
 
 def _sha256_text(text: str) -> str:
+    """Return the SHA-256 hex digest of text after normalising CRLF to LF, so line-ending differences do not change the hash."""
     lf = text.replace("\r\n", "\n")
     return hashlib.sha256(lf.encode("utf-8")).hexdigest()
 
@@ -555,6 +605,7 @@ def _deliver_item(
     }
 
     def _hist(result: str) -> dict[str, Any]:
+        """Build the history field for a resubmitted item (or an empty dict when history is not recorded), appending this attempt to any prior history."""
         if not record_history:
             return {}
         prev = meta.get("history")
@@ -720,6 +771,7 @@ def cmd_outbox_resubmit(args: argparse.Namespace) -> int:
 
 
 def cmd_flush_outbox(args: argparse.Namespace) -> int:
+    """Retry queued outbox items against each item's own recorded peer and report delivered or remaining; returns 0, or 1 on errors (or any remainder with --strict)."""
     _ensure_orama_src()
     from orama_system.lan_peer_files import list_outbox, read_outbox_file
 
@@ -821,6 +873,7 @@ def cmd_flush_outbox(args: argparse.Namespace) -> int:
 
 
 def cmd_fanout(args: argparse.Namespace) -> int:
+    """Drop every assignment in a manifest, to the peer when the assignee is the other host and locally otherwise; returns 1 when any drop failed."""
     manifest = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
     fanout_id = str(manifest.get("fanout_id") or "").strip()
     assignments = manifest.get("assignments") or []
@@ -865,6 +918,7 @@ def cmd_fanout(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Parse the command line, dispatch to the chosen subcommand and return its exit code."""
     peer_p = argparse.ArgumentParser(add_help=False)
     peer_p.add_argument(
         "--peer", action="store_true", help="Target peer portal (default: local inbox)"
@@ -898,6 +952,14 @@ def main(argv: list[str] | None = None) -> int:
     read.add_argument("--name", required=True)
     read.add_argument("--json", action="store_true")
     read.set_defaults(func=cmd_read)
+
+    rcpt = sub.add_parser(
+        "receipt",
+        help="Show receipt evidence (sha256, size, time, host) for one local inbox file; no network",
+    )
+    rcpt.add_argument("name", help="Inbox filename (validated; no path components)")
+    rcpt.add_argument("--json", action="store_true")
+    rcpt.set_defaults(func=cmd_receipt)
 
     flush = sub.add_parser(
         "flush-outbox",

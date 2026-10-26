@@ -21,6 +21,7 @@ SCRIPT = (
 
 @pytest.fixture
 def peer_mod(monkeypatch):
+    """Load a fresh copy of probe_lan_peer from its file path for each test."""
     spec = importlib.util.spec_from_file_location("probe_lan_peer", SCRIPT)
     assert spec and spec.loader
     mod = importlib.util.module_from_spec(spec)
@@ -30,6 +31,7 @@ def peer_mod(monkeypatch):
 
 
 def test_peer_from_discovery_mac_role(peer_mod):
+    """In the mac role the peer is the win endpoint from discovery."""
     discovery = {"endpoints": {"win": {"ip": "10.0.0.50", "port": 1234}}}
     ip, port = peer_mod.peer_from_discovery(discovery, "mac")
     assert ip == "10.0.0.50"
@@ -37,7 +39,9 @@ def test_peer_from_discovery_mac_role(peer_mod):
 
 
 def test_run_checks_lmstudio_pass(peer_mod, monkeypatch):
+    """With a healthy portal and LM Studio, health and models pass and status is skipped without tokens."""
     def fake_get(url: str, token: str = "", timeout: int = 8):
+        """Fake http_get answering health and models successfully."""
         if url.endswith("/health"):
             return 200, '{"status":"ok"}'
         if url.endswith("/v1/models"):
@@ -53,6 +57,7 @@ def test_run_checks_lmstudio_pass(peer_mod, monkeypatch):
 
 
 def test_resolve_control_plane_token_from_pt_state(peer_mod, monkeypatch, tmp_path):
+    """The control-plane token is resolved from the Perpetua-Tools state file."""
     token_file = tmp_path / ".state" / "control_plane_token"
     token_file.parent.mkdir(parents=True)
     token_file.write_text("pt-secret-token\n", encoding="utf-8")
@@ -63,6 +68,7 @@ def test_resolve_control_plane_token_from_pt_state(peer_mod, monkeypatch, tmp_pa
 
 
 def test_load_repo_env_uses_env_local_without_overriding_shell(peer_mod, monkeypatch, tmp_path):
+    """Repo .env.local overrides .env but neither overrides the shell environment."""
     (tmp_path / ".env").write_text(
         "ORAMA_CONTROL_PLANE_TOKEN=base-token\n"
         "ORAMA_CONTROL_PLANE_TOKEN_PEER=base-peer\n",
@@ -83,6 +89,7 @@ def test_load_repo_env_uses_env_local_without_overriding_shell(peer_mod, monkeyp
 
 
 def test_outbound_peer_token_tried_first(peer_mod, monkeypatch):
+    """The peer token is tried before the local lane token."""
     monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "local-symmetric")
     monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN_PEER", "peer-handoff")
     for var in ("PERPETUA_TOOLS_ROOT", "PERPETUATOOLSROOT", "PERPETUA_TOOLS_PATH", "PT_HOME"):
@@ -92,9 +99,11 @@ def test_outbound_peer_token_tried_first(peer_mod, monkeypatch):
 
 
 def test_portal_status_tries_second_token(peer_mod, monkeypatch):
+    """Portal status moves on to the second token after the first is rejected."""
     calls: list[str] = []
 
     def fake_get(url: str, token: str = "", timeout: int = 8):
+        """Fake http_get that rejects the bad token and accepts the good one."""
         if token:
             calls.append(token)
         if url.endswith("/health"):
@@ -125,9 +134,11 @@ def test_portal_status_tries_second_token(peer_mod, monkeypatch):
 
 
 def test_run_checks_uses_configured_timeouts(peer_mod, monkeypatch):
+    """run_checks passes each configured timeout to the matching probe and uses https for the portal."""
     calls: list[tuple[str, int]] = []
 
     def fake_get(url: str, token: str = "", timeout: int = 8):
+        """Fake http_get that records URLs and timeouts."""
         calls.append((url, timeout))
         if url.endswith("/health"):
             return 200, '{"status":"ok"}'
@@ -167,6 +178,7 @@ def test_run_checks_uses_configured_timeouts(peer_mod, monkeypatch):
 
 
 def test_write_probe_result_on_success(peer_mod, monkeypatch, tmp_path):
+    """write_probe_result writes the payload to the result path and returns it."""
     out = tmp_path / "last_lan_peer_probe.json"
     monkeypatch.setattr(peer_mod, "probe_result_path", lambda: out)
     written = peer_mod.write_probe_result({"status": "success", "peer_ip": "10.0.0.50"})
@@ -176,6 +188,7 @@ def test_write_probe_result_on_success(peer_mod, monkeypatch, tmp_path):
 
 
 def test_main_json_exit_zero_when_lmstudio_ok(peer_mod, monkeypatch, capsys, tmp_path):
+    """main --json exits 0 and reports success with the result path when the peer is healthy."""
     disc = tmp_path / "last_discovery.json"
     disc.write_text(
         json.dumps({"endpoints": {"win": {"ip": "10.0.0.50", "port": 1234}}}),
@@ -187,6 +200,7 @@ def test_main_json_exit_zero_when_lmstudio_ok(peer_mod, monkeypatch, capsys, tmp
     monkeypatch.setattr(peer_mod, "probe_result_path", lambda: result_file)
 
     def fake_get(url: str, token: str = "", timeout: int = 8):
+        """Fake http_get answering health and models successfully."""
         if "/health" in url:
             return 200, "ok"
         return 200, json.dumps({"data": []})

@@ -101,6 +101,7 @@ def test_topology_region_has_no_ipv4_literals() -> None:
 
 @pytest.mark.skipif(POWERSHELL is None, reason="powershell not available")
 def test_failed_probe_returns_false_and_ok_probe_returns_true(tmp_path: Path) -> None:
+    """Invoke-LanPeerProbe returns false for a failing probe command and true for a succeeding one."""
     if not str(POWERSHELL).lower().endswith(".exe") and not shutil.which("cmd"):
         pytest.skip("needs Windows PowerShell")
     # Topo-WriteProbeOutput calls Topo-MaskSecrets, so the harness needs it too.

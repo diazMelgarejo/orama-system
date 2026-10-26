@@ -1,4 +1,5 @@
 ﻿#Requires -Version 5.1
+
 <#
 .SYNOPSIS
     install.ps1 — One-time Windows setup for orama-system  v1.1.1.0
@@ -15,6 +16,14 @@
     Execution policy: run as:
         Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
     or use the one-liner above.
+
+.PARAMETER WriteOpenClawConfig
+    Write the legacy OpenClaw configuration stub under the user profile. Off by
+    default: Windows hosts use Hermes as the sole orchestrator.
+
+.PARAMETER SkipHermesHarness
+    Skip the Hermes profile and thin-wrapper install (edge cases, or CI runs
+    without a Hermes home).
 #>
 
 [CmdletBinding()]
@@ -32,10 +41,46 @@ $ScriptDir = Split-Path -Parent $PSCommandPath
 $RepoRoot  = (Resolve-Path (Join-Path $ScriptDir '..\..')).Path
 $env:ORAMA_SYSTEM_PATH = $RepoRoot
 
-function _Step { param([string]$Msg) Write-Host "  [+] $Msg" -ForegroundColor Cyan }
-function _OK   { param([string]$Msg) Write-Host "  ✓  $Msg" -ForegroundColor Green }
-function _Warn { param([string]$Msg) Write-Host "  !  $Msg" -ForegroundColor Yellow }
-function _Err  { param([string]$Msg) Write-Host "  ✗  $Msg" -ForegroundColor Red; exit 1 }
+function _Step {
+    <#
+    .SYNOPSIS
+    Print a cyan progress line announcing the step that is about to run.
+    .PARAMETER Msg
+    Text of the step.
+    #>
+    param([string]$Msg)
+    Write-Host "  [+] $Msg" -ForegroundColor Cyan
+}
+function _OK {
+    <#
+    .SYNOPSIS
+    Print a green success line for a step that completed.
+    .PARAMETER Msg
+    Text of the success message.
+    #>
+    param([string]$Msg)
+    Write-Host "  ✓  $Msg" -ForegroundColor Green
+}
+function _Warn {
+    <#
+    .SYNOPSIS
+    Print a yellow warning line; the install continues afterwards.
+    .PARAMETER Msg
+    Text of the warning.
+    #>
+    param([string]$Msg)
+    Write-Host "  !  $Msg" -ForegroundColor Yellow
+}
+function _Err {
+    <#
+    .SYNOPSIS
+    Print a red error line and terminate the installer with exit code 1.
+    .PARAMETER Msg
+    Text of the error.
+    #>
+    param([string]$Msg)
+    Write-Host "  ✗  $Msg" -ForegroundColor Red; exit 1
+}
 
 Write-Host ''
 Write-Host '═══════════════════════════════════════════════════════════' -ForegroundColor DarkCyan

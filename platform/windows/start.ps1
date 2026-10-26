@@ -1,22 +1,32 @@
 ﻿#Requires -Version 5.1
+
 <#
 .SYNOPSIS
     start.ps1 — orama-system Windows counterpart to start.sh  v1.1.0.0
 
 .DESCRIPTION
-    Starts the three orama services on a Windows host that runs LM Studio as the
-    GPU backend.  This script is the Windows-native equivalent of start.sh and
-    covers every CLI mode that start.sh exposes:
+    Starts the orama services on a Windows host that runs LM Studio as the GPU
+    backend: Perpetua-Tools (PT), the orama API and the Portal dashboard, plus a
+    fourth service, the Portal TLS front end, when PORTAL_TLS_ENABLED is on.
+    This script is the Windows-native equivalent of start.sh and covers the CLI
+    modes that start.sh exposes. Flags are read from the raw arguments, so use the
+    --kebab-case form shown here (the -PascalCase aliases also work):
 
       .\start.ps1             — start all services, open browser
       .\start.ps1 --no-open   — start all, skip browser
-      .\start.ps1 --stop      — kill all three services
+      .\start.ps1 --stop      — stop the services (PT, orama, Portal, Portal TLS)
+                               and the LM Link watcher, using the PID files
       .\start.ps1 --status    — show port-listener status
       .\start.ps1 --list      — show resolved read-only configuration
+                               (add --include-network to reveal non-loopback hosts)
       .\start.ps1 --validate  — validate launcher argument handling without setup
+      .\start.ps1 --fleet-status[=text|json] — show fleet topology and exit
       .\start.ps1 --discover  — re-run LAN path discovery, rewrite .paths.ps1, exit
       .\start.ps1 --hardware-policy — validate model↔hardware affinity and exit
       .\start.ps1 --lan-peer    — set LAN bind env + run peer probe after start
+      .\start.ps1 --restart-portal — restart only the Portal and its TLS proxy;
+                               PT and orama keep running
+      .\start.ps1 --help      — print the option summary
 
 .NOTES
     Windows-only requirements live in this /windows folder.
@@ -26,6 +36,7 @@
       8000  Perpetua-Tools  (PT  — Layer 2)
       8001  orama API       (US  — Layer 3 reasoning engine)
       8002  Portal dashboard
+      8443  Portal TLS front end (only with PORTAL_TLS_ENABLED; PORTAL_TLS_PORT)
 
     Service processes are launched detached (scripts\lib\spawn_detached.py), so
     they keep running after this script exits. stdout/stderr are appended to
@@ -53,11 +64,16 @@ $FleetStatusFormat = 'text'
 $Discover = $false
 $HardwarePolicy = $false
 $LanPeer = $false
+$RestartPortal = $false
 $ValidateOnly = $false
 $ListOnly = $false
 $ListIncludeNetwork = $false
 
 function Show-Usage {
+    <#
+    .SYNOPSIS
+    Print the launcher option summary (--help) to the host.
+    #>
     @"
 Usage: .\platform\windows\start.ps1 [options]
 
@@ -74,11 +90,22 @@ Options:
   --validate             Validate launcher arguments without environment, bootstrap,
                          discovery, or service startup.
   --lan-peer             LAN-bind services and probe the peer after startup.
+  --restart-portal       Restart only Portal and its TLS proxy; PT and orama keep running.
   --help, -h             Show this help.
 "@ | Write-Host
 }
 
 function Get-ListPathsValue {
+    <#
+    .SYNOPSIS
+    Read one quoted variable assignment from .paths.ps1 without executing the file.
+    .PARAMETER PathsFile
+    Path to .paths.ps1.
+    .PARAMETER VariableName
+    Variable name to look up, without the dollar sign.
+    .OUTPUTS
+    The quoted value, or null when the file or the assignment is absent.
+    #>
     param([string]$PathsFile, [string]$VariableName)
     if (-not (Test-Path $PathsFile)) { return $null }
     $pattern = '^\s*\${0}\s*=\s*[''"](?<value>.*?)[''"]\s*$' -f [regex]::Escape($VariableName)
@@ -89,6 +116,12 @@ function Get-ListPathsValue {
 }
 
 function Get-ListConfigValue {
+    <#
+    .SYNOPSIS
+    Resolve a --list setting from .paths.ps1, then the process environment, then a default.
+    .OUTPUTS
+    A hashtable with Value and Source (.paths.ps1, environment:NAME, or default).
+    #>
     param([string]$PathsFile, [string]$PathsVariable, [string[]]$EnvironmentNames, [string]$DefaultValue)
     $fromPaths = Get-ListPathsValue -PathsFile $PathsFile -VariableName $PathsVariable
     if ($fromPaths) { return @{ Value = $fromPaths; Source = '.paths.ps1' } }
@@ -100,6 +133,12 @@ function Get-ListConfigValue {
 }
 
 function Get-ListResolvedHost {
+    <#
+    .SYNOPSIS
+    Resolve the bind host shown by --list from the LAN switch and host variables, without side effects.
+    .OUTPUTS
+    The wildcard address when the LAN switch is truthy, else the first non-empty host variable, else the default.
+    #>
     param([string]$LanEnvironment, [string[]]$HostEnvironments, [string]$DefaultHost)
     $lan = [Environment]::GetEnvironmentVariable($LanEnvironment, 'Process')
     if ($lan -and $lan.Trim().ToLower() -in @('1', 'true', 'yes')) { return '0.0.0.0' }
@@ -111,6 +150,10 @@ function Get-ListResolvedHost {
 }
 
 function Get-ListEnvironmentOrDefault {
+    <#
+    .SYNOPSIS
+    Return a process environment variable for --list, or the default when it is unset or empty.
+    #>
     param([string]$Name, [string]$DefaultValue)
     $value = [Environment]::GetEnvironmentVariable($Name, 'Process')
     if ($value) { return $value }
@@ -118,6 +161,12 @@ function Get-ListEnvironmentOrDefault {
 }
 
 function Format-ListHost {
+    <#
+    .SYNOPSIS
+    Format a resolved host for --list output, redacting non-loopback hosts unless network details were requested.
+    .PARAMETER IncludeNetwork
+    True when --include-network was passed.
+    #>
     param([string]$ResolvedHost, [bool]$IncludeNetwork)
     if ($ResolvedHost -in @('localhost', '127.0.0.1', '::1')) { return "$ResolvedHost (loopback)" }
     if ($ResolvedHost -eq '0.0.0.0' -and $IncludeNetwork) { return '0.0.0.0 (all interfaces)' }
@@ -126,6 +175,12 @@ function Format-ListHost {
 }
 
 function Show-ReadOnlyConfiguration {
+    <#
+    .SYNOPSIS
+    Print the resolved launcher configuration (--list) without loading environment, bootstrapping, probing or starting anything.
+    .PARAMETER IncludeNetwork
+    Reveal non-loopback hosts instead of redacting them.
+    #>
     param([bool]$IncludeNetwork)
     $scriptDir = Split-Path -Parent $PSCommandPath
     $repoRoot = (Resolve-Path (Join-Path $scriptDir '..\..')).Path
@@ -170,6 +225,7 @@ foreach ($a in $args) {
         '^--hardware-policy$|^-HardwarePolicy$' { $HardwarePolicy = $true }
         '^--validate$|^-Validate$'     { $ValidateOnly = $true }
         '^--lan-peer$|^-LanPeer$'      { $LanPeer = $true }
+        '^--restart-portal$|^-RestartPortal$' { $RestartPortal = $true }
         '^--help$|^-h$|^-Help$'        { Show-Usage; exit 0 }
         default { throw "Unknown argument: $a. Supported: --no-open --stop --status --fleet-status[=text|json] --discover --hardware-policy --validate --lan-peer --help" }
     }
@@ -178,11 +234,14 @@ foreach ($a in $args) {
 if ($ListIncludeNetwork -and -not $ListOnly) {
     throw '--include-network is only valid with --list.'
 }
-if ($ListOnly -and ($NoOpen -or $Stop -or $Status -or $FleetStatus -or $Discover -or $HardwarePolicy -or $LanPeer)) {
+if ($ListOnly -and ($NoOpen -or $Stop -or $Status -or $FleetStatus -or $Discover -or $HardwarePolicy -or $LanPeer -or $RestartPortal)) {
     throw '--list cannot be combined with lifecycle or probe modes.'
 }
-if ($ValidateOnly -and ($ListOnly -or $ListIncludeNetwork -or $NoOpen -or $Stop -or $Status -or $FleetStatus -or $Discover -or $HardwarePolicy -or $LanPeer)) {
+if ($ValidateOnly -and ($ListOnly -or $ListIncludeNetwork -or $NoOpen -or $Stop -or $Status -or $FleetStatus -or $Discover -or $HardwarePolicy -or $LanPeer -or $RestartPortal)) {
     throw '--validate cannot be combined with another launcher mode.'
+}
+if ($RestartPortal -and ($Stop -or $Status -or $FleetStatus -or $Discover -or $HardwarePolicy -or $LanPeer)) {
+    throw '--restart-portal cannot be combined with another lifecycle or probe mode.'
 }
 
 if ($ValidateOnly) {
@@ -242,6 +301,16 @@ if (Test-Path $Glm52EnvFile) {
 $LogStart   = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
 
 function _Log {
+    <#
+    .SYNOPSIS
+    Write a timestamped log line to the host and append it to .logs\startup-YYYYMMDD.log.
+    .PARAMETER Level
+    Severity label.
+    .PARAMETER Stage
+    Launcher stage tag.
+    .PARAMETER Message
+    Text to log.
+    #>
     param([string]$Level, [string]$Stage, [string]$Message)
     $ts      = (Get-Date).ToString('HH:mm:ss')
     $elapsed = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() - $LogStart
@@ -250,9 +319,24 @@ function _Log {
     $null    = New-Item -ItemType Directory -Force -Path $LogDir
     Add-Content -Path (Join-Path $LogDir "startup-$(Get-Date -Format yyyyMMdd).log") -Value $line
 }
-function _Info  { _Log 'INFO ' $args[0] $args[1] }
-function _Warn  { _Log 'WARN ' $args[0] $args[1] }
-function _Err   { _Log 'ERROR' $args[0] $args[1] }
+function _Info  {
+    <#
+    .SYNOPSIS
+    Log an INFO line; arguments are the stage and the message (see _Log).
+    #>
+    _Log 'INFO ' $args[0] $args[1] }
+function _Warn  {
+    <#
+    .SYNOPSIS
+    Log a WARN line; arguments are the stage and the message (see _Log).
+    #>
+    _Log 'WARN ' $args[0] $args[1] }
+function _Err   {
+    <#
+    .SYNOPSIS
+    Log an ERROR line; arguments are the stage and the message (see _Log).
+    #>
+    _Log 'ERROR' $args[0] $args[1] }
 
 # ── Bootstrap helpers (venv probe / pip under a safe error policy) ────────────
 # pip writes '[notice] new release available' to stderr; under
@@ -422,6 +506,12 @@ if (-not $ReadOnlyMode) {
 
 # ── Python detection ──────────────────────────────────────────────────────────
 function Get-BestPython {
+    <#
+    .SYNOPSIS
+    Pick a Python interpreter: the .venv under the directory when present, else python, python3 or py from PATH.
+    .OUTPUTS
+    The interpreter path. Throws when none is found.
+    #>
     param([string]$Dir)
     $venv = Join-Path $Dir '.venv\Scripts\python.exe'
     if (Test-Path $venv) { return $venv }
@@ -436,6 +526,13 @@ function Get-BestPython {
 
 # ── PT directory discovery ────────────────────────────────────────────────────
 function Find-PtDir {
+    <#
+    .SYNOPSIS
+    Locate the Perpetua-Tools checkout (one containing orchestrator\fastapi_app.py).
+    Checks the PT environment variables, OPENCLAW_HOME, a sibling perplexity-api checkout, then sibling directories of the repo.
+    .OUTPUTS
+    The directory path, or null when none is found.
+    #>
     foreach ($root in @(
         $env:PERPETUA_TOOLS_PATH,
         $env:PT_HOME,
@@ -517,6 +614,14 @@ if ($Discover -or (-not $ReadOnlyMode -and ($PathsNeedRewrite -or -not (Test-Pat
 }
 
 function Get-BindHost {
+    <#
+    .SYNOPSIS
+    Resolve the bind host for a service: wildcard when the LAN switch is truthy, else the host variable, else the default (loopback).
+    .PARAMETER LanEnv
+    Name of the LAN-bind switch variable.
+    .PARAMETER HostEnv
+    Name of the explicit host variable.
+    #>
     param([string]$LanEnv, [string]$HostEnv, [string]$Default = '127.0.0.1')
     $lan = [Environment]::GetEnvironmentVariable($LanEnv, 'Process')
     if ($lan -and $lan.Trim().ToLower() -in @('1', 'true', 'yes')) {
@@ -545,6 +650,11 @@ $UsHost     = Get-BindHost 'ORAMA_BIND_LAN' 'ORAMASYS_HOST'
 $PortalHost = Get-BindHost 'PORTAL_BIND_LAN' 'PORTAL_HOST'
 
 function Sync-ControlPlaneToken {
+    <#
+    .SYNOPSIS
+    Ensure ORAMA_CONTROL_PLANE_TOKEN is set for LAN use.
+    Keeps a real value already in the environment, else loads PT .state\control_plane_token, else generates a random token and saves it there.
+    #>
     if ($env:ORAMA_CONTROL_PLANE_TOKEN -and $env:ORAMA_CONTROL_PLANE_TOKEN -notmatch '^<') { return }
     if (-not $PtDir) { return }
     $tokenPath = Join-Path $PtDir '.state\control_plane_token'
@@ -567,6 +677,10 @@ function Sync-ControlPlaneToken {
 }
 
 function Test-LanBindConfigured {
+    <#
+    .SYNOPSIS
+    Return true when any of PORTAL_BIND_LAN, ORAMA_BIND_LAN or PT_BIND_LAN is set to 1, true or yes.
+    #>
     foreach ($name in @('PORTAL_BIND_LAN', 'ORAMA_BIND_LAN', 'PT_BIND_LAN')) {
         # Set-StrictMode -Version Latest throws on .Value against a $null
         # Get-Item result (e.g. a fresh install where none of these env vars
@@ -633,6 +747,12 @@ function Topo-WriteProbeOutput {
 }
 
 function Invoke-LanPeerProbe {
+    <#
+    .SYNOPSIS
+    Run probe_lan_peer.py --json against the LAN peer with output captured, masked and logged.
+    .OUTPUTS
+    True when the probe exits 0; false when it fails or the script is missing.
+    #>
     $probe = Join-Path $RepoRoot 'bin\orama-system\skills\hermes-harness\scripts\probe_lan_peer.py'
     if (-not (Test-Path $probe)) {
         _Warn 'lan-peer' "probe script missing: $probe"
@@ -663,6 +783,10 @@ function Invoke-LanPeerProbe {
 }
 
 function Invoke-LanPeerOutboxFlush {
+    <#
+    .SYNOPSIS
+    Flush queued LAN peer drops via lan_peer_assign.py flush-outbox; warns when drops remain pending.
+    #>
     $assign = Join-Path $RepoRoot 'bin\orama-system\skills\hermes-harness\scripts\lan_peer_assign.py'
     if (-not (Test-Path $assign)) {
         _Warn 'lan-peer' "assignment script missing: $assign"
@@ -687,6 +811,14 @@ function Invoke-LanPeerOutboxFlush {
 }
 
 function Invoke-LanPeerSession {
+    <#
+    .SYNOPSIS
+    Record or query LAN peer session state through lan_peer_session.py.
+    .PARAMETER LanArgs
+    Sub-command and arguments passed to the script.
+    .OUTPUTS
+    True when the script exits 0 or is missing, false otherwise.
+    #>
     param([string[]]$LanArgs)
     $session = Join-Path $RepoRoot 'bin\orama-system\skills\hermes-harness\scripts\lan_peer_session.py'
     if (-not (Test-Path $session)) {
@@ -699,6 +831,10 @@ function Invoke-LanPeerSession {
 
 # ── Hardware policy check ─────────────────────────────────────────────────────
 function Invoke-HardwarePolicyCheck {
+    <#
+    .SYNOPSIS
+    List and validate the model-to-hardware affinity policy using PT hardware_policy_cli.py; throws on a non-zero exit.
+    #>
     $cli = if ($PtDir) { Join-Path $PtDir 'scripts\hardware_policy_cli.py' } else { $null }
     if ($cli -and (Test-Path $cli)) {
         Write-Host "`n=== Hardware model affinity policy ==="
@@ -723,6 +859,12 @@ if ($HardwarePolicy) {
 
 # ── Port helpers ──────────────────────────────────────────────────────────────
 function Get-PidOnPort {
+    <#
+    .SYNOPSIS
+    Find the PID of the process LISTENING on a TCP port, parsed from netstat.
+    .OUTPUTS
+    The PID, or null when nothing listens.
+    #>
     param([int]$Port)
     try {
         # netstat -ano | findstr :PORT
@@ -739,6 +881,10 @@ function Get-PidOnPort {
 # True when every LISTENING socket on the port is bound to a loopback address.
 # No listener, or an unparsable address, counts as not loopback-only (fail closed).
 function Test-PortLoopbackOnly {
+    <#
+    .SYNOPSIS
+    Return true only when the port has at least one listener and every listener is bound to a loopback address (fails closed otherwise).
+    #>
     param([int]$Port)
     $seen = 0
     try {
@@ -758,6 +904,12 @@ function Test-PortLoopbackOnly {
 
 # Life-* helpers: service lifecycle (detached launch, readiness, stop). PS 5.1 safe.
 function Life-GetProc {
+    <#
+    .SYNOPSIS
+    Get a process by id.
+    .OUTPUTS
+    The process object, or null when the id is not positive or the process is gone.
+    #>
     param([int]$ProcId)
     if ($ProcId -le 0) { return $null }
     try { return (Get-Process -Id $ProcId -ErrorAction Stop) } catch { return $null }
@@ -766,6 +918,11 @@ function Life-GetProc {
 # True when ProcId is alive, its name matches NamePattern and (optionally) its
 # command line matches CmdPattern. Never matches on process name alone for kills.
 function Life-PidMatches {
+    <#
+    .SYNOPSIS
+    Return true when the process is alive, its name matches NamePattern and, if given, its command line matches CmdPattern.
+    Used before any kill so processes are never matched by name alone.
+    #>
     param([int]$ProcId, [string]$NamePattern, [string]$CmdPattern = '')
     $p = Life-GetProc $ProcId
     if (-not $p) { return $false }
@@ -781,11 +938,21 @@ function Life-PidMatches {
 }
 
 function Life-IsPythonPid {
+    <#
+    .SYNOPSIS
+    Return true when the process id belongs to a live python or pythonw process.
+    #>
     param([int]$ProcId)
     return (Life-PidMatches $ProcId '^pythonw?[0-9.]*$')
 }
 
 function Life-ReadPid {
+    <#
+    .SYNOPSIS
+    Read a PID file.
+    .OUTPUTS
+    The integer PID, or 0 when the file is missing or not a number.
+    #>
     param([string]$PidFile)
     if (-not (Test-Path $PidFile)) { return 0 }
     try {
@@ -799,12 +966,20 @@ function Life-ReadPid {
 # Probe host: the specific bind host, else IPv4 loopback by address (the name
 # localhost costs ~2 s per attempt on IPv6-first hosts).
 function Life-ProbeHost {
+    <#
+    .SYNOPSIS
+    Choose the host used for readiness probes: a specific bind host, else the IPv4 loopback address (not the name localhost, which is slow on IPv6-first hosts).
+    #>
     param([string]$BindHost = '')
     if ($BindHost -and $BindHost -ne '0.0.0.0' -and $BindHost -ne '::') { return $BindHost }
     return [System.Net.IPAddress]::Loopback.IPAddressToString
 }
 
 function Life-ShowLogTail {
+    <#
+    .SYNOPSIS
+    Print the last lines of a service log to the host, or note that the log does not exist.
+    #>
     param([string]$LogFile, [int]$Lines = 30)
     if (Test-Path $LogFile) {
         Write-Host "  --- last $Lines lines of $LogFile ---"
@@ -818,6 +993,17 @@ function Life-ShowLogTail {
 }
 
 function Wait-ForPort {
+    <#
+    .SYNOPSIS
+    Wait until a service accepts TCP connections on its port.
+    Fails early when the service process exits, and fails on timeout; either way the log tail is shown.
+    .PARAMETER ServicePid
+    Optional PID of the service, used to detect an early exit.
+    .PARAMETER BindHost
+    Bind host of the service, used to pick the probe address.
+    .OUTPUTS
+    True when the port is up, false otherwise.
+    #>
     param(
         [int]$Port,
         [string]$Label,
@@ -856,6 +1042,10 @@ function Wait-ForPort {
 }
 
 function Open-Browser {
+    <#
+    .SYNOPSIS
+    Open a URL in the default browser; a failure is logged as a warning only.
+    #>
     param([string]$Url)
     try { Start-Process $Url } catch { _Warn 'browser' "Could not open browser: $_" }
 }
@@ -911,6 +1101,13 @@ if ($Stop) {
 $script:FleetStatusExitCode = 1
 
 function Show-FleetStatus {
+    <#
+    .SYNOPSIS
+    Print the fleet topology via orama_system.display_fleet_status as text or JSON.
+    Sets script:FleetStatusExitCode from the Python exit code (it stays 1 when the source is missing or an error occurs).
+    .PARAMETER Format
+    text or json.
+    #>
     param([string]$Format = 'text')
     try {
         $py = Get-BestPython $RepoRoot
@@ -1048,6 +1245,10 @@ function Test-LmStudioUp([string]$ip) {
 }
 
 function Invoke-DiscoverEndpoints {
+    <#
+    .SYNOPSIS
+    Run discover.py --force to refresh LAN topology state; a missing script or a failure is only a warning.
+    #>
     $scripts = @(
         (Join-Path $RepoRoot 'scripts\discover.py'),
         (Join-Path $HOME '.openclaw\scripts\discover.py')
@@ -1076,6 +1277,13 @@ function Invoke-DiscoverEndpoints {
 }
 
 function Resolve-MacLanIp {
+    <#
+    .SYNOPSIS
+    Resolve the Mac peer LAN address from MAC_IP or the Mac endpoint variables, then last_discovery.json, then openclaw.json.
+    Loopback and localhost values are ignored and there is no hard-coded fallback.
+    .OUTPUTS
+    A hashtable with Ip (or the word unresolved) and Source.
+    #>
     # Priority: operator env → fresh last_discovery.json → openclaw.json (legacy)
     # Never use gateway .110 heuristic or hardcoded fallbacks.
     $macIp = $null
@@ -1306,6 +1514,13 @@ $LifeSpawnScript = Join-Path $RepoRoot 'scripts\lib\spawn_detached.py'
 
 # Returns the child PID (int), or 0 when the launcher failed.
 function Life-Spawn {
+    <#
+    .SYNOPSIS
+    Start a command detached through scripts\lib\spawn_detached.py, which logs to LogFile and writes PidFile.
+    EnvExtra entries are passed as --env arguments.
+    .OUTPUTS
+    The child PID, or 0 when the launcher failed.
+    #>
     param(
         [string]$LogFile,
         [string]$PidFile,
@@ -1337,6 +1552,13 @@ function Life-Spawn {
 }
 
 function Start-OramaService {
+    <#
+    .SYNOPSIS
+    Start one service unless its port is already served.
+    Reuses a python listener, refuses to start over a non-python listener, rotates the previous log to .prev, then spawns detached.
+    .OUTPUTS
+    An object with Name, Port, Pid, Started and Failed.
+    #>
     param(
         [string]$Name,
         [int]$Port,
@@ -1375,6 +1597,12 @@ function Start-OramaService {
 
 # Wait for a started service and return its summary row.
 function Life-Settle {
+    <#
+    .SYNOPSIS
+    Wait for a service returned by Start-OramaService and build its summary row.
+    .OUTPUTS
+    An object with Name, Port, State (UP or FAILED) and Detail.
+    #>
     param($Svc, [string]$BindHost)
     if ($Svc.Failed) {
         return [pscustomobject]@{ Name = $Svc.Name; Port = $Svc.Port; State = 'FAILED'; Detail = 'could not start' }
@@ -1389,15 +1617,45 @@ function Life-Settle {
     return [pscustomobject]@{ Name = $Svc.Name; Port = $Svc.Port; State = 'FAILED'; Detail = "not listening (PID $($Svc.Pid))" }
 }
 
-# Ensure partner CLI paths are present for this session (Hermes, Codex, AGY, cursor-agent).
+# Ensure partner CLI paths are present in this process without requiring User PATH registry access.
 # Placed after all read-only/lifecycle handlers so --stop, --status, --list, etc.
 # do not mutate PATH or leak script-scope variables.
 if (Test-Path "$RepoRoot\platform\windows\ensure-partner-cli-paths.ps1") {
-    & "$RepoRoot\platform\windows\ensure-partner-cli-paths.ps1"
+    & "$RepoRoot\platform\windows\ensure-partner-cli-paths.ps1" -SessionOnly
+}
+
+# Restart only owned Portal processes; never disturb PT or orama.
+if ($RestartPortal) {
+    Write-Host 'Restarting Portal (PT and orama keep running)...'
+    foreach ($service in @(
+        @{ Name = 'portal'; Pattern = 'uvicorn' },
+        @{ Name = 'portal_tls'; Pattern = 'portal_tls_proxy' }
+    )) {
+        $pidFile = Join-Path $LogDir ($service.Name + '.pid')
+        $recorded = Life-ReadPid $pidFile
+        if ($recorded -gt 0 -and (Life-PidMatches $recorded '^pythonw?[0-9.]*$' $service.Pattern)) {
+            & taskkill.exe /PID $recorded /T /F 2>$null | Out-Null
+            Write-Host "  stopped $($service.Name) PID $recorded"
+        } elseif ($recorded -gt 0) {
+            Write-Host "  $($service.Name) PID record is stale or mismatched; process not killed"
+        }
+        if (Test-Path $pidFile) { Remove-Item -LiteralPath $pidFile -Force -ErrorAction SilentlyContinue }
+    }
+    foreach ($restartPort in @($PortalPort, $PortalTlsPort)) {
+        $deadline = (Get-Date).AddSeconds(10)
+        while ((Get-Date) -lt $deadline -and (Get-PidOnPort $restartPort)) {
+            Start-Sleep -Milliseconds 250
+        }
+        if (Get-PidOnPort $restartPort) {
+            Write-Host "  port $restartPort remains occupied; normal startup will report its state"
+        }
+    }
 }
 
 # ── 1. Perpetua-Tools ─────────────────────────────────────────────────────────
 $LifeResults = @()
+$TlsSelfCheckLines = @()
+$TlsSelfCheckNotice = ''
 if ($PtDir -and (Test-Path (Join-Path $PtDir 'orchestrator\fastapi_app.py'))) {
     $svc = Start-OramaService -Name 'PT' -Port $PtPort -WorkDir $PtDir `
         -Cmd @($PtPython, '-m', 'uvicorn', 'orchestrator.fastapi_app:app',
@@ -1460,6 +1718,34 @@ if ($PortalTlsEnabled -and $PortalLoopbackOk) {
             -EnvExtra @{ PYTHONPATH = "$PtDir\src;$PtDir" }
         $tlsRow = Life-Settle $svc $PortalTlsListenHost
         if ($tlsRow.State -eq 'UP' -and -not $svc.Started) { $PortalTlsReused = $true }
+        if ($tlsRow.State -eq 'UP') {
+            $prevEapCheck = $ErrorActionPreference
+            $prevPyPathCheck = $env:PYTHONPATH
+            $ErrorActionPreference = 'Continue'
+            Push-Location $PtDir
+            try {
+                $env:PYTHONPATH = "$PtDir\src;$PtDir"
+                $TlsSelfCheckLines = @(& $PtPython -m orchestrator.portal_tls_proxy --self-check `
+                    --listen-port $PortalTlsPort.ToString() --upstream-port $PortalPort.ToString() 2>&1 |
+                    ForEach-Object { "$_" })
+                $selfCheckCode = $LASTEXITCODE
+            } catch {
+                $TlsSelfCheckLines = @("self-check could not run: $($_.Exception.Message)")
+                $selfCheckCode = 1
+            } finally {
+                Pop-Location
+                $env:PYTHONPATH = $prevPyPathCheck
+                $ErrorActionPreference = $prevEapCheck
+            }
+            $olderProxy = ($selfCheckCode -eq 2 -and @($TlsSelfCheckLines | Where-Object { $_ -match 'unrecognized arguments' }).Count -gt 0)
+            if ($olderProxy) {
+                $TlsSelfCheckNotice = 'TLS self-check unavailable; update Perpetua-Tools before treating this endpoint as verified'
+            } elseif ($selfCheckCode -ne 0) {
+                $failureLine = @($TlsSelfCheckLines | Where-Object { $_ -match '^check_\w+=FAIL' } | Select-Object -First 1)
+                $detail = if ($failureLine.Count) { "TLS self-check failed: $($failureLine[0])" } else { "TLS self-check failed (exit $selfCheckCode)" }
+                $tlsRow = [pscustomobject]@{ Name = 'Portal TLS'; Port = $PortalTlsPort; State = 'FAILED'; Detail = $detail }
+            }
+        }
         $LifeResults += $tlsRow
     }
 }
@@ -1470,6 +1756,10 @@ Write-Host '── service summary ───────────────
 foreach ($r in $LifeResults) {
     Write-Host ('  {0,-10} port {1,-6} {2,-8} {3}' -f $r.Name, $r.Port, $r.State, $r.Detail)
 }
+foreach ($checkLine in $TlsSelfCheckLines) {
+    if ($checkLine -match '^(check_\w+|ca_sha256_file|self_check)=') { Write-Host "  $checkLine" }
+}
+if ($TlsSelfCheckNotice) { Write-Host "  WARNING: $TlsSelfCheckNotice" -ForegroundColor Yellow }
 $LifeFailed = @($LifeResults | Where-Object { $_.State -eq 'FAILED' })
 if ($LifeFailed.Count -gt 0) {
     Write-Host ("  {0} core service(s) failed: {1}" -f $LifeFailed.Count, (($LifeFailed | ForEach-Object { $_.Name }) -join ', '))

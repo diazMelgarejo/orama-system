@@ -1,4 +1,5 @@
 #Requires -Version 5.1
+
 <#
 .SYNOPSIS
     Idempotently prepare Windows partner CLIs for the current session.
@@ -6,7 +7,9 @@
 .DESCRIPTION
     Windows partner lanes (Hermes, Codex, AGY, cursor-agent, ai-cli-mcp) must
     resolve from a normal start.ps1 session without manual PATH or package
-    repair. Safe to re-run. ai-cli-mcp package/runtime readiness delegates to
+    repair. -SessionOnly updates only the current process for launcher use;
+    the default mode persists missing entries to User PATH. Safe to re-run.
+    ai-cli-mcp package/runtime readiness delegates to
     the cross-platform scripts/ensure_ai_cli_mcp.py source of truth; provider
     login and terms acceptance remain explicit operator actions.
 
@@ -23,32 +26,61 @@
 
 [CmdletBinding()]
 param(
-    [switch]$WhatIf
+    [switch]$WhatIf,
+    [switch]$SessionOnly
 )
 
 $ErrorActionPreference = 'Stop'
 
 function Add-UserPathEntry {
+    <#
+    .SYNOPSIS
+    Prepend an existing directory to the process PATH, and to the User PATH unless -SessionOnly is set.
+    Honors -WhatIf (reports without changing anything).
+    .PARAMETER Dir
+    Directory to add; ignored when it does not exist.
+    .OUTPUTS
+    True when something was (or would be) added, false when nothing changed.
+    #>
     param([string]$Dir)
     if (-not $Dir) { return $false }
     $resolved = $Dir
     try { $resolved = (Resolve-Path -LiteralPath $Dir -ErrorAction Stop).Path } catch { return $false }
     if (-not (Test-Path -LiteralPath $resolved)) { return $false }
 
-    $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-    $parts = @($userPath -split ';' | Where-Object { $_ -and $_.Trim() })
-    foreach ($p in $parts) {
-        if ($p.TrimEnd('\') -ieq $resolved.TrimEnd('\')) { return $false }
-    }
-    if ($WhatIf) {
-        Write-Host "  [whatif] would add to User PATH: $resolved"
+    $processParts = @($env:Path -split ';' | Where-Object { $_ -and $_.Trim() })
+    $inProcessPath = @($processParts | Where-Object { $_.TrimEnd('\') -ieq $resolved.TrimEnd('\') }).Count -gt 0
+    if ($SessionOnly) {
+        if ($inProcessPath) { return $false }
+        if ($WhatIf) {
+            Write-Host "  [whatif] would add to process PATH: $resolved"
+            return $true
+        }
+        $env:Path = (@($resolved) + $processParts) -join ';'
+        Write-Host "  [+] Process PATH: $resolved"
         return $true
     }
-    # Prepend so partner CLIs shadow stale Machine/npm shims (e.g. native Codex before LM Studio bin).
-    $newPath = ($resolved + ';' + ($parts -join ';')).TrimEnd(';')
-    [Environment]::SetEnvironmentVariable('Path', $newPath, 'User')
-    $env:Path = "$env:Path;$resolved"
-    Write-Host "  [+] User PATH: $resolved"
+
+    $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+    $parts = @($userPath -split ';' | Where-Object { $_ -and $_.Trim() })
+    $inUserPath = @($parts | Where-Object { $_.TrimEnd('\') -ieq $resolved.TrimEnd('\') }).Count -gt 0
+    if ($WhatIf) {
+        if ($inUserPath -and $inProcessPath) { return $false }
+        $scope = if ($inUserPath) { 'process' } else { 'User' }
+        Write-Host "  [whatif] would add to $scope PATH: $resolved"
+        return $true
+    }
+    if ($inProcessPath -and $inUserPath) { return $false }
+    if (-not $inProcessPath) {
+        $env:Path = (@($resolved) + $processParts) -join ';'
+        Write-Host "  [+] Process PATH: $resolved"
+    }
+    if (-not $inUserPath) {
+        # Prepend so partner CLIs shadow stale Machine/npm shims (e.g. native Codex before LM Studio bin).
+        $newPath = ($resolved + ';' + ($parts -join ';')).TrimEnd(';')
+        [Environment]::SetEnvironmentVariable('Path', $newPath, 'User')
+        Write-Host "  [+] User PATH: $resolved"
+    }
     return $true
 }
 
@@ -61,15 +93,23 @@ $candidates = @(
     (Join-Path $env:USERPROFILE '.lmstudio\bin')
 )
 
-Write-Host 'Ensuring partner CLI paths (User PATH)...'
+Write-Host $(if ($SessionOnly) { 'Ensuring partner CLI paths (process PATH only)...' } else { 'Ensuring partner CLI paths (User PATH)...' })
 $added = 0
 foreach ($c in $candidates) {
     if (Add-UserPathEntry -Dir $c) { $added++ }
 }
 if ($added -eq 0) {
-    Write-Host '  OK - all existing partner CLI paths already on User PATH'
+    $scope = if ($SessionOnly) { 'process PATH' } else { 'User PATH' }
+    Write-Host "  OK - all existing partner CLI paths already on $scope"
+} elseif ($WhatIf) {
+    $scope = if ($SessionOnly) { 'process PATH' } else { 'User PATH' }
+    Write-Host "  [whatif] would add $added path(s) to the $scope; nothing was changed."
 } else {
-    Write-Host "  OK - added $added path(s). Open a new terminal for full effect."
+    if ($SessionOnly) {
+        Write-Host "  OK - added $added path(s) to the current process."
+    } else {
+        Write-Host "  OK - added $added path(s). Open a new terminal for full effect."
+    }
 }
 
 # ai-cli-mcp is a partner execution lane, so start.ps1 reaches the same shared

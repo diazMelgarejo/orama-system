@@ -38,6 +38,7 @@ class PeerTrustError(OSError):
 
 
 def normalize_fingerprint(value: str) -> str:
+    """Return a SHA-256 fingerprint as 64 lowercase hex characters with separators stripped; raise ValueError when malformed."""
     fp = "".join(ch for ch in (value or "") if ch not in ": \t").lower()
     if len(fp) != 64 or any(c not in "0123456789abcdef" for c in fp):
         raise ValueError("fingerprint must be 64 hex chars (SHA-256)")
@@ -45,6 +46,7 @@ def normalize_fingerprint(value: str) -> str:
 
 
 def pinned_fingerprints() -> set[str]:
+    """Return the set of pinned fingerprints from the environment; raise PeerTrustError when any entry is invalid."""
     pins: set[str] = set()
     for part in (os.environ.get(PEER_PINS_ENV) or "").split(","):
         if part.strip():
@@ -56,14 +58,17 @@ def pinned_fingerprints() -> set[str]:
 
 
 def peer_ca_file() -> str:
+    """Return the configured peer CA bundle path, or an empty string when unset."""
     return (os.environ.get(PEER_CA_ENV) or "").strip()
 
 
 def cert_fingerprint(der: bytes) -> str:
+    """Return the SHA-256 hex fingerprint of a DER-encoded certificate."""
     return hashlib.sha256(der).hexdigest()
 
 
 def _ca_context(cafile: str) -> ssl.SSLContext:
+    """Build a verifying SSL context that trusts the given CA file; raise PeerTrustError when it cannot be loaded."""
     try:
         return ssl.create_default_context(cafile=cafile)
     except (OSError, ssl.SSLError) as exc:
@@ -71,6 +76,7 @@ def _ca_context(cafile: str) -> ssl.SSLContext:
 
 
 def _fetch_leaf_pem(host: str, port: int, timeout: float) -> str:
+    """Fetch the certificate a peer presents using a handshake only (no request data); raise PeerTrustError on failure."""
     # Handshake only; reads the presented certificate, sends no request data.
     try:
         return ssl.get_server_certificate((host, port), timeout=timeout)
@@ -79,6 +85,7 @@ def _fetch_leaf_pem(host: str, port: int, timeout: float) -> str:
 
 
 def _pinned_context(pem: str) -> ssl.SSLContext:
+    """Build a verifying TLS 1.2+ context that trusts only the given PEM leaf certificate (hostname still checked)."""
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     ctx.minimum_version = ssl.TLSVersion.TLSv1_2
     ctx.check_hostname = True
@@ -95,6 +102,7 @@ _cache_lock = threading.Lock()
 
 
 def context_for(host: str, port: int, timeout: float = 8.0) -> ssl.SSLContext:
+    """Return the SSL context for a peer, honouring pins first and then the CA file, otherwise the default verified context; raise PeerTrustError when trust cannot be established."""
     pins = pinned_fingerprints()
     cafile = peer_ca_file()
     key = (host, port, cafile, ",".join(sorted(pins)))
@@ -157,5 +165,6 @@ def websocket_kwargs(url: str, timeout: float = 8.0) -> dict[str, Any]:
 
 
 def clear_cache() -> None:
+    """Drop all cached SSL contexts (mainly for tests)."""
     with _cache_lock:
         _cache.clear()

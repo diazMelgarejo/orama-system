@@ -438,6 +438,7 @@ LMLINK_MODELS = ["qwen3.5-9b-mlx", "qwen3.5-27b-claude-4.6-opus-reasoning-distil
 
 
 def _lmlink_host(env=None, cache=None, scan_hits=None):
+    """Build a Windows-host harness whose Mac probe returns LM Link models that mirror a Windows id, with a policy listing that id as Windows-only."""
     D = _windows_host(
         env=env,
         probes={f"http://{MAC}:1234": LMLINK_MODELS},
@@ -451,6 +452,7 @@ def _lmlink_host(env=None, cache=None, scan_hits=None):
 
 
 def test_explicit_mac_ip_with_lm_link_models_is_still_the_mac():
+    """An explicit MAC_IP stays the Mac even when its model list carries Windows ids."""
     D = _lmlink_host(env={"MAC_IP": MAC})
     result = D.discover_endpoints()
     assert result["mac"]["ip"] == MAC
@@ -458,6 +460,7 @@ def test_explicit_mac_ip_with_lm_link_models_is_still_the_mac():
 
 
 def test_scan_hit_with_both_evidence_is_the_mac():
+    """A scan hit with both Mac and Windows evidence is classified as the Mac, not a Windows peer."""
     # LM Link mirrors the peer's models: Mac evidence wins over Windows ids.
     D = _lmlink_host(scan_hits=[MAC])
     result = D.discover_endpoints()
@@ -466,6 +469,7 @@ def test_scan_hit_with_both_evidence_is_the_mac():
 
 
 def test_cached_mac_with_both_evidence_is_kept_and_probed_once(capsys):
+    """A cached Mac with both kinds of evidence is kept and its address is probed exactly once."""
     cache = {"endpoints": {"mac": {"ip": MAC}, "win": {"ip": "localhost"}},
              "models": {"mac": [], "win": []}}
     D = _lmlink_host(cache=cache)
@@ -476,6 +480,7 @@ def test_cached_mac_with_both_evidence_is_kept_and_probed_once(capsys):
 
 
 def test_cache_probed_address_is_excluded_from_scan():
+    """An address already probed from the cache is excluded from the scan and not probed again."""
     cache = {"endpoints": {"mac": {"ip": WIN2}, "win": {"ip": "localhost"}},
              "models": {"mac": [], "win": []}}
     D = _windows_host(probes={f"http://{WIN2}:1234": WIN_MODELS}, cache=cache, scan_hits=[WIN2])
@@ -487,11 +492,13 @@ def test_cache_probed_address_is_excluded_from_scan():
 
 
 def test_known_windows_address_with_mac_evidence_is_never_the_mac():
+    """An address configured in WIN_PEER_IPS is never reported as the Mac, even with Mac evidence."""
     D = _lmlink_host(env={"WIN_PEER_IPS": MAC}, scan_hits=[MAC])
     assert D.discover_endpoints()["mac"] is None
 
 
 def test_run_discovery_keeps_cached_lm_link_mac_when_mac_ip_unset(tmp_path):
+    """run_discovery keeps a cached LM Link Mac address when MAC_IP is unset."""
     last = {
         "endpoints": {"mac": {"ip": MAC, "reachable": True},
                       "win": {"ip": "localhost", "reachable": True}},
@@ -506,6 +513,7 @@ def test_run_discovery_keeps_cached_lm_link_mac_when_mac_ip_unset(tmp_path):
 
 
 def test_backfill_preserves_last_good_mac_not_known_windows(tmp_path):
+    """Backfill preserves the last good Mac endpoint when it is not a known Windows address."""
     last = {
         "endpoints": {"mac": {"ip": MAC, "reachable": True},
                       "win": {"ip": "localhost", "reachable": True}},
@@ -518,6 +526,7 @@ def test_backfill_preserves_last_good_mac_not_known_windows(tmp_path):
 
 
 def test_backfill_ignores_stale_mac_that_is_a_win_peer_this_run(tmp_path):
+    """Backfill drops a stale cached Mac that this run's probes identified as a Windows peer."""
     # WIN_PEER_IPS unset: Win-2 is only known as Windows from this run's probes.
     last = {
         "endpoints": {"mac": {"ip": WIN2, "reachable": True},
@@ -533,6 +542,7 @@ def test_backfill_ignores_stale_mac_that_is_a_win_peer_this_run(tmp_path):
 
 
 def test_recovery_tier_ignores_stale_mac_seen_as_win_peer_this_run(tmp_path):
+    """The recovery tier does not restore a stale Mac that this run saw as a Windows peer."""
     tier2 = {"mac": {"ip": WIN2, "models": WIN_MODELS}, "win": {"ip": "localhost", "models": ["m"]}}
     live = {"mac": None, "win": None, "win_peers": [{"ip": WIN2, "models": WIN_MODELS}]}
     D = _run_discovery_host(tmp_path, None, tier2=tier2, live=live, env={})
@@ -542,6 +552,7 @@ def test_recovery_tier_ignores_stale_mac_seen_as_win_peer_this_run(tmp_path):
 
 
 def test_patch_openclaw_clears_stale_localhost_lmstudio_mac_on_windows(tmp_path, monkeypatch):
+    """On Windows, patching clears a stale lmstudio-mac provider that points at localhost when no Mac is found."""
     D, oc = _patch_host(tmp_path, monkeypatch)
     cfg = json.loads(oc.read_text())
     cfg["models"]["providers"]["lmstudio-mac"]["baseUrl"] = "http://localhost:1234/v1"
@@ -551,6 +562,7 @@ def test_patch_openclaw_clears_stale_localhost_lmstudio_mac_on_windows(tmp_path,
 
 
 def test_patch_openclaw_clears_known_windows_lmstudio_mac_on_windows(tmp_path, monkeypatch):
+    """On Windows, patching clears an lmstudio-mac provider that points at this host's own address."""
     D, oc = _patch_host(tmp_path, monkeypatch)
     cfg = json.loads(oc.read_text())
     cfg["models"]["providers"]["lmstudio-mac"]["baseUrl"] = f"http://{LOCAL}:1234/v1"
@@ -560,6 +572,7 @@ def test_patch_openclaw_clears_known_windows_lmstudio_mac_on_windows(tmp_path, m
 
 
 def test_patch_openclaw_keeps_remote_lmstudio_mac_when_mac_down_on_windows(tmp_path, monkeypatch):
+    """On Windows, patching keeps a remote lmstudio-mac URL when the Mac is merely down."""
     D, oc = _patch_host(tmp_path, monkeypatch)
     D.patch_openclaw_json({"mac": None, "win": None})
     url = json.loads(oc.read_text())["models"]["providers"]["lmstudio-mac"]["baseUrl"]
@@ -567,6 +580,7 @@ def test_patch_openclaw_keeps_remote_lmstudio_mac_when_mac_down_on_windows(tmp_p
 
 
 def test_write_env_never_falls_back_to_localhost_mac_on_windows(tmp_path):
+    """On Windows, the env writer leaves the Mac endpoint empty rather than falling back to localhost."""
     D = _load_discover()
     D.RUNNING_ON_WINDOWS = True
     D._local_ipv4s = lambda: {LOCAL}
@@ -599,6 +613,7 @@ def _bind(D, name):
 
 
 def test_no_change_path_repairs_stale_localhost_lmstudio_mac(tmp_path, monkeypatch):
+    """The unchanged-hash path repairs a stale localhost Mac in the config and env file, and is idempotent afterwards."""
     oc = tmp_path / "openclaw.json"
     oc.write_text(json.dumps({
         "models": {"providers": {"lmstudio-mac": {"baseUrl": "http://localhost:1234/v1", "models": []}}},
@@ -633,6 +648,7 @@ def test_no_change_path_repairs_stale_localhost_lmstudio_mac(tmp_path, monkeypat
 
 
 def test_no_change_path_removes_localhost_lmstudio_mac_when_mac_down(tmp_path):
+    """The unchanged-hash path removes a localhost lmstudio-mac provider when no Mac is reachable."""
     oc = tmp_path / "openclaw.json"
     oc.write_text(json.dumps({
         "models": {"providers": {"lmstudio-mac": {"baseUrl": "http://localhost:1234/v1", "models": []}}},
@@ -660,6 +676,7 @@ WIN2_GGUF = ["qwen3-8b-q4_k_m.gguf"]
 
 
 def test_gguf_peer_with_ollama_bge_m3_sorting_before_mac_is_not_the_mac():
+    """A GGUF peer with bge-m3 that sorts before the Mac is a Windows peer and the scan still finds the real Mac."""
     # WIN2 sorts before MAC: weak (bge-m3) + Windows (gguf) evidence is a win_peer,
     # and the scan must keep going to find the real Mac.
     D = _windows_host(
@@ -676,6 +693,7 @@ def test_gguf_peer_with_ollama_bge_m3_sorting_before_mac_is_not_the_mac():
 
 
 def test_lm_link_mac_sorting_after_gguf_peer_is_still_discovered():
+    """Strong Mac evidence wins for an LM Link Mac that sorts after a GGUF Windows peer."""
     # Strong Mac evidence (mlx) wins even though the list mirrors Windows ids.
     D = _lmlink_host(scan_hits=[WIN2, MAC])
     base = D.probe_models
@@ -686,6 +704,7 @@ def test_lm_link_mac_sorting_after_gguf_peer_is_still_discovered():
 
 
 def test_strong_without_windows_evidence_beats_strong_with_it():
+    """Among strong Mac candidates, the one without Windows evidence is chosen."""
     D = _windows_host(
         probes={
             f"http://{WIN2}:1234": ["qwen3.5-9b-mlx", "x-q4.gguf"],
@@ -697,6 +716,7 @@ def test_strong_without_windows_evidence_beats_strong_with_it():
 
 
 def test_weak_only_mac_without_windows_evidence_is_accepted_when_nothing_better():
+    """A weak-evidence Mac with no Windows evidence is accepted when nothing better exists."""
     D = _windows_host(
         probes={f"http://{MAC}:1234": ["plain-model"], f"http://{MAC}:11434": ["bge-m3:latest"]},
         scan_hits=[MAC],
@@ -705,6 +725,7 @@ def test_weak_only_mac_without_windows_evidence_is_accepted_when_nothing_better(
 
 
 def test_cached_weak_mac_with_windows_evidence_is_not_accepted(tmp_path):
+    """A cached weak Mac that shows Windows evidence is rejected and reported as a Windows peer."""
     cache = {"endpoints": {"mac": {"ip": WIN2}, "win": {"ip": "localhost"}},
              "models": {"mac": [], "win": []}}
     D = _windows_host(
@@ -717,6 +738,7 @@ def test_cached_weak_mac_with_windows_evidence_is_not_accepted(tmp_path):
 
 
 def test_ties_are_broken_by_numeric_address_order():
+    """Equal-ranked Mac candidates are tie-broken by numeric address order."""
     other = "192.0.2.9"
     D = _windows_host(
         probes={f"http://{MAC}:1234": ["a-mlx"], f"http://{other}:1234": ["b-mlx"]},

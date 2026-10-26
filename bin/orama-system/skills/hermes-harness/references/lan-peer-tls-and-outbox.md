@@ -104,3 +104,17 @@ Never retarget the whole outbox at a new address. A changed address is not
 proof that the old items belong there. Resubmit named items to a destination
 you have approved, one decision at a time, and resolve items you can prove
 are already delivered or replaced.
+
+## Evidence flow: canary, receipt, then item by item
+
+Before resolving or resubmitting anything, gather evidence in this order:
+
+1. Canary: drop one small known file to the destination and confirm the
+   authenticated listing shows it.
+2. Receipt: on the receiving node run `lan_peer_assign.py receipt NAME [--json]`.
+   It is local and read-only (no network, no tokens). It prints `filename`,
+   `bytes`, `sha256` of the body exactly as stored, `sha256_lf` (the same
+   LF-normalised hash `outbox-status` uses, so a CRLF/LF difference is
+   explainable), `received_utc` and `host`. It exits 2 when the file is missing.
+3. Only then act on individual outbox items with `outbox-resolve` or
+   `outbox-resubmit`, one item at a time. Never a bulk retarget.
