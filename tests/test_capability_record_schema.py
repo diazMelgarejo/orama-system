@@ -39,6 +39,14 @@ def _record() -> dict[str, Any]:
     }
 
 
+def _pre_dispatch_refusal_section(text: str) -> str:
+    """Return the refusal contract without matching similar plan prose elsewhere."""
+    heading = "### Pre-dispatch refusal record and replay"
+    start = text.index(heading)
+    end = text.index("\n## 5. Release 2 frozen items", start)
+    return text[start:end]
+
+
 def _type_ok(value: Any, name: str) -> bool:
     """Return whether value matches the JSON Schema primitive type name."""
     if name == "null":
@@ -169,6 +177,23 @@ def test_unknown_schema_and_bad_timestamp_fail() -> None:
     record = _record()
     record["issued_at"] = "2026-10-26 00:00:00"
     assert _errors(record)
+
+
+@pytest.mark.unit
+def test_pre_dispatch_refusal_contract_preserves_e1_outcomes() -> None:
+    """A pre-dispatch refusal is durable without becoming a fourth E1 outcome."""
+    text = DOCS[1].read_text(encoding="utf-8")
+    contract = _pre_dispatch_refusal_section(text)
+
+    assert "`authorization_refused` **disposition**, not an outcome value" in contract
+    assert "`confirmed`, `failed`, and `unknown`" in contract
+    for field in ("`attempt_id`", "`disposition`", "`refusal_code`", "`receipt_ref`", "`recorded_at`"):
+        assert field in contract
+    assert "existing `BEGIN IMMEDIATE` authorization transaction" in contract
+    assert "It does not consume a use" in contract
+    assert "An exact replay first looks up `attempt_id`" in contract
+    assert '"<stored refusal_code>"' in contract
+    assert '"<stored opaque receipt_ref>"' in contract
 
 
 @pytest.mark.parametrize("doc", DOCS, ids=lambda p: p.name)
