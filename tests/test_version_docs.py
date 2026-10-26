@@ -70,15 +70,22 @@ def test_bridge_docs_reference_current_version():
 
 
 def test_agent_registry_version():
+    """Agent registry version."""
     import json
     for reg in [
         ROOT / "bin" / "config" / "agent_registry.json",
         ROOT / "bin" / "orama-system" / "config" / "agent_registry.json",
     ]:
         if reg.exists():
-            data = json.loads(reg.read_text())
+            text = reg.read_text(encoding="utf-8")
+            if not text.lstrip().startswith("{"):
+                # core.symlinks=false checkouts store a git symlink as a text
+                # file holding its relative target; follow it.
+                reg = (reg.parent / text.strip()).resolve()
+                text = reg.read_text(encoding="utf-8")
+            data = json.loads(text)
             assert data.get("version") == EXPECTED, (
-                f"{reg.relative_to(ROOT)} version={data.get('version')!r} != {EXPECTED!r}"
+                f"{reg} version={data.get('version')!r} != {EXPECTED!r}"
             )
 
 
