@@ -9,7 +9,6 @@ live file with "w" before a same-directory temp write has fully landed.
 """
 from __future__ import annotations
 
-import fcntl
 import json
 import os
 import re
@@ -17,6 +16,12 @@ import sys
 import tempfile
 from datetime import datetime, timezone
 from typing import Any, Mapping, Sequence
+
+try:  # POSIX
+    import fcntl
+except ImportError:  # Windows has no fcntl; msvcrt provides the same exclusive lock
+    fcntl = None
+    import msvcrt
 
 MAX_BACKUPS = 10
 # Metadata fields that live alongside a provider's "settings" dict (set by
@@ -133,14 +138,32 @@ def switch_provider(
     return "activated"
 
 
+def _lock_exclusive(fd: int) -> None:
+    """Block until this process holds an exclusive lock on ``fd`` (flock on POSIX, a one-byte msvcrt lock on Windows)."""
+    if fcntl is not None:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        return
+    os.lseek(fd, 0, os.SEEK_SET)
+    msvcrt.locking(fd, msvcrt.LK_LOCK, 1)
+
+
+def _unlock(fd: int) -> None:
+    """Release the lock taken by ``_lock_exclusive``."""
+    if fcntl is not None:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        return
+    os.lseek(fd, 0, os.SEEK_SET)
+    msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+
+
 def main(argv: Sequence[str]) -> None:
     providers_path, tmpl_path, profile, backup_dir, lock_path = argv[1:6]
     lock_fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
-    fcntl.flock(lock_fd, fcntl.LOCK_EX)
+    _lock_exclusive(lock_fd)
     try:
         status = switch_provider(providers_path, tmpl_path, profile, backup_dir)
     finally:
-        fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        _unlock(lock_fd)
         os.close(lock_fd)
 
     if status == "no-op":
