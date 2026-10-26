@@ -41,6 +41,7 @@ def _load_delegate_module() -> types.ModuleType:
 
 
 def test_hanging_worker_times_out_within_deadline() -> None:
+    """Check: hanging worker times out within deadline."""
     mod = _load_delegate_module()
     release = __import__("threading").Event()
 
@@ -77,6 +78,7 @@ def test_hanging_worker_times_out_within_deadline() -> None:
 
 
 def test_fast_workers_complete_ok() -> None:
+    """Check: fast workers complete ok."""
     mod = _load_delegate_module()
 
     def fast(_role: str, task: str) -> dict[str, str]:
@@ -101,6 +103,7 @@ def test_fast_workers_complete_ok() -> None:
 
 
 def test_partial_status_when_some_workers_fail() -> None:
+    """Check: partial status when some workers fail."""
     mod = _load_delegate_module()
 
     def mixed(_role: str, task: str) -> dict[str, str]:
@@ -190,6 +193,7 @@ def test_subprocess_worker_timeout_kills_grandchild_without_group_signal(
     mod = _load_delegate_module()
 
     def unavailable_group_signal(_pgid: int, _signal: int) -> None:
+        """Unavailable group signal."""
         raise ProcessLookupError
 
     monkeypatch.setattr(mod.os, "killpg", unavailable_group_signal)
@@ -388,6 +392,7 @@ def test_subprocess_workers_respect_concurrency_cap(tmp_path: Path) -> None:
     stop = threading.Event()
 
     def poll_concurrency() -> None:
+        """Poll concurrency."""
         nonlocal observed_max
         while not stop.is_set():
             count = len(list(marker_dir.glob("*.running")))
@@ -437,6 +442,7 @@ def test_worker_construction_failure_does_not_abort_the_batch(tmp_path: Path) ->
     call_count = {"n": 0}
 
     class _FlakyWorker(real_worker_cls):
+        """Tests and helpers: FlakyWorker."""
         def __init__(self, task: str, pt_root: str) -> None:
             """
             Simulate a worker construction failure for the second instance.
@@ -547,6 +553,7 @@ def test_launch_deadline_checked_between_worker_constructions(
     workers: list[Any] = []
 
     def worker(task: str, pt_root: str) -> Any:
+        """Worker."""
         starts.append((task, clock[0]))
         clock[0] += 0.6
         obj = types.SimpleNamespace(task=task, proc=Mock(), cleanup=Mock())
@@ -555,6 +562,7 @@ def test_launch_deadline_checked_between_worker_constructions(
         return obj
 
     def terminate(obj: Any) -> None:
+        """Terminate."""
         obj.proc.poll.return_value = -15
 
     monkeypatch.setattr(mod.time, "monotonic", lambda: clock[0])

@@ -39,6 +39,7 @@ def _run_spawn(
     env: dict[str, str] | None = None,
     timeout: int = 30,
 ) -> subprocess.CompletedProcess[str]:
+    """Run spawn."""
     merged = os.environ.copy()
     for key in (
         "PERPETUA_TOOLS_PATH",
@@ -61,6 +62,7 @@ def _run_spawn(
 
 @pytest.fixture
 def isolated_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, git_bin: str) -> Path:
+    """Isolated runtime."""
     runtime = tmp_path / "runtime"
     runtime.mkdir()
     cache = tmp_path / "cache"
@@ -122,6 +124,7 @@ def test_resolve_perp_harness_fails_without_pt_root(tmp_path: Path) -> None:
 
 
 def test_invalid_session_id_rejected(isolated_runtime: Path) -> None:
+    """Check: invalid session id rejected."""
     proc = _run_spawn(
         "status",
         env={
@@ -137,6 +140,7 @@ def test_invalid_session_id_rejected(isolated_runtime: Path) -> None:
 
 
 def test_status_exits_when_no_pid_file(isolated_runtime: Path) -> None:
+    """Check: status exits when no pid file."""
     proc = _run_spawn(
         "status",
         env={
@@ -151,6 +155,7 @@ def test_status_exits_when_no_pid_file(isolated_runtime: Path) -> None:
 
 
 def test_pid_dir_uses_numeric_uid(isolated_runtime: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Check: pid dir uses numeric uid."""
     monkeypatch.setenv("USER", "../../traversal")
     proc = _run_spawn(
         "status",
@@ -168,6 +173,7 @@ def test_pid_dir_uses_numeric_uid(isolated_runtime: Path, monkeypatch: pytest.Mo
 
 
 def test_lock_without_metadata_is_busy(isolated_runtime: Path) -> None:
+    """Check: lock without metadata is busy."""
     uid = _uid()
     pid_dir = isolated_runtime / "runtime" / f"hermes-spawn-{uid}"
     pid_dir.mkdir(parents=True)
@@ -189,6 +195,7 @@ def test_lock_without_metadata_is_busy(isolated_runtime: Path) -> None:
 
 @_NEEDS_POSIX_PROCESS_TABLE
 def test_start_writes_pid_and_status_ok(isolated_runtime: Path) -> None:
+    """Check: start writes pid and status ok."""
     env = {
         "PERPETUA_TOOLS_ROOT": str(isolated_runtime / "pt"),
         "HOME": str(isolated_runtime),
@@ -216,6 +223,7 @@ def test_start_writes_pid_and_status_ok(isolated_runtime: Path) -> None:
 @_NEEDS_POSIX_PROCESS_TABLE
 @pytest.mark.skipif(shutil.which("jq") is None, reason="json-response.sh requires jq, which is not installed")
 def test_start_json_includes_pid(isolated_runtime: Path) -> None:
+    """Check: start json includes pid."""
     import json
     import re
 
@@ -240,6 +248,7 @@ def test_start_json_includes_pid(isolated_runtime: Path) -> None:
 
 
 def test_stop_cleans_stale_pid_file(isolated_runtime: Path) -> None:
+    """Check: stop cleans stale pid file."""
     uid = _uid()
     pid_dir = isolated_runtime / "runtime" / f"hermes-spawn-{uid}"
     pid_dir.mkdir(parents=True)

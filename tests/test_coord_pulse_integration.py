@@ -38,11 +38,13 @@ except ImportError:
     from enum import Enum
 
     class FleetMode(str, Enum):
+        """Tests and helpers: FleetMode."""
         SOLO = "SOLO"
         PAIR = "PAIR"
         FLEET = "FLEET"
 
     def classify_fleet_mode(peers_reachable: int, cross_reachable: bool) -> FleetMode:
+        """Classify fleet mode."""
         if peers_reachable <= 0:
             return FleetMode.SOLO
         if peers_reachable == 1:
@@ -398,6 +400,7 @@ class TestErrorResilience:
         results_lock = threading.Lock()
 
         def run_pulse():
+            """Run pulse."""
             # Real file-locked read/update — fcntl.flock is the actual mechanism
             # a multi-worker coord_pulse server would need (this test previously
             # only had a comment claiming locking; the read/write were fully

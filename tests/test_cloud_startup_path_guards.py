@@ -18,6 +18,7 @@ pytestmark = pytest.mark.unit
 
 
 def _run_bash(script: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+    """Run bash."""
     full_env = os.environ.copy()
     # Isolate from cloud VM path pollution.
     for key in (
@@ -41,6 +42,7 @@ def _run_bash(script: str, env: dict[str, str] | None = None) -> subprocess.Comp
 
 
 def _init_repo(path: Path) -> None:
+    """Init repo."""
     path.mkdir(parents=True, exist_ok=True)
     subprocess.run(["git", "init", "-b", "main"], cwd=path, check=True, capture_output=True)
     subprocess.run(
@@ -58,6 +60,7 @@ def _init_repo(path: Path) -> None:
 
 
 def _commit_file(repo: Path, rel: str, content: str | bytes, msg: str = "init") -> None:
+    """Commit file."""
     dest = repo / rel
     dest.parent.mkdir(parents=True, exist_ok=True)
     if isinstance(content, bytes):
@@ -78,6 +81,7 @@ def _commit_file(repo: Path, rel: str, content: str | bytes, msg: str = "init") 
 
 
 def test_normalize_expands_literal_tilde(tmp_path: Path) -> None:
+    """Check: normalize expands literal tilde."""
     home = tmp_path / "home"
     home.mkdir()
     out = tmp_path / "out.txt"
@@ -115,6 +119,7 @@ def test_normalize_expands_literal_tilde(tmp_path: Path) -> None:
 
 
 def test_normalize_rejects_openclaw_home_inside_repo(tmp_path: Path) -> None:
+    """Check: normalize rejects openclaw home inside repo."""
     home = tmp_path / "home"
     home.mkdir()
     repo = tmp_path / "orama"
@@ -144,6 +149,7 @@ def test_normalize_rejects_openclaw_home_inside_repo(tmp_path: Path) -> None:
 
 
 def test_normalize_rederives_junk_sibling_paths(tmp_path: Path) -> None:
+    """Check: normalize rederives junk sibling paths."""
     home = tmp_path / "home"
     home.mkdir()
     repo = tmp_path / "orama-system"
@@ -188,6 +194,7 @@ def test_normalize_rederives_junk_sibling_paths(tmp_path: Path) -> None:
 
 
 def _seed_guard_sync_scripts(canon: Path, *extra: str) -> Path:
+    """Seed guard sync scripts."""
     names = (
         "guard-sync-manifest.sh",
         "check-guard-sync-divergence.sh",
@@ -201,6 +208,7 @@ def _seed_guard_sync_scripts(canon: Path, *extra: str) -> Path:
 
 
 def test_guard_sync_on_dirty_skip_exits_dirty_status(tmp_path: Path) -> None:
+    """Check: guard sync on dirty skip exits dirty status."""
     workspace = tmp_path / "ws"
     canon = workspace / "orama"
     sibling = workspace / "ac"
@@ -241,6 +249,7 @@ def test_guard_sync_on_dirty_skip_exits_dirty_status(tmp_path: Path) -> None:
 
 
 def test_sync_real_failure_is_not_treated_as_dirty_skip(tmp_path: Path) -> None:
+    """Check: sync real failure is not treated as dirty skip."""
     workspace = tmp_path / "ws"
     canon = workspace / "orama"
     sibling = workspace / "ac"
@@ -270,6 +279,7 @@ def test_sync_real_failure_is_not_treated_as_dirty_skip(tmp_path: Path) -> None:
 
 
 def test_apply_skips_nested_checkout(tmp_path: Path) -> None:
+    """Check: apply skips nested checkout."""
     workspace = tmp_path / "ws"
     outer = workspace / "orama"
     nested = outer / "junk" / "ac"
