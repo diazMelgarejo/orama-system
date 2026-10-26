@@ -18,6 +18,7 @@ HYGIENE_PATH = ROOT / "scripts" / "review" / "repo_hygiene.py"
 
 
 def load_repo_hygiene():
+    """Helper for load repo hygiene."""
     spec = importlib.util.spec_from_file_location("repo_hygiene_private_ranges", HYGIENE_PATH)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
@@ -26,6 +27,7 @@ def load_repo_hygiene():
 
 
 def _git(repo: Path, *args: str) -> None:
+    """Helper for git."""
     proc = subprocess.run(
         ["git", "-C", str(repo), *args],
         check=False,
@@ -38,6 +40,7 @@ def _git(repo: Path, *args: str) -> None:
 
 
 def _init_hygiene_repo(repo: Path) -> None:
+    """Helper for init hygiene repo."""
     repo.mkdir(parents=True, exist_ok=True)
     _git(repo, "init")
     _git(repo, "config", "user.name", "Codex")
@@ -133,6 +136,7 @@ def test_staged_prohibited_address_classes_match_dialer(tmp_path: Path) -> None:
 
 
 def test_public_and_adjacent_ranges_are_not_prohibited(tmp_path: Path) -> None:
+    """Verify public and adjacent ranges are not prohibited."""
     repo = tmp_path / "repo"
     _init_hygiene_repo(repo)
     note = repo / "docs" / "note.md"
@@ -197,10 +201,12 @@ def test_typechange_from_symlink_is_scanned(tmp_path: Path) -> None:
 
 
 def test_run_git_decodes_as_utf8(tmp_path: Path, monkeypatch) -> None:
+    """Verify run git decodes as utf8."""
     mod = load_repo_hygiene()
     captured: dict = {}
 
     def fake_run(cmd, **kwargs):
+        """Helper for fake run."""
         captured.update(kwargs)
         return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
@@ -259,6 +265,7 @@ def test_commit_range_scan_sees_committed_literal_when_index_is_clean(tmp_path: 
 
 
 def test_scanner_source_exception_allows_range_definitions(tmp_path: Path) -> None:
+    """Verify scanner source exception allows range definitions."""
     repo = tmp_path / "repo"
     _init_hygiene_repo(repo)
     path = repo / "scripts" / "review" / "repo_hygiene.py"

@@ -1,3 +1,4 @@
+"""Tests for bin/orama-system/scripts/install-mcp-stack.sh core readiness."""
 from __future__ import annotations
 
 import os
@@ -17,12 +18,14 @@ _NEEDS_POSIX_USERLAND = pytest.mark.skipif(
 
 
 def _cmd(path: Path, name: str, body: str) -> None:
+    """Helper for cmd."""
     target = path / name
     target.write_text("#!/usr/bin/env bash\nset -eu\n" + body, encoding="utf-8")
     target.chmod(0o755)
 
 
 def _env(tmp_path: Path) -> dict[str, str]:
+    """Helper for env."""
     bindir = tmp_path / "bin"
     bindir.mkdir()
     _cmd(bindir, "node", "echo v22.12.0")
@@ -50,6 +53,7 @@ def _env(tmp_path: Path) -> dict[str, str]:
 
 @_NEEDS_POSIX_USERLAND
 def test_core_verify_is_noninteractive_and_uses_shared_gate(tmp_path: Path) -> None:
+    """Verify core verify is noninteractive and uses shared gate."""
     result = subprocess.run(
         ["bash", str(SCRIPT), "--core-only", "--non-interactive", "--verify"],
         env=_env(tmp_path),
@@ -64,6 +68,7 @@ def test_core_verify_is_noninteractive_and_uses_shared_gate(tmp_path: Path) -> N
 
 @_NEEDS_POSIX_USERLAND
 def test_core_readiness_does_not_require_claude_client(tmp_path: Path) -> None:
+    """Verify core readiness does not require claude client."""
     result = subprocess.run(
         ["bash", str(SCRIPT), "--core-only", "--verify"],
         env=_env(tmp_path),
@@ -77,6 +82,7 @@ def test_core_readiness_does_not_require_claude_client(tmp_path: Path) -> None:
 @pytest.mark.integration
 @_NEEDS_POSIX_USERLAND
 def test_core_only_default_arguments_are_bash32_nounset_safe(tmp_path: Path) -> None:
+    """Verify core only default arguments are bash32 nounset safe."""
     result = subprocess.run(
         ["/bin/bash", "-u", str(SCRIPT), "--core-only"],
         env=_env(tmp_path),
@@ -89,6 +95,7 @@ def test_core_only_default_arguments_are_bash32_nounset_safe(tmp_path: Path) -> 
 
 
 def test_unknown_flag_rejected_before_any_install(tmp_path: Path) -> None:
+    """Verify unknown flag rejected before any install."""
     result = subprocess.run(
         ["bash", str(SCRIPT), "--wat"],
         env=_env(tmp_path),

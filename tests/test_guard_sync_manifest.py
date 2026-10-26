@@ -65,6 +65,7 @@ def _run_sync_binding_check(sync_script: Path) -> subprocess.CompletedProcess[st
 
 
 def _bash_array(name: str) -> list[str]:
+    """Helper for bash array."""
     result = subprocess.run(
         [
             "bash",
@@ -122,6 +123,7 @@ def test_parity_required_expands_in_bash() -> None:
 
 @pytest.mark.unit
 def test_sync_and_verify_source_manifest() -> None:
+    """Verify sync and verify source manifest."""
     pattern = r'^\s*(source|\.)\s+.*guard-sync-manifest\.sh'
     for script in (SYNC, VERIFY):
         body = script.read_text(encoding="utf-8")
@@ -150,6 +152,7 @@ def test_verify_rejects_comment_only_manifest_reference(tmp_path: Path) -> None:
 
 @pytest.mark.unit
 def test_verify_guard_parity_passes_in_canonical_repo() -> None:
+    """Verify verify guard parity passes in canonical repo."""
     result = subprocess.run(
         ["bash", str(VERIFY)],
         cwd=ROOT,
@@ -218,6 +221,7 @@ def test_markdown_lint_gate_passes_awkward_staged_paths_through_unquoted(
     stub.chmod(0o755)
 
     def git(*args: str) -> None:
+        """Helper for git."""
         subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True, env=env)
 
     git("init", "-q")

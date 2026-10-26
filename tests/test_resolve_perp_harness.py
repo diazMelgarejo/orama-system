@@ -49,6 +49,7 @@ def _run_resolver(
     env: dict[str, str] | None = None,
     cwd: Path | None = None,
 ) -> subprocess.CompletedProcess[str]:
+    """Helper for run resolver."""
     run_env = os.environ.copy()
     for key in (
         "PERPETUA_TOOLS_PATH",
@@ -79,6 +80,7 @@ def _make_pt_root(
     git_bin: str,
     remote_url: str | None = None,
 ) -> Path:
+    """Helper for make pt root."""
     root = tmp_path / name
     root.mkdir(parents=True)
     subprocess.run([git_bin, "init", "-q"], cwd=root, check=True)
@@ -125,6 +127,7 @@ def test_resolve_perp_harness_fails_without_pt_root(tmp_path: Path, git_bin: str
 def test_resolve_perp_harness_env_var_precedence(
     tmp_path: Path, env_key: str, git_bin: str
 ) -> None:
+    """Verify resolve perp harness env var precedence."""
     pt = _make_pt_root(tmp_path, git_bin=git_bin)
     result = _run_resolver(env={env_key: str(pt)})
     assert result.returncode == 0, result.stderr
@@ -132,6 +135,7 @@ def test_resolve_perp_harness_env_var_precedence(
 
 
 def test_resolve_perp_harness_env_precedence_order(tmp_path: Path, git_bin: str) -> None:
+    """Verify resolve perp harness env precedence order."""
     primary = _make_pt_root(tmp_path, "primary-pt", git_bin=git_bin)
     secondary = _make_pt_root(tmp_path, "secondary-pt", git_bin=git_bin)
     result = _run_resolver(
@@ -145,6 +149,7 @@ def test_resolve_perp_harness_env_precedence_order(tmp_path: Path, git_bin: str)
 
 
 def test_resolve_perp_harness_paths_file_pt_dir(tmp_path: Path, git_bin: str) -> None:
+    """Verify resolve perp harness paths file pt dir."""
     pt = _make_pt_root(tmp_path, git_bin=git_bin)
     orama = tmp_path / "orama-system"
     orama.mkdir()
@@ -160,6 +165,7 @@ def test_resolve_perp_harness_paths_file_pt_dir(tmp_path: Path, git_bin: str) ->
 
 
 def test_resolve_perp_harness_mother_repo_crawl(tmp_path: Path, git_bin: str) -> None:
+    """Verify resolve perp harness mother repo crawl."""
     isolated_home = tmp_path / "home"
     isolated_home.mkdir()
     pt = _make_pt_root(isolated_home, git_bin=git_bin)
@@ -179,6 +185,7 @@ def test_resolve_perp_harness_mother_repo_crawl(tmp_path: Path, git_bin: str) ->
 
 
 def test_resolve_perp_harness_home_crawl(tmp_path: Path, git_bin: str) -> None:
+    """Verify resolve perp harness home crawl."""
     isolated_home = tmp_path / "home"
     isolated_home.mkdir()
     pt = _make_pt_root(isolated_home, git_bin=git_bin)
@@ -198,6 +205,7 @@ def test_resolve_perp_harness_home_crawl(tmp_path: Path, git_bin: str) -> None:
 
 
 def test_resolve_perp_harness_rejects_incomplete_marker(tmp_path: Path, git_bin: str) -> None:
+    """Verify resolve perp harness rejects incomplete marker."""
     isolated_home = tmp_path / "home"
     isolated_home.mkdir()
     orama = isolated_home / "orama-system"
@@ -222,6 +230,7 @@ def test_resolve_perp_harness_rejects_incomplete_marker(tmp_path: Path, git_bin:
 
 
 def test_resolve_perp_harness_rejects_symlink_root(tmp_path: Path, git_bin: str) -> None:
+    """Verify resolve perp harness rejects symlink root."""
     isolated_home = tmp_path / "home"
     isolated_home.mkdir()
     orama = isolated_home / "orama-system"
@@ -285,6 +294,7 @@ def test_resolve_perp_harness_rejects_symlink_even_when_real_target_is_crawlable
 
 @pytest.mark.integration
 def test_resolve_pt_root_cached_within_session(tmp_path: Path, git_bin: str) -> None:
+    """Verify resolve pt root cached within session."""
     pt = _make_pt_root(tmp_path, git_bin=git_bin)
     run_env = os.environ.copy()
     for key in (
@@ -321,6 +331,7 @@ def test_resolve_pt_root_cached_within_session(tmp_path: Path, git_bin: str) -> 
 
 
 def test_resolve_perp_harness_fails_on_ambiguous_crawl(tmp_path: Path, git_bin: str) -> None:
+    """Verify resolve perp harness fails on ambiguous crawl."""
     orama = tmp_path / "orama-system"
     orama.mkdir()
     subprocess.run([git_bin, "init", "-q"], cwd=orama, check=True)

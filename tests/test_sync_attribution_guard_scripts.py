@@ -49,23 +49,27 @@ def _extract_function(name: str) -> str:
 
 
 def _run_atomic_append_snippet(dest: Path, mode: str, snippet: Path) -> subprocess.CompletedProcess[str]:
+    """Helper for run atomic append snippet."""
     func_src = _extract_function("atomic_append_snippet")
     wrapper = f'set -euo pipefail\n{func_src}\natomic_append_snippet "{dest}" "{mode}" "{snippet}"\n'
     return subprocess.run(["bash", "-c", wrapper], capture_output=True, text=True)
 
 
 def _run_repo_uses_githooks(repo: Path) -> subprocess.CompletedProcess[str]:
+    """Helper for run repo uses githooks."""
     func_src = _extract_function("_repo_uses_githooks")
     wrapper = f'set -euo pipefail\n{func_src}\n_repo_uses_githooks "{repo}" && echo YES || echo NO\n'
     return subprocess.run(["bash", "-c", wrapper], cwd=repo, capture_output=True, text=True)
 
 
 def _init_git_repo(repo: Path) -> None:
+    """Helper for init git repo."""
     repo.mkdir(parents=True, exist_ok=True)
     subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
 
 
 def test_repo_uses_githooks_rejects_directory_without_effective_hookspath(tmp_path: Path) -> None:
+    """Verify repo uses githooks rejects directory without effective hookspath."""
     repo = tmp_path / "repo"
     _init_git_repo(repo)
     (repo / ".githooks").mkdir()
@@ -77,6 +81,7 @@ def test_repo_uses_githooks_rejects_directory_without_effective_hookspath(tmp_pa
 
 
 def test_repo_uses_githooks_accepts_effective_hookspath(tmp_path: Path) -> None:
+    """Verify repo uses githooks accepts effective hookspath."""
     repo = tmp_path / "repo"
     _init_git_repo(repo)
     (repo / ".githooks").mkdir()
@@ -89,6 +94,7 @@ def test_repo_uses_githooks_accepts_effective_hookspath(tmp_path: Path) -> None:
 
 
 def test_repo_uses_githooks_accepts_explicit_marker(tmp_path: Path) -> None:
+    """Verify repo uses githooks accepts explicit marker."""
     repo = tmp_path / "repo"
     _init_git_repo(repo)
     hooks = repo / ".githooks"
@@ -102,6 +108,7 @@ def test_repo_uses_githooks_accepts_explicit_marker(tmp_path: Path) -> None:
 
 
 def test_append_snippet_creates_new_dest_when_missing(tmp_path: Path) -> None:
+    """Verify append snippet creates new dest when missing."""
     dest = tmp_path / "new-file.txt"
     snippet = tmp_path / "snippet.txt"
     snippet.write_text("snippet content\n", encoding="utf-8")
@@ -114,6 +121,7 @@ def test_append_snippet_creates_new_dest_when_missing(tmp_path: Path) -> None:
 
 
 def test_append_snippet_preserves_existing_dest_content(tmp_path: Path) -> None:
+    """Verify append snippet preserves existing dest content."""
     dest = tmp_path / "existing.txt"
     dest.write_text("original content\n", encoding="utf-8")
     snippet = tmp_path / "snippet.txt"
@@ -188,6 +196,7 @@ def test_append_snippet_fails_closed_when_dest_is_a_directory(tmp_path: Path) ->
 
 
 def test_append_snippet_rejects_symlink_dest(tmp_path: Path) -> None:
+    """Verify append snippet rejects symlink dest."""
     external = tmp_path / "external.txt"
     external.write_text("external-only\n", encoding="utf-8")
     dest = tmp_path / "symlink-dest"
@@ -204,6 +213,7 @@ def test_append_snippet_rejects_symlink_dest(tmp_path: Path) -> None:
 
 
 def test_append_snippet_rejects_dangling_symlink_dest(tmp_path: Path) -> None:
+    """Verify append snippet rejects dangling symlink dest."""
     nowhere = tmp_path / "nowhere"
     dest = tmp_path / "dangling"
     _symlink_or_skip(dest, nowhere)

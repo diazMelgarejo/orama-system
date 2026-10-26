@@ -1,9 +1,8 @@
-from __future__ import annotations
-
 """Tests for the workspace_candidates(), workspace_path(), and repo_relative()
 functions added/modified in
 bin/orama-system/skills/skillify/scripts/install_thin_skill_wrappers.py.
 """
+from __future__ import annotations
 
 import errno
 import importlib.util
@@ -63,6 +62,7 @@ requires_symlinks = pytest.mark.skipif(
 
 @pytest.fixture(scope="module")
 def mod():
+    """Helper for mod."""
     spec = importlib.util.spec_from_file_location("install_thin_skill_wrappers", SCRIPT)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
@@ -72,6 +72,7 @@ def mod():
 
 
 def _link_ownership(slug: str, canonical_path: str | None = None):
+    """Helper for link ownership."""
     import gemini_reconciliation as gr
 
     return lambda _slug: gr.GeminiOwnership(
@@ -82,6 +83,7 @@ def _link_ownership(slug: str, canonical_path: str | None = None):
 # ── workspace_candidates ──────────────────────────────────────────────────────
 
 def test_workspace_candidates_orama_exact(mod):
+    """Verify workspace candidates orama exact."""
     candidates = mod.workspace_candidates("orama-system")
     # Should include both "orama-system" and "ultrathink-system" as Path objects.
     strs = [c.name for c in candidates]
@@ -90,6 +92,7 @@ def test_workspace_candidates_orama_exact(mod):
 
 
 def test_workspace_candidates_orama_subpath(mod):
+    """Verify workspace candidates orama subpath."""
     candidates = mod.workspace_candidates("orama-system/bin/orama-system/SKILL.md")
     # Both aliases should carry the suffix.
     strs = [c.as_posix() for c in candidates]
@@ -98,6 +101,7 @@ def test_workspace_candidates_orama_subpath(mod):
 
 
 def test_workspace_candidates_perpetua_exact(mod):
+    """Verify workspace candidates perpetua exact."""
     candidates = mod.workspace_candidates("perplexity-api/Perpetua-Tools")
     strs = [c.as_posix() for c in candidates]
     assert any("perplexity-api/Perpetua-Tools" in s for s in strs)
@@ -105,6 +109,7 @@ def test_workspace_candidates_perpetua_exact(mod):
 
 
 def test_workspace_candidates_perpetua_subpath(mod):
+    """Verify workspace candidates perpetua subpath."""
     candidates = mod.workspace_candidates("perplexity-api/Perpetua-Tools/SKILL.md")
     strs = [c.as_posix() for c in candidates]
     assert any("Perpetua-Tools/SKILL.md" in s for s in strs)
@@ -112,6 +117,7 @@ def test_workspace_candidates_perpetua_subpath(mod):
 
 
 def test_workspace_candidates_no_match_returns_single(mod):
+    """Verify workspace candidates no match returns single."""
     candidates = mod.workspace_candidates("some-other/path/SKILL.md")
     assert len(candidates) == 1
     assert candidates[0].name == "SKILL.md"
@@ -162,31 +168,37 @@ def test_workspace_path_prefers_primary_over_alias(mod, tmp_path, monkeypatch):
 # ── repo_relative ─────────────────────────────────────────────────────────────
 
 def test_repo_relative_strips_orama_prefix(mod):
+    """Verify repo relative strips orama prefix."""
     result = mod.repo_relative("orama-system/bin/orama-system/cidf/SKILL.md")
     assert result == "bin/orama-system/cidf/SKILL.md"
 
 
 def test_repo_relative_strips_perpetua_prefix(mod):
+    """Verify repo relative strips perpetua prefix."""
     result = mod.repo_relative("perplexity-api/Perpetua-Tools/config/SKILL.md")
     assert result == "config/SKILL.md"
 
 
 def test_repo_relative_exact_orama_prefix_returns_dot(mod):
+    """Verify repo relative exact orama prefix returns dot."""
     result = mod.repo_relative("orama-system")
     assert result == "."
 
 
 def test_repo_relative_exact_perpetua_prefix_returns_dot(mod):
+    """Verify repo relative exact perpetua prefix returns dot."""
     result = mod.repo_relative("perplexity-api/Perpetua-Tools")
     assert result == "."
 
 
 def test_repo_relative_no_known_prefix_splits_on_first_slash(mod):
+    """Verify repo relative no known prefix splits on first slash."""
     result = mod.repo_relative("some-repo/path/to/SKILL.md")
     assert result == "path/to/SKILL.md"
 
 
 def test_repo_relative_no_slash_returns_as_is(mod):
+    """Verify repo relative no slash returns as is."""
     result = mod.repo_relative("singleword")
     assert result == "singleword"
 
@@ -233,10 +245,12 @@ def test_wrapper_embeds_repo_relative_not_absolute(mod):
 # ── hermes-harness is in CANONICAL_SKILLS ────────────────────────────────────
 
 def test_hermes_harness_in_canonical_skills(mod):
+    """Verify hermes harness in canonical skills."""
     assert "orama-system/bin/orama-system/skills/hermes-harness/SKILL.md" in mod.CANONICAL_SKILLS
 
 
 def test_gossip_bus_in_canonical_skills(mod: ModuleType) -> None:
+    """Verify gossip bus in canonical skills."""
     assert "orama-system/bin/orama-system/skills/gossip-bus/SKILL.md" in mod.CANONICAL_SKILLS
 
 
@@ -278,6 +292,7 @@ def test_wrapper_discovers_nested_canonical_root(
 # install, archive, or symlink function — they only observe.
 
 def test_render_inventory_is_sorted_and_portable(mod, tmp_path: Path) -> None:
+    """Verify render inventory is sorted and portable."""
     rows = [
         mod.SkillInventory("zeta", "gemini", "regular", "a" * 64, ("name",)),
         mod.SkillInventory("alpha", "agents", "symlink", "b" * 64, ("description", "name")),
@@ -299,6 +314,7 @@ def test_render_inventory_strips_home_if_it_leaks_into_a_row(mod, tmp_path: Path
 
 
 def test_inventory_root_absent_when_root_missing(mod, tmp_path: Path) -> None:
+    """Verify inventory root absent when root missing."""
     missing = tmp_path / "does-not-exist"
     rows = mod.inventory_root("gemini", missing)
     assert len(rows) == 1
@@ -308,6 +324,7 @@ def test_inventory_root_absent_when_root_missing(mod, tmp_path: Path) -> None:
 
 
 def test_inventory_root_detects_regular_directory(mod, tmp_path: Path) -> None:
+    """Verify inventory root detects regular directory."""
     root = tmp_path / "skills"
     skill_dir = root / "some-skill"
     skill_dir.mkdir(parents=True)
@@ -327,6 +344,7 @@ def test_inventory_root_detects_regular_directory(mod, tmp_path: Path) -> None:
 
 
 def test_inventory_root_detects_symlink(mod, tmp_path: Path) -> None:
+    """Verify inventory root detects symlink."""
     root = tmp_path / "skills"
     canonical = tmp_path / "canonical-skill"
     canonical.mkdir(parents=True)
@@ -342,6 +360,7 @@ def test_inventory_root_detects_symlink(mod, tmp_path: Path) -> None:
 
 
 def test_inventory_root_skips_dotfiles_and_stray_files(mod, tmp_path: Path) -> None:
+    """Verify inventory root skips dotfiles and stray files."""
     root = tmp_path / "skills"
     root.mkdir()
     (root / ".DS_Store").write_bytes(b"\x00")
@@ -356,6 +375,7 @@ def test_inventory_root_skips_dotfiles_and_stray_files(mod, tmp_path: Path) -> N
 
 
 def test_inventory_root_missing_skill_md_has_no_digest_or_keys(mod, tmp_path: Path) -> None:
+    """Verify inventory root missing skill md has no digest or keys."""
     root = tmp_path / "skills"
     (root / "empty-dir").mkdir(parents=True)
 
@@ -368,6 +388,7 @@ def test_inventory_root_missing_skill_md_has_no_digest_or_keys(mod, tmp_path: Pa
 
 
 def test_inventory_all_roots_covers_five_logical_roots(mod, tmp_path, monkeypatch) -> None:
+    """Verify inventory all roots covers five logical roots."""
     monkeypatch.setattr(mod, "HOME", tmp_path)
     rows = mod.inventory_all_roots()
     root_ids = {row.root_id for row in rows}
@@ -399,6 +420,7 @@ def test_inventory_all_roots_agents_and_antigravity_share_one_physical_root(
 
 
 def test_audit_gemini_cli_flag_prints_render_inventory(mod, tmp_path, monkeypatch, capsys) -> None:
+    """Verify audit gemini cli flag prints render inventory."""
     monkeypatch.setattr(mod, "HOME", tmp_path)
     monkeypatch.setattr(sys, "argv", ["prog", "--audit-gemini"])
 
@@ -414,10 +436,12 @@ def test_audit_gemini_cli_flag_prints_render_inventory(mod, tmp_path, monkeypatc
 
 
 def _canonical_code_review() -> Path:
+    """Helper for canonical code review."""
     return ROOT / "bin" / "orama-system" / "skills" / "code-review"
 
 
 def test_gemini_verify_reports_failure_when_not_reconciled(mod, tmp_path: Path, monkeypatch, capsys) -> None:
+    """Verify gemini verify reports failure when not reconciled."""
     root = tmp_path / ".gemini" / "skills"
     (root / "code-review").mkdir(parents=True)
     (root / "code-review" / "SKILL.md").write_text("old Gemini card\n", encoding="utf-8")
@@ -436,6 +460,7 @@ def test_gemini_verify_reports_failure_when_not_reconciled(mod, tmp_path: Path, 
 
 
 def test_gemini_verify_fails_on_missing_receipt(mod, tmp_path: Path) -> None:
+    """Verify gemini verify fails on missing receipt."""
     root = tmp_path / "gemini" / "skills"
     root.mkdir(parents=True)
     _symlink_or_skip(root / "code-review", _canonical_code_review(), is_dir=True)
@@ -448,6 +473,7 @@ def test_gemini_verify_fails_on_missing_receipt(mod, tmp_path: Path) -> None:
 
 
 def test_gemini_verify_fails_on_mismatched_receipt(mod, tmp_path: Path) -> None:
+    """Verify gemini verify fails on mismatched receipt."""
     root, archive_parent = tmp_path / "gemini" / "skills", tmp_path / "archive"
     root.mkdir(parents=True)
     _symlink_or_skip(root / "code-review", _canonical_code_review(), is_dir=True)
@@ -478,9 +504,11 @@ def test_gemini_verify_fails_on_mismatched_receipt(mod, tmp_path: Path) -> None:
 
 
 def test_oserror_with_unrelated_errno_propagates(mod, tmp_path: Path, monkeypatch) -> None:
+    """Verify oserror with unrelated errno propagates."""
     root, archive = tmp_path / "gemini" / "skills", tmp_path / "archive" / "batch-1"
 
     def disk_full(_target: Path, _source: Path) -> None:
+        """Helper for disk full."""
         raise OSError(errno.ENOSPC, "disk full")
 
     monkeypatch.setattr("gemini_reconciliation.create_relative_link", disk_full)
@@ -497,6 +525,7 @@ def test_oserror_with_unrelated_errno_propagates(mod, tmp_path: Path, monkeypatc
 
 
 def test_lock_contention_fails_cleanly(mod, tmp_path: Path) -> None:
+    """Verify lock contention fails cleanly."""
     root, archive = tmp_path / "gemini" / "skills", tmp_path / "archive" / "batch-1"
     lock = mod.acquire_reconcile_lock(archive, root, {"code-review"})
     try:
@@ -510,6 +539,7 @@ def test_lock_terminated_owner_requires_guarded_recovery(mod, tmp_path: Path) ->
     # Lock lives beside the live root (not the archive root) since the
     # timestamped archive root changes per invocation and the live root is
     # the thing that actually needs serializing.
+    """Verify lock terminated owner requires guarded recovery."""
     root, archive = tmp_path / "gemini" / "skills", tmp_path / "archive" / "batch-1"
     root.mkdir(parents=True)
     lock_path = root / ".reconcile.lock"
@@ -527,6 +557,7 @@ def test_lock_terminated_owner_requires_guarded_recovery(mod, tmp_path: Path) ->
 
 
 def test_second_run_over_same_slug_is_a_no_op(mod, tmp_path: Path) -> None:
+    """Verify second run over same slug is a no op."""
     root, archive = tmp_path / "gemini" / "skills", tmp_path / "archive" / "batch-1"
     old_skill = root / "code-review" / "SKILL.md"
     old_skill.parent.mkdir(parents=True)
@@ -551,6 +582,7 @@ def test_second_run_over_same_slug_is_a_no_op(mod, tmp_path: Path) -> None:
 
 
 def _seed_live_skill(root: Path, slug: str = "code-review", body: str = "old Gemini card\n") -> Path:
+    """Helper for seed live skill."""
     skill = root / slug
     skill.mkdir(parents=True)
     (skill / "SKILL.md").write_text(body, encoding="utf-8")
@@ -567,9 +599,11 @@ def test_live_skill_survives_when_every_activation_path_fails(
     _seed_live_skill(root)
 
     def refuse_symlink(_target: Path, _source: Path) -> None:
+        """Helper for refuse symlink."""
         raise OSError(errno.EPERM, "symlinks not permitted")
 
     def refuse_wrapper(_target: Path, _source: Path) -> None:
+        """Helper for refuse wrapper."""
         raise OSError(errno.EROFS, "read-only file system")
 
     monkeypatch.setattr("gemini_reconciliation.create_relative_link", refuse_symlink)
@@ -609,6 +643,7 @@ def test_live_skill_is_restored_when_the_swap_fails_after_archive(
         # Fail only the staging -> live install; let the rollback restore work,
         # otherwise we would be testing that os.replace is broken, not that
         # reconcile_gemini recovers.
+        """Helper for fail installing stage."""
         if ".reconcile-staging" in str(src):
             raise OSError(errno.EIO, "input/output error installing staged replacement")
         return real_replace(src, dst, *args, **kwargs)
@@ -645,6 +680,7 @@ def test_live_skill_untouched_when_the_initial_rollback_move_fails(
     real_replace = mod.os.replace
 
     def fail_moving_live_aside(src, dst, *args, **kwargs):
+        """Helper for fail moving live aside."""
         if ".reconcile-rollback" in str(dst):
             raise OSError(errno.EPERM, "operation not permitted moving live aside")
         return real_replace(src, dst, *args, **kwargs)
@@ -774,6 +810,7 @@ def test_verify_gemini_fails_when_symlink_target_no_longer_exists(mod, tmp_path:
 
 
 def test_audit_reports_antigravity_shared_root(mod: ModuleType, tmp_path: Path) -> None:
+    """Verify audit reports antigravity shared root."""
     agents, antigravity = tmp_path / "agents", tmp_path / "antigravity"
     agents.mkdir()
     _symlink_or_skip(antigravity, agents, is_dir=True)
@@ -783,6 +820,7 @@ def test_audit_reports_antigravity_shared_root(mod: ModuleType, tmp_path: Path) 
 def test_audit_reports_missing_antigravity_root_with_operator_action(
     mod: ModuleType, tmp_path: Path
 ) -> None:
+    """Verify audit reports missing antigravity root with operator action."""
     finding = mod.verify_antigravity_root(tmp_path / "agents", tmp_path / "antigravity")
     assert finding.status == "missing"
     assert finding.operator_next_action == "Ask a human operator to approve or decline deferred Task 5a; do not create an Antigravity root in this plan."
@@ -803,6 +841,7 @@ def test_verify_antigravity_root_reports_unreadable_on_oserror(
     real_resolve = Path.resolve
 
     def raise_on_antigravity(self, *args, **kwargs):
+        """Helper for raise on antigravity."""
         if self == antigravity:
             raise OSError(errno.ELOOP, "too many levels of symbolic links")
         return real_resolve(self, *args, **kwargs)
@@ -818,6 +857,7 @@ def test_verify_antigravity_root_reports_unreadable_on_oserror(
 def test_audit_reports_divergent_antigravity_root_with_operator_action(
     mod: ModuleType, tmp_path: Path
 ) -> None:
+    """Verify audit reports divergent antigravity root with operator action."""
     agents, antigravity = tmp_path / "agents", tmp_path / "antigravity"
     agents.mkdir()
     antigravity.mkdir()
@@ -829,6 +869,7 @@ def test_audit_reports_divergent_antigravity_root_with_operator_action(
 def test_audit_antigravity_root_reports_missing_when_no_root_is_configured(
     mod: ModuleType, tmp_path: Path
 ) -> None:
+    """Verify audit antigravity root reports missing when no root is configured."""
     finding = mod.audit_antigravity_root(tmp_path / "agents", None)
 
     assert finding.status == "missing"
@@ -838,6 +879,7 @@ def test_audit_antigravity_root_reports_missing_when_no_root_is_configured(
 def test_audit_antigravity_cli_is_read_only_and_reports_missing(
     mod: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """Verify audit antigravity cli is read only and reports missing."""
     monkeypatch.setattr(mod, "HOME", tmp_path)
     monkeypatch.setattr(sys, "argv", ["prog", "--audit-antigravity"])
 
@@ -850,15 +892,18 @@ def test_audit_antigravity_cli_is_read_only_and_reports_missing(
     assert not list(tmp_path.iterdir())
 
 def test_reconcile_never_replaces_gstack_upgrade(mod, tmp_path: Path) -> None:
+    """Verify reconcile never replaces gstack upgrade."""
     with pytest.raises(ValueError, match="preserve-external"):
         mod.reconcile_gemini(tmp_path / "gemini", tmp_path / "archive", {"gstack-upgrade"}, lambda s: __import__('gemini_reconciliation').GeminiOwnership('gstack', 'preserve-external', 'gstack-upgrade', '', 'external'))
 
 
 def test_reconcile_never_replaces_skillify(mod, tmp_path: Path) -> None:
+    """Verify reconcile never replaces skillify."""
     with pytest.raises(ValueError, match="preserve-external"):
         mod.reconcile_gemini(tmp_path / "gemini", tmp_path / "archive", {"skillify"}, lambda s: __import__('gemini_reconciliation').GeminiOwnership('gstack', 'preserve-external', 'skillify', '', 'external'))
 
 def test_reconcile_rejects_unknown_frontmatter_key_for_adapter(mod, tmp_path: Path) -> None:
+    """Verify reconcile rejects unknown frontmatter key for adapter."""
     root = tmp_path / "gemini"
     skill = root / "orama-system" / "SKILL.md"
     skill.parent.mkdir(parents=True)
@@ -867,6 +912,7 @@ def test_reconcile_rejects_unknown_frontmatter_key_for_adapter(mod, tmp_path: Pa
         mod.reconcile_gemini(root, tmp_path / "archive", {"orama-system"}, lambda s: __import__('gemini_reconciliation').GeminiOwnership('orama', 'adapter', 'orama-system', '/path/SKILL.md', 'validated'))
 
 def test_reconcile_reports_the_exact_unknown_frontmatter_key(mod, tmp_path: Path) -> None:
+    """Verify reconcile reports the exact unknown frontmatter key."""
     root = tmp_path / "gemini"
     skill = root / "orama-system" / "SKILL.md"
     skill.parent.mkdir(parents=True)
@@ -875,6 +921,7 @@ def test_reconcile_reports_the_exact_unknown_frontmatter_key(mod, tmp_path: Path
         mod.reconcile_gemini(root, tmp_path / "archive", {"orama-system"}, lambda s: __import__('gemini_reconciliation').GeminiOwnership('orama', 'adapter', 'orama-system', '/path/SKILL.md', 'validated'))
 
 def test_reconcile_falls_back_to_wrapper_when_symlink_fails(mod, tmp_path: Path, monkeypatch) -> None:
+    """Verify reconcile falls back to wrapper when symlink fails."""
     monkeypatch.setattr("gemini_reconciliation.create_relative_link", lambda target, source: (_ for _ in ()).throw(OSError(errno.EPERM, "links disabled")))
     root = tmp_path / "gemini"
     skill = root / "code-review" / "SKILL.md"
@@ -885,6 +932,7 @@ def test_reconcile_falls_back_to_wrapper_when_symlink_fails(mod, tmp_path: Path,
     assert (root / "code-review" / "SKILL.md").is_file()
 
 def test_orama_gstack_adapter_targets_gstack_gbrain(mod) -> None:
+    """Verify orama gstack adapter targets gstack gbrain."""
     import gemini_reconciliation
     ownership = gemini_reconciliation.GeminiOwnership("orama", "adapter", "orama-gstack", "bin/orama-system/gstack-gbrain/SKILL.md", "validated")
     text = gemini_reconciliation.gemini_adapter(ownership)
@@ -893,6 +941,7 @@ def test_orama_gstack_adapter_targets_gstack_gbrain(mod) -> None:
 
 @requires_symlinks
 def test_code_review_reconciliation_drops_glm_fallback(mod, tmp_path: Path) -> None:
+    """Verify code review reconciliation drops glm fallback."""
     root = tmp_path / "gemini"
     skill = root / "code-review" / "SKILL.md"
     skill.parent.mkdir(parents=True)
@@ -909,6 +958,7 @@ def test_code_review_reconciliation_drops_glm_fallback(mod, tmp_path: Path) -> N
     assert live.read_text(encoding="utf-8") == "Canonical content"
 
 def test_perpetua_wrapper_uses_environment_root_not_caller_repo(mod) -> None:
+    """Verify perpetua wrapper uses environment root not caller repo."""
     import gemini_reconciliation
     ownership = gemini_reconciliation.GeminiOwnership("perpetua", "adapter", "perpetua-config", "$PERPETUA_TOOLS_PATH/config/SKILL.md", "validated")
     text = gemini_reconciliation.cross_repo_wrapper(ownership)
@@ -916,6 +966,7 @@ def test_perpetua_wrapper_uses_environment_root_not_caller_repo(mod) -> None:
     assert "git rev-parse --show-toplevel" not in text
 
 def test_perpetua_wrapper_explains_missing_root(mod) -> None:
+    """Verify perpetua wrapper explains missing root."""
     import gemini_reconciliation
     ownership = gemini_reconciliation.GeminiOwnership("perpetua", "adapter", "perpetua-tools", "$PERPETUA_TOOLS_PATH/SKILL.md", "validated")
     assert "PERPETUA_TOOLS_PATH is not set" in gemini_reconciliation.cross_repo_wrapper(ownership)
@@ -1125,6 +1176,7 @@ def test_index_json_write_is_atomic_against_a_mid_write_crash(mod, tmp_path: Pat
 
     def crash_on_fsync(fd):
         # Trigger simulated crash right after partial stream write, before os.replace
+        """Helper for crash on fsync."""
         raise OSError("simulated crash mid-stream-write")
 
     monkeypatch.setattr(os, "fsync", crash_on_fsync)
@@ -1162,6 +1214,7 @@ def test_index_json_write_failure_during_os_replace_preserves_original(mod, tmp_
     real_replace = os.replace
 
     def crash_on_replace(src, dst):
+        """Helper for crash on replace."""
         if Path(dst) == index_path:
             raise OSError("simulated replace failure")
         return real_replace(src, dst)
@@ -1316,6 +1369,7 @@ def test_index_json_first_write_crash_leaves_no_corrupt_index(mod, tmp_path: Pat
     (old / "SKILL.md").write_text("v1\n", encoding="utf-8")
 
     def crash_on_fsync(fd):
+        """Helper for crash on fsync."""
         raise OSError("simulated first-write crash")
 
     monkeypatch.setattr(os, "fsync", crash_on_fsync)

@@ -16,12 +16,14 @@ STACK_ELEVATED = ORAMA_ROOT / "bin/orama-system/config/cursor-mcp.stack.json"
 
 
 def test_readonly_stack_has_crg_only() -> None:
+    """Verify readonly stack has crg only."""
     data = json.loads(STACK_READONLY.read_text(encoding="utf-8"))
     servers = set(data["mcpServers"].keys())
     assert servers == {"code-review-graph"}
 
 
 def test_elevated_stack_includes_ai_cli() -> None:
+    """Verify elevated stack includes ai cli."""
     data = json.loads(STACK_ELEVATED.read_text(encoding="utf-8"))
     servers = set(data["mcpServers"].keys())
     assert "code-review-graph" in servers
@@ -30,6 +32,7 @@ def test_elevated_stack_includes_ai_cli() -> None:
 
 @pytest.mark.skipif(shutil.which("jq") is None, reason="sync-cursor-mcp.sh requires jq, which is not installed")
 def test_sync_script_readonly_profile_dry_run() -> None:
+    """Verify sync script readonly profile dry run."""
     proc = subprocess.run(
         ["bash", str(SYNC_SH), "--profile", "readonly", "--dry-run"],
         cwd=str(ORAMA_ROOT),
@@ -44,6 +47,7 @@ def test_sync_script_readonly_profile_dry_run() -> None:
 
 
 def test_tracked_cursor_mcp_json_is_readonly_safe() -> None:
+    """Verify tracked cursor mcp json is readonly safe."""
     data = json.loads((ORAMA_ROOT / ".cursor/mcp.json").read_text(encoding="utf-8"))
     servers = set(data["mcpServers"].keys())
     assert "ai-cli-mcp" not in servers
@@ -52,6 +56,7 @@ def test_tracked_cursor_mcp_json_is_readonly_safe() -> None:
 
 @pytest.mark.skipif(shutil.which("jq") is None, reason="sync-cursor-mcp.sh requires jq, which is not installed")
 def test_sync_script_elevated_profile_dry_run() -> None:
+    """Verify sync script elevated profile dry run."""
     proc = subprocess.run(
         ["bash", str(SYNC_SH), "--profile", "elevated", "--dry-run"],
         cwd=str(ORAMA_ROOT),
@@ -66,6 +71,7 @@ def test_sync_script_elevated_profile_dry_run() -> None:
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX file modes (0o600) are not representable on Windows")
 def test_ensure_control_plane_token_persists_when_enforced(monkeypatch, tmp_path):
+    """Verify ensure control plane token persists when enforced."""
     from utils.control_plane_auth import ensure_control_plane_token
 
     monkeypatch.delenv("ORAMA_CONTROL_PLANE_TOKEN", raising=False)
