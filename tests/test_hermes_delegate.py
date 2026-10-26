@@ -6,6 +6,7 @@ import importlib.util
 import os
 import signal
 import subprocess
+import sys
 import time
 import types
 from pathlib import Path
@@ -15,6 +16,11 @@ from unittest.mock import Mock, call
 import pytest
 
 pytestmark = pytest.mark.unit
+
+_POSIX_GROUP_SIGNALS_ONLY = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="exercises the POSIX os.killpg branch of _terminate_worker; Windows uses taskkill /T and has no os.killpg",
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 DELEGATE_PY = ROOT / "bin/orama-system/skills/hermes-harness/scripts/hermes_delegate.py"
@@ -165,10 +171,13 @@ def test_subprocess_worker_timeout_kills_child(tmp_path: Path) -> None:
         raw = pid_file.read_text(encoding="utf-8").strip()
         assert raw, f"{task}'s PID file must not be empty"
         pid = int(raw)
-        with pytest.raises(ProcessLookupError):
+        # Windows reports a vanished PID as a generic OSError (WinError 87).
+        gone = OSError if sys.platform == "win32" else ProcessLookupError
+        with pytest.raises(gone):
             os.kill(pid, 0)
 
 
+@_POSIX_GROUP_SIGNALS_ONLY
 def test_subprocess_worker_timeout_kills_grandchild_without_group_signal(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -245,6 +254,7 @@ def test_subprocess_worker_timeout_kills_grandchild_without_group_signal(
     assert grandchild_dead, "grandchild must be killed, not just the direct child"
 
 
+@_POSIX_GROUP_SIGNALS_ONLY
 def test_descendant_permission_error_falls_through_to_group_cleanup(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -270,6 +280,7 @@ def test_descendant_permission_error_falls_through_to_group_cleanup(
     group_signal.assert_called_once_with(10, signal.SIGTERM)
 
 
+@_POSIX_GROUP_SIGNALS_ONLY
 def test_non_linux_cleanup_still_signals_the_group_after_the_worker_exits(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -293,6 +304,7 @@ def test_non_linux_cleanup_still_signals_the_group_after_the_worker_exits(
     group_signal.assert_called_once_with(10, signal.SIGTERM)
 
 
+@_POSIX_GROUP_SIGNALS_ONLY
 def test_linux_cleanup_skips_the_group_signal_once_the_worker_exits(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -314,6 +326,7 @@ def test_linux_cleanup_skips_the_group_signal_once_the_worker_exits(
     group_signal.assert_not_called()
 
 
+@_POSIX_GROUP_SIGNALS_ONLY
 def test_descendant_cleanup_escalates_to_group_sigkill_when_worker_stays_alive(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
