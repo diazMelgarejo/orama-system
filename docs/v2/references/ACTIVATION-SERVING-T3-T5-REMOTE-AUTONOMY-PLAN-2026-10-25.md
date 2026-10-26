@@ -127,11 +127,12 @@ issuer state, settle unknown holds, run effects, or contact a provider.
 2. Add `/healthz`, `/readyz`, and a narrowly scoped verification/readiness route. Readiness must
    separately report verifier-ready, issuer-ready, serving-enabled, and autonomous-policy-ready; it
    must not infer one from another. Map each route to the kernel security contracts in
-   `01-kernel-spec.md` §6b before Wave 1 qualification: the `Capability` it requires (`public` for
-   the health probes, `read` for verification), the `AuthContext` it consumes, the
-   `SecurityDecision` and `AuditEvent` it emits, and the `EndpointPolicy` that governs exposure.
-   The Wave 1 gate also records the control mapping to the baseline in
-   `24-security-first-platform.md` (OWASP, NIST SSDF, CISA Secure by Design, OpenSSF, SLSA).
+   [01-kernel-spec.md](../01-kernel-spec.md) §6b before Wave 1 qualification: the `Capability` it
+   requires (`public` for the health probes, `read` for verification), the `AuthContext` it
+   consumes, the `SecurityDecision` and `AuditEvent` it emits, and the `EndpointPolicy` that
+   governs exposure. The Wave 1 gate also records the control mapping to the baseline in
+   [24-security-first-platform.md](../24-security-first-platform.md) (OWASP, NIST SSDF, CISA Secure
+   by Design, OpenSSF, SLSA).
 3. Bind feature enablement to an explicit operator record. `ORAMA_GRANT_SERVING` remains
    absent/unset until the approval is recorded and exact binary/config digests match.
 4. Exercise denial paths: stale revocation, unknown key, malformed grant, revoked grant, missing
@@ -166,14 +167,18 @@ dispatch receipt, terminal taxonomy, redaction envelope, and replay rules. The o
 
 ### Implementation sequence
 
-1. **State first:** add migrations and transactional `prepared → authorized → dispatched →
-   acknowledged/unknown/refused` records. Every externally visible effect uses a durable idempotency
-   key and a fencing epoch. Revocation or a cascade may also move a `prepared` or `authorized`
-   attempt to `refused` before dispatch; that refusal is terminal, and a replay under the same
-   idempotency key returns the same refusal, so the attempt can neither stay pending nor dispatch.
+1. **State first:** reuse the ratified E1 outcome vocabulary (`confirmed`, `failed`, `unknown`)
+   and the existing atomic intent/use/outbox transaction — do not freeze a second T3 state machine.
+   The roadmap labels `prepared → authorized → dispatched → acknowledged/unknown/refused` remain
+   conceptual only (see [RELEASE12-IMPLEMENTATION-ROUND-2026-10-26.md](RELEASE12-IMPLEMENTATION-ROUND-2026-10-26.md)).
+   Every externally visible effect still uses a durable idempotency key and a fencing epoch.
+   Pre-dispatch refusal stays required: revocation or a cascade that blocks work before the
+   outbox send records a terminal `failed` (with an explicit refusal reason) under the same
+   idempotency key; a replay returns that same refusal so the attempt can neither stay pending
+   nor dispatch. After a send may have started, unsettled work remains `unknown`.
 2. **Authorization second:** verify the bound approval/permit at the final execution boundary.
    Revocation and cascades refuse future dispatch, including attempts not yet dispatched (the
-   pre-dispatch refusal above); already uncertain work becomes an explicit unknown disposition,
+   pre-dispatch refusal above); already uncertain work becomes an explicit `unknown` disposition,
    never a silent rollback.
 3. **Driver third:** introduce one local, inert/dry-run effect driver. It accepts a sealed command
    envelope and returns a receipt; it cannot execute arbitrary shell text.

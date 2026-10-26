@@ -206,6 +206,37 @@ def test_same_timestamp_switches_never_overwrite_or_misorder_backups(
         "model-prior", "model-a", "model-b"]
 
 
+def test_backup_stamp_treats_invalid_calendar_fields_as_unparseable() -> None:
+    """Regex-shaped names with impossible dates must not abort stamp parsing."""
+    _backup_stamp = switch_cline_provider._backup_stamp
+    assert _backup_stamp("openai-compatible-20260101T120000.000000Z.json") == datetime(
+        2026, 1, 1, 12, 0, 0
+    )
+    assert _backup_stamp("openai-compatible-20261301T120000.000000Z.json") is None
+    assert _backup_stamp("not-a-backup.json") is None
+
+
+def test_switch_continues_when_latest_backup_name_has_invalid_date(
+    workspace: Workspace,
+) -> None:
+    """A lexicographically-newest backup with an impossible stamp must not stop activation."""
+    providers_path, backup_dir, tmpl_path = workspace
+    _write_json(providers_path, _providers_cfg(_settings("model-prior", "key-prior")))
+    bogus = backup_dir / "openai-compatible-20261301T120000.000000Z.json"
+    _write_json(bogus, {"settings": _settings("model-prior", "key-prior")})
+
+    status = switch_provider(
+        str(providers_path),
+        str(tmpl_path),
+        "profile-a",
+        str(backup_dir),
+        env={"A_KEY": "key-a"},
+        now=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    )
+    assert status == "activated"
+    assert _read_json(providers_path)["providers"]["openai-compatible"]["settings"]["model"] == "model-a"
+
+
 def test_backup_rotation_caps_at_ten(
     workspace: Workspace, monkeypatch: pytest.MonkeyPatch
 ) -> None:

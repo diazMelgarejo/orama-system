@@ -73,7 +73,14 @@ _BACKUP_NAME_RE = re.compile(r"^openai-compatible-(\d{8}T\d{6}\.\d{6})Z\.json$")
 def _backup_stamp(path: str) -> datetime | None:
     """Return the naive timestamp encoded in a backup file name, or None when the name is not one this script wrote."""
     m = _BACKUP_NAME_RE.match(os.path.basename(path))
-    return datetime.strptime(m.group(1), "%Y%m%dT%H%M%S.%f") if m else None
+    if not m:
+        return None
+    try:
+        return datetime.strptime(m.group(1), "%Y%m%dT%H%M%S.%f")
+    except ValueError:
+        # Pattern matched but the calendar fields are invalid (e.g. month 13).
+        # Treat like an unexpected filename so switch can continue.
+        return None
 
 
 def comparable(block: Mapping[str, Any]) -> dict[str, Any]:
