@@ -1,8 +1,12 @@
 """Guard sync manifest — single source of truth for attribution guard distribution."""
 from __future__ import annotations
 
+import os
 import re
+import shutil
 import subprocess
+import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -40,6 +44,18 @@ _SYNC_BINDING_PATTERN = _extract_sync_binding_pattern()
 
 def _run_sync_binding_check(sync_script: Path) -> subprocess.CompletedProcess[str]:
     """Same grep as verify-guard-parity.sh SYNC BINDING check."""
+    if sys.platform == "win32":
+        # The MSYS runtime strips backslashes from Windows command lines, which
+        # turns the pattern's escaped dot into a wildcard; read it from a file.
+        with tempfile.TemporaryDirectory() as tmp:
+            pattern_file = Path(tmp) / "pattern.txt"
+            pattern_file.write_bytes(_SYNC_BINDING_PATTERN.encode("utf-8"))
+            return subprocess.run(
+                ["grep", "-Eq", "-f", str(pattern_file), str(sync_script)],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+            )
     return subprocess.run(
         ["grep", "-Eq", _SYNC_BINDING_PATTERN, str(sync_script)],
         capture_output=True,
@@ -49,6 +65,7 @@ def _run_sync_binding_check(sync_script: Path) -> subprocess.CompletedProcess[st
 
 
 def _bash_array(name: str) -> list[str]:
+    """Helper for bash array."""
     result = subprocess.run(
         [
             "bash",
@@ -75,6 +92,10 @@ def test_manifest_files_exist_on_disk() -> None:
 
 
 @pytest.mark.unit
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="POSIX executable bits are not represented on Windows checkouts",
+)
 def test_cursor_executables_are_executable_in_canonical_source() -> None:
     """Cursor guard executables in the manifest are executable on disk."""
     helpers = _bash_array("GUARD_SYNC_CURSOR_EXECUTABLES")
@@ -102,6 +123,7 @@ def test_parity_required_expands_in_bash() -> None:
 
 @pytest.mark.unit
 def test_sync_and_verify_source_manifest() -> None:
+    """Verify sync and verify source manifest."""
     pattern = r'^\s*(source|\.)\s+.*guard-sync-manifest\.sh'
     for script in (SYNC, VERIFY):
         body = script.read_text(encoding="utf-8")
@@ -130,6 +152,7 @@ def test_verify_rejects_comment_only_manifest_reference(tmp_path: Path) -> None:
 
 @pytest.mark.unit
 def test_verify_guard_parity_passes_in_canonical_repo() -> None:
+    """Verify verify guard parity passes in canonical repo."""
     result = subprocess.run(
         ["bash", str(VERIFY)],
         cwd=ROOT,
@@ -183,6 +206,14 @@ def test_markdown_lint_gate_passes_awkward_staged_paths_through_unquoted(
     repo = tmp_path / "repo"
     repo.mkdir()
     env = {"PATH": str(tmp_path / "bin") + ":/usr/bin:/bin", "HOME": str(tmp_path)}
+    if sys.platform == "win32":
+        # Git for Windows keeps git outside /usr/bin, so expose it explicitly.
+        git_exe = shutil.which("git")
+        assert git_exe is not None, "git executable not found"
+        env["PATH"] = os.pathsep.join(
+            (str(tmp_path / "bin"), str(Path(git_exe).parent), os.environ["PATH"])
+        )
+        env["SYSTEMROOT"] = os.environ.get("SYSTEMROOT", "")
     (tmp_path / "bin").mkdir()
     record = tmp_path / "argv.txt"
     stub = tmp_path / "bin" / "markdownlint-cli2"
@@ -190,6 +221,7 @@ def test_markdown_lint_gate_passes_awkward_staged_paths_through_unquoted(
     stub.chmod(0o755)
 
     def git(*args: str) -> None:
+        """Helper for git."""
         subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True, env=env)
 
     git("init", "-q")

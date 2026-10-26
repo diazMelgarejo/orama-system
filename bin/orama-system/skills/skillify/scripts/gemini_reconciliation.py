@@ -1,3 +1,4 @@
+"""Reconcile Gemini skill roots against canonical skills with archive receipts."""
 from __future__ import annotations
 
 import errno
@@ -19,6 +20,7 @@ import yaml
 
 @dataclass(frozen=True)
 class GeminiOwnership:
+    """Manifest record describing how one skill is reconciled for Gemini."""
     owner: str
     action: str
     canonical_slug: str
@@ -27,6 +29,7 @@ class GeminiOwnership:
 
 
 def load_gemini_ownership(manifest_path: Path) -> dict[str, GeminiOwnership]:
+    """Load and validate the Gemini ownership manifest into a slug-keyed mapping."""
     if not manifest_path.exists():
         return {}
     data = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -64,6 +67,7 @@ class RootFinding:
 
 
 def _validate_frontmatter(source_text: str) -> str:
+    """Return the validated YAML frontmatter block of a skill source, or raise on malformed input."""
     frontmatter = ""
     if source_text.startswith("---"):
         # Normalize CRLF before the fence match: a file authored/edited on
@@ -109,6 +113,7 @@ def _validate_frontmatter(source_text: str) -> str:
 
 
 def gemini_adapter(ownership: GeminiOwnership, source_text: str = "") -> str:
+    """Render the generated Gemini adapter text for an ownership record."""
     frontmatter = ""
     if ownership.metadata_policy == "validated":
         frontmatter = _validate_frontmatter(source_text)
@@ -116,6 +121,7 @@ def gemini_adapter(ownership: GeminiOwnership, source_text: str = "") -> str:
 
 
 def cross_repo_wrapper(ownership: GeminiOwnership, source_text: str = "") -> str:
+    """Render the cross-repository adapter text for an ownership record."""
     frontmatter = ""
     if ownership.metadata_policy == "validated":
         frontmatter = _validate_frontmatter(source_text)
@@ -129,6 +135,7 @@ class ReconcileLockHeldError(RuntimeError):
 
 
 def _remove_path(path: Path) -> None:
+    """Remove a file, symlink or directory tree if present."""
     if path.is_symlink() or path.is_file():
         path.unlink()
     elif path.exists():
@@ -169,11 +176,23 @@ def _tree_sha256(path: Path) -> str:
 
 
 def _recognized_symlink_error_numbers() -> set[int]:
+    """Return the errno values that mean this platform cannot create symlinks."""
     return {
         value
         for name in ("EPERM", "ENOSYS", "EOPNOTSUPP")
         if isinstance((value := getattr(errno, name, None)), int)
     }
+
+
+def _is_symlink_unsupported_error(exc: OSError) -> bool:
+    """True when ``exc`` means this platform or account cannot create symlinks.
+
+    Besides the POSIX errno values, Windows reports an unprivileged symlink
+    attempt as winerror 1314 (ERROR_PRIVILEGE_NOT_HELD) with no errno.
+    """
+    if exc.errno in _recognized_symlink_error_numbers():
+        return True
+    return getattr(exc, "winerror", None) == 1314
 
 
 def create_relative_link(target: Path, source: Path) -> None:
@@ -204,9 +223,67 @@ def _lock_path(root: Path) -> Path:
     return root / ".reconcile.lock"
 
 
+def _windows_pid_is_live(pid: int) -> bool:
+    """Probe a PID on Windows without signalling it.
+
+    ``os.kill`` on Windows terminates the target for any signal other than
+    the console control events, so liveness is checked through the process
+    handle and its exit code instead.
+    """
+    import ctypes
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[attr-defined]
+    # Declare pointer-sized signatures: the default C int return type would
+    # truncate a 64-bit process HANDLE.
+    kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    kernel32.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+    kernel32.GetExitCodeProcess.restype = wintypes.BOOL
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    kernel32.CloseHandle.restype = wintypes.BOOL
+    process_query_limited_information = 0x1000
+    still_active = 259
+    handle = kernel32.OpenProcess(process_query_limited_information, False, pid)
+    if not handle:
+        # Access denied means the process exists; any other failure means it does not.
+        return ctypes.get_last_error() == 5
+    try:
+        code = wintypes.DWORD()
+        if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+            return True
+        return code.value == still_active
+    finally:
+        kernel32.CloseHandle(handle)
+
+
+_MSYS_DRIVE_PATH = re.compile(r"^/([A-Za-z])(?:/(.*))?$")
+
+
+def _native_absolute_path(canonical_path: str) -> Path:
+    """Return ``canonical_path`` as a path the host OS can resolve.
+
+    On Windows an MSYS-style ``/c/Users/x`` is converted to ``C:/Users/x``; a
+    leading-slash path with no drive component cannot be anchored and is
+    rejected rather than silently resolved against the current drive.
+    """
+    path = Path(canonical_path)
+    if sys.platform != "win32" or path.is_absolute() or not canonical_path.startswith("/"):
+        return path
+    match = _MSYS_DRIVE_PATH.match(canonical_path)
+    if match is None:
+        raise ValueError(
+            f"canonical_path '{canonical_path}' is POSIX-absolute and cannot be converted to a Windows path"
+        )
+    return Path(f"{match.group(1).upper()}:/{match.group(2) or ''}")
+
+
 def _pid_is_live(pid: object) -> bool:
+    """Return True when ``pid`` names a running process."""
     if not isinstance(pid, int) or pid <= 0:
         return False
+    if sys.platform == "win32":
+        return _windows_pid_is_live(pid)
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
@@ -217,6 +294,7 @@ def _pid_is_live(pid: object) -> bool:
 
 
 def _read_lock_payload(lock_path: Path) -> dict[str, object]:
+    """Parse the JSON payload of a reconcile lock, failing closed when unreadable."""
     try:
         payload = json.loads(lock_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
@@ -256,6 +334,7 @@ def acquire_reconcile_lock(archive_root: Path, source_root: Path, only: set[str]
 
 
 def release_reconcile_lock(lock_path: Path) -> None:
+    """Release a reconcile lock created by acquire_reconcile_lock."""
     lock_path.unlink(missing_ok=True)
 
 
@@ -294,6 +373,7 @@ def force_unlock_gemini(root: Path, slug: str) -> dict[str, object]:
 
 
 def _index_lock_path(index_path: Path) -> Path:
+    """Return the lock file path guarding the archive index.json."""
     return index_path.with_name(".index.json.lock")
 
 
@@ -329,6 +409,7 @@ def _acquire_index_lock(index_path: Path, attempts: int = 50, delay: float = 0.0
 
 
 def _release_index_lock(lock_path: Path) -> None:
+    """Release the archive index lock."""
     lock_path.unlink(missing_ok=True)
 
 
@@ -340,6 +421,7 @@ def _write_receipt(
     final_target_kind: str,
     canonical_target: Path,
 ) -> None:
+    """Write the reconciliation receipt and update the archive index atomically."""
     receipt_path = archive_root / slug / ".receipt.json"
 
     if final_target_kind == "symlink":
@@ -455,8 +537,18 @@ def reconcile_gemini(
             if ownership.action == "preserve-external":
                 raise ValueError(f"{slug}: preserve-external action cannot be reconciled")
 
+            # A leading "/" marks an absolute POSIX path; on Windows
+            # Path("/x").is_absolute() is False (no drive), so convert an
+            # MSYS-style "/c/..." to a native path (or reject it) rather than
+            # let relpath resolve it against the current drive.
             canonical_target = Path(ownership.canonical_path)
-            if ownership.action == "link" and not canonical_target.is_absolute():
+            is_abs = canonical_target.is_absolute() or str(ownership.canonical_path).startswith("/")
+            if is_abs and ownership.action == "link":
+                try:
+                    canonical_target = _native_absolute_path(str(ownership.canonical_path))
+                except ValueError as exc:
+                    raise ValueError(f"{slug}: {exc}") from exc
+            if ownership.action == "link" and not is_abs:
                 if canonical_root is None:
                     raise ValueError(
                         f"{slug}: canonical_path '{ownership.canonical_path}' is repo-relative "
@@ -553,7 +645,7 @@ def reconcile_gemini(
                         create_relative_link(stage, canonical_target)
                         final_target_kind = "symlink"
                     except OSError as exc:
-                        if exc.errno not in _recognized_symlink_error_numbers():
+                        if not _is_symlink_unsupported_error(exc):
                             raise
                         write_generated_wrapper(stage, canonical_target)
                         final_target_kind = "generated-wrapper"
@@ -619,6 +711,7 @@ def reconcile_gemini(
 
 
 def _gemini_slugs(root: Path, only: set[str] | None) -> set[str]:
+    """Return the Gemini slugs to verify, optionally narrowed to ``only``."""
     if only is not None:
         return only
     if not root.is_dir():
@@ -694,6 +787,8 @@ def verify_gemini(root: Path, archive_parent: Path, only: set[str] | None = None
                     if expected_target not in text:
                         findings.append(RootFinding(slug, "failed", f"{slug}: generated wrapper does not match receipt"))
                 else:
-                    if canonical_target_raw not in text:
+                    # The receipt stores str(Path), which uses native separators,
+                    # while the adapter text embeds the manifest's POSIX spelling.
+                    if canonical_target_raw not in text and Path(canonical_target_raw).as_posix() not in text:
                         findings.append(RootFinding(slug, "failed", f"{slug}: generated adapter does not match receipt"))
     return findings

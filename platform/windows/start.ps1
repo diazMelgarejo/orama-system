@@ -1775,7 +1775,8 @@ Write-Host ("  ●  orama   http://localhost:{0}/health" -f $UsPort)
 Write-Host ("  ●  Portal  {0}" -f $PortalUrl)
 Write-Host ("  ○  JSON    {0}/api/status" -f $PortalUrl)
 if ($PortalTlsEnabled -and $PortalLoopbackOk) {
-    # Fingerprint lines come from the proxy itself (ca_sha256_file=, ca_public_path=).
+    # Fingerprint lines come from the proxy itself (ca_sha256_der=, ca_sha256_file=, ca_public_path=).
+    $tlsCaDer = ''
     $tlsCaSha = ''
     $tlsCaPath = ''
     $prevEapFp = $ErrorActionPreference
@@ -1786,6 +1787,7 @@ if ($PortalTlsEnabled -and $PortalLoopbackOk) {
         $env:PYTHONPATH = "$PtDir\src;$PtDir"
         $fpOut = @(& $PtPython -m orchestrator.portal_tls_proxy --print-fingerprint 2>&1 | ForEach-Object { "$_" })
         foreach ($fpLine in $fpOut) {
+            if ($fpLine -match '^ca_sha256_der=(.+)$')   { $tlsCaDer  = $Matches[1].Trim() }
             if ($fpLine -match '^ca_sha256_file=(.+)$')  { $tlsCaSha  = $Matches[1].Trim() }
             if ($fpLine -match '^ca_public_path=(.+)$')  { $tlsCaPath = $Matches[1].Trim() }
         }
@@ -1802,8 +1804,13 @@ if ($PortalTlsEnabled -and $PortalLoopbackOk) {
     }
     if ($tlsCaSha -and $tlsCaPath) {
         Write-Host ("     CA public cert : {0}" -f $tlsCaPath)
-        Write-Host ("     CA SHA-256     : {0}" -f $tlsCaSha)
-        Write-Host '     Send the CA public cert to the peer, then compare its SHA-256 through a'
+        if ($tlsCaDer) {
+            Write-Host ("     CA fingerprint : {0}   <- give THIS to the peer operator to pin" -f $tlsCaDer)
+            Write-Host '                      (SHA-256 of the certificate itself; the peer checks it with'
+            Write-Host '                      openssl x509 -noout -fingerprint -sha256, whatever the line endings)'
+        }
+        Write-Host ("     CA file SHA-256: {0}   (exact PEM file bytes only; changes if the file is pasted or re-saved)" -f $tlsCaSha)
+        Write-Host '     Send the CA public cert to the peer, then compare the fingerprint through a'
         Write-Host '     separate channel (voice, chat) before the peer trusts it. Never send a private key.'
     } else {
         Write-Host '     WARNING: could not read the CA fingerprint from --print-fingerprint output:'

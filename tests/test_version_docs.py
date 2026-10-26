@@ -57,12 +57,14 @@ def test_active_version_surfaces_match_version_file():
 
 
 def test_readme_mentions_active_lan_helpers():
+    """The README names the active LAN helper modules, portal_server.py and network_autoconfig.py."""
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     assert "portal_server.py" in readme
     assert "network_autoconfig.py" in readme
 
 
 def test_bridge_docs_reference_current_version():
+    """The bridge and sync-analysis docs carry the current version string (Version X in the bridge doc, vX in the sync analysis)."""
     bridge = (ROOT / "docs" / "PERPLEXITY_BRIDGE.md").read_text(encoding="utf-8")
     sync   = (ROOT / "docs" / "SYNC_ANALYSIS.md").read_text(encoding="utf-8")
     assert f"Version {EXPECTED}" in bridge, f"PERPLEXITY_BRIDGE.md missing Version {EXPECTED}"
@@ -70,19 +72,27 @@ def test_bridge_docs_reference_current_version():
 
 
 def test_agent_registry_version():
+    """Agent registry version."""
     import json
     for reg in [
         ROOT / "bin" / "config" / "agent_registry.json",
         ROOT / "bin" / "orama-system" / "config" / "agent_registry.json",
     ]:
         if reg.exists():
-            data = json.loads(reg.read_text())
+            text = reg.read_text(encoding="utf-8")
+            if not text.lstrip().startswith("{"):
+                # core.symlinks=false checkouts store a git symlink as a text
+                # file holding its relative target; follow it.
+                reg = (reg.parent / text.strip()).resolve()
+                text = reg.read_text(encoding="utf-8")
+            data = json.loads(text)
             assert data.get("version") == EXPECTED, (
-                f"{reg.relative_to(ROOT)} version={data.get('version')!r} != {EXPECTED!r}"
+                f"{reg} version={data.get('version')!r} != {EXPECTED!r}"
             )
 
 
 def test_portal_server_version_constant():
+    """portal_server.py declares a VERSION constant equal to the canonical version."""
     portal = (ROOT / "src" / "orama_system" / "portal_server.py").read_text(encoding="utf-8")
     assert f'VERSION = "{EXPECTED}"' in portal, (
         f"portal_server.py VERSION constant != {EXPECTED!r}"

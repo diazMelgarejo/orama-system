@@ -1,9 +1,28 @@
-# install_coord_pulse.ps1 — install Win 15-minute coord pulse (Task Scheduler)
+﻿# install_coord_pulse.ps1 — install Win 15-minute coord pulse (Task Scheduler)
 # Usage:
 #   .\scripts\install_coord_pulse.ps1
 #   .\scripts\install_coord_pulse.ps1 -Uninstall
 #   .\scripts\install_coord_pulse.ps1 -Status
 
+<#
+.SYNOPSIS
+    Install, inspect or remove the Windows scheduled task that runs the LAN coord pulse.
+
+.DESCRIPTION
+    Writes a small wrapper script under the user's OpenClaw state directory (it sets ORAMA_SYSTEM_PATH and, when known, PERPETUA_TOOLS_PATH, then calls the repo's coord_pulse.ps1) and registers a repeating task named OramaCoordPulse that runs it every IntervalSec seconds. The repo root comes from ORAMA_SYSTEM_PATH or the enclosing git work tree.
+
+.PARAMETER Uninstall
+    Remove the scheduled task and exit.
+
+.PARAMETER Status
+    Show the task state, next run time and the last lines of the pulse log, then exit.
+
+.PARAMETER IntervalSec
+    Seconds between pulses (default 900, i.e. 15 minutes).
+
+.EXAMPLE
+    .\scripts\install_coord_pulse.ps1 -Status
+#>
 param(
     [switch]$Uninstall,
     [switch]$Status,

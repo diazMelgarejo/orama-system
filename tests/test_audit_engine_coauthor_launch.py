@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def _load_engine():
+    """Import scripts/git/audit_engine.py under a private module name and return it."""
     spec = importlib.util.spec_from_file_location(
         "audit_engine_under_test", ROOT / "scripts" / "git" / "audit_engine.py"
     )
@@ -25,10 +26,12 @@ def _load_engine():
 
 
 def test_coauthor_check_is_launched_via_bash(monkeypatch):
+    """The policy script is run as ``bash <script>``, never executed directly."""
     engine = _load_engine()
     seen = {}
 
     def fake_run(argv, **kwargs):
+        """Record the command line and pretend the policy check succeeded."""
         seen["argv"] = list(argv)
         return subprocess.CompletedProcess(argv, 0, "", "")
 
@@ -40,6 +43,7 @@ def test_coauthor_check_is_launched_via_bash(monkeypatch):
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="bash not available")
 def test_coauthor_check_runs_for_real_without_launch_error():
+    """Run the real policy script: it must launch (no OSError) and accept a plain body."""
     engine = _load_engine()
     # A body with no trailers is acceptable under the policy; the point is that
     # the script actually executes instead of raising OSError on Windows.

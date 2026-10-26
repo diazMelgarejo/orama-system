@@ -26,6 +26,7 @@ import hashlib
 import json
 import logging
 import os
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -48,6 +49,7 @@ def _atomic_write_json(path: Path, data: Any) -> None:
 
 
 def _load_json(path: Path, default: Any) -> Any:
+    """Return the JSON document at ``path``, or ``default`` when the file is absent, unreadable or not valid JSON (the failure is logged as a warning, never raised)."""
     if not path.exists():
         return default
     try:
@@ -68,23 +70,53 @@ def _fingerprint(value: Any) -> str:
 class LockHeld(Exception):
     """Raised when the target lock is already held by another live process."""
     def __init__(self, pid: int, lock_path: Path) -> None:
+        """Record the holder's PID and the lock file path and build the message; both stay available as attributes for callers."""
         self.pid = pid
         self.lock_path = lock_path
         super().__init__(f"oramaclaw lock held by PID {pid} ({lock_path})")
 
 
+def _win_pid_exists(pid: int) -> bool:
+    """Return whether a Windows process with this PID is still running.
+
+    ``os.kill(pid, 0)`` is unusable on Windows: any signal other than the
+    console-control ones calls ``TerminateProcess``, so probing would kill
+    the lock holder. Query the process handle instead.
+    """
+    import ctypes
+
+    kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+    kernel32.OpenProcess.restype = ctypes.c_void_p
+    handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+    if not handle:
+        # ERROR_ACCESS_DENIED means it exists but is not ours; anything else
+        # (typically ERROR_INVALID_PARAMETER) means no such process.
+        return ctypes.GetLastError() == 5
+    try:
+        code = ctypes.c_ulong()
+        if not kernel32.GetExitCodeProcess(ctypes.c_void_p(handle), ctypes.byref(code)):
+            return True
+        return code.value == 259  # STILL_ACTIVE
+    finally:
+        kernel32.CloseHandle(ctypes.c_void_p(handle))
+
+
 def _pid_is_alive(pid: int, expected_create_time: float | None) -> bool | None:
     """Return whether pid is a live process matching the expected start time."""
     os_kill_failed = False
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        # Process exists but we don't own it — still alive.
-        pass
-    except Exception:
-        os_kill_failed = True
+    if sys.platform == "win32":
+        if not _win_pid_exists(pid):
+            return False
+    else:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            # Process exists but we don't own it — still alive.
+            pass
+        except Exception:
+            os_kill_failed = True
 
     if expected_create_time is None and not os_kill_failed:
         return True
@@ -132,6 +164,7 @@ def _acquire_lock(lock_path: Path) -> None:
     }
 
     def _should_overwrite_existing() -> bool:
+        """Decide what to do with an existing lock file: raise LockHeld if its owner is alive (or the file cannot be parsed), return True if the owner is dead or the lock has outlived LOCK_STALE_SECONDS with unknown liveness."""
         try:
             data = json.loads(lock_path.read_bytes())
             held_pid: int = data.get("pid", -1)
@@ -191,6 +224,7 @@ def _acquire_lock(lock_path: Path) -> None:
 
 
 def _release_lock(lock_path: Path) -> None:
+    """Remove the lock file if this process still owns it; a lock whose recorded PID is another process is left in place with a warning, and I/O or parse errors are logged, not raised."""
     try:
         if lock_path.exists():
             data = json.loads(lock_path.read_bytes())
@@ -219,6 +253,7 @@ class ControlStore:
     """
 
     def __init__(self, target: ConfigTarget) -> None:
+        """Bind the store to ``target`` and derive the registry, journal, pending-resolution and lock file paths inside its state directory; the lock is not taken until ``open``."""
         self._target = target
         sd = target.state_dir
         self._registry_path = sd / "registry.json"
@@ -246,14 +281,17 @@ class ControlStore:
         return store
 
     def close(self) -> None:
+        """Release the PID lock if this store holds it; calling it again is harmless."""
         if self._lock_held:
             _release_lock(self._lock_path)
             self._lock_held = False
 
     def __enter__(self) -> "ControlStore":
+        """Enter the ``with`` block; the lock was already acquired by ``open``, so the store itself is returned."""
         return self
 
     def __exit__(self, *_: object) -> None:
+        """Leave the ``with`` block by closing the store, which releases the lock; exceptions are not suppressed."""
         self.close()
 
     # ── Registry (field ownership ledger) ─────────────────────────────────
@@ -487,11 +525,13 @@ class ControlStore:
 # ── Utilities ─────────────────────────────────────────────────────────────────
 
 def _iso_now() -> str:
+    """Return the current UTC time as an ISO-8601 string with offset."""
     import datetime
     return datetime.datetime.now(datetime.timezone.utc).isoformat()
 
 
 def _serialise_pending(resolution: PendingResolution) -> dict[str, Any]:
+    """Convert a PendingResolution (and its nested conflict) into the plain JSON-serialisable dict stored in pending-resolutions.json."""
     c = resolution.conflict
     return {
         "resolution_id": resolution.resolution_id,

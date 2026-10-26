@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -14,12 +16,40 @@ RESOLVE_SCRIPT = (
 )
 
 
+def _same_path(printed: str, expected: Path) -> bool:
+    """Compare a path printed by the bash resolver with a native ``Path``.
+
+    Git Bash on Windows prints MSYS paths (``/tmp/...``); ``cygpath -w`` maps
+    them back to native form so both sides compare via ``os.path.normcase``.
+    On POSIX the strings are compared exactly as before.
+    """
+    if sys.platform != "win32":
+        return printed == str(expected.resolve())
+    cygpath = shutil.which("cygpath")
+    if cygpath is not None and printed:
+        printed = subprocess.run(
+            [cygpath, "-w", printed], capture_output=True, text=True, check=False
+        ).stdout.strip() or printed
+    return os.path.normcase(os.path.realpath(printed)) == os.path.normcase(
+        os.path.realpath(str(expected))
+    )
+
+
+def _symlink_or_skip(link: Path, target: Path) -> None:
+    """Create ``link`` -> ``target`` or skip when the platform denies symlinks."""
+    try:
+        link.symlink_to(target)
+    except (OSError, NotImplementedError) as exc:
+        pytest.skip(f"symlink creation not permitted on this platform: {exc}")
+
+
 def _run_resolver(
     *,
     func: str = "resolve_pt_root",
     env: dict[str, str] | None = None,
     cwd: Path | None = None,
 ) -> subprocess.CompletedProcess[str]:
+    """Helper for run resolver."""
     run_env = os.environ.copy()
     for key in (
         "PERPETUA_TOOLS_PATH",
@@ -50,6 +80,7 @@ def _make_pt_root(
     git_bin: str,
     remote_url: str | None = None,
 ) -> Path:
+    """Helper for make pt root."""
     root = tmp_path / name
     root.mkdir(parents=True)
     subprocess.run([git_bin, "init", "-q"], cwd=root, check=True)
@@ -96,13 +127,15 @@ def test_resolve_perp_harness_fails_without_pt_root(tmp_path: Path, git_bin: str
 def test_resolve_perp_harness_env_var_precedence(
     tmp_path: Path, env_key: str, git_bin: str
 ) -> None:
+    """Verify resolve perp harness env var precedence."""
     pt = _make_pt_root(tmp_path, git_bin=git_bin)
     result = _run_resolver(env={env_key: str(pt)})
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == str(pt.resolve())
+    assert _same_path(result.stdout.strip(), pt)
 
 
 def test_resolve_perp_harness_env_precedence_order(tmp_path: Path, git_bin: str) -> None:
+    """Verify resolve perp harness env precedence order."""
     primary = _make_pt_root(tmp_path, "primary-pt", git_bin=git_bin)
     secondary = _make_pt_root(tmp_path, "secondary-pt", git_bin=git_bin)
     result = _run_resolver(
@@ -112,10 +145,11 @@ def test_resolve_perp_harness_env_precedence_order(tmp_path: Path, git_bin: str)
         }
     )
     assert result.returncode == 0
-    assert result.stdout.strip() == str(primary.resolve())
+    assert _same_path(result.stdout.strip(), primary)
 
 
 def test_resolve_perp_harness_paths_file_pt_dir(tmp_path: Path, git_bin: str) -> None:
+    """Verify resolve perp harness paths file pt dir."""
     pt = _make_pt_root(tmp_path, git_bin=git_bin)
     orama = tmp_path / "orama-system"
     orama.mkdir()
@@ -127,10 +161,11 @@ def test_resolve_perp_harness_paths_file_pt_dir(tmp_path: Path, git_bin: str) ->
         cwd=orama,
     )
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == str(pt.resolve())
+    assert _same_path(result.stdout.strip(), pt)
 
 
 def test_resolve_perp_harness_mother_repo_crawl(tmp_path: Path, git_bin: str) -> None:
+    """Verify resolve perp harness mother repo crawl."""
     isolated_home = tmp_path / "home"
     isolated_home.mkdir()
     pt = _make_pt_root(isolated_home, git_bin=git_bin)
@@ -146,10 +181,11 @@ def test_resolve_perp_harness_mother_repo_crawl(tmp_path: Path, git_bin: str) ->
         cwd=orama,
     )
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == str(pt.resolve())
+    assert _same_path(result.stdout.strip(), pt)
 
 
 def test_resolve_perp_harness_home_crawl(tmp_path: Path, git_bin: str) -> None:
+    """Verify resolve perp harness home crawl."""
     isolated_home = tmp_path / "home"
     isolated_home.mkdir()
     pt = _make_pt_root(isolated_home, git_bin=git_bin)
@@ -165,10 +201,11 @@ def test_resolve_perp_harness_home_crawl(tmp_path: Path, git_bin: str) -> None:
         cwd=orama,
     )
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == str(pt.resolve())
+    assert _same_path(result.stdout.strip(), pt)
 
 
 def test_resolve_perp_harness_rejects_incomplete_marker(tmp_path: Path, git_bin: str) -> None:
+    """Verify resolve perp harness rejects incomplete marker."""
     isolated_home = tmp_path / "home"
     isolated_home.mkdir()
     orama = isolated_home / "orama-system"
@@ -193,6 +230,7 @@ def test_resolve_perp_harness_rejects_incomplete_marker(tmp_path: Path, git_bin:
 
 
 def test_resolve_perp_harness_rejects_symlink_root(tmp_path: Path, git_bin: str) -> None:
+    """Verify resolve perp harness rejects symlink root."""
     isolated_home = tmp_path / "home"
     isolated_home.mkdir()
     orama = isolated_home / "orama-system"
@@ -201,7 +239,7 @@ def test_resolve_perp_harness_rejects_symlink_root(tmp_path: Path, git_bin: str)
     # Real PT checkout lives outside HOME so crawl cannot bypass the symlink env var.
     real = _make_pt_root(tmp_path, "real-pt", git_bin=git_bin)
     link = isolated_home / "pt-link"
-    link.symlink_to(real)
+    _symlink_or_skip(link, real)
 
     result = _run_resolver(
         func="resolve_perp_harness_script",
@@ -239,7 +277,7 @@ def test_resolve_perp_harness_rejects_symlink_even_when_real_target_is_crawlable
     # crawl-reachable, unlike the test above.
     real = _make_pt_root(isolated_home, "real-pt", git_bin=git_bin)
     link = isolated_home / "pt-link"
-    link.symlink_to(real)
+    _symlink_or_skip(link, real)
 
     result = _run_resolver(
         func="resolve_perp_harness_script",
@@ -256,6 +294,7 @@ def test_resolve_perp_harness_rejects_symlink_even_when_real_target_is_crawlable
 
 @pytest.mark.integration
 def test_resolve_pt_root_cached_within_session(tmp_path: Path, git_bin: str) -> None:
+    """Verify resolve pt root cached within session."""
     pt = _make_pt_root(tmp_path, git_bin=git_bin)
     run_env = os.environ.copy()
     for key in (
@@ -287,10 +326,12 @@ def test_resolve_pt_root_cached_within_session(tmp_path: Path, git_bin: str) -> 
     assert result.returncode == 0, result.stderr
     lines = [line for line in result.stdout.splitlines() if line.strip()]
     assert len(lines) == 2
-    assert lines[0] == lines[1] == str(pt.resolve())
+    assert lines[0] == lines[1]
+    assert _same_path(lines[0], pt)
 
 
 def test_resolve_perp_harness_fails_on_ambiguous_crawl(tmp_path: Path, git_bin: str) -> None:
+    """Verify resolve perp harness fails on ambiguous crawl."""
     orama = tmp_path / "orama-system"
     orama.mkdir()
     subprocess.run([git_bin, "init", "-q"], cwd=orama, check=True)
@@ -327,7 +368,7 @@ def test_resolve_perp_harness_accepts_trusted_remote(
     pt = _make_pt_root(tmp_path, git_bin=git_bin, remote_url=remote_url)
     result = _run_resolver(env={"PERPETUA_TOOLS_PATH": str(pt)})
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == str(pt.resolve())
+    assert _same_path(result.stdout.strip(), pt)
 
 
 @pytest.mark.integration
@@ -345,7 +386,7 @@ def test_resolve_perp_harness_accepts_trusted_remote_case_insensitive_host(
     )
     result = _run_resolver(env={"PERPETUA_TOOLS_PATH": str(pt)})
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == str(pt.resolve())
+    assert _same_path(result.stdout.strip(), pt)
 
 
 @pytest.mark.integration
@@ -411,4 +452,4 @@ def test_resolve_perp_harness_no_remote_still_accepted(
     pt = _make_pt_root(tmp_path, git_bin=git_bin, remote_url=None)
     result = _run_resolver(env={"PERPETUA_TOOLS_PATH": str(pt)})
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == str(pt.resolve())
+    assert _same_path(result.stdout.strip(), pt)

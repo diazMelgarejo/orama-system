@@ -10,6 +10,7 @@ STRIP_HOOK = ROOT / "scripts/git/hooks/commit-msg.strip-coauthor"
 
 
 def test_strip_coauthor_hook_removes_cursor_trailers(tmp_path):
+    """Verify strip coauthor hook removes cursor trailers."""
     msg = tmp_path / "COMMIT_EDITMSG"
     msg.write_text(
         "feat: example\n\n"
@@ -30,8 +31,10 @@ def test_strip_coauthor_hook_removes_cursor_trailers(tmp_path):
 
 
 def test_cursor_hooks_id_matches_workspace():
+    """Verify cursor hooks id matches workspace."""
     lib = ROOT / "scripts/git/cursor-hooks-id.sh"
-    repo_abs = str(ROOT.resolve())
+    # The shell helper prints the workspace with forward slashes on every platform.
+    repo_abs = ROOT.resolve().as_posix()
     out = subprocess.check_output(
         ["bash", "-c", f'source "{lib}" && cursor_hooks_id "{ROOT}"'],
         text=True,
@@ -42,6 +45,7 @@ def test_cursor_hooks_id_matches_workspace():
 
 
 def test_check_commit_message_allows_well_known_coauthors(tmp_path):
+    """Verify check commit message allows well known coauthors."""
     script = ROOT / "scripts/git/check_commit_message.sh"
     for body, label in (
         ("feat: x\n\nCo-authored-by: Codex <codex@openai.com>\n", "codex"),
@@ -53,6 +57,7 @@ def test_check_commit_message_allows_well_known_coauthors(tmp_path):
 
 
 def test_check_commit_message_rejects_unknown_gmail(tmp_path):
+    """Verify check commit message rejects unknown gmail."""
     script = ROOT / "scripts/git/check_commit_message.sh"
     msg = tmp_path / "msg-bad"
     msg.write_text(

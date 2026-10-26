@@ -1,4 +1,5 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
+
 <#
 .SYNOPSIS
     Print ORAMA_CONTROL_PLANE_TOKEN for Mac .env.local handoff (LAN peer bidirectional).

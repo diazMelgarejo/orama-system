@@ -6,6 +6,7 @@ import importlib.util
 import os
 import signal
 import subprocess
+import sys
 import time
 import types
 from pathlib import Path
@@ -15,6 +16,11 @@ from unittest.mock import Mock, call
 import pytest
 
 pytestmark = pytest.mark.unit
+
+_POSIX_GROUP_SIGNALS_ONLY = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="exercises the POSIX os.killpg branch of _terminate_worker; Windows uses taskkill /T and has no os.killpg",
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 DELEGATE_PY = ROOT / "bin/orama-system/skills/hermes-harness/scripts/hermes_delegate.py"
@@ -35,6 +41,7 @@ def _load_delegate_module() -> types.ModuleType:
 
 
 def test_hanging_worker_times_out_within_deadline() -> None:
+    """Check: hanging worker times out within deadline."""
     mod = _load_delegate_module()
     release = __import__("threading").Event()
 
@@ -71,6 +78,7 @@ def test_hanging_worker_times_out_within_deadline() -> None:
 
 
 def test_fast_workers_complete_ok() -> None:
+    """Check: fast workers complete ok."""
     mod = _load_delegate_module()
 
     def fast(_role: str, task: str) -> dict[str, str]:
@@ -95,6 +103,7 @@ def test_fast_workers_complete_ok() -> None:
 
 
 def test_partial_status_when_some_workers_fail() -> None:
+    """Check: partial status when some workers fail."""
     mod = _load_delegate_module()
 
     def mixed(_role: str, task: str) -> dict[str, str]:
@@ -165,10 +174,46 @@ def test_subprocess_worker_timeout_kills_child(tmp_path: Path) -> None:
         raw = pid_file.read_text(encoding="utf-8").strip()
         assert raw, f"{task}'s PID file must not be empty"
         pid = int(raw)
-        with pytest.raises(ProcessLookupError):
+        assert not _pid_is_alive(pid), f"{task}'s worker must be gone after the timeout"
+
+
+def _pid_is_alive(pid: int) -> bool:
+    """Non-destructive liveness probe.
+
+    os.kill(pid, 0) terminates the target on Windows, so there the exit code is
+    read through the process handle instead.
+    """
+    if sys.platform != "win32":
+        try:
             os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        return True
+    import ctypes
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    kernel32.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+    kernel32.GetExitCodeProcess.restype = wintypes.BOOL
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    kernel32.CloseHandle.restype = wintypes.BOOL
+    handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+    if not handle:
+        return ctypes.get_last_error() == 5  # access denied: the process exists
+    try:
+        code = wintypes.DWORD()
+        if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+            return True
+        return code.value == 259  # STILL_ACTIVE
+    finally:
+        kernel32.CloseHandle(handle)
 
 
+@_POSIX_GROUP_SIGNALS_ONLY
 def test_subprocess_worker_timeout_kills_grandchild_without_group_signal(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -181,6 +226,7 @@ def test_subprocess_worker_timeout_kills_grandchild_without_group_signal(
     mod = _load_delegate_module()
 
     def unavailable_group_signal(_pgid: int, _signal: int) -> None:
+        """Unavailable group signal."""
         raise ProcessLookupError
 
     monkeypatch.setattr(mod.os, "killpg", unavailable_group_signal)
@@ -245,6 +291,7 @@ def test_subprocess_worker_timeout_kills_grandchild_without_group_signal(
     assert grandchild_dead, "grandchild must be killed, not just the direct child"
 
 
+@_POSIX_GROUP_SIGNALS_ONLY
 def test_descendant_permission_error_falls_through_to_group_cleanup(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -270,6 +317,7 @@ def test_descendant_permission_error_falls_through_to_group_cleanup(
     group_signal.assert_called_once_with(10, signal.SIGTERM)
 
 
+@_POSIX_GROUP_SIGNALS_ONLY
 def test_non_linux_cleanup_still_signals_the_group_after_the_worker_exits(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -293,6 +341,7 @@ def test_non_linux_cleanup_still_signals_the_group_after_the_worker_exits(
     group_signal.assert_called_once_with(10, signal.SIGTERM)
 
 
+@_POSIX_GROUP_SIGNALS_ONLY
 def test_linux_cleanup_skips_the_group_signal_once_the_worker_exits(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -314,6 +363,7 @@ def test_linux_cleanup_skips_the_group_signal_once_the_worker_exits(
     group_signal.assert_not_called()
 
 
+@_POSIX_GROUP_SIGNALS_ONLY
 def test_descendant_cleanup_escalates_to_group_sigkill_when_worker_stays_alive(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -375,6 +425,7 @@ def test_subprocess_workers_respect_concurrency_cap(tmp_path: Path) -> None:
     stop = threading.Event()
 
     def poll_concurrency() -> None:
+        """Poll concurrency."""
         nonlocal observed_max
         while not stop.is_set():
             count = len(list(marker_dir.glob("*.running")))
@@ -424,6 +475,7 @@ def test_worker_construction_failure_does_not_abort_the_batch(tmp_path: Path) ->
     call_count = {"n": 0}
 
     class _FlakyWorker(real_worker_cls):
+        """Tests and helpers: FlakyWorker."""
         def __init__(self, task: str, pt_root: str) -> None:
             """
             Simulate a worker construction failure for the second instance.
@@ -534,6 +586,7 @@ def test_launch_deadline_checked_between_worker_constructions(
     workers: list[Any] = []
 
     def worker(task: str, pt_root: str) -> Any:
+        """Worker."""
         starts.append((task, clock[0]))
         clock[0] += 0.6
         obj = types.SimpleNamespace(task=task, proc=Mock(), cleanup=Mock())
@@ -542,6 +595,7 @@ def test_launch_deadline_checked_between_worker_constructions(
         return obj
 
     def terminate(obj: Any) -> None:
+        """Terminate."""
         obj.proc.poll.return_value = -15
 
     monkeypatch.setattr(mod.time, "monotonic", lambda: clock[0])
