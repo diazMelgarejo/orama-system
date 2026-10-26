@@ -2,8 +2,12 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
+import sys
 from pathlib import Path
+
+import pytest
 
 ORAMA_ROOT = Path(__file__).resolve().parents[1]
 SYNC_SH = ORAMA_ROOT / "bin/orama-system/scripts/sync-cursor-mcp.sh"
@@ -24,6 +28,7 @@ def test_elevated_stack_includes_ai_cli() -> None:
     assert "ai-cli-mcp" in servers
 
 
+@pytest.mark.skipif(shutil.which("jq") is None, reason="sync-cursor-mcp.sh requires jq, which is not installed")
 def test_sync_script_readonly_profile_dry_run() -> None:
     proc = subprocess.run(
         ["bash", str(SYNC_SH), "--profile", "readonly", "--dry-run"],
@@ -45,6 +50,7 @@ def test_tracked_cursor_mcp_json_is_readonly_safe() -> None:
     assert "code-review-graph" in servers
 
 
+@pytest.mark.skipif(shutil.which("jq") is None, reason="sync-cursor-mcp.sh requires jq, which is not installed")
 def test_sync_script_elevated_profile_dry_run() -> None:
     proc = subprocess.run(
         ["bash", str(SYNC_SH), "--profile", "elevated", "--dry-run"],
@@ -58,6 +64,7 @@ def test_sync_script_elevated_profile_dry_run() -> None:
     assert "server: ai-cli-mcp" in proc.stdout
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX file modes (0o600) are not representable on Windows")
 def test_ensure_control_plane_token_persists_when_enforced(monkeypatch, tmp_path):
     from utils.control_plane_auth import ensure_control_plane_token
 

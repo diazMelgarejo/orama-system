@@ -10,6 +10,12 @@ import pytest
 SCRIPT = Path(__file__).parents[1] / "bin/orama-system/scripts/install-mcp-stack.sh"
 
 
+_NEEDS_POSIX_USERLAND = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="install-mcp-stack.sh needs python3 and /usr/bin:/bin on PATH, which Windows lacks",
+)
+
+
 def _cmd(path: Path, name: str, body: str) -> None:
     target = path / name
     target.write_text("#!/usr/bin/env bash\nset -eu\n" + body, encoding="utf-8")
@@ -42,6 +48,7 @@ def _env(tmp_path: Path) -> dict[str, str]:
     return env
 
 
+@_NEEDS_POSIX_USERLAND
 def test_core_verify_is_noninteractive_and_uses_shared_gate(tmp_path: Path) -> None:
     result = subprocess.run(
         ["bash", str(SCRIPT), "--core-only", "--non-interactive", "--verify"],
@@ -55,6 +62,7 @@ def test_core_verify_is_noninteractive_and_uses_shared_gate(tmp_path: Path) -> N
     assert "dangerously-skip-permissions" not in result.stdout
 
 
+@_NEEDS_POSIX_USERLAND
 def test_core_readiness_does_not_require_claude_client(tmp_path: Path) -> None:
     result = subprocess.run(
         ["bash", str(SCRIPT), "--core-only", "--verify"],
@@ -67,6 +75,7 @@ def test_core_readiness_does_not_require_claude_client(tmp_path: Path) -> None:
 
 
 @pytest.mark.integration
+@_NEEDS_POSIX_USERLAND
 def test_core_only_default_arguments_are_bash32_nounset_safe(tmp_path: Path) -> None:
     result = subprocess.run(
         ["/bin/bash", "-u", str(SCRIPT), "--core-only"],
