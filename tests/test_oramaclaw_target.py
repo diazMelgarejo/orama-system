@@ -198,8 +198,11 @@ def test_catalog_load_invalid_json_returns_empty(tmp_path, caplog):
 
 
 def test_catalog_get_missing_target_raises(tmp_path):
+    """Catalog get missing target raises."""
     catalog = TargetCatalog({}, tmp_path / "t.json")
     with pytest.raises(TargetNotFound) as exc_info:
         catalog.get("nonexistent")
-    assert "nonexistent" in str(exc_info.value)
-    assert str(tmp_path / "t.json") in str(exc_info.value)
+    # KeyError.__str__ reprs its message (doubling Windows backslashes); read the raw arg.
+    message = str(exc_info.value.args[0])
+    assert "nonexistent" in message
+    assert str(tmp_path / "t.json") in message

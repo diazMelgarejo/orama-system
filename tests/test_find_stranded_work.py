@@ -5,6 +5,7 @@ from __future__ import annotations
 import shutil
 import stat
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -147,7 +148,9 @@ def test_missing_reanchor_scanner_fails_closed(tmp_path: Path) -> None:
     assert "No stranded work found." not in result.stdout
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX execute bit cannot be cleared on Windows filesystems")
 def test_non_executable_reanchor_scanner_fails_closed(tmp_path: Path) -> None:
+    """Non executable reanchor scanner fails closed."""
     repo = _make_pushed_repo(tmp_path)
 
     result = _run_scanner_with_broken_reanchor(repo, tmp_path, missing=False)
@@ -183,6 +186,7 @@ def test_unresolved_origin_main_fails_closed(tmp_path: Path) -> None:
 
 
 def test_dirty_worktree_is_flagged(tmp_path: Path) -> None:
+    """Dirty worktree is flagged."""
     repo = _make_pushed_repo(tmp_path)
     _git(repo, "checkout", "-b", "dirty-branch")
     _commit(repo, "dirty-base.txt", "base\n", "dirty branch base")
@@ -195,7 +199,15 @@ def test_dirty_worktree_is_flagged(tmp_path: Path) -> None:
     result = _run_scanner(repo)
 
     assert result.returncode == 0, result.stderr
-    assert f"worktree: {worktree}" in result.stdout
+    if sys.platform == "win32":
+        # bash prints MSYS-style paths (/tmp/...) for a native tmp dir.
+        tail = f"{worktree.parent.name}/{worktree.name}"
+        assert any(
+            line.strip().startswith("worktree: ") and line.strip().endswith(tail)
+            for line in result.stdout.splitlines()
+        )
+    else:
+        assert f"worktree: {worktree}" in result.stdout
     assert "branch: dirty-branch" in result.stdout
     assert "issue: dirty-worktree" in result.stdout
     assert "?? untracked.txt" in result.stdout

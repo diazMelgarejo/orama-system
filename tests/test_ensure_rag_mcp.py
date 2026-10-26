@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -39,6 +40,7 @@ def test_codex_apply_writes_stdio_mcp_blocks(tmp_path, monkeypatch):
 
 
 def test_openclaw_apply_merges_missing_server(tmp_path, monkeypatch):
+    """Openclaw apply merges missing server."""
     mod = _load_module()
     mcp_json = tmp_path / ".mcp.json"
     mcp_json.write_text(json.dumps({"mcpServers": {"existing": {"command": "x"}}}), encoding="utf-8")
@@ -50,7 +52,8 @@ def test_openclaw_apply_merges_missing_server(tmp_path, monkeypatch):
     data = json.loads(mcp_json.read_text(encoding="utf-8"))
     assert "existing" in data["mcpServers"]
     assert data["mcpServers"]["gbrain"]["command"] == "/bin/sh"
-    assert "gbrain serve" in data["mcpServers"]["gbrain"]["args"][1]
+    # The resolved binary may carry a platform suffix (gbrain.EXE on Windows).
+    assert re.search(r"gbrain(\.exe)? serve", data["mcpServers"]["gbrain"]["args"][1], re.IGNORECASE)
 
 
 def test_openclaw_apply_rejects_malformed_json(tmp_path, monkeypatch):

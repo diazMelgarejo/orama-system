@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 import stat
 import subprocess
+import sys
 import textwrap
 from pathlib import Path
 
@@ -62,6 +63,19 @@ def _make_fake_install_sh(directory: Path, exit_code: int = 0) -> Path:
 # This harness replicates ONLY the new code added to install.sh (lines 157-173).
 # It is self-contained so it can be run with arbitrary env vars via the `env`
 # parameter of _bash().
+
+def _assert_pt_install(stdout: str, pt_dir: Path) -> None:
+    """Assert the harness reported pt_dir's install.sh, tolerating bash path spelling on Windows."""
+    expected = f"PT_INSTALL={pt_dir}/install.sh"
+    if sys.platform != "win32":
+        assert expected in stdout
+        return
+    # bash may echo native backslashes or MSYS-style /tmp paths; compare the
+    # tail below the per-test tmp dir, with separators normalised.
+    line = next(ln for ln in stdout.splitlines() if ln.startswith("PT_INSTALL="))
+    tail = pt_dir.relative_to(pt_dir.parent.parent.parent).as_posix() + "/install.sh"
+    assert line.replace("\\", "/").endswith(tail), line
+
 
 _PT_DISCOVERY_HARNESS = r"""
 warn() { echo "WARN: $*" >&2; }
@@ -173,6 +187,7 @@ class TestInstallShPtDiscovery:
     # ── OPENCLAW_HOME fallback ───────────────────────────────────────────────
 
     def test_openclaw_home_perpetua_tools_used_as_last_resort(self, tmp_path):
+        """Openclaw home perpetua tools used as last resort."""
         openclaw = tmp_path / "openclaw-v1"
         pt_dir = openclaw / "Perpetua-Tools"
         _make_fake_install_sh(pt_dir)
@@ -182,7 +197,7 @@ class TestInstallShPtDiscovery:
             "OPENCLAW_HOME": str(openclaw),
         })
         assert result.returncode == 0
-        assert f"PT_INSTALL={pt_dir}/install.sh" in result.stdout
+        _assert_pt_install(result.stdout, pt_dir)
 
     def test_openclaw_home_defaults_to_home_openclaw_v1(self, tmp_path):
         """When OPENCLAW_HOME is unset, falls back to $HOME/openclaw-v1."""
@@ -197,7 +212,7 @@ class TestInstallShPtDiscovery:
         env_copy["HOME"] = str(tmp_path)
         result = _bash(_PT_DISCOVERY_HARNESS, env=env_copy)
         assert result.returncode == 0
-        assert f"PT_INSTALL={pt_dir}/install.sh" in result.stdout
+        _assert_pt_install(result.stdout, pt_dir)
 
     # ── Priority: PATH > ROOT > OPENCLAW_HOME ───────────────────────────────
 
