@@ -30,6 +30,37 @@ SCRIPT = (
 )
 
 
+# Rooted-and-absolute on every platform ('/fake' lacks a drive letter on Windows
+# and would be classified as repo-relative by the reconciler).
+FAKE_ROOT = Path(os.path.abspath("/fake")).as_posix()
+
+
+def _symlink_or_skip(link: Path, target: Path | str, *, is_dir: bool = False) -> None:
+    """Create ``link`` -> ``target``, skipping the test when symlinks are unavailable."""
+    try:
+        link.symlink_to(target, target_is_directory=is_dir)
+    except (OSError, NotImplementedError) as exc:
+        pytest.skip(f"symlink creation not permitted on this platform: {exc}")
+
+
+def _symlinks_supported() -> bool:
+    """Probe once whether this account can create directory symlinks."""
+    with tempfile.TemporaryDirectory() as tmp:
+        base = Path(tmp)
+        (base / "target").mkdir()
+        try:
+            (base / "link").symlink_to(base / "target", target_is_directory=True)
+        except (OSError, NotImplementedError):
+            return False
+    return True
+
+
+requires_symlinks = pytest.mark.skipif(
+    not _symlinks_supported(),
+    reason="creating symlinks needs a privilege (Developer Mode/admin) not held here",
+)
+
+
 @pytest.fixture(scope="module")
 def mod():
     spec = importlib.util.spec_from_file_location("install_thin_skill_wrappers", SCRIPT)
@@ -44,7 +75,7 @@ def _link_ownership(slug: str, canonical_path: str | None = None):
     import gemini_reconciliation as gr
 
     return lambda _slug: gr.GeminiOwnership(
-        "orama", "link", slug, canonical_path or f"/fake/{slug}/SKILL.md", "none"
+        "orama", "link", slug, canonical_path or f"{FAKE_ROOT}/{slug}/SKILL.md", "none"
     )
 
 
@@ -301,7 +332,7 @@ def test_inventory_root_detects_symlink(mod, tmp_path: Path) -> None:
     canonical.mkdir(parents=True)
     (canonical / "SKILL.md").write_text("---\nname: c\n---\n# C\n", encoding="utf-8")
     root.mkdir()
-    (root / "linked-skill").symlink_to(canonical, target_is_directory=True)
+    _symlink_or_skip(root / "linked-skill", canonical, is_dir=True)
 
     rows = mod.inventory_root("gemini", root)
 
@@ -407,7 +438,7 @@ def test_gemini_verify_reports_failure_when_not_reconciled(mod, tmp_path: Path, 
 def test_gemini_verify_fails_on_missing_receipt(mod, tmp_path: Path) -> None:
     root = tmp_path / "gemini" / "skills"
     root.mkdir(parents=True)
-    (root / "code-review").symlink_to(_canonical_code_review(), target_is_directory=True)
+    _symlink_or_skip(root / "code-review", _canonical_code_review(), is_dir=True)
 
     findings = mod.verify_gemini(root, tmp_path / "archive", {"code-review"})
 
@@ -419,7 +450,7 @@ def test_gemini_verify_fails_on_missing_receipt(mod, tmp_path: Path) -> None:
 def test_gemini_verify_fails_on_mismatched_receipt(mod, tmp_path: Path) -> None:
     root, archive_parent = tmp_path / "gemini" / "skills", tmp_path / "archive"
     root.mkdir(parents=True)
-    (root / "code-review").symlink_to(_canonical_code_review(), target_is_directory=True)
+    _symlink_or_skip(root / "code-review", _canonical_code_review(), is_dir=True)
     receipt_dir = archive_parent / "batch-1" / "code-review"
     receipt_dir.mkdir(parents=True)
     (receipt_dir / "SKILL.md").write_text("archived source\n", encoding="utf-8")
@@ -649,7 +680,7 @@ def test_reconcile_does_not_silently_skip_a_corrupt_receipt(mod, tmp_path: Path)
     archive_skill.mkdir(parents=True)
     (archive_skill / ".receipt.json").write_text("not valid json{{{", encoding="utf-8")
 
-    ownership = gr.GeminiOwnership("orama", "link", "code-review", "/fake/code-review/SKILL.md", "none")
+    ownership = gr.GeminiOwnership("orama", "link", "code-review", f"{FAKE_ROOT}/code-review/SKILL.md", "none")
 
     # Must NOT silently return [] -- an unparseable receipt cannot be
     # trusted, so this must surface loudly (an existing archive with no
@@ -718,6 +749,7 @@ def test_validate_frontmatter_tolerates_crlf_line_endings(mod) -> None:
     assert "description: test" in frontmatter
 
 
+@requires_symlinks
 def test_verify_gemini_fails_when_symlink_target_no_longer_exists(mod, tmp_path: Path) -> None:
     """Path.resolve() is non-strict: a symlink whose canonical target has
     since been deleted still resolves (syntactically) to the same string,
@@ -744,7 +776,7 @@ def test_verify_gemini_fails_when_symlink_target_no_longer_exists(mod, tmp_path:
 def test_audit_reports_antigravity_shared_root(mod: ModuleType, tmp_path: Path) -> None:
     agents, antigravity = tmp_path / "agents", tmp_path / "antigravity"
     agents.mkdir()
-    antigravity.symlink_to(agents, target_is_directory=True)
+    _symlink_or_skip(antigravity, agents, is_dir=True)
     assert mod.verify_antigravity_root(agents, antigravity).status == "shared-root"
 
 
@@ -766,7 +798,7 @@ def test_verify_antigravity_root_reports_unreadable_on_oserror(
     shared = tmp_path / "agents"
     antigravity = tmp_path / "antigravity"
     shared.mkdir()
-    antigravity.symlink_to(shared, target_is_directory=True)
+    _symlink_or_skip(antigravity, shared, is_dir=True)
 
     real_resolve = Path.resolve
 
@@ -859,6 +891,7 @@ def test_orama_gstack_adapter_targets_gstack_gbrain(mod) -> None:
     assert "bin/orama-system/gstack-gbrain/SKILL.md" in text
     assert "bin/orama-system/gstack/SKILL.md" not in text
 
+@requires_symlinks
 def test_code_review_reconciliation_drops_glm_fallback(mod, tmp_path: Path) -> None:
     root = tmp_path / "gemini"
     skill = root / "code-review" / "SKILL.md"
@@ -942,6 +975,7 @@ def test_lock_scoped_to_live_root_not_timestamped_archive(mod, tmp_path: Path) -
         mod.release_reconcile_lock(lock)
 
 
+@requires_symlinks
 def test_link_target_anchored_to_repo_root_not_caller_cwd(mod, tmp_path: Path, monkeypatch) -> None:
     """Bug 2: a manifest canonical_path is repo-relative (e.g.
     'bin/orama-system/skills/code-review/SKILL.md'). The real symlink must
@@ -986,7 +1020,7 @@ def test_receipt_write_failure_restores_previously_live_skill(mod, tmp_path: Pat
     archive.mkdir(parents=True)
     (archive.parent / "index.json").write_text("not valid json{{{", encoding="utf-8")
 
-    ownership = gr.GeminiOwnership("orama", "link", "code-review", "/fake/code-review/SKILL.md", "none")
+    ownership = gr.GeminiOwnership("orama", "link", "code-review", f"{FAKE_ROOT}/code-review/SKILL.md", "none")
     with pytest.raises(ValueError, match="archive index is invalid JSON"):
         mod.reconcile_gemini(root, archive, {"code-review"}, lambda s: ownership)
 
@@ -1004,7 +1038,7 @@ def test_receipt_write_failure_removes_fresh_install(mod, tmp_path: Path) -> Non
     archive.mkdir(parents=True)
     (archive.parent / "index.json").write_text("not valid json{{{", encoding="utf-8")
 
-    ownership = gr.GeminiOwnership("orama", "link", "code-review", "/fake/code-review/SKILL.md", "none")
+    ownership = gr.GeminiOwnership("orama", "link", "code-review", f"{FAKE_ROOT}/code-review/SKILL.md", "none")
     with pytest.raises(ValueError, match="archive index is invalid JSON"):
         mod.reconcile_gemini(root, archive, {"code-review"}, lambda s: ownership)
 
@@ -1077,7 +1111,7 @@ def test_index_json_write_is_atomic_against_a_mid_write_crash(mod, tmp_path: Pat
     old.mkdir(parents=True)
     (old / "SKILL.md").write_text("v1\n", encoding="utf-8")
 
-    ownership = gr.GeminiOwnership("orama", "link", "code-review", "/fake/code-review/SKILL.md", "none")
+    ownership = gr.GeminiOwnership("orama", "link", "code-review", f"{FAKE_ROOT}/code-review/SKILL.md", "none")
     mod.reconcile_gemini(root, archive, {"code-review"}, lambda s: ownership)
 
     index_path = archive.parent / "index.json"
@@ -1098,7 +1132,7 @@ def test_index_json_write_is_atomic_against_a_mid_write_crash(mod, tmp_path: Pat
     old2 = root / "orama-afrp"
     old2.mkdir(parents=True)
     (old2 / "SKILL.md").write_text("v1\n", encoding="utf-8")
-    ownership2 = gr.GeminiOwnership("orama", "link", "orama-afrp", "/fake/orama-afrp/SKILL.md", "none")
+    ownership2 = gr.GeminiOwnership("orama", "link", "orama-afrp", f"{FAKE_ROOT}/orama-afrp/SKILL.md", "none")
     with pytest.raises(OSError, match="simulated crash mid-stream-write"):
         mod.reconcile_gemini(root, archive, {"orama-afrp"}, lambda s: ownership2)
 
@@ -1119,7 +1153,7 @@ def test_index_json_write_failure_during_os_replace_preserves_original(mod, tmp_
     old.mkdir(parents=True)
     (old / "SKILL.md").write_text("v1\n", encoding="utf-8")
 
-    ownership = gr.GeminiOwnership("orama", "link", "code-review", "/fake/code-review/SKILL.md", "none")
+    ownership = gr.GeminiOwnership("orama", "link", "code-review", f"{FAKE_ROOT}/code-review/SKILL.md", "none")
     mod.reconcile_gemini(root, archive, {"code-review"}, lambda s: ownership)
 
     index_path = archive.parent / "index.json"
@@ -1137,7 +1171,7 @@ def test_index_json_write_failure_during_os_replace_preserves_original(mod, tmp_
     old2 = root / "orama-afrp"
     old2.mkdir(parents=True)
     (old2 / "SKILL.md").write_text("v1\n", encoding="utf-8")
-    ownership2 = gr.GeminiOwnership("orama", "link", "orama-afrp", "/fake/orama-afrp/SKILL.md", "none")
+    ownership2 = gr.GeminiOwnership("orama", "link", "orama-afrp", f"{FAKE_ROOT}/orama-afrp/SKILL.md", "none")
     with pytest.raises(OSError, match="simulated replace failure"):
         mod.reconcile_gemini(root, archive, {"orama-afrp"}, lambda s: ownership2)
 
@@ -1152,6 +1186,7 @@ def test_index_json_write_failure_during_os_replace_preserves_original(mod, tmp_
     assert not list(archive.parent.glob(".index.json.tmp.*"))
 
 
+@requires_symlinks
 def test_cli_anchors_gemini_link_targets_to_repo_root_not_workspace_root(
     mod, tmp_path: Path, monkeypatch
 ) -> None:
@@ -1285,7 +1320,7 @@ def test_index_json_first_write_crash_leaves_no_corrupt_index(mod, tmp_path: Pat
 
     monkeypatch.setattr(os, "fsync", crash_on_fsync)
 
-    ownership = gr.GeminiOwnership("orama", "link", "code-review", "/fake/code-review/SKILL.md", "none")
+    ownership = gr.GeminiOwnership("orama", "link", "code-review", f"{FAKE_ROOT}/code-review/SKILL.md", "none")
     with pytest.raises(OSError, match="simulated first-write crash"):
         mod.reconcile_gemini(root, archive, {"code-review"}, lambda s: ownership)
 
