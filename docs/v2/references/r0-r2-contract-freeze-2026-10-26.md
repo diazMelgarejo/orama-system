@@ -45,8 +45,10 @@ Rules:
   operator signature. In Releases 0 to 2 no signing path exists, so any `true` bit is refused at
   startup with `capability.unsigned_enablement`.
 - Readiness prints each bit's effective value and the reason when it differs from the record.
-- The schema checks shape only. Digest comparison and signature verification are runtime
-  checks in the consumer and are not expressed in the schema.
+- The schema checks shape only. The consumer must parse `issued_at` as an RFC 3339 UTC
+  timestamp; a parse failure makes the record invalid and denies every capability. Digest
+  comparison and signature verification are also runtime checks in the consumer and are not
+  expressed in the schema.
 
 ## 2. Startup refusal matrix
 

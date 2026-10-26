@@ -6,6 +6,7 @@ import copy
 import json
 import re
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -20,11 +21,13 @@ DIGEST = "sha256:" + "0" * 64
 IPV4 = re.compile(r"(?<![0-9A-Za-z.])(?:\d{1,3}\.){3}\d{1,3}(?![0-9A-Za-z])")
 
 
-def _schema() -> dict:
+def _schema() -> dict[str, Any]:
+    """Load the capability-record schema from disk."""
     return json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
 
 
-def _record() -> dict:
+def _record() -> dict[str, Any]:
+    """Return a valid all-false capability record."""
     return {
         "schema": "orama-capability-record/v1",
         "record_id": "rec-1",
@@ -36,7 +39,8 @@ def _record() -> dict:
     }
 
 
-def _type_ok(value, name: str) -> bool:
+def _type_ok(value: Any, name: str) -> bool:
+    """Return whether value matches the JSON Schema primitive type name."""
     if name == "null":
         return value is None
     if name == "boolean":
@@ -48,7 +52,7 @@ def _type_ok(value, name: str) -> bool:
     raise AssertionError(f"unsupported type in schema: {name}")
 
 
-def _check(node: dict, value, errors: list[str], path: str = "$") -> None:
+def _check(node: dict[str, Any], value: Any, errors: list[str], path: str = "$") -> None:
     """Minimal structural validator covering the keywords this schema uses."""
     if "const" in node and value != node["const"]:
         errors.append(f"{path}: const")
@@ -75,7 +79,8 @@ def _check(node: dict, value, errors: list[str], path: str = "$") -> None:
                 _check(sub, value[key], errors, f"{path}.{key}")
 
 
-def _errors(record) -> list[str]:
+def _errors(record: Any) -> list[str]:
+    """Return validation errors for record, cross-checked with jsonschema when installed."""
     errors: list[str] = []
     _check(_schema(), record, errors)
     try:
@@ -88,7 +93,8 @@ def _errors(record) -> list[str]:
     return errors
 
 
-def test_schema_is_valid_json_with_draft_2020_12():
+def test_schema_is_valid_json_with_draft_2020_12() -> None:
+    """Schema declares draft 2020-12 and closes the capability bit set."""
     schema = _schema()
     assert schema["$schema"] == "https://json-schema.org/draft/2020-12/schema"
     assert schema["additionalProperties"] is False
@@ -98,18 +104,21 @@ def test_schema_is_valid_json_with_draft_2020_12():
     assert all(caps["properties"][b] == {"type": "boolean"} for b in BITS)
 
 
-def test_default_all_false_record_validates():
+def test_default_all_false_record_validates() -> None:
+    """The default all-false record is valid."""
     assert _errors(_record()) == []
 
 
-def test_signature_object_is_allowed_shape():
+def test_signature_object_is_allowed_shape() -> None:
+    """A signature object is accepted by shape."""
     record = _record()
     record["signature"] = {"alg": "test", "value": "x"}
     assert _errors(record) == []
 
 
 @pytest.mark.parametrize("bit", BITS)
-def test_missing_bit_fails(bit):
+def test_missing_bit_fails(bit: str) -> None:
+    """A record missing any capability bit is invalid."""
     record = _record()
     del record["capabilities"][bit]
     assert _errors(record)
@@ -117,14 +126,16 @@ def test_missing_bit_fails(bit):
 
 @pytest.mark.parametrize("bit", BITS)
 @pytest.mark.parametrize("bad", [0, 1, "false", None])
-def test_non_bool_bit_fails(bit, bad):
+def test_non_bool_bit_fails(bit: str, bad: Any) -> None:
+    """A non-boolean capability bit is invalid."""
     record = _record()
     record["capabilities"][bit] = bad
     assert _errors(record)
 
 
 @pytest.mark.parametrize("where", ["top", "capabilities", "binds"])
-def test_extra_key_fails(where):
+def test_extra_key_fails(where: str) -> None:
+    """Unknown keys are rejected at every level."""
     record = _record()
     target = record if where == "top" else record[where]
     target["extra"] = True
@@ -133,7 +144,8 @@ def test_extra_key_fails(where):
 
 @pytest.mark.parametrize("field", ["schema", "record_id", "issued_at", "issuer", "binds",
                                    "signature", "capabilities"])
-def test_missing_top_level_field_fails(field):
+def test_missing_top_level_field_fails(field: str) -> None:
+    """Every top-level field is required."""
     record = _record()
     del record[field]
     assert _errors(record)
@@ -141,14 +153,16 @@ def test_missing_top_level_field_fails(field):
 
 @pytest.mark.parametrize("bad", ["sha256:abc", "sha256:" + "G" * 64, "md5:" + "0" * 64,
                                  "sha256:" + "0" * 65, "SHA256:" + "0" * 64])
-def test_bad_digest_fails(bad):
+def test_bad_digest_fails(bad: str) -> None:
+    """Malformed digests are rejected for both bound digests."""
     for key in ("binary_digest", "config_digest"):
         record = copy.deepcopy(_record())
         record["binds"][key] = bad
         assert _errors(record)
 
 
-def test_unknown_schema_and_bad_timestamp_fail():
+def test_unknown_schema_and_bad_timestamp_fail() -> None:
+    """An unknown schema id or a malformed timestamp is invalid."""
     record = _record()
     record["schema"] = "orama-capability-record/v2"
     assert _errors(record)
@@ -158,14 +172,16 @@ def test_unknown_schema_and_bad_timestamp_fail():
 
 
 @pytest.mark.parametrize("doc", DOCS, ids=lambda p: p.name)
-def test_docs_contain_no_ip_literals_or_workstation_paths(doc):
+def test_docs_contain_no_ip_literals_or_workstation_paths(doc: Path) -> None:
+    """Documents carry no IP literals or workstation paths."""
     text = doc.read_text(encoding="utf-8")
     assert not IPV4.findall(text)
     assert not re.search(r"[A-Za-z]:\\|/Users/|/home/", text)
 
 
 @pytest.mark.parametrize("doc", DOCS, ids=lambda p: p.name)
-def test_docs_state_draft_and_no_activation(doc):
+def test_docs_state_draft_and_no_activation(doc: Path) -> None:
+    """Documents state draft status and no activation."""
     text = doc.read_text(encoding="utf-8")
     assert "ORAMA_GRANT_SERVING" in text
     assert "not" in text.split("\n\n", 2)[1].lower()
