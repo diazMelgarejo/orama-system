@@ -179,6 +179,33 @@ def test_cycling_between_profiles_backs_up_each_distinct_outgoing_state(
     assert models_backed_up == ["model-prior", "model-a", "model-b"]
 
 
+def test_same_timestamp_switches_never_overwrite_or_misorder_backups(
+    workspace: Workspace,
+) -> None:
+    """A coarse clock can give two switches the identical timestamp: each outgoing
+    state must still get its own backup, in chronological name order."""
+    from datetime import datetime, timezone
+
+    providers_path, backup_dir, tmpl_path = workspace
+    tmpl_b = tmpl_path.parent / "profile-b.json.tmpl"
+    with tmpl_b.open("w") as f:
+        json.dump({"settings": {**_settings("model-b", "${B_KEY}"), "apiKey": "${B_KEY}"}}, f)
+    _write_json(providers_path, _providers_cfg(_settings("model-prior", "key-prior")))
+    frozen = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+
+    switch_provider(str(providers_path), str(tmpl_path), "profile-a", str(backup_dir),
+                    env={"A_KEY": "key-a"}, now=frozen)
+    switch_provider(str(providers_path), str(tmpl_b), "profile-b", str(backup_dir),
+                    env={"B_KEY": "key-b"}, now=frozen)
+    switch_provider(str(providers_path), str(tmpl_path), "profile-a", str(backup_dir),
+                    env={"A_KEY": "key-a"}, now=frozen)
+
+    names = sorted(os.listdir(backup_dir))
+    assert len(names) == 3, names
+    assert [_read_json(backup_dir / n)["settings"]["model"] for n in names] == [
+        "model-prior", "model-a", "model-b"]
+
+
 def test_backup_rotation_caps_at_ten(
     workspace: Workspace, monkeypatch: pytest.MonkeyPatch
 ) -> None:

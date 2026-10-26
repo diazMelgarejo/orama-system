@@ -14,7 +14,7 @@ import os
 import re
 import sys
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping, Sequence
 
 try:  # POSIX
@@ -126,6 +126,14 @@ def switch_provider(
         # second (a realistic rate for an automated agent) must not
         # collide on the same filename and silently clobber each other.
         ts = now.strftime("%Y%m%dT%H%M%S.%fZ")
+        # Names sort chronologically and rotation/dedupe rely on that. A coarse
+        # clock (Windows ticks about every 15 ms) can hand two switches the same
+        # timestamp, which would overwrite a backup and break the order: bump the
+        # stamp until it is strictly newer than the latest backup on file.
+        if prior and f"openai-compatible-{ts}.json" <= os.path.basename(prior):
+            while f"openai-compatible-{ts}.json" <= os.path.basename(prior):
+                now = now + timedelta(microseconds=1)
+                ts = now.strftime("%Y%m%dT%H%M%S.%fZ")
         snapshot = {"settings": outgoing, "savedAt": now.isoformat()}
         atomic_write_json(os.path.join(backup_dir, f"openai-compatible-{ts}.json"), snapshot)
         rotate_backups(backup_dir)
