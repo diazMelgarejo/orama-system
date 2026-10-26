@@ -85,6 +85,21 @@ def _run(cmd: list[str], *, timeout: int = 120, cwd: Path | None = None) -> tupl
         return -2, "", str(exc)
 
 
+def _native_path(path: str) -> str:
+    """Convert an MSYS/Cygwin POSIX-style path to a native Windows path (no-op elsewhere).
+
+    Parameters:
+    	path (str): Path text printed by a bash helper.
+
+    Returns:
+    	str: The native path when running on Windows and ``cygpath`` succeeds, else ``path``.
+    """
+    if sys.platform != "win32" or not path.startswith("/"):
+        return path
+    rc, out, _err = _run(["cygpath", "-w", path], timeout=10)
+    return out if rc == 0 and out else path
+
+
 def check_pt_root(repo_root: Path) -> tuple[str, dict[str, Any]]:
     """
     Resolve the Perpetual Trading harness root for the repository.
@@ -102,7 +117,7 @@ def check_pt_root(repo_root: Path) -> tuple[str, dict[str, Any]]:
         cwd=repo_root,
     )
     if rc == 0 and out:
-        return "ok", {"path": out.splitlines()[-1]}
+        return "ok", {"path": _native_path(out.splitlines()[-1])}
     return "degraded", {"detail": err or out or "PT root not resolved"}
 
 
