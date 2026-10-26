@@ -7,6 +7,7 @@ mangles the box-drawing characters in them).
 
 from __future__ import annotations
 
+import codecs
 import os
 import re
 import shutil
@@ -259,3 +260,32 @@ def test_launcher_scripts_hardening_present() -> None:
     assert "removed stray orama-system" in start
     assert "interpreter not found" in start
     assert "$discoverExit = $LASTEXITCODE" in _read(INSTALL)
+
+
+def _tracked_powershell_scripts() -> list[Path]:
+    """Every tracked .ps1 in the repository (git ls-files; empty outside a checkout)."""
+    proc = subprocess.run(["git", "-C", str(REPO), "ls-files", "*.ps1"], capture_output=True, text=True)
+    return sorted(REPO / line for line in proc.stdout.splitlines() if line.strip())
+
+
+@pytest.mark.parametrize("path", _tracked_powershell_scripts(), ids=lambda p: str(p.relative_to(REPO)))
+def test_script_with_non_ascii_text_has_a_utf8_bom(path: Path) -> None:
+    """A .ps1 with non-ASCII text needs a BOM: 5.1 otherwise reads it as ANSI, and an em dash can end a string early."""
+    data = path.read_bytes()
+    if data.startswith(codecs.BOM_UTF8):
+        return
+    assert data.isascii(), f"{path.name} has non-ASCII text but no UTF-8 BOM"
+
+
+@pytest.mark.skipif(sys.platform != "win32" or shutil.which("powershell.exe") is None,
+                    reason="needs Windows PowerShell 5.1")
+@pytest.mark.parametrize("path", _tracked_powershell_scripts(), ids=lambda p: str(p.relative_to(REPO)))
+def test_script_parses_under_windows_powershell_5_1(path: Path, tmp_path: Path) -> None:
+    """Parse the script with the real 5.1 parser and require zero syntax errors."""
+    command = (
+        "$e=$null;[void][System.Management.Automation.Language.Parser]::ParseFile("
+        f"'{path}',[ref]$null,[ref]$e);if($e.Count){{$e[0].Message+' (line '+$e[0].Extent.StartLineNumber+')';exit 1}}"
+    )
+    proc = subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", command],
+                          capture_output=True, text=True, cwd=tmp_path)
+    assert proc.returncode == 0, f"{path.name}: {proc.stdout.strip()}"

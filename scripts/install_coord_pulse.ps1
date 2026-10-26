@@ -1,4 +1,4 @@
-# install_coord_pulse.ps1 — install Win 15-minute coord pulse (Task Scheduler)
+﻿# install_coord_pulse.ps1 — install Win 15-minute coord pulse (Task Scheduler)
 # Usage:
 #   .\scripts\install_coord_pulse.ps1
 #   .\scripts\install_coord_pulse.ps1 -Uninstall

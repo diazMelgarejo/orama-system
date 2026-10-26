@@ -1,4 +1,4 @@
-# scripts/ensure_requirements.ps1 — Windows hard-requirements probe + installer
+﻿# scripts/ensure_requirements.ps1 — Windows hard-requirements probe + installer
 # orama-system v1.1.0.0 — Run on the Windows GPU box
 #
 # HARD requirements:
