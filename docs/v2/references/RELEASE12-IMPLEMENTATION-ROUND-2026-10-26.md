@@ -48,12 +48,14 @@ dependencies and immutable Core/Telos/Agate pins installed. Full suite:
 **1993 passed, 3 skipped**. Focused serving/effect regression set: **87 passed**.
 This is developer verification, not the sealed non-editable release matrix.
 
-Independent review found and blocked an unscoped inert sender. The reproduced
-failure was repaired by checking the persisted inert destination and consumed
-reservation inside the same transaction as the send marker. Real destinations
-remain unchanged on refusal. Tests also reopen the database and prove that a
-send marker without settlement remains unknown and cannot be retried. The
-restart test is not a substitute for the remaining subprocess crash matrix.
+Review identified and blocked an unscoped inert sender. The durable repair is
+the [scoped inert driver implementation](https://github.com/oramasys/oramasys/commit/8a68cc386299ead2f6c8e665a7fb4ea0cc33508a),
+with [integration regressions](https://github.com/oramasys/oramasys/blob/bb234b4b7e72e8038fbffdf91daf68e961171a81/src/tests/test_inert_effect_integration.py)
+that prove real destinations refuse inert simulation, a permitted inert send is
+single-use after reopen, and a send marker without settlement remains unknown
+and cannot be retried. The [subprocess evidence receipt](https://github.com/oramasys/oramasys/blob/bb234b4b7e72e8038fbffdf91daf68e961171a81/docs/release12-process-crash-evidence.md)
+keeps the crash matrix and its remaining limits separate. The restart test is
+not a substitute for that matrix.
 
 ## Successor batch: subprocess evidence and memory preservation
 
