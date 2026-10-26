@@ -29,9 +29,11 @@ class FakeExecutor:
     """Deterministic test double that records calls; verdict/failure injectable."""
 
     def __init__(self, verdict="PASS", fail_stage=None, delay=0.0):
+        """Configure the verification verdict, an optional stage name that will raise, and a per-stage delay; start with an empty call log."""
         self.verdict, self.fail_stage, self.delay, self.calls = verdict, fail_stage, delay, []
 
     async def run_stage(self, stage, task, prior):
+        """Log the stage and a copy of the prior outputs, optionally sleep or raise RuntimeError for ``fail_stage``, and return canned output (plus the verdict for verification)."""
         self.calls.append((stage.value, dict(prior)))
         if self.delay:
             await asyncio.sleep(self.delay)
@@ -44,12 +46,14 @@ class FakeExecutor:
 
 
 def call(server, name, arguments, req_id=1):
+    """Send one tools/call JSON-RPC request to ``server`` and return its response dict."""
     request = {"jsonrpc": "2.0", "id": req_id, "method": "tools/call",
                "params": {"name": name, "arguments": arguments}}
     return asyncio.run(server.handle_request(request))
 
 
 def test_solve_without_executor_fails_closed_and_persists_nothing():
+    """With no executor configured, solve returns an unavailable error result (never started, queued or done) and stores no task state."""
     server = OramasysMCPServer()
     result = call(server, "oramasys_solve", {"task": "do it"})["result"]
     assert result["isError"] is True
@@ -59,12 +63,14 @@ def test_solve_without_executor_fails_closed_and_persists_nothing():
 
 
 def test_delegate_without_executor_fails_closed():
+    """Delegating a stage without an executor is likewise an unavailable error, not a fake success."""
     result = call(OramasysMCPServer(), "oramasys_delegate",
                   {"stage": "context", "input": {}})["result"]
     assert result["isError"] is True and result["status"] == "unavailable"
 
 
 def test_solve_completes_all_stages_and_keeps_pt_client_contract():
+    """Solve runs every stage in order and returns the top-level fields (status, result, model_used, isError) that the Perpetua-Tools client reads; status reports the task as done."""
     executor = FakeExecutor()
     server = OramasysMCPServer(executor=executor)
     result = call(server, "oramasys_solve", {"task": "do it"})["result"]
@@ -79,6 +85,7 @@ def test_solve_completes_all_stages_and_keeps_pt_client_contract():
 
 
 def test_unapproved_verification_blocks_crystallization():
+    """A non-PASS verification verdict makes solve return rejected, crystallization never runs, and the stored task is marked failed."""
     executor = FakeExecutor(verdict="FAIL")
     server = OramasysMCPServer(executor=executor)
     result = call(server, "oramasys_solve", {"task": "t"})["result"]
@@ -89,6 +96,7 @@ def test_unapproved_verification_blocks_crystallization():
 
 
 def test_stage_failure_and_timeout_are_reported_not_hidden():
+    """A stage that raises is reported as failed with its stage name, and a stage exceeding the timeout is reported as timeout, both flagged as errors."""
     failed = call(OramasysMCPServer(executor=FakeExecutor(fail_stage="execution")),
                   "oramasys_solve", {"task": "t"})["result"]
     assert failed["status"] == "failed" and failed["stage"] == "execution" and failed["isError"]
@@ -98,6 +106,7 @@ def test_stage_failure_and_timeout_are_reported_not_hidden():
 
 
 def test_delegate_returns_real_output_and_persists_it():
+    """Delegating a stage to an existing task returns the executor's real output; delegating against an unknown task id is rejected."""
     server = OramasysMCPServer(executor=FakeExecutor())
     solved = call(server, "oramasys_solve", {"task": "t"})["result"]
     result = call(server, "oramasys_delegate",
@@ -109,6 +118,7 @@ def test_delegate_returns_real_output_and_persists_it():
 
 
 def test_invalid_params_are_jsonrpc_errors():
+    """Bad arguments (empty task, invalid optimize_for, unknown stage, unknown tool) are JSON-RPC -32602 errors, while a status query for an unknown task is a not_found error result."""
     server = OramasysMCPServer(executor=FakeExecutor())
     assert call(server, "oramasys_solve", {"task": ""})["error"]["code"] == -32602
     assert call(server, "oramasys_solve", {"task": "t", "optimize_for": "x"})["error"]["code"] == -32602
@@ -119,6 +129,7 @@ def test_invalid_params_are_jsonrpc_errors():
 
 
 def test_notifications_get_no_response_and_unknown_methods_error():
+    """A notification gets no response, an unknown method returns -32601, and ping returns an empty result."""
     server = OramasysMCPServer()
     assert asyncio.run(server.handle_request(
         {"jsonrpc": "2.0", "method": "notifications/initialized"})) is None
@@ -129,6 +140,7 @@ def test_notifications_get_no_response_and_unknown_methods_error():
 
 
 def test_executor_env_loader_rejects_malformed_specs_and_defaults_to_none():
+    """Without ORAMASYS_STAGE_EXECUTOR no executor is loaded, and a spec that is not a plain module:attribute reference is refused with ValueError instead of being imported."""
     assert load_executor_from_env({}) is None
     with pytest.raises(ValueError):
         load_executor_from_env({"ORAMASYS_STAGE_EXECUTOR": "os.system:exit; rm -rf"})
@@ -168,6 +180,7 @@ def _task_with(server, stage_outputs):
 
 
 def _crystallize(server, task_id=None):
+    """Delegate the crystallization stage (with ``task_id`` when given) through the server and return the result payload."""
     args = {"stage": "crystallization", "input": {}}
     if task_id:
         args["task_id"] = task_id
@@ -175,6 +188,7 @@ def _crystallize(server, task_id=None):
 
 
 def test_delegate_crystallization_without_task_id_is_rejected_and_executor_not_called():
+    """Delegating crystallization with no task id is rejected before the executor runs and nothing is persisted, since there is no verification to gate on."""
     executor = FakeExecutor()
     server = OramasysMCPServer(executor=executor)
     result = _crystallize(server)
@@ -184,6 +198,7 @@ def test_delegate_crystallization_without_task_id_is_rejected_and_executor_not_c
 
 
 def test_delegate_crystallization_with_missing_verification_is_rejected():
+    """Crystallization is rejected when the task has no completed verification, the executor is not called and no crystallization output is stored."""
     executor = FakeExecutor()
     server = OramasysMCPServer(executor=executor)
     task_id = _task_with(server, {"context": {"status": "done", "output": "c"}})
@@ -195,6 +210,7 @@ def test_delegate_crystallization_with_missing_verification_is_rejected():
 
 @pytest.mark.parametrize("verdict", ["FAIL", "WARNING", None])
 def test_delegate_crystallization_with_non_pass_verdict_is_rejected(verdict):
+    """Crystallization is rejected for a FAIL, WARNING or missing verification verdict, and the executor is never called."""
     executor = FakeExecutor()
     server = OramasysMCPServer(executor=executor)
     task_id = _task_with(server, {"verification": {"status": "done", "output": "v", "verdict": verdict}})
@@ -204,6 +220,7 @@ def test_delegate_crystallization_with_non_pass_verdict_is_rejected(verdict):
 
 
 def test_delegate_crystallization_rejects_unknown_task_and_unfinished_verification():
+    """Crystallization is rejected for an unknown task id and for a task whose verification stage itself failed."""
     server = OramasysMCPServer(executor=FakeExecutor())
     assert _crystallize(server, "nope")["status"] == "rejected"
     task_id = _task_with(server, {"verification": {"status": "failed", "error": "RuntimeError"}})
@@ -211,6 +228,7 @@ def test_delegate_crystallization_rejects_unknown_task_and_unfinished_verificati
 
 
 def test_delegate_crystallization_runs_after_pass_including_delegated_verification():
+    """After a PASS verification obtained through direct delegation, crystallization is allowed and runs, so the gate reads state that delegate writes."""
     executor = FakeExecutor(verdict="PASS")
     server = OramasysMCPServer(executor=executor)
     task_id = _task_with(server, {})
@@ -223,6 +241,7 @@ def test_delegate_crystallization_runs_after_pass_including_delegated_verificati
 
 
 def test_later_failing_verification_supersedes_an_earlier_pass():
+    """A later FAIL verification replaces an earlier PASS in the task state, so crystallization is rejected afterwards."""
     server = OramasysMCPServer(executor=FakeExecutor(verdict="FAIL"))
     task_id = _task_with(server, {"verification": {"status": "done", "output": "v", "verdict": "PASS"}})
     call(server, "oramasys_delegate", {"stage": "verification", "task_id": task_id, "input": {}})
@@ -253,9 +272,11 @@ class SequencedExecutor:
     """Per-stage delays and a call counter, so overlapping calls interleave deterministically."""
 
     def __init__(self, delays):
+        """Remember the per-stage delay table and start the call counter at zero."""
         self.delays, self.count = delays, 0
 
     async def run_stage(self, stage, task, prior):
+        """Count the call, sleep for the stage's configured delay, then return output tagged with the call number (and a PASS verdict for verification)."""
         self.count += 1
         n = self.count
         await asyncio.sleep(self.delays.get(stage.value, 0))
@@ -269,11 +290,13 @@ def test_overlapping_delegates_on_one_task_never_lose_a_result():
     """A slow verification must not write back a stale snapshot over a newer execution output."""
 
     async def scenario():
+        """Race a slow verification against a fast execution on the same task and check that neither result overwrites the other."""
         server = OramasysMCPServer(executor=SequencedExecutor({"verification": 0.05}))
         await server.state.set_task_state(
             "t1", {"task_id": "t1", "stage_outputs": {"execution": {"status": "done", "output": "old"}}})
 
         def delegate(stage, req_id):
+            """Build a tools/call delegate request for ``stage`` on task t1 and return the server's pending response coroutine."""
             return server.handle_request({"jsonrpc": "2.0", "id": req_id, "method": "tools/call",
                                           "params": {"name": "oramasys_delegate", "arguments": {
                                               "stage": stage, "task_id": "t1", "input": {}}}})
@@ -290,6 +313,7 @@ def test_overlapping_delegates_on_one_task_never_lose_a_result():
 
 
 def test_task_locks_do_not_accumulate():
+    """Per-task locks are discarded after each solve, so the lock table stays empty rather than growing with every task."""
     server = OramasysMCPServer(executor=FakeExecutor())
     for _ in range(5):
         call(server, "oramasys_solve", {"task": "t"})
@@ -300,6 +324,7 @@ class UnserializableVerdictExecutor:
     """Verification returns a FAIL verdict whose output cannot be stored as JSON."""
 
     async def run_stage(self, stage, task, prior):
+        """Return a FAIL verification whose output (a datetime) cannot be serialised to JSON, so recording it fails."""
         import datetime
         out = {"output": {"at": datetime.datetime(2026, 1, 1)}, "model_used": "fake"}
         if stage.value == "verification":
@@ -308,6 +333,7 @@ class UnserializableVerdictExecutor:
 
 
 def test_unrecordable_rerun_revokes_the_earlier_pass_instead_of_reporting_done():
+    """If a re-run verification cannot be stored, the delegate call fails, the stored verification is marked failed (revoking the old PASS), and crystallization is rejected."""
     server = OramasysMCPServer(executor=UnserializableVerdictExecutor())
     task_id = _task_with(server, {"verification": {"status": "done", "output": "v", "verdict": "PASS"}})
     result = call(server, "oramasys_delegate",
@@ -319,10 +345,12 @@ def test_unrecordable_rerun_revokes_the_earlier_pass_instead_of_reporting_done()
 
 
 def test_state_store_write_failure_is_never_reported_as_done(monkeypatch):
+    """When the state store refuses a write, delegate and solve report failed with a could-not-be-recorded error and never claim done."""
     server = OramasysMCPServer(executor=FakeExecutor())
     task_id = _task_with(server, {})
 
     async def refuse(*_args, **_kwargs):
+        """Stand-in for set_task_state that always reports that the write was refused."""
         return False
 
     monkeypatch.setattr(server.state, "set_task_state", refuse)

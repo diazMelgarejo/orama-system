@@ -38,6 +38,7 @@ _METADATA_KEYS = ("updatedAt", "tokenSource")
 
 
 def atomic_write_json(path: str, data: Mapping[str, Any]) -> None:
+    """Write ``data`` as JSON to ``path`` via a same-directory temp file, fsync, then ``os.replace`` so readers never see a half-written file; the temp file is removed on failure."""
     directory = os.path.dirname(path)
     fd, tmp_path = tempfile.mkstemp(dir=directory, prefix=".tmp-", suffix=".json")
     try:
@@ -54,25 +55,30 @@ def atomic_write_json(path: str, data: Mapping[str, Any]) -> None:
 
 
 def load_json(path: str) -> dict[str, Any]:
+    """Return the parsed JSON object stored at ``path``."""
     with open(path) as f:
         return json.load(f)
 
 
 def latest_backup(backup_dir: str) -> str | None:
+    """Return the path of the lexicographically newest ``.json`` backup in ``backup_dir`` (timestamped names sort chronologically), or None when there are none."""
     entries = sorted(e for e in os.listdir(backup_dir) if e.endswith(".json"))
     return os.path.join(backup_dir, entries[-1]) if entries else None
 
 
 def comparable(block: Mapping[str, Any]) -> dict[str, Any]:
+    """Return ``block`` without the metadata keys, so two settings dicts can be compared on real configuration only."""
     return {k: v for k, v in block.items() if k not in _METADATA_KEYS}
 
 
 def resolve_template(tmpl_path: str, env: Mapping[str, str] | None = None) -> dict[str, Any]:
+    """Read the profile template, substitute ``${NAME}`` placeholders from ``env`` (default ``os.environ``) and return its ``settings`` dict; an unset variable aborts via SystemExit."""
     env = env if env is not None else os.environ
     with open(tmpl_path) as f:
         raw = f.read()
 
     def resolve(m: re.Match[str]) -> str:
+        """Replacement callback for one ``${NAME}`` match: return the env value or exit with an error naming the unset variable."""
         name = m.group(1)
         val = env.get(name)
         if val is None:
@@ -83,6 +89,7 @@ def resolve_template(tmpl_path: str, env: Mapping[str, str] | None = None) -> di
 
 
 def rotate_backups(backup_dir: str, max_backups: int = MAX_BACKUPS) -> None:
+    """Delete the oldest ``.json`` backups so that at most ``max_backups`` newest ones remain."""
     entries = sorted(e for e in os.listdir(backup_dir) if e.endswith(".json"))
     for stale in entries[:-max_backups]:
         os.unlink(os.path.join(backup_dir, stale))
@@ -157,6 +164,7 @@ def _unlock(fd: int) -> None:
 
 
 def main(argv: Sequence[str]) -> None:
+    """CLI entry: take providers path, template, profile name, backup dir and lock path from ``argv``, switch under an exclusive lock, then print whether the profile was activated or already live."""
     providers_path, tmpl_path, profile, backup_dir, lock_path = argv[1:6]
     lock_fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
     _lock_exclusive(lock_fd)

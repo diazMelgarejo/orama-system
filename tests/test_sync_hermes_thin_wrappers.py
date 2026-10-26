@@ -29,6 +29,7 @@ SYNC_SCRIPT = (
 
 
 def _load_module():
+    """Import sync_hermes_thin_wrappers.py by file path as a fresh module, since the skill directory is not an importable package."""
     spec = importlib.util.spec_from_file_location("sync_hermes_thin_wrappers", SYNC_SCRIPT)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
@@ -38,6 +39,7 @@ def _load_module():
 
 @pytest.fixture()
 def sw():
+    """Fixture exposing a freshly loaded sync_hermes_thin_wrappers module."""
     return _load_module()
 
 

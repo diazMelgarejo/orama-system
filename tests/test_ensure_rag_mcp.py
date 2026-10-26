@@ -1,3 +1,4 @@
+"""Tests for scripts/ensure-rag-mcp.py: the Codex TOML writer and the OpenClaw MCP JSON merger."""
 from __future__ import annotations
 
 import importlib.util
@@ -13,6 +14,7 @@ SCRIPT = ROOT / "scripts" / "ensure-rag-mcp.py"
 
 
 def _load_module():
+    """Import ensure-rag-mcp.py (hyphenated name, so not importable normally) as a fresh module for each test."""
     spec = importlib.util.spec_from_file_location("ensure_rag_mcp_test", SCRIPT)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
@@ -21,6 +23,7 @@ def _load_module():
 
 
 def test_codex_apply_writes_stdio_mcp_blocks(tmp_path, monkeypatch):
+    """codex_apply appends stdio MCP server blocks (command, args, env table) to config.toml while keeping existing servers."""
     mod = _load_module()
     cfg = tmp_path / "config.toml"
     cfg.write_text('[mcp_servers.github]\ncommand = "npx"\n', encoding="utf-8")
@@ -57,6 +60,7 @@ def test_openclaw_apply_merges_missing_server(tmp_path, monkeypatch):
 
 
 def test_openclaw_apply_rejects_malformed_json(tmp_path, monkeypatch):
+    """openclaw_apply refuses a malformed .mcp.json with an Invalid JSON error instead of overwriting it."""
     mod = _load_module()
     mcp_json = tmp_path / ".mcp.json"
     mcp_json.write_text('{"mcpServers": ', encoding="utf-8")

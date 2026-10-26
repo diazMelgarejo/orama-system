@@ -104,6 +104,7 @@ echo "PT_INSTALL=$PT_INSTALL"
 
 
 def _run_discovery(env: dict) -> subprocess.CompletedProcess:
+    """Run the install.sh discovery harness under bash with ``env`` layered over the current environment."""
     return _bash(_PT_DISCOVERY_HARNESS, env=env)
 
 
@@ -125,6 +126,7 @@ echo "BLOCK_DONE"
 
 
 def _run_cloud_block(env: dict) -> subprocess.CompletedProcess:
+    """Run the cloud-install.sh Perpetua-Tools block harness under bash with ``env`` layered over the current environment."""
     return _bash(_CLOUD_INSTALL_HARNESS, env=env)
 
 
@@ -138,6 +140,7 @@ class TestInstallShPtDiscovery:
     # ── PERPETUA_TOOLS_PATH takes priority ──────────────────────────────────
 
     def test_perpetua_tools_path_used_when_set_and_install_sh_exists(self, tmp_path):
+        """PERPETUA_TOOLS_PATH is chosen when it points at a directory containing install.sh."""
         pt_dir = tmp_path / "pt-path"
         _make_fake_install_sh(pt_dir)
         result = _run_discovery({"PERPETUA_TOOLS_PATH": str(pt_dir)})
@@ -145,6 +148,7 @@ class TestInstallShPtDiscovery:
         assert f"PT_INSTALL={pt_dir}/install.sh" in result.stdout
 
     def test_perpetua_tools_path_skipped_when_install_sh_absent(self, tmp_path):
+        """PERPETUA_TOOLS_PATH is ignored when its directory has no install.sh, and with no other source PT_INSTALL stays empty."""
         pt_dir = tmp_path / "pt-path-no-install"
         pt_dir.mkdir()
         # No install.sh created
@@ -164,6 +168,7 @@ class TestInstallShPtDiscovery:
     # ── PERPETUA_TOOLS_ROOT is the fallback ─────────────────────────────────
 
     def test_perpetua_tools_root_used_when_path_absent(self, tmp_path):
+        """An empty PERPETUA_TOOLS_PATH is skipped and PERPETUA_TOOLS_ROOT supplies install.sh."""
         pt_root = tmp_path / "pt-root"
         _make_fake_install_sh(pt_root)
         result = _run_discovery({
@@ -174,6 +179,7 @@ class TestInstallShPtDiscovery:
         assert f"PT_INSTALL={pt_root}/install.sh" in result.stdout
 
     def test_perpetua_tools_root_used_when_path_env_not_set(self, tmp_path):
+        """With PERPETUA_TOOLS_PATH blanked and OPENCLAW_HOME blank, PERPETUA_TOOLS_ROOT alone is enough to find install.sh."""
         pt_root = tmp_path / "pt-root-only"
         _make_fake_install_sh(pt_root)
         result = _run_discovery({
@@ -217,6 +223,7 @@ class TestInstallShPtDiscovery:
     # ── Priority: PATH > ROOT > OPENCLAW_HOME ───────────────────────────────
 
     def test_perpetua_tools_path_wins_over_root(self, tmp_path):
+        """When both PERPETUA_TOOLS_PATH and PERPETUA_TOOLS_ROOT hold an install.sh, PATH wins and the ROOT directory is not reported."""
         pt_path_dir = tmp_path / "from-path"
         pt_root_dir = tmp_path / "from-root"
         _make_fake_install_sh(pt_path_dir)
@@ -230,6 +237,7 @@ class TestInstallShPtDiscovery:
         assert str(pt_root_dir) not in result.stdout.split("PT_INSTALL=", 1)[1]
 
     def test_perpetua_tools_path_wins_over_openclaw_home(self, tmp_path):
+        """PERPETUA_TOOLS_PATH takes precedence over a Perpetua-Tools directory under OPENCLAW_HOME."""
         pt_path_dir = tmp_path / "from-path"
         openclaw = tmp_path / "openclaw-v1"
         pt_oc_dir = openclaw / "Perpetua-Tools"
@@ -244,6 +252,7 @@ class TestInstallShPtDiscovery:
         assert f"PT_INSTALL={pt_path_dir}/install.sh" in result.stdout
 
     def test_perpetua_tools_root_wins_over_openclaw_home(self, tmp_path):
+        """PERPETUA_TOOLS_ROOT takes precedence over a Perpetua-Tools directory under OPENCLAW_HOME."""
         pt_root_dir = tmp_path / "from-root"
         openclaw = tmp_path / "openclaw-v1"
         pt_oc_dir = openclaw / "Perpetua-Tools"
@@ -378,6 +387,7 @@ class TestCloudInstallPerpetuaToolsBlock:
     # ── File-present branch ──────────────────────────────────────────────────
 
     def test_install_sh_invoked_when_file_exists(self, tmp_path):
+        """The cloud block runs install.sh from OPENCLAW_HOME/Perpetua-Tools when that file exists, and the harness exits 0."""
         openclaw = tmp_path / "openclaw-v1"
         pt_dir = openclaw / "Perpetua-Tools"
         _make_fake_install_sh(pt_dir, exit_code=0)
@@ -387,6 +397,7 @@ class TestCloudInstallPerpetuaToolsBlock:
         assert sentinel.exists(), "Perpetua-Tools/install.sh was not invoked"
 
     def test_install_sh_invoked_with_skip_desktop_flag(self, tmp_path):
+        """The cloud block passes --skip-desktop to the install.sh it invokes."""
         openclaw = tmp_path / "openclaw-v1"
         pt_dir = openclaw / "Perpetua-Tools"
         _make_fake_install_sh(pt_dir, exit_code=0)
@@ -397,6 +408,7 @@ class TestCloudInstallPerpetuaToolsBlock:
         assert "--skip-desktop" in args
 
     def test_log_message_printed_on_invocation(self, tmp_path):
+        """The cloud block logs a message mentioning the Perpetua-Tools install.sh or MCPB build when it invokes the script."""
         openclaw = tmp_path / "openclaw-v1"
         pt_dir = openclaw / "Perpetua-Tools"
         _make_fake_install_sh(pt_dir)
@@ -408,6 +420,7 @@ class TestCloudInstallPerpetuaToolsBlock:
     # ── File-absent branch ───────────────────────────────────────────────────
 
     def test_block_skipped_when_install_sh_absent(self, tmp_path):
+        """A Perpetua-Tools directory without install.sh is skipped: nothing is invoked and the block still finishes."""
         openclaw = tmp_path / "openclaw-v1"
         pt_dir = openclaw / "Perpetua-Tools"
         pt_dir.mkdir(parents=True)   # directory exists but no install.sh
@@ -418,6 +431,7 @@ class TestCloudInstallPerpetuaToolsBlock:
         assert "BLOCK_DONE" in result.stdout
 
     def test_block_skipped_when_perpetua_tools_dir_absent(self, tmp_path):
+        """A missing Perpetua-Tools directory under OPENCLAW_HOME is skipped quietly and the block finishes with exit 0."""
         openclaw = tmp_path / "openclaw-v1"
         openclaw.mkdir(parents=True)  # no Perpetua-Tools subdir at all
         result = _run_cloud_block({"OPENCLAW_HOME": str(openclaw)})
@@ -425,6 +439,7 @@ class TestCloudInstallPerpetuaToolsBlock:
         assert "BLOCK_DONE" in result.stdout
 
     def test_block_skipped_when_openclaw_home_dir_absent(self, tmp_path):
+        """An OPENCLAW_HOME that does not exist is tolerated: the block is skipped and finishes with exit 0."""
         missing = tmp_path / "does-not-exist"
         result = _run_cloud_block({"OPENCLAW_HOME": str(missing)})
         assert result.returncode == 0
@@ -442,6 +457,7 @@ class TestCloudInstallPerpetuaToolsBlock:
         assert "BLOCK_DONE" in result.stdout
 
     def test_failed_install_sh_emits_warning(self, tmp_path):
+        """A failing install.sh in the cloud block produces a warning on stderr (the block's warn-only path)."""
         openclaw = tmp_path / "openclaw-v1"
         pt_dir = openclaw / "Perpetua-Tools"
         _make_fake_install_sh(pt_dir, exit_code=1)
@@ -483,6 +499,7 @@ class TestChangedScriptSyntax:
         "scripts/cursor/cloud-install.sh",
     ])
     def test_script_is_valid_bash(self, script_path):
+        """install.sh and scripts/cursor/cloud-install.sh both pass ``bash -n`` syntax checking."""
         result = subprocess.run(
             ["bash", "-n", script_path],
             cwd=ROOT,

@@ -104,7 +104,9 @@ def _run_setup(
 # ===========================================================================
 
 class TestSetupScriptSyntax:
+    """Static checks that setup-glm52.sh parses as bash and enables strict mode."""
     def test_script_is_valid_bash(self):
+        """``bash -n`` accepts setup-glm52.sh with no syntax errors."""
         result = subprocess.run(
             ["bash", "-n", str(SETUP_SCRIPT)],
             capture_output=True,
@@ -115,6 +117,7 @@ class TestSetupScriptSyntax:
         )
 
     def test_script_uses_strict_mode(self):
+        """The script enables ``set -euo pipefail`` so failures abort it."""
         text = SETUP_SCRIPT.read_text(encoding="utf-8")
         assert "set -euo pipefail" in text
 
@@ -124,15 +127,19 @@ class TestSetupScriptSyntax:
 # ===========================================================================
 
 class TestApiKeyRequirement:
+    """The script refuses to run without a non-empty API key and never waits for interactive input."""
     def test_missing_api_key_exits_nonzero(self, tmp_path):
+        """With no key in the environment the script exits with status 1."""
         result = _run_setup(tmp_path, env={})
         assert result.returncode == 1
 
     def test_missing_api_key_error_message_is_clear(self, tmp_path):
+        """The failure message tells the operator that GLM52_API_KEY must be set."""
         result = _run_setup(tmp_path, env={})
         assert "GLM52_API_KEY must be set" in result.stderr
 
     def test_missing_api_key_shows_example_usage(self, tmp_path):
+        """The failure message includes an ``export GLM52_API_KEY=`` example."""
         result = _run_setup(tmp_path, env={})
         assert "export GLM52_API_KEY=" in result.stderr
 
@@ -144,11 +151,13 @@ class TestApiKeyRequirement:
         assert result.returncode == 1  # returned promptly; no timeout raised
 
     def test_empty_glm52_api_key_is_treated_as_unset(self, tmp_path):
+        """An empty GLM52_API_KEY counts as unset: exit 1 with the must-be-set message."""
         result = _run_setup(tmp_path, env={"GLM52_API_KEY": ""})
         assert result.returncode == 1
         assert "GLM52_API_KEY must be set" in result.stderr
 
     def test_empty_bigmodel_apikey_fallback_does_not_satisfy_requirement(self, tmp_path):
+        """An empty fallback BigModel key variable does not satisfy the requirement either, so the script exits 1."""
         result = _run_setup(
             tmp_path,
             env={"OPENCLAW_MODELS_PROVIDERS_BIGMODEL_APIKEY": ""},
@@ -156,6 +165,7 @@ class TestApiKeyRequirement:
         assert result.returncode == 1
 
     def test_valid_glm52_api_key_succeeds(self, tmp_path):
+        """A non-empty GLM52_API_KEY lets setup finish with exit 0."""
         result = _run_setup(tmp_path, env={"GLM52_API_KEY": "test-key-abc123"})
         assert result.returncode == 0, result.stdout + result.stderr
 
@@ -171,7 +181,9 @@ class TestApiKeyRequirement:
 # ===========================================================================
 
 class TestApiKeySourcePrecedence:
+    """Where the key comes from: GLM52_API_KEY first, the OpenClaw BigModel variable only as a fallback."""
     def test_bigmodel_apikey_used_when_glm52_api_key_unset(self, tmp_path):
+        """With GLM52_API_KEY unset, the fallback BigModel variable is stored as the secret."""
         result = _run_setup(
             tmp_path,
             env={"OPENCLAW_MODELS_PROVIDERS_BIGMODEL_APIKEY": "fallback-key-xyz"},
@@ -181,6 +193,7 @@ class TestApiKeySourcePrecedence:
         assert secrets_file.read_text(encoding="utf-8") == "fallback-key-xyz"
 
     def test_glm52_api_key_takes_precedence_over_bigmodel_apikey(self, tmp_path):
+        """When both variables are set, GLM52_API_KEY wins and its value is the one stored."""
         result = _run_setup(
             tmp_path,
             env={
@@ -198,13 +211,16 @@ class TestApiKeySourcePrecedence:
 # ===========================================================================
 
 class TestSecureStorage:
+    """Setup creates the secrets and logs directories and writes the key and env file correctly."""
     def test_secrets_dir_and_logs_dir_created(self, tmp_path):
+        """The secrets and logs directories exist under the OpenClaw home after setup."""
         result = _run_setup(tmp_path, env={"GLM52_API_KEY": "k"})
         assert result.returncode == 0, result.stdout + result.stderr
         assert (result.home / ".openclaw" / "secrets").is_dir()
         assert (result.home / ".openclaw" / "logs").is_dir()
 
     def test_secrets_file_contains_exact_key_value(self, tmp_path):
+        """The secrets file contains the key exactly, with no added newline or text."""
         result = _run_setup(tmp_path, env={"GLM52_API_KEY": "my-secret-value"})
         assert result.returncode == 0, result.stdout + result.stderr
         secrets_file = result.home / ".openclaw" / "secrets" / "glm52-api-key"
@@ -229,6 +245,7 @@ class TestSecureStorage:
         assert mode == 0o600, f"expected mode 0o600, got {oct(mode)}"
 
     def test_env_file_contains_expected_endpoint(self, tmp_path):
+        """The generated env file exports the BigModel chat completions endpoint."""
         result = _run_setup(tmp_path, env={"GLM52_API_KEY": "k"})
         assert result.returncode == 0, result.stdout + result.stderr
         env_file = result.home / ".openclaw" / ".env.glm52"
@@ -239,6 +256,7 @@ class TestSecureStorage:
         )
 
     def test_env_file_reads_key_from_secrets_file_not_hardcoded(self, tmp_path):
+        """The env file reads the key from the secrets file at load time instead of embedding it, so the key value never appears in it."""
         result = _run_setup(tmp_path, env={"GLM52_API_KEY": "unique-marker-9f8e7d"})
         assert result.returncode == 0, result.stdout + result.stderr
         env_file = result.home / ".openclaw" / ".env.glm52"
@@ -252,17 +270,21 @@ class TestSecureStorage:
 # ===========================================================================
 
 class TestShellProfileHandling:
+    """Shell profiles are touched only when they already exist, and only when persistence is opted in."""
     def test_does_not_create_zshrc_if_absent(self, tmp_path):
+        """Without existing profiles the script does not create ~/.zshrc."""
         result = _run_setup(tmp_path, env={"GLM52_API_KEY": "k"}, make_profiles=False)
         assert result.returncode == 0, result.stdout + result.stderr
         assert not (result.home / ".zshrc").exists()
 
     def test_does_not_create_bashrc_if_absent(self, tmp_path):
+        """Without existing profiles the script does not create ~/.bashrc."""
         result = _run_setup(tmp_path, env={"GLM52_API_KEY": "k"}, make_profiles=False)
         assert result.returncode == 0, result.stdout + result.stderr
         assert not (result.home / ".bashrc").exists()
 
     def test_appends_source_line_to_existing_zshrc(self, tmp_path):
+        """With persistence opted in, the source line for the env file is appended to an existing ~/.zshrc."""
         result = _run_setup(
             tmp_path,
             env={"GLM52_API_KEY": "k", "GLM52_PERSIST_SHELL_PROFILE": "1"},
@@ -273,6 +295,7 @@ class TestShellProfileHandling:
         assert "source ~/.openclaw/.env.glm52 2>/dev/null || true" in content
 
     def test_appends_source_line_to_existing_bashrc(self, tmp_path):
+        """With persistence opted in, the source line for the env file is appended to an existing ~/.bashrc."""
         result = _run_setup(
             tmp_path,
             env={"GLM52_API_KEY": "k", "GLM52_PERSIST_SHELL_PROFILE": "1"},
@@ -283,12 +306,14 @@ class TestShellProfileHandling:
         assert "source ~/.openclaw/.env.glm52 2>/dev/null || true" in content
 
     def test_preserves_existing_profile_content(self, tmp_path):
+        """A run against an existing profile leaves the profile's original content intact."""
         result = _run_setup(tmp_path, env={"GLM52_API_KEY": "k"}, make_profiles=True)
         assert result.returncode == 0, result.stdout + result.stderr
         content = (result.home / ".zshrc").read_text(encoding="utf-8")
         assert "# existing zshrc" in content
 
     def test_does_not_duplicate_source_line_on_rerun(self, tmp_path):
+        """Running setup twice with persistence on leaves exactly one source line in the profile (idempotent)."""
         home = tmp_path / "home"
         env = {"GLM52_API_KEY": "k", "GLM52_PERSIST_SHELL_PROFILE": "1"}
         result1 = _run_setup(tmp_path, env=env, make_profiles=True, home=home)
@@ -299,6 +324,7 @@ class TestShellProfileHandling:
         assert content.count("source ~/.openclaw/.env.glm52 2>/dev/null || true") == 1
 
     def test_added_message_printed_when_profile_exists(self, tmp_path):
+        """When a profile exists and persistence is on, the script prints that it added the source line to the .zshrc and .bashrc files."""
         result = _run_setup(
             tmp_path,
             env={"GLM52_API_KEY": "k", "GLM52_PERSIST_SHELL_PROFILE": "1"},
@@ -321,11 +347,13 @@ class TestShellProfileHandling:
         assert "GLM52_PERSIST_SHELL_PROFILE=1" in result.stdout
 
     def test_no_added_message_when_profile_absent(self, tmp_path):
+        """No 'added' message is printed when no profile exists."""
         result = _run_setup(tmp_path, env={"GLM52_API_KEY": "k"}, make_profiles=False)
         assert result.returncode == 0, result.stdout + result.stderr
         assert "Added GLM-5.2 fallback source line to" not in result.stdout
 
     def test_no_added_message_on_second_run_already_sourced(self, tmp_path):
+        """A second run, where the profile already sources the env file, does not repeat the 'added' message."""
         home = tmp_path / "home"
         _run_setup(tmp_path, env={"GLM52_API_KEY": "k"}, make_profiles=True, home=home)
         result2 = _run_setup(tmp_path, env={"GLM52_API_KEY": "k"}, make_profiles=True, home=home)
@@ -338,19 +366,23 @@ class TestShellProfileHandling:
 # ===========================================================================
 
 class TestCredentialNeverPrinted:
+    """The API key value must never appear in the script's stdout or stderr, whichever variable supplied it."""
     SECRET = "sk-super-secret-do-not-print-987654321"
 
     def test_secret_not_in_stdout(self, tmp_path):
+        """The key is absent from stdout on a successful run."""
         result = _run_setup(tmp_path, env={"GLM52_API_KEY": self.SECRET})
         assert result.returncode == 0, result.stdout + result.stderr
         assert self.SECRET not in result.stdout
 
     def test_secret_not_in_stderr(self, tmp_path):
+        """The key is absent from stderr on a successful run."""
         result = _run_setup(tmp_path, env={"GLM52_API_KEY": self.SECRET})
         assert result.returncode == 0, result.stdout + result.stderr
         assert self.SECRET not in result.stderr
 
     def test_secret_not_printed_via_bigmodel_fallback_env_var(self, tmp_path):
+        """A key supplied through the fallback BigModel variable is likewise never printed."""
         # The secret reaches GLM52_API_KEY via the fallback env var; it must
         # still never be echoed to stdout/stderr.
         result = _run_setup(
@@ -378,12 +410,15 @@ class TestCredentialNeverPrinted:
 # ===========================================================================
 
 class TestSetupCompletion:
+    """Completion output: the script reports success and tells the operator how to activate the env file."""
     def test_prints_setup_complete_message(self, tmp_path):
+        """A successful run prints the 'Setup complete.' message."""
         result = _run_setup(tmp_path, env={"GLM52_API_KEY": "k"})
         assert result.returncode == 0, result.stdout + result.stderr
         assert "Setup complete." in result.stdout
 
     def test_prints_activation_hint(self, tmp_path):
+        """A successful run prints the 'source ~/.openclaw/.env.glm52' activation hint."""
         result = _run_setup(tmp_path, env={"GLM52_API_KEY": "k"})
         assert result.returncode == 0, result.stdout + result.stderr
         assert "source ~/.openclaw/.env.glm52" in result.stdout
@@ -401,38 +436,49 @@ class TestSetupCompletion:
 # ===========================================================================
 
 class TestSkillMdFrontmatter:
+    """Frontmatter fields of the skill's SKILL.md."""
     @property
     def _text(self) -> str:
+        """Return the full text of SKILL.md."""
         return SKILL_MD.read_text(encoding="utf-8")
 
     def test_skill_md_exists(self):
+        """SKILL.md exists at the canonical skill path."""
         assert SKILL_MD.exists()
 
     def test_frontmatter_has_when_to_use(self):
+        """The frontmatter declares when_to_use."""
         assert "when_to_use:" in self._text
 
     def test_frontmatter_disable_model_invocation_is_true(self):
+        """The frontmatter sets disable-model-invocation to true, so the skill is invoked explicitly only."""
         assert "disable-model-invocation: true" in self._text
 
     def test_frontmatter_effort_is_medium(self):
+        """The frontmatter sets effort to medium."""
         assert "effort: medium" in self._text
 
     def test_frontmatter_paths_points_at_canonical_dir(self):
+        """The frontmatter's paths entry points at the canonical glm52-fallback directory glob."""
         assert 'paths:' in self._text
         assert '"bin/orama-system/skills/glm52-fallback/**"' in self._text
 
     def test_frontmatter_retains_name_and_trigger(self):
+        """The frontmatter keeps the skill name glm52-fallback and the 'bash setup-glm52.sh' trigger."""
         text = self._text
         assert "name: glm52-fallback" in text
         assert 'trigger: "bash setup-glm52.sh"' in text
 
 
 class TestSkillMdContent:
+    """Body content of SKILL.md: canonical folder, setup, verification and security guidance."""
     @property
     def _text(self) -> str:
+        """Return the full text of SKILL.md."""
         return SKILL_MD.read_text(encoding="utf-8")
 
     def test_canonical_folder_statement_present(self):
+        """SKILL.md names the canonical folder bin/orama-system/skills/glm52-fallback/."""
         text = self._text
         assert "Canonical folder" in text
         assert "bin/orama-system/skills/glm52-fallback/" in text
@@ -451,21 +497,25 @@ class TestSkillMdContent:
         assert export_idx < run_idx
 
     def test_setup_steps_describe_fail_fast_behavior(self):
+        """The setup steps say the script fails fast and is suitable for unattended or CI use."""
         text = self._text
         assert "fails fast" in text
         assert "unattended" in text or "CI" in text
 
     def test_security_note_prohibits_printing_credential(self):
+        """The security note states that the credential value must not be printed."""
         text = self._text
         assert "must not" in text
         assert "print" in text.lower()
         assert "credential value" in text
 
     def test_verification_section_present(self):
+        """SKILL.md has a Verification section."""
         text = self._text
         assert "## Verification" in text
 
     def test_verification_section_does_not_print_key_value(self):
+        """The Verification section tells the reader not to print the credential value."""
         text = self._text
         v_idx = text.find("## Verification")
         next_idx = text.find("\n## Security", v_idx)
@@ -473,9 +523,11 @@ class TestSkillMdContent:
         assert "Do not print the credential value" in verification_section
 
     def test_security_section_present(self):
+        """SKILL.md has a Security section."""
         assert "## Security" in self._text
 
     def test_security_section_mentions_runtime_values_local_only(self):
+        """The Security section says runtime values live under ~/.openclaw/ and never in tracked files."""
         text = self._text
         s_idx = text.find("## Security")
         security_section = text[s_idx:]
@@ -504,26 +556,34 @@ class TestSkillMdContent:
 # ===========================================================================
 
 class TestReplayRecordDoc:
+    """Content checks for docs/security/glm52-clean-replay-record.md: scope, backup policy, inventory, decisions and out-of-scope items."""
     @property
     def _text(self) -> str:
+        """Return the full text of the replay record."""
         return REPLAY_RECORD.read_text(encoding="utf-8")
 
     def test_file_exists(self):
+        """The replay record file exists."""
         assert REPLAY_RECORD.exists()
 
     def test_has_title(self):
+        """The record carries the 'GLM52 Clean Remediation Replay Record' title."""
         assert "# GLM52 Clean Remediation Replay Record" in self._text
 
     def test_has_date(self):
+        """The record states a date in YYYY-MM-DD form."""
         assert re.search(r"Date: \d{4}-\d{2}-\d{2}", self._text)
 
     def test_has_scope_section(self):
+        """The record has a Scope section."""
         assert "## Scope" in self._text
 
     def test_has_backup_policy_section(self):
+        """The record has a Backup policy section."""
         assert "## Backup policy" in self._text
 
     def test_backup_policy_prohibits_credential_backups(self):
+        """The Backup policy section prohibits credential-bearing backup copies."""
         text = self._text
         b_idx = text.find("## Backup policy")
         next_idx = text.find("\n## ", b_idx + 1)
@@ -531,14 +591,17 @@ class TestReplayRecordDoc:
         assert "credential-bearing backup copies" in backup_section
 
     def test_has_pre_replacement_inventory_table(self):
+        """The record has a Pre-replacement inventory section."""
         assert "## Pre-replacement inventory" in self._text
 
     def test_inventory_table_lists_canonical_path_as_present(self):
+        """The inventory table marks the canonical SKILL.md and setup-glm52.sh paths as present."""
         text = self._text
         assert "`bin/orama-system/skills/glm52-fallback/SKILL.md` | present" in text
         assert "`bin/orama-system/skills/glm52-fallback/setup-glm52.sh` | present" in text
 
     def test_inventory_table_lists_stale_paths_as_absent(self):
+        """The inventory table marks the two stale legacy SKILL.md paths as absent."""
         text = self._text
         assert "`skills/glm52-fallback/SKILL.md` | absent" in text
         assert (
@@ -547,9 +610,11 @@ class TestReplayRecordDoc:
         )
 
     def test_has_replay_decisions_section(self):
+        """The record has a Replay decisions section."""
         assert "## Replay decisions" in self._text
 
     def test_replay_decisions_name_the_canonical_folder(self):
+        """The Replay decisions section names one consolidated canonical folder, bin/orama-system/skills/glm52-fallback/."""
         text = self._text
         d_idx = text.find("## Replay decisions")
         next_idx = text.find("\n## ", d_idx + 1)
@@ -558,17 +623,21 @@ class TestReplayRecordDoc:
         assert "bin/orama-system/skills/glm52-fallback/" in decisions_section
 
     def test_replay_decisions_forbid_printing_credentials(self):
+        """The record forbids printing, quoting or storing runtime credential values."""
         text = self._text
         assert "Do not print, quote, or store runtime credential values" in text
 
     def test_replay_decisions_name_runtime_contract_env_var(self):
+        """The record names $GLM52_API_KEY as the runtime contract variable."""
         text = self._text
         assert "`$GLM52_API_KEY`" in text
 
     def test_has_out_of_scope_section(self):
+        """The record has an Out of scope section."""
         assert "## Out of scope" in self._text
 
     def test_out_of_scope_excludes_history_rewrite_and_key_rotation(self):
+        """The Out of scope section excludes Git history rewrite and provider key rotation."""
         text = self._text
         o_idx = text.find("## Out of scope")
         out_section = text[o_idx:]

@@ -20,6 +20,7 @@ RESOLVER_SCRIPT = REPO_ROOT / "scripts/git/resolve_sibling_git_repo.sh"
 
 
 def _run(script_body: str, *, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+    """Source the resolver script and run ``script_body`` in bash with ``env`` layered over the current environment."""
     run_env = os.environ.copy()
     if env:
         run_env.update(env)
@@ -34,6 +35,7 @@ def _run(script_body: str, *, env: dict[str, str] | None = None) -> subprocess.C
 
 
 def _make_repo(root: Path, marker: str = "") -> Path:
+    """Create (and git init) a repository at ``root``, optionally with a ``marker`` file inside it; return ``root``."""
     root.mkdir(parents=True, exist_ok=True)
     subprocess.run(["git", "init", "-q"], cwd=root, check=True)
     if marker:
@@ -44,6 +46,7 @@ def _make_repo(root: Path, marker: str = "") -> Path:
 
 
 def test_is_git_root_requires_git_dir(tmp_path: Path) -> None:
+    """A plain directory without a .git entry is not a git root."""
     plain = tmp_path / "plain"
     plain.mkdir()
     result = _run(f'sibling_repo_is_git_root "{plain}" "" && echo YES || echo NO')
@@ -51,12 +54,14 @@ def test_is_git_root_requires_git_dir(tmp_path: Path) -> None:
 
 
 def test_is_git_root_empty_marker_accepts_any_git_repo(tmp_path: Path) -> None:
+    """With an empty marker argument any git repository counts as a root."""
     repo = _make_repo(tmp_path / "repo")
     result = _run(f'sibling_repo_is_git_root "{repo}" "" && echo YES || echo NO')
     assert result.stdout.strip() == "YES"
 
 
 def test_is_git_root_rejects_missing_marker(tmp_path: Path) -> None:
+    """A git repository that lacks the required marker file is rejected."""
     repo = _make_repo(tmp_path / "repo")
     result = _run(f'sibling_repo_is_git_root "{repo}" "some/marker.py" && echo YES || echo NO')
     assert result.stdout.strip() == "NO"
@@ -92,6 +97,7 @@ def test_is_git_root_rejects_symlinked_git_entry(tmp_path: Path) -> None:
 
 
 def test_is_git_root_rejects_nested_directory_inside_repo(tmp_path: Path) -> None:
+    """A subdirectory inside a repository is not a git root, since .git must sit directly in the directory."""
     repo = _make_repo(tmp_path / "repo")
     nested = repo / "nested"
     nested.mkdir()
@@ -114,6 +120,7 @@ def test_add_candidate_on_empty_array_does_not_crash_under_nounset(tmp_path: Pat
 
 
 def test_add_candidate_dedupes(tmp_path: Path) -> None:
+    """Adding the same repository twice leaves a single candidate."""
     repo = _make_repo(tmp_path / "repo")
     result = _run(
         f'sibling_repo_reset_candidates; '
@@ -143,6 +150,7 @@ def test_crawl_collect_finds_nested_repo_at_depth(tmp_path: Path) -> None:
 
 
 def test_crawl_collect_depth_zero_only_checks_base(tmp_path: Path) -> None:
+    """A crawl depth of 0 inspects only the base directory, so a repo nested below it is not found and finalize fails."""
     _make_repo(tmp_path / "mother" / "nested" / "Target", marker="marker.txt")
     result = _run(
         f'sibling_repo_reset_candidates; '
@@ -153,6 +161,7 @@ def test_crawl_collect_depth_zero_only_checks_base(tmp_path: Path) -> None:
 
 
 def test_finalize_fails_closed_on_ambiguous_candidates(tmp_path: Path) -> None:
+    """Two matching repos make finalize fail closed with an ambiguity error rather than picking one."""
     _make_repo(tmp_path / "mother" / "A", marker="marker.txt")
     _make_repo(tmp_path / "mother" / "B", marker="marker.txt")
     result = _run(
@@ -165,6 +174,7 @@ def test_finalize_fails_closed_on_ambiguous_candidates(tmp_path: Path) -> None:
 
 
 def test_check_env_override_returns_1_when_unset() -> None:
+    """With the environment variable unset the override check returns 1, meaning no override was supplied."""
     result = _run(
         'unset FOO_PATH; sibling_repo_check_env_override "" FOO_PATH; echo "rc=$?"',
     )
@@ -172,6 +182,7 @@ def test_check_env_override_returns_1_when_unset() -> None:
 
 
 def test_check_env_override_returns_2_on_invalid_explicit_override(tmp_path: Path) -> None:
+    """An override variable pointing at a directory that is not a git repo makes the check return 2 (invalid explicit override)."""
     bogus = tmp_path / "not-a-repo"
     bogus.mkdir()
     result = _run(
@@ -181,6 +192,7 @@ def test_check_env_override_returns_2_on_invalid_explicit_override(tmp_path: Pat
 
 
 def test_check_env_override_returns_0_on_valid_override(tmp_path: Path) -> None:
+    """An override variable pointing at a valid repo makes the check succeed and print that repo path."""
     repo = _make_repo(tmp_path / "repo")
     result = _run(
         f'export FOO_PATH="{repo}"; sibling_repo_check_env_override "" FOO_PATH',
