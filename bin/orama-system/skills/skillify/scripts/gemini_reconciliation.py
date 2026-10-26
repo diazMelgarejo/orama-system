@@ -456,7 +456,10 @@ def reconcile_gemini(
                 raise ValueError(f"{slug}: preserve-external action cannot be reconciled")
 
             canonical_target = Path(ownership.canonical_path)
-            if ownership.action == "link" and not canonical_target.is_absolute():
+            # A leading "/" marks an absolute POSIX path; on Windows
+            # Path("/x").is_absolute() is False (no drive), so honour it too.
+            is_abs = canonical_target.is_absolute() or str(ownership.canonical_path).startswith("/")
+            if ownership.action == "link" and not is_abs:
                 if canonical_root is None:
                     raise ValueError(
                         f"{slug}: canonical_path '{ownership.canonical_path}' is repo-relative "
