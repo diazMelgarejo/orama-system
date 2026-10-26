@@ -94,11 +94,15 @@ composition and avoids reintroducing an obsolete Core pin.
 
 ### Acceptance gate
 
-- Fresh non-editable install on supported Python versions.
+- Fresh non-editable install on the Python qualification matrix: the repository CI matrix
+  (3.11, 3.12, 3.13) is the required set. The v2 documents state a 3.11+ policy, so 3.10, which
+  the root package still declares via `requires-python = ">=3.10"`, is not qualified by this plan
+  and must be reconciled with that declaration before any 3.10 claim is made. The M1 receipt
+  covers 3.11 and 3.12 only; 3.13 needs its own qualification evidence.
 - Runtime source/pin assertion and registry-digest assertion.
 - Every capability is disabled by default; every forbidden combination refuses before dispatch.
 - Independent review confirms no signing seed, issuer-write capability, or P5 material is reachable
-- from the web-serving process.
+  from the web-serving process.
 
 ## 5. Release 1 — verification-only serving
 
@@ -108,13 +112,13 @@ issuer state, settle unknown holds, run effects, or contact a provider.
 ### Architecture
 
 - **Phylax:** read-only public-key, issued-grant-index, and revocation verifier. It owns public
-- verification and revocation freshness semantics.
+  verification and revocation freshness semantics.
 - **Oramasys:** authenticated request handling, admission composition, response shaping, and durable
-- audit references. It never signs in the web process.
+  audit references. It never signs in the web process.
 - **Telos:** endpoint exposure, authenticated local transport, TLS/bearer policy where applicable,
-- network allowlist, and stable `503` readiness code.
+  network allowlist, and stable `503` readiness code.
 - **Phylax monitorability:** receives redacted delivery/decision evidence. A monitoring failure must
-- not turn into an effect permission.
+  not turn into an effect permission.
 
 ### Work packages
 
@@ -122,7 +126,12 @@ issuer state, settle unknown holds, run effects, or contact a provider.
    creates nor migrates authority state.
 2. Add `/healthz`, `/readyz`, and a narrowly scoped verification/readiness route. Readiness must
    separately report verifier-ready, issuer-ready, serving-enabled, and autonomous-policy-ready; it
-   must not infer one from another.
+   must not infer one from another. Map each route to the kernel security contracts in
+   `01-kernel-spec.md` §6b before Wave 1 qualification: the `Capability` it requires (`public` for
+   the health probes, `read` for verification), the `AuthContext` it consumes, the
+   `SecurityDecision` and `AuditEvent` it emits, and the `EndpointPolicy` that governs exposure.
+   The Wave 1 gate also records the control mapping to the baseline in
+   `24-security-first-platform.md` (OWASP, NIST SSDF, CISA Secure by Design, OpenSSF, SLSA).
 3. Bind feature enablement to an explicit operator record. `ORAMA_GRANT_SERVING` remains
    absent/unset until the approval is recorded and exact binary/config digests match.
 4. Exercise denial paths: stale revocation, unknown key, malformed grant, revoked grant, missing
@@ -159,10 +168,13 @@ dispatch receipt, terminal taxonomy, redaction envelope, and replay rules. The o
 
 1. **State first:** add migrations and transactional `prepared → authorized → dispatched →
    acknowledged/unknown/refused` records. Every externally visible effect uses a durable idempotency
-   key and a fencing epoch.
+   key and a fencing epoch. Revocation or a cascade may also move a `prepared` or `authorized`
+   attempt to `refused` before dispatch; that refusal is terminal, and a replay under the same
+   idempotency key returns the same refusal, so the attempt can neither stay pending nor dispatch.
 2. **Authorization second:** verify the bound approval/permit at the final execution boundary.
-   Revocation and cascades refuse future dispatch; already uncertain work becomes an explicit
-   unknown disposition, never a silent rollback.
+   Revocation and cascades refuse future dispatch, including attempts not yet dispatched (the
+   pre-dispatch refusal above); already uncertain work becomes an explicit unknown disposition,
+   never a silent rollback.
 3. **Driver third:** introduce one local, inert/dry-run effect driver. It accepts a sealed command
    envelope and returns a receipt; it cannot execute arbitrary shell text.
 4. **HITL fourth:** require explicit, scoped human approval for the concrete attempt identity.
@@ -174,12 +186,12 @@ dispatch receipt, terminal taxonomy, redaction envelope, and replay rules. The o
 ### Required adversarial tests
 
 - double submit, duplicate delivery, stale epoch, post-approval payload substitution, revocation
-- race, timeout after dispatch, process crash at every durable boundary, replay after restart, and
-- concurrent reservations;
+  race, timeout after dispatch, process crash at every durable boundary, replay after restart, and
+  concurrent reservations;
 - no effect without a matching durable authorization; no second effect for the same attempt
-- identity;
+  identity;
 - unknown is preserved when outcome cannot be proven; manual reconciliation is authenticated,
-- append-only, scoped, expiring, and single-use.
+  append-only, scoped, expiring, and single-use.
 
 ### T3 release gate
 
@@ -196,9 +208,12 @@ controls.
 1. Freeze a provider-neutral request/response/error envelope and a compatibility matrix. Preserve
    the external framework behavior required by the LangChain/LangGraph compatibility contract; do
    not silently fall back to another provider.
-2. Telos enforces exact allowlists, canonical URL parsing, TLS for bearer-bearing redirects,
+2. Telos enforces exact allowlists, canonical URL parsing, TLS for bearer-bearing requests,
    proxy/environment handling (`trust_env=False` where the policy requires), request size limits,
-   deadlines, retry classification, and circuit state.
+   deadlines, retry classification, and circuit state. The existing redirect contract
+   (`32-agentic-security-controls.md`) binds the T4 provider transport: redirects are denied by
+   default, every hop is revalidated if redirects are ever enabled, and credentials are never
+   forwarded to a rejected address. The qualification tests assert each of the three behaviors.
 3. Bind each remote request to a T3 effect attempt, admission evidence, cost/time reservation, and
    redacted telemetry receipt.
 4. Begin in **shadow/dry-run** mode: construct and validate requests, but do not send. Then enable
@@ -210,8 +225,9 @@ controls.
 
 - deterministic fake-provider and fault-injection suite;
 - integration test against an explicitly approved non-production endpoint or controlled test double;
-- credential non-disclosure tests, SSRF/redirect tests, response-size and malformed-wire tests,
-- idempotency tests, and fallback-refusal tests;
+- credential non-disclosure tests, SSRF/redirect tests (default denial, per-hop revalidation, and
+  no credential forwarding to a rejected address), response-size and malformed-wire tests,
+  idempotency tests, and fallback-refusal tests;
 - staged operator review before each expansion of the provider/model/endpoint allowlist.
 
 ## 8. Release 4 — T5 durable continuation
@@ -222,14 +238,14 @@ dispatched effect.
 ### Invariants
 
 - A checkpoint is not “restart from `START` with loaded state.” It has a versioned graph identity,
-- canonical state digest, frontier/scheduler position, completed-attempt receipts, pending attempts,
-- epoch, and compatibility/version policy.
+  canonical state digest, frontier/scheduler position, completed-attempt receipts, pending attempts,
+  epoch, and compatibility/version policy.
 - Any attempt that may have crossed an effect/transport boundary is reconciled before resumption.
 - The engine never guesses that it did not run.
 - State-schema, graph-definition, reducer, or plugin incompatibility refuses continuation and
-- requires an explicit migration/replay procedure.
+  requires an explicit migration/replay procedure.
 - The default continuation policy is conservative: restart only from a known safe boundary; retain
-- the old checkpoint and receipt chain.
+  the old checkpoint and receipt chain.
 
 ### Implementation sequence
 
@@ -260,13 +276,13 @@ tests are qualified:
 
 - explicit operator command starts recovery; a passive UNKNOWN hold never mints a grant;
 - Phylax owns issuance, public registry, revocation, quota, and immutable key tier; Oramasys owns
-- recovery intent and transactional consumption;
+  recovery intent and transactional consumption;
 - fixed `settle`/`steps` semantics, 1–3 units per grant, 900-second lifetime, six accepted
-- autonomous grants per principal per rolling hour;
+  autonomous grants per principal per rolling hour;
 - canonical recovery identity binds principal, store/run/hold, fencing epochs, units, action,
-- evidence digest, issuance/expiry, policy revision, and single-use grant ID;
+  evidence digest, issuance/expiry, policy revision, and single-use grant ID;
 - exact retry returns the stored grant; changed payload refuses; expiry/revocation/consumption do
-- not refund quota;
+  not refund quota;
 - legacy NULL-owner holds refuse autonomous recovery. There is no automatic owner backfill.
 
 ### Level 1: separately reviewed isolated issuer
@@ -282,8 +298,10 @@ alone. Require all ADR-71 evidence:
    real serving identity;
 5. versioned deployment-policy activation record with operator approval.
 
-Only then may the policy raise the autonomous issuance ceiling to twelve accepted grants/hour. Key
-rotation and policy change cannot reset the quota bucket.
+Only then may the policy raise the autonomous issuance ceiling to twelve accepted grants/hour.
+Level 1 changes only the ceiling (six to twelve): the bucket stays per principal over a rolling
+hour, and every Level 0 rule (single-use, retry, payload binding, expiry, revocation, consumption,
+no quota refund) remains in force. Key rotation and policy change cannot reset the quota bucket.
 
 ### Remote-autonomy abort conditions
 
@@ -316,12 +334,12 @@ after all local checks, and no force push, branch deletion, or history rewrite.
 - [ ] Required collection, targeted regression, full affected suite, and fault/crash scenarios pass.
 - [ ] Producer/consumer interoperability runs both directions where a shared wire exists.
 - [ ] Red-team refusals prove defaults, expiry, revocation, stale epochs, retries, malformed input,
-- and unavailable dependency behavior.
+  and unavailable dependency behavior.
 - [ ] Serving identity access audit proves least privilege and absence of secrets.
 - [ ] Rollback stops new work without deleting evidence or invalidating already issued receipts.
 - [ ] Two independent reviews at final candidate heads; post-merge rerun at actual merged pins.
 - [ ] Operator decision explicitly names the capability, scope, expiry/review date, and disablement
-- control.
+  control.
 
 ## 12. Immediate next action
 
@@ -333,11 +351,11 @@ every powerful capability fail-closed.
 ## 13. Assumptions ledger
 
 - The current live heads examined in the rehearsal were Core `6d75cfe08af9`, Oramasys
-- `68f063017b52`, Orama `6281e969353f`, and Perpetua-Tools `cd82cc76a5e4`.
+  `68f063017b52`, Orama `6281e969353f`, and Perpetua-Tools `cd82cc76a5e4`.
 - This plan does not assume branch protection status, deployed credentials, local account isolation,
-- public network exposure, or a live provider account.
+  public network exposure, or a live provider account.
 - “Remote autonomy” here means the ADR-71 bounded recovery/settlement capability, not permission for
-- arbitrary remote commands, autonomous code changes, autonomous pushes, or unbounded provider
-- spend.
+  arbitrary remote commands, autonomous code changes, autonomous pushes, or unbounded provider
+  spend.
 - Any material change to a frozen wire, state machine, threat model, or deployment identity returns
-- the affected wave to contract review.
+  the affected wave to contract review.

@@ -8,12 +8,13 @@ Run: pytest tests/test_multi_agent.py -v
 import json
 import pytest
 from pathlib import Path
+from typing import Any
 
 ROOT   = Path(__file__).parent.parent
 MULTI  = ROOT / "bin"
 
 
-def _read_json_file(path: Path):
+def _read_json_file(path: Path) -> Any:
     """Parse a JSON file, following a git symlink checked out as a plain-text stub.
 
     Without symlink privilege (Windows, core.symlinks=false) git writes a symlink

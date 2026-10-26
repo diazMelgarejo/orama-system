@@ -282,9 +282,10 @@ def test_script_with_non_ascii_text_has_a_utf8_bom(path: Path) -> None:
 @pytest.mark.parametrize("path", _tracked_powershell_scripts(), ids=lambda p: str(p.relative_to(REPO)))
 def test_script_parses_under_windows_powershell_5_1(path: Path, tmp_path: Path) -> None:
     """Parse the script with the real 5.1 parser and require zero syntax errors."""
+    powershell_path = str(path).replace("'", "''")  # keep an apostrophe inside the single-quoted literal
     command = (
         "$e=$null;[void][System.Management.Automation.Language.Parser]::ParseFile("
-        f"'{path}',[ref]$null,[ref]$e);if($e.Count){{$e[0].Message+' (line '+$e[0].Extent.StartLineNumber+')';exit 1}}"
+        f"'{powershell_path}',[ref]$null,[ref]$e);if($e.Count){{$e[0].Message+' (line '+$e[0].Extent.StartLineNumber+')';exit 1}}"
     )
     proc = subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", command],
                           capture_output=True, text=True, cwd=tmp_path)

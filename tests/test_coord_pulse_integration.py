@@ -372,26 +372,27 @@ class TestErrorResilience:
     def test_concurrent_coord_pulse_calls_dont_race(self, mock_fleet_topology_file):
         """Concurrent coord_pulse calls should not race (file lock prevents corruption)."""
         import threading
+        from typing import IO
 
         try:
             import fcntl
 
-            def lock(f):
+            def lock(f: IO[str]) -> None:
                 """Take an exclusive flock on the open file."""
                 fcntl.flock(f, fcntl.LOCK_EX)
 
-            def unlock(f):
+            def unlock(f: IO[str]) -> None:
                 """Release the flock on the open file."""
                 fcntl.flock(f, fcntl.LOCK_UN)
         except ImportError:  # Windows: one-byte msvcrt lock at offset 0
             import msvcrt
 
-            def lock(f):
+            def lock(f: IO[str]) -> None:
                 """Take an exclusive one-byte lock at offset 0."""
                 f.seek(0)
                 msvcrt.locking(f.fileno(), msvcrt.LK_LOCK, 1)
 
-            def unlock(f):
+            def unlock(f: IO[str]) -> None:
                 """Release the one-byte lock at offset 0."""
                 f.seek(0)
                 msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)

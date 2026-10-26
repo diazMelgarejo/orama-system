@@ -5,6 +5,7 @@ import ipaddress
 import json
 import socket
 import sys
+import threading
 
 import pytest
 from fastapi.testclient import TestClient
@@ -31,16 +32,31 @@ def client(monkeypatch):
 def test_offline_run_delivers_bound_csv_and_canonical_receipt(client, monkeypatch):
     """Offline run delivers bound csv and canonical receipt."""
     real_connect = socket.socket.connect
+    real_socketpair = socket.socketpair
+    # Windows has no AF_UNIX socketpair(): asyncio's self-pipe is a loopback TCP
+    # connection made inside socket.socketpair(). Exempt only connects issued by
+    # a thread that is currently inside that call, not arbitrary loopback ones.
+    in_socketpair: set[int] = set()
+
+    def tracking_socketpair(*args, **kwargs):
+        """Run the real socketpair while marking this thread as the harness."""
+        ident = threading.get_ident()
+        in_socketpair.add(ident)
+        try:
+            return real_socketpair(*args, **kwargs)
+        finally:
+            in_socketpair.discard(ident)
 
     def forbidden(self, address, *args, **kwargs):
-        """Fail on any outbound connect; Windows' asyncio self-pipe socketpair is exempt."""
-        if sys.platform == "win32" and isinstance(address, tuple):
+        """Fail on any outbound connect; the Windows asyncio self-pipe socketpair is exempt."""
+        if sys.platform == "win32" and threading.get_ident() in in_socketpair and isinstance(address, tuple):
             try:
                 if ipaddress.ip_address(address[0]).is_loopback:
                     return real_connect(self, address, *args, **kwargs)
             except ValueError:
                 pass
         pytest.fail("Offline task attempted a network connection")
+    monkeypatch.setattr(socket, "socketpair", tracking_socketpair)
     monkeypatch.setattr(socket.socket, "connect", forbidden)
     response = client.post("/api/workspace/run", json=FIXTURE)
     assert response.status_code == 200, response.text

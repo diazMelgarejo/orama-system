@@ -174,10 +174,43 @@ def test_subprocess_worker_timeout_kills_child(tmp_path: Path) -> None:
         raw = pid_file.read_text(encoding="utf-8").strip()
         assert raw, f"{task}'s PID file must not be empty"
         pid = int(raw)
-        # Windows reports a vanished PID as a generic OSError (WinError 87).
-        gone = OSError if sys.platform == "win32" else ProcessLookupError
-        with pytest.raises(gone):
+        assert not _pid_is_alive(pid), f"{task}'s worker must be gone after the timeout"
+
+
+def _pid_is_alive(pid: int) -> bool:
+    """Non-destructive liveness probe.
+
+    os.kill(pid, 0) terminates the target on Windows, so there the exit code is
+    read through the process handle instead.
+    """
+    if sys.platform != "win32":
+        try:
             os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        return True
+    import ctypes
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    kernel32.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+    kernel32.GetExitCodeProcess.restype = wintypes.BOOL
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    kernel32.CloseHandle.restype = wintypes.BOOL
+    handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+    if not handle:
+        return ctypes.get_last_error() == 5  # access denied: the process exists
+    try:
+        code = wintypes.DWORD()
+        if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+            return True
+        return code.value == 259  # STILL_ACTIVE
+    finally:
+        kernel32.CloseHandle(handle)
 
 
 @_POSIX_GROUP_SIGNALS_ONLY

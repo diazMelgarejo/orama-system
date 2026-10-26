@@ -231,21 +231,51 @@ def _windows_pid_is_live(pid: int) -> bool:
     handle and its exit code instead.
     """
     import ctypes
+    from ctypes import wintypes
 
-    kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[attr-defined]
+    # Declare pointer-sized signatures: the default C int return type would
+    # truncate a 64-bit process HANDLE.
+    kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    kernel32.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+    kernel32.GetExitCodeProcess.restype = wintypes.BOOL
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    kernel32.CloseHandle.restype = wintypes.BOOL
     process_query_limited_information = 0x1000
     still_active = 259
     handle = kernel32.OpenProcess(process_query_limited_information, False, pid)
     if not handle:
         # Access denied means the process exists; any other failure means it does not.
-        return ctypes.get_last_error() == 5 or ctypes.GetLastError() == 5
+        return ctypes.get_last_error() == 5
     try:
-        code = ctypes.c_ulong()
+        code = wintypes.DWORD()
         if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
             return True
         return code.value == still_active
     finally:
         kernel32.CloseHandle(handle)
+
+
+_MSYS_DRIVE_PATH = re.compile(r"^/([A-Za-z])(?:/(.*))?$")
+
+
+def _native_absolute_path(canonical_path: str) -> Path:
+    """Return ``canonical_path`` as a path the host OS can resolve.
+
+    On Windows an MSYS-style ``/c/Users/x`` is converted to ``C:/Users/x``; a
+    leading-slash path with no drive component cannot be anchored and is
+    rejected rather than silently resolved against the current drive.
+    """
+    path = Path(canonical_path)
+    if sys.platform != "win32" or path.is_absolute() or not canonical_path.startswith("/"):
+        return path
+    match = _MSYS_DRIVE_PATH.match(canonical_path)
+    if match is None:
+        raise ValueError(
+            f"canonical_path '{canonical_path}' is POSIX-absolute and cannot be converted to a Windows path"
+        )
+    return Path(f"{match.group(1).upper()}:/{match.group(2) or ''}")
 
 
 def _pid_is_live(pid: object) -> bool:
@@ -507,10 +537,17 @@ def reconcile_gemini(
             if ownership.action == "preserve-external":
                 raise ValueError(f"{slug}: preserve-external action cannot be reconciled")
 
-            canonical_target = Path(ownership.canonical_path)
             # A leading "/" marks an absolute POSIX path; on Windows
-            # Path("/x").is_absolute() is False (no drive), so honour it too.
+            # Path("/x").is_absolute() is False (no drive), so convert an
+            # MSYS-style "/c/..." to a native path (or reject it) rather than
+            # let relpath resolve it against the current drive.
+            canonical_target = Path(ownership.canonical_path)
             is_abs = canonical_target.is_absolute() or str(ownership.canonical_path).startswith("/")
+            if is_abs and ownership.action == "link":
+                try:
+                    canonical_target = _native_absolute_path(str(ownership.canonical_path))
+                except ValueError as exc:
+                    raise ValueError(f"{slug}: {exc}") from exc
             if ownership.action == "link" and not is_abs:
                 if canonical_root is None:
                     raise ValueError(

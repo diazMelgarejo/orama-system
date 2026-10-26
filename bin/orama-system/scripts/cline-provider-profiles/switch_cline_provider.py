@@ -24,6 +24,7 @@ except ImportError:  # Windows has no fcntl; msvcrt provides the same exclusive 
     import msvcrt
 
 MAX_BACKUPS = 10
+_WIN_LOCK_TIMEOUT_ERRNO = 36  # errno.EDEADLOCK: msvcrt LK_LOCK gave up after its retries
 # Metadata fields that live alongside a provider's "settings" dict (set by
 # this script itself when activating a profile, see switch_provider below)
 # and would always differ between snapshots even for an otherwise-identical
@@ -64,6 +65,15 @@ def latest_backup(backup_dir: str) -> str | None:
     """Return the path of the lexicographically newest ``.json`` backup in ``backup_dir`` (timestamped names sort chronologically), or None when there are none."""
     entries = sorted(e for e in os.listdir(backup_dir) if e.endswith(".json"))
     return os.path.join(backup_dir, entries[-1]) if entries else None
+
+
+_BACKUP_NAME_RE = re.compile(r"^openai-compatible-(\d{8}T\d{6}\.\d{6})Z\.json$")
+
+
+def _backup_stamp(path: str) -> datetime | None:
+    """Return the naive timestamp encoded in a backup file name, or None when the name is not one this script wrote."""
+    m = _BACKUP_NAME_RE.match(os.path.basename(path))
+    return datetime.strptime(m.group(1), "%Y%m%dT%H%M%S.%f") if m else None
 
 
 def comparable(block: Mapping[str, Any]) -> dict[str, Any]:
@@ -125,15 +135,18 @@ def switch_provider(
         # Microsecond precision: two switches inside the same wall-clock
         # second (a realistic rate for an automated agent) must not
         # collide on the same filename and silently clobber each other.
-        ts = now.strftime("%Y%m%dT%H%M%S.%fZ")
         # Names sort chronologically and rotation/dedupe rely on that. A coarse
-        # clock (Windows ticks about every 15 ms) can hand two switches the same
-        # timestamp, which would overwrite a backup and break the order: bump the
-        # stamp until it is strictly newer than the latest backup on file.
-        if prior and f"openai-compatible-{ts}.json" <= os.path.basename(prior):
-            while f"openai-compatible-{ts}.json" <= os.path.basename(prior):
-                now = now + timedelta(microseconds=1)
-                ts = now.strftime("%Y%m%dT%H%M%S.%fZ")
+        # clock (Windows ticks about every 15 ms) or a clock stepped backwards can
+        # hand a switch a stamp that is not newer than the latest backup, which
+        # would overwrite it and break the order: jump straight to one microsecond
+        # past the latest backup's stamp. A name that does not parse (not one this
+        # script wrote) is ignored for ordering.
+        prior_stamp = _backup_stamp(prior) if prior else None
+        if prior_stamp is not None:
+            now_naive = now.replace(tzinfo=None)
+            if now_naive <= prior_stamp:
+                now = now + (prior_stamp - now_naive) + timedelta(microseconds=1)
+        ts = now.strftime("%Y%m%dT%H%M%S.%fZ")
         snapshot = {"settings": outgoing, "savedAt": now.isoformat()}
         atomic_write_json(os.path.join(backup_dir, f"openai-compatible-{ts}.json"), snapshot)
         rotate_backups(backup_dir)
@@ -158,8 +171,16 @@ def _lock_exclusive(fd: int) -> None:
     if fcntl is not None:
         fcntl.flock(fd, fcntl.LOCK_EX)
         return
-    os.lseek(fd, 0, os.SEEK_SET)
-    msvcrt.locking(fd, msvcrt.LK_LOCK, 1)
+    # LK_LOCK gives up with EDEADLOCK after ~10 one-second retries; flock waits
+    # indefinitely, so keep waiting on contention and surface any other error.
+    while True:
+        os.lseek(fd, 0, os.SEEK_SET)
+        try:
+            msvcrt.locking(fd, msvcrt.LK_LOCK, 1)
+            return
+        except OSError as exc:
+            if exc.errno != _WIN_LOCK_TIMEOUT_ERRNO:
+                raise
 
 
 def _unlock(fd: int) -> None:
