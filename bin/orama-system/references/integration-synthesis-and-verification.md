@@ -66,8 +66,11 @@ or refuted it, origin vs local result>
 
 ## Corollaries
 
-- **Merge, never rewrite others' work.** Integrate other agents' commits by merge
-  commit only. Never rebase them and never force-push over them.
+- **Merge, never rewrite others' work.** Integrate another branch (a base into a
+  stacked PR, another agent's branch) by merge commit only. Never rebase other
+  agents' commits and never force-push over them. When the same shared branch
+  advances under your unpushed delta, follow
+  [concurrent-head reapply](concurrent-head-reapply.md) instead of a catch-up merge.
 - **Disclose takeover first.** Before acting on another agent's work, state that you
   are taking it over; see the
   [cross-agent provenance invariant](cross-agent-provenance-invariant.md).
