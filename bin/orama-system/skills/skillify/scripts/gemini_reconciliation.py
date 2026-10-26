@@ -176,6 +176,17 @@ def _recognized_symlink_error_numbers() -> set[int]:
     }
 
 
+def _is_symlink_unsupported_error(exc: OSError) -> bool:
+    """True when ``exc`` means this platform or account cannot create symlinks.
+
+    Besides the POSIX errno values, Windows reports an unprivileged symlink
+    attempt as winerror 1314 (ERROR_PRIVILEGE_NOT_HELD) with no errno.
+    """
+    if exc.errno in _recognized_symlink_error_numbers():
+        return True
+    return getattr(exc, "winerror", None) == 1314
+
+
 def create_relative_link(target: Path, source: Path) -> None:
     """Create a directory link from ``target`` to ``source`` without an
     absolute link payload, so the foreign root remains relocatable."""
@@ -204,9 +215,37 @@ def _lock_path(root: Path) -> Path:
     return root / ".reconcile.lock"
 
 
+def _windows_pid_is_live(pid: int) -> bool:
+    """Probe a PID on Windows without signalling it.
+
+    ``os.kill`` on Windows terminates the target for any signal other than
+    the console control events, so liveness is checked through the process
+    handle and its exit code instead.
+    """
+    import ctypes
+
+    kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+    process_query_limited_information = 0x1000
+    still_active = 259
+    handle = kernel32.OpenProcess(process_query_limited_information, False, pid)
+    if not handle:
+        # Access denied means the process exists; any other failure means it does not.
+        return ctypes.get_last_error() == 5 or ctypes.GetLastError() == 5
+    try:
+        code = ctypes.c_ulong()
+        if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+            return True
+        return code.value == still_active
+    finally:
+        kernel32.CloseHandle(handle)
+
+
 def _pid_is_live(pid: object) -> bool:
+    """Return True when ``pid`` names a running process."""
     if not isinstance(pid, int) or pid <= 0:
         return False
+    if sys.platform == "win32":
+        return _windows_pid_is_live(pid)
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
@@ -556,7 +595,7 @@ def reconcile_gemini(
                         create_relative_link(stage, canonical_target)
                         final_target_kind = "symlink"
                     except OSError as exc:
-                        if exc.errno not in _recognized_symlink_error_numbers():
+                        if not _is_symlink_unsupported_error(exc):
                             raise
                         write_generated_wrapper(stage, canonical_target)
                         final_target_kind = "generated-wrapper"
@@ -697,6 +736,8 @@ def verify_gemini(root: Path, archive_parent: Path, only: set[str] | None = None
                     if expected_target not in text:
                         findings.append(RootFinding(slug, "failed", f"{slug}: generated wrapper does not match receipt"))
                 else:
-                    if canonical_target_raw not in text:
+                    # The receipt stores str(Path), which uses native separators,
+                    # while the adapter text embeds the manifest's POSIX spelling.
+                    if canonical_target_raw not in text and Path(canonical_target_raw).as_posix() not in text:
                         findings.append(RootFinding(slug, "failed", f"{slug}: generated adapter does not match receipt"))
     return findings
