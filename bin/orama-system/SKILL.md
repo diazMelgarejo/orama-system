@@ -332,6 +332,7 @@ treat `swarm_state.md` and `log.txt` / `val_bpb` as the source of truth. Detail:
 - Verify programmatically after every insertion
 - Write `tasks/todo.md` before implementing anything with 3+ steps
 - Start at CIDF rank 1 — never jump directly to scripting
+- When integrating or resuming parallel work, apply [`references/integration-synthesis-and-verification.md`](references/integration-synthesis-and-verification.md): reuse leftovers, synthesize both sides, verify reports against live origin and local code before any push
 
 ### Ask First
 
@@ -410,6 +411,9 @@ agent's SOUL.md and session start.
 
 → Full protocol: `references/multi-agent-collaboration-protocol.md` (load before any multi-agent session).
 
+Integration rules (leftover reuse, synthesis, live-code verification, takeover and stash corollaries):
+[`references/integration-synthesis-and-verification.md`](references/integration-synthesis-and-verification.md).
+
 ## Search Policy
 
 **RULE: Never guess when information is scarce.** Cheapest source first, stop at the first satisfying
@@ -453,3 +457,4 @@ Preserve the originating author independently from the current actor, represent 
 bound endorsements to checked evidence, and disclose any takeover before acting on another agent's
 work; never fabricate another agent's pulse, status, authority or authorship. Full policy:
 [`references/cross-agent-provenance-invariant.md`](references/cross-agent-provenance-invariant.md).
+Takeover and integration practice: [`references/integration-synthesis-and-verification.md`](references/integration-synthesis-and-verification.md).

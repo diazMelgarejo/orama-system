@@ -27,7 +27,7 @@ allowed-tools: Bash(scripts/git/check_no_pending_merge.sh *), file-operations
 > **Thin entrypoint.** Full invariant, diagrams, KB table, and decision log:
 > [`../git-history-surgery/references/pending-operation-push-guard-reference-card.md`](../git-history-surgery/references/pending-operation-push-guard-reference-card.md)
 
-## When to load
+## When to Use
 
 - Before `git push` after any `--no-commit` merge, cherry-pick, or revert
 - When pre-push prints `GIT_PUSH_E_PENDING_*`
@@ -70,6 +70,23 @@ every normal push.
 | 3 | `GIT_PUSH_E_PENDING_CHERRY_PICK` |
 | 4 | `GIT_PUSH_E_PENDING_REVERT` |
 
+## Boundaries
+
+### Always Do
+
+- Run the quick check before any push that follows a no-commit merge, cherry-pick or revert.
+
+### Ask First
+
+- Bypassing the guard (document why).
+
+### Never Do
+
+- Push while `MERGE_HEAD`, `CHERRY_PICK_HEAD` or `REVERT_HEAD` is set.
+
 ## Parent skill
 
 [`../git-history-surgery/SKILL.md`](../git-history-surgery/SKILL.md) — decision item 11.
+
+Before any push, verify reports against live origin and local code:
+[`../../references/integration-synthesis-and-verification.md`](../../references/integration-synthesis-and-verification.md).
