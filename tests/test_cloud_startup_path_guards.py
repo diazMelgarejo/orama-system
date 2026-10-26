@@ -81,10 +81,10 @@ def test_normalize_expands_literal_tilde(tmp_path: Path) -> None:
     home = tmp_path / "home"
     home.mkdir()
     out = tmp_path / "out.txt"
-    home_q = shlex.quote(str(home))
-    repo_root_q = shlex.quote(str(tmp_path / "orama"))
-    normalize_q = shlex.quote(str(NORMALIZE))
-    out_q = shlex.quote(str(out))
+    home_q = shlex.quote(home.as_posix())
+    repo_root_q = shlex.quote((tmp_path / "orama").as_posix())
+    normalize_q = shlex.quote(NORMALIZE.as_posix())
+    out_q = shlex.quote(out.as_posix())
     script = textwrap.dedent(
         f"""
         set -euo pipefail
@@ -108,10 +108,10 @@ def test_normalize_expands_literal_tilde(tmp_path: Path) -> None:
     result = _run_bash(script)
     assert result.returncode == 0, result.stderr
     lines = out.read_text(encoding="utf-8").splitlines()
-    assert lines[0] == str(home / "oc-home")
-    assert lines[1] == str(home / "oc-home" / "pt-tools")
-    assert lines[2] == str(home / "oc-home" / "ac-tools")
-    assert lines[3] == str(home / "oc-home" / "orama")
+    assert lines[0] == (home / "oc-home").as_posix()
+    assert lines[1] == (home / "oc-home" / "pt-tools").as_posix()
+    assert lines[2] == (home / "oc-home" / "ac-tools").as_posix()
+    assert lines[3] == (home / "oc-home" / "orama").as_posix()
 
 
 def test_normalize_rejects_openclaw_home_inside_repo(tmp_path: Path) -> None:
@@ -121,11 +121,11 @@ def test_normalize_rejects_openclaw_home_inside_repo(tmp_path: Path) -> None:
     repo.mkdir()
     nested = repo / "~" / "oc-home"
     out = tmp_path / "out.txt"
-    home_q = shlex.quote(str(home))
-    nested_q = shlex.quote(str(nested))
-    repo_q = shlex.quote(str(repo))
-    normalize_q = shlex.quote(str(NORMALIZE))
-    out_q = shlex.quote(str(out))
+    home_q = shlex.quote(home.as_posix())
+    nested_q = shlex.quote(nested.as_posix())
+    repo_q = shlex.quote(repo.as_posix())
+    normalize_q = shlex.quote(NORMALIZE.as_posix())
+    out_q = shlex.quote(out.as_posix())
     script = textwrap.dedent(
         f"""
         set -euo pipefail
@@ -140,7 +140,7 @@ def test_normalize_rejects_openclaw_home_inside_repo(tmp_path: Path) -> None:
     )
     result = _run_bash(script)
     assert result.returncode == 0, result.stderr
-    assert out.read_text(encoding="utf-8").strip() == str(home / "openclaw-v1")
+    assert out.read_text(encoding="utf-8").strip() == (home / "openclaw-v1").as_posix()
 
 
 def test_normalize_rederives_junk_sibling_paths(tmp_path: Path) -> None:
@@ -151,13 +151,13 @@ def test_normalize_rederives_junk_sibling_paths(tmp_path: Path) -> None:
     junk_orama = repo / "~" / "openclaw-v1" / "orama-system"
     junk_pt = repo / "~" / "openclaw-v1" / "Perpetua-Tools"
     out = tmp_path / "out.txt"
-    home_q = shlex.quote(str(home))
-    junk_orama_q = shlex.quote(str(junk_orama))
-    junk_pt_q = shlex.quote(str(junk_pt))
-    nested_oc_q = shlex.quote(str(repo / "~" / "openclaw-v1"))
-    repo_q = shlex.quote(str(repo))
-    normalize_q = shlex.quote(str(NORMALIZE))
-    out_q = shlex.quote(str(out))
+    home_q = shlex.quote(home.as_posix())
+    junk_orama_q = shlex.quote(junk_orama.as_posix())
+    junk_pt_q = shlex.quote(junk_pt.as_posix())
+    nested_oc_q = shlex.quote((repo / "~" / "openclaw-v1").as_posix())
+    repo_q = shlex.quote(repo.as_posix())
+    normalize_q = shlex.quote(NORMALIZE.as_posix())
+    out_q = shlex.quote(out.as_posix())
     script = textwrap.dedent(
         f"""
         set -euo pipefail
@@ -181,10 +181,10 @@ def test_normalize_rederives_junk_sibling_paths(tmp_path: Path) -> None:
     result = _run_bash(script)
     assert result.returncode == 0, result.stderr
     lines = out.read_text(encoding="utf-8").splitlines()
-    assert lines[0] == str(home / "openclaw-v1")
-    assert lines[1] == str(repo)
-    assert lines[2] == str(home / "openclaw-v1" / "Perpetua-Tools")
-    assert lines[3] == str(home / "openclaw-v1" / "AlphaClaw")
+    assert lines[0] == (home / "openclaw-v1").as_posix()
+    assert lines[1] == repo.as_posix()
+    assert lines[2] == (home / "openclaw-v1" / "Perpetua-Tools").as_posix()
+    assert lines[3] == (home / "openclaw-v1" / "AlphaClaw").as_posix()
 
 
 def _seed_guard_sync_scripts(canon: Path, *extra: str) -> Path:
