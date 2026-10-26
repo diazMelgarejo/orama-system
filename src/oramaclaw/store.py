@@ -26,6 +26,7 @@ import hashlib
 import json
 import logging
 import os
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -73,18 +74,47 @@ class LockHeld(Exception):
         super().__init__(f"oramaclaw lock held by PID {pid} ({lock_path})")
 
 
+def _win_pid_exists(pid: int) -> bool:
+    """Return whether a Windows process with this PID is still running.
+
+    ``os.kill(pid, 0)`` is unusable on Windows: any signal other than the
+    console-control ones calls ``TerminateProcess``, so probing would kill
+    the lock holder. Query the process handle instead.
+    """
+    import ctypes
+
+    kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+    kernel32.OpenProcess.restype = ctypes.c_void_p
+    handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+    if not handle:
+        # ERROR_ACCESS_DENIED means it exists but is not ours; anything else
+        # (typically ERROR_INVALID_PARAMETER) means no such process.
+        return ctypes.GetLastError() == 5
+    try:
+        code = ctypes.c_ulong()
+        if not kernel32.GetExitCodeProcess(ctypes.c_void_p(handle), ctypes.byref(code)):
+            return True
+        return code.value == 259  # STILL_ACTIVE
+    finally:
+        kernel32.CloseHandle(ctypes.c_void_p(handle))
+
+
 def _pid_is_alive(pid: int, expected_create_time: float | None) -> bool | None:
     """Return whether pid is a live process matching the expected start time."""
     os_kill_failed = False
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        # Process exists but we don't own it — still alive.
-        pass
-    except Exception:
-        os_kill_failed = True
+    if sys.platform == "win32":
+        if not _win_pid_exists(pid):
+            return False
+    else:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            # Process exists but we don't own it — still alive.
+            pass
+        except Exception:
+            os_kill_failed = True
 
     if expected_create_time is None and not os_kill_failed:
         return True
