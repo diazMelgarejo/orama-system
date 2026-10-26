@@ -1,12 +1,26 @@
 """Cover launcher path precedence and npm-prefix discovery without services."""
 
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
+# /bin/bash does not exist for native Windows subprocess calls; resolve bash from PATH.
+BASH = shutil.which("bash") or "/bin/bash"
+
+
+def _same_path(actual: str, expected: Path) -> bool:
+    """Compare a path printed by bash with ``expected``, tolerating MSYS spelling on Windows."""
+    if os.name == "nt":
+        converted = subprocess.run(
+            [BASH, "-c", 'cygpath -w "$1"', "test", actual],
+            capture_output=True, text=True, timeout=10,
+        )
+        actual = converted.stdout.strip() or actual
+    return Path(actual).resolve() == expected.resolve()
 
 
 @pytest.mark.unit
@@ -23,14 +37,14 @@ def test_explicit_pt_source_overrides_cached_paths(tmp_path: Path) -> None:
     cached.write_text('PT_DIR="/old/source"\nPT_PYTHON="/old/python"\n')
     env = dict(os.environ, PERPETUA_TOOLS_ROOT=str(live))
     result = subprocess.run(
-        ["/bin/bash", "-c", 'set -eu; SCRIPT_DIR="$1"; PATHS_FILE="$2"; '
+        [BASH, "-c", 'set -eu; SCRIPT_DIR="$1"; PATHS_FILE="$2"; '
          '_debug() { :; }; _warn() { :; }; _info() { :; }; '
          + resolution + '\nprintf "%s\\n" "$PT_DIR" "$PT_PYTHON"',
          "test", str(tmp_path), str(cached)],
         env=env, capture_output=True, text=True, timeout=10,
     )
     assert result.returncode == 0, result.stderr
-    assert result.stdout.splitlines()[0] == str(live)
+    assert _same_path(result.stdout.splitlines()[0], live)
     assert "/old/python" not in result.stdout
 
 
@@ -48,13 +62,13 @@ def test_node_path_uses_npm_prefix_with_spaces(tmp_path: Path) -> None:
     executable.write_text("#!/bin/sh\nexit 0\n")
     executable.chmod(0o755)
     result = subprocess.run(
-        ["/bin/bash", "-c", 'source "$1"; command -v ai-cli', "test",
+        [BASH, "-c", 'source "$1"; command -v ai-cli', "test",
          str(ROOT / "scripts/lib/node-global-path.sh")],
-        env=dict(os.environ, PATH=str(bins) + ":/usr/bin:/bin"),
+        env=dict(os.environ, PATH=os.pathsep.join([str(bins), "/usr/bin", "/bin"])),
         capture_output=True, text=True, timeout=10,
     )
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == str(executable)
+    assert _same_path(result.stdout.strip(), executable)
 
 
 @pytest.mark.unit
@@ -68,7 +82,7 @@ def test_macos_banner_probe_sets_connection_timeout(tmp_path: Path) -> None:
     nc.write_text('#!/bin/sh\ncase " $* " in *" -G 1 "*) exit 0;; *) exit 1;; esac\n')
     nc.chmod(0o755)
     result = subprocess.run(
-        ["/bin/bash", "-c", '_OS_NAME=Darwin; ' + function + '\n_nc_probe host 1234'],
+        [BASH, "-c", '_OS_NAME=Darwin; ' + function + '\n_nc_probe host 1234'],
         env=dict(os.environ, PATH=str(tmp_path) + ":/usr/bin:/bin"),
         capture_output=True, text=True, timeout=3,
     )
