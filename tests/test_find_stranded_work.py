@@ -5,6 +5,7 @@ from __future__ import annotations
 import shutil
 import stat
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -17,6 +18,7 @@ SCRIPT_GIT_DIR = REPO_ROOT / "scripts/git"
 
 
 def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    """Run ``git`` in ``cwd`` and return the completed process; a non-zero exit raises, so setup failures surface immediately."""
     return subprocess.run(
         ["git", *args],
         cwd=cwd,
@@ -27,6 +29,7 @@ def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
 
 
 def _commit(repo: Path, filename: str, body: str, message: str) -> None:
+    """Write ``body`` to ``filename`` inside ``repo`` (creating parent directories), stage it and commit it with ``message``."""
     path = repo / filename
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(body, encoding="utf-8")
@@ -35,6 +38,7 @@ def _commit(repo: Path, filename: str, body: str, message: str) -> None:
 
 
 def _make_pushed_repo(tmp_path: Path) -> Path:
+    """Create a workspace holding a ``orama-system`` repo on main with one base commit, pushed to a local bare remote with upstream tracking set; return the repo path."""
     mother = tmp_path / "workspace"
     repo = mother / "orama-system"
     remote = tmp_path / "remote.git"
@@ -50,6 +54,7 @@ def _make_pushed_repo(tmp_path: Path) -> Path:
 
 
 def _run_scanner(repo: Path) -> subprocess.CompletedProcess[str]:
+    """Run find_stranded_work.sh from inside ``repo`` and capture its output without raising on a non-zero exit."""
     return subprocess.run(
         ["bash", str(SCRIPT)],
         cwd=repo,
@@ -82,6 +87,7 @@ def _run_scanner_with_broken_reanchor(repo: Path, tmp_path: Path, *, missing: bo
 
 
 def test_branch_with_no_upstream_is_flagged(tmp_path: Path) -> None:
+    """A local branch that was never given an upstream is reported with an ``issue: no-upstream`` line."""
     repo = _make_pushed_repo(tmp_path)
     _git(repo, "checkout", "-b", "local-only")
     _commit(repo, "local.txt", "local\n", "local only work")
@@ -147,7 +153,9 @@ def test_missing_reanchor_scanner_fails_closed(tmp_path: Path) -> None:
     assert "No stranded work found." not in result.stdout
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX execute bit cannot be cleared on Windows filesystems")
 def test_non_executable_reanchor_scanner_fails_closed(tmp_path: Path) -> None:
+    """Non executable reanchor scanner fails closed."""
     repo = _make_pushed_repo(tmp_path)
 
     result = _run_scanner_with_broken_reanchor(repo, tmp_path, missing=False)
@@ -183,6 +191,7 @@ def test_unresolved_origin_main_fails_closed(tmp_path: Path) -> None:
 
 
 def test_dirty_worktree_is_flagged(tmp_path: Path) -> None:
+    """Dirty worktree is flagged."""
     repo = _make_pushed_repo(tmp_path)
     _git(repo, "checkout", "-b", "dirty-branch")
     _commit(repo, "dirty-base.txt", "base\n", "dirty branch base")
@@ -195,7 +204,15 @@ def test_dirty_worktree_is_flagged(tmp_path: Path) -> None:
     result = _run_scanner(repo)
 
     assert result.returncode == 0, result.stderr
-    assert f"worktree: {worktree}" in result.stdout
+    if sys.platform == "win32":
+        # bash prints MSYS-style paths (/tmp/...) for a native tmp dir.
+        tail = f"{worktree.parent.name}/{worktree.name}"
+        assert any(
+            line.strip().startswith("worktree: ") and line.strip().endswith(tail)
+            for line in result.stdout.splitlines()
+        )
+    else:
+        assert f"worktree: {worktree}" in result.stdout
     assert "branch: dirty-branch" in result.stdout
     assert "issue: dirty-worktree" in result.stdout
     assert "?? untracked.txt" in result.stdout

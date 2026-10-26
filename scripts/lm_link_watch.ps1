@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     lm_link_watch.ps1 — Windows counterpart of scripts/lm_link_watch.py (PS 5.1-compatible).
 

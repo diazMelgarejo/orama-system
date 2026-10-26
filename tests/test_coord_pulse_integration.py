@@ -38,11 +38,13 @@ except ImportError:
     from enum import Enum
 
     class FleetMode(str, Enum):
+        """Tests and helpers: FleetMode."""
         SOLO = "SOLO"
         PAIR = "PAIR"
         FLEET = "FLEET"
 
     def classify_fleet_mode(peers_reachable: int, cross_reachable: bool) -> FleetMode:
+        """Classify fleet mode."""
         if peers_reachable <= 0:
             return FleetMode.SOLO
         if peers_reachable == 1:
@@ -370,19 +372,43 @@ class TestErrorResilience:
     def test_concurrent_coord_pulse_calls_dont_race(self, mock_fleet_topology_file):
         """Concurrent coord_pulse calls should not race (file lock prevents corruption)."""
         import threading
-        import fcntl
+        from typing import IO
+
+        try:
+            import fcntl
+
+            def lock(f: IO[str]) -> None:
+                """Take an exclusive flock on the open file."""
+                fcntl.flock(f, fcntl.LOCK_EX)
+
+            def unlock(f: IO[str]) -> None:
+                """Release the flock on the open file."""
+                fcntl.flock(f, fcntl.LOCK_UN)
+        except ImportError:  # Windows: one-byte msvcrt lock at offset 0
+            import msvcrt
+
+            def lock(f: IO[str]) -> None:
+                """Take an exclusive one-byte lock at offset 0."""
+                f.seek(0)
+                msvcrt.locking(f.fileno(), msvcrt.LK_LOCK, 1)
+
+            def unlock(f: IO[str]) -> None:
+                """Release the one-byte lock at offset 0."""
+                f.seek(0)
+                msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
 
         results = []
         results_lock = threading.Lock()
 
         def run_pulse():
+            """Run pulse."""
             # Real file-locked read/update — fcntl.flock is the actual mechanism
             # a multi-worker coord_pulse server would need (this test previously
             # only had a comment claiming locking; the read/write were fully
             # unsynchronized, so 2 of 3 threads would race on a partially-written
             # file and silently drop out of `results` without a real lock here).
             with open(mock_fleet_topology_file, "r+") as f:
-                fcntl.flock(f, fcntl.LOCK_EX)
+                lock(f)
                 try:
                     f.seek(0)
                     state = json.load(f)
@@ -393,7 +419,7 @@ class TestErrorResilience:
                     f.flush()
                     os.fsync(f.fileno())
                 finally:
-                    fcntl.flock(f, fcntl.LOCK_UN)
+                    unlock(f)
             with results_lock:
                 results.append(state["timestamp"])
 
@@ -430,9 +456,11 @@ class TestCrossRepoIntegration:
         assert isinstance(result, FleetMode)
         assert result == FleetMode.FLEET
 
-    @mock.patch("requests.get")
-    def test_api_endpoints_called_correctly(self, mock_get):
+    def test_api_endpoints_called_correctly(self):
         """Coord pulse should query Phase 3 API endpoints correctly."""
+        # A local mock stands in for requests.get so the test does not depend on
+        # the optional ``requests`` package being importable.
+        mock_get = mock.MagicMock()
         # Mock GET /api/fleet-topology response
         mock_get.return_value.json.return_value = {
             "local_node": "win-rtx3080",

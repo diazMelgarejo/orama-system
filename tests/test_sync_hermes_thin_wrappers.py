@@ -29,6 +29,7 @@ SYNC_SCRIPT = (
 
 
 def _load_module():
+    """Import sync_hermes_thin_wrappers.py by file path as a fresh module, since the skill directory is not an importable package."""
     spec = importlib.util.spec_from_file_location("sync_hermes_thin_wrappers", SYNC_SCRIPT)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
@@ -38,6 +39,7 @@ def _load_module():
 
 @pytest.fixture()
 def sw():
+    """Fixture exposing a freshly loaded sync_hermes_thin_wrappers module."""
     return _load_module()
 
 
@@ -78,7 +80,7 @@ def test_resolve_repo_root_strips_trailing_newline(sw):
     fake_root = "/some/repo/root"
     with patch("subprocess.check_output", return_value=fake_root + "\n"):
         result = sw.resolve_repo_root()
-    assert str(result) == fake_root
+    assert result == Path(fake_root)
 
 
 # ── main() — installer presence check ────────────────────────────────────────
@@ -204,6 +206,7 @@ def test_main_hermes_home_is_forwarded(sw, tmp_path, monkeypatch):
 
 def test_main_no_hermes_home_when_not_provided(sw, tmp_path, monkeypatch):
     """When --hermes-home is absent, subprocess env must not override HERMES_HOME."""
+    monkeypatch.delenv("HERMES_HOME", raising=False)  # hermetic: ignore the caller's own value
     _make_fake_installer(tmp_path)
     monkeypatch.setattr(sw, "resolve_repo_root", lambda: tmp_path)
 

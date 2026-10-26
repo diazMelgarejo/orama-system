@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
+import sys
 import textwrap
 from pathlib import Path
 
@@ -17,11 +19,27 @@ RESOLVE_SH = ROOT / "bin/orama-system/skills/hermes-harness/scripts/resolve_perp
 FAKE_PERP = ROOT / "tests/fixtures/hermes_harness_stub.py"
 
 
+def _uid() -> int:
+    """Return the numeric uid the spawn script derives via ``id -u`` (MSYS id on Windows)."""
+    if hasattr(os, "getuid"):
+        return os.getuid()
+    out = subprocess.run(["bash", "-c", "id -u"], capture_output=True, text=True, check=True)
+    return int(out.stdout.strip())
+
+
+_NEEDS_POSIX_PROCESS_TABLE = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="hermes_spawn.sh verifies the child via ps/proc matching of a POSIX process table; "
+    "under MSYS bash the native python3 child is not visible to it",
+)
+
+
 def _run_spawn(
     *args: str,
     env: dict[str, str] | None = None,
     timeout: int = 30,
 ) -> subprocess.CompletedProcess[str]:
+    """Run spawn."""
     merged = os.environ.copy()
     for key in (
         "PERPETUA_TOOLS_PATH",
@@ -44,6 +62,7 @@ def _run_spawn(
 
 @pytest.fixture
 def isolated_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, git_bin: str) -> Path:
+    """Isolated runtime."""
     runtime = tmp_path / "runtime"
     runtime.mkdir()
     cache = tmp_path / "cache"
@@ -105,6 +124,7 @@ def test_resolve_perp_harness_fails_without_pt_root(tmp_path: Path) -> None:
 
 
 def test_invalid_session_id_rejected(isolated_runtime: Path) -> None:
+    """Check: invalid session id rejected."""
     proc = _run_spawn(
         "status",
         env={
@@ -120,6 +140,7 @@ def test_invalid_session_id_rejected(isolated_runtime: Path) -> None:
 
 
 def test_status_exits_when_no_pid_file(isolated_runtime: Path) -> None:
+    """Check: status exits when no pid file."""
     proc = _run_spawn(
         "status",
         env={
@@ -134,6 +155,7 @@ def test_status_exits_when_no_pid_file(isolated_runtime: Path) -> None:
 
 
 def test_pid_dir_uses_numeric_uid(isolated_runtime: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Check: pid dir uses numeric uid."""
     monkeypatch.setenv("USER", "../../traversal")
     proc = _run_spawn(
         "status",
@@ -144,14 +166,15 @@ def test_pid_dir_uses_numeric_uid(isolated_runtime: Path, monkeypatch: pytest.Mo
             "HERMES_HOME": str(isolated_runtime / "hermes-home"),
         },
     )
-    uid = str(os.getuid())
+    uid = str(_uid())
     pid_dir = isolated_runtime / "runtime" / f"hermes-spawn-{uid}"
     assert pid_dir.exists()
     assert proc.returncode == 1
 
 
 def test_lock_without_metadata_is_busy(isolated_runtime: Path) -> None:
-    uid = os.getuid()
+    """Check: lock without metadata is busy."""
+    uid = _uid()
     pid_dir = isolated_runtime / "runtime" / f"hermes-spawn-{uid}"
     pid_dir.mkdir(parents=True)
     lock_dir = pid_dir / "default.lock"
@@ -170,7 +193,9 @@ def test_lock_without_metadata_is_busy(isolated_runtime: Path) -> None:
     assert "without owner metadata" in proc.stderr
 
 
+@_NEEDS_POSIX_PROCESS_TABLE
 def test_start_writes_pid_and_status_ok(isolated_runtime: Path) -> None:
+    """Check: start writes pid and status ok."""
     env = {
         "PERPETUA_TOOLS_ROOT": str(isolated_runtime / "pt"),
         "HOME": str(isolated_runtime),
@@ -195,7 +220,10 @@ def test_start_writes_pid_and_status_ok(isolated_runtime: Path) -> None:
         assert stop.returncode == 0
 
 
+@_NEEDS_POSIX_PROCESS_TABLE
+@pytest.mark.skipif(shutil.which("jq") is None, reason="json-response.sh requires jq, which is not installed")
 def test_start_json_includes_pid(isolated_runtime: Path) -> None:
+    """Check: start json includes pid."""
     import json
     import re
 
@@ -220,7 +248,8 @@ def test_start_json_includes_pid(isolated_runtime: Path) -> None:
 
 
 def test_stop_cleans_stale_pid_file(isolated_runtime: Path) -> None:
-    uid = os.getuid()
+    """Check: stop cleans stale pid file."""
+    uid = _uid()
     pid_dir = isolated_runtime / "runtime" / f"hermes-spawn-{uid}"
     pid_dir.mkdir(parents=True)
     pid_file = pid_dir / "default.pid"

@@ -9,6 +9,8 @@
 from __future__ import annotations
 
 import subprocess
+import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -25,6 +27,19 @@ def _bash(script: str, env: dict | None = None) -> subprocess.CompletedProcess:
     full_env = os.environ.copy()
     if env:
         full_env.update(env)
+    if sys.platform == "win32":
+        # Windows argv quoting mangles the backslash/quote sequences these
+        # snippets contain, so hand bash a LF-only script file instead.
+        with tempfile.TemporaryDirectory() as tmp:
+            script_file = Path(tmp) / "snippet.sh"
+            script_file.write_bytes(script.encode("utf-8"))
+            return subprocess.run(
+                ["bash", str(script_file)],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                env=full_env,
+            )
     return subprocess.run(
         ["bash", "-c", script],
         capture_output=True,
@@ -108,14 +123,17 @@ echo "OK"
 # ---------------------------------------------------------------------------
 
 def _run_mcp_safe_path(path: str) -> subprocess.CompletedProcess:
+    """Helper for run mcp safe path."""
     return _bash(_mcp_safe_path_harness(path), env={"TEST_PATH": path})
 
 
 def _run_first_run_safe_path(path: str) -> subprocess.CompletedProcess:
+    """Helper for run first run safe path."""
     return _bash(_first_run_safe_path_harness(), env={"TEST_PATH": path})
 
 
 def _run_slug_validation(slug: str) -> subprocess.CompletedProcess:
+    """Helper for run slug validation."""
     return _bash(_slug_validation_harness(), env={"TEST_SLUG": slug})
 
 
@@ -129,51 +147,62 @@ class TestMcpSafePath:
     # ── Acceptance cases ────────────────────────────────────────────────────
 
     def test_simple_absolute_path_accepted(self):
+        """Verify simple absolute path accepted."""
         result = _run_mcp_safe_path("/home/user/.claude/skills")
         assert result.returncode == 0
 
     def test_simple_relative_path_accepted(self):
+        """Verify simple relative path accepted."""
         result = _run_mcp_safe_path("skills/orama-system")
         assert result.returncode == 0
 
     def test_path_with_dashes_accepted(self):
+        """Verify path with dashes accepted."""
         result = _run_mcp_safe_path("/opt/orama-system/bin")
         assert result.returncode == 0
 
     def test_path_with_dots_accepted(self):
+        """Verify path with dots accepted."""
         result = _run_mcp_safe_path("/home/user/.claude/skills/SKILL.md")
         assert result.returncode == 0
 
     def test_path_with_underscores_accepted(self):
+        """Verify path with underscores accepted."""
         result = _run_mcp_safe_path("/home/user/my_skills/orama")
         assert result.returncode == 0
 
     def test_path_with_numbers_accepted(self):
+        """Verify path with numbers accepted."""
         result = _run_mcp_safe_path("/var/run/orama123/v2")
         assert result.returncode == 0
 
     def test_home_tilde_expanded_path_accepted(self):
         # Tilde is already expanded by the caller; we test the expanded form.
         # Use /Users/user/ — a hygiene-scanner-approved generic placeholder.
+        """Verify home tilde expanded path accepted."""
         result = _run_mcp_safe_path("/Users/user/.codex/skills/orama")
         assert result.returncode == 0
 
     # ── Leading-dash rejection ───────────────────────────────────────────────
 
     def test_leading_dash_rejected(self):
+        """Verify leading dash rejected."""
         result = _run_mcp_safe_path("-evil")
         assert result.returncode != 0
 
     def test_leading_dash_with_flag_like_string_rejected(self):
+        """Verify leading dash with flag like string rejected."""
         result = _run_mcp_safe_path("--force")
         assert result.returncode != 0
 
     def test_leading_dash_in_absolute_path_is_actually_safe(self):
         # A path like /some/-dir does NOT start with dash (it starts with /).
+        """Verify leading dash in absolute path is actually safe."""
         result = _run_mcp_safe_path("/some/-dir")
         assert result.returncode == 0
 
     def test_leading_dash_error_message(self):
+        """Verify leading dash error message."""
         result = _run_mcp_safe_path("-bad-path")
         assert result.returncode != 0
         assert "dash" in result.stderr.lower() or "start" in result.stderr.lower()
@@ -202,6 +231,7 @@ class TestMcpSafePath:
         ("`", "backtick"),
     ])
     def test_metachar_in_middle_of_path_rejected(self, char, description):
+        """Verify metachar in middle of path rejected."""
         path = f"/home/user{char}evil"
         result = _run_mcp_safe_path(path)
         assert result.returncode != 0, (
@@ -210,23 +240,28 @@ class TestMcpSafePath:
 
     def test_dollar_sign_in_path_rejected(self):
         # $ is a common injection vector (variable expansion).
+        """Verify dollar sign in path rejected."""
         result = _run_mcp_safe_path("/home/$USER/skills")
         assert result.returncode != 0
 
     def test_command_substitution_pattern_rejected(self):
         # $(cmd) form
+        """Verify command substitution pattern rejected."""
         result = _run_mcp_safe_path("/tmp/$(id)/evil")
         assert result.returncode != 0
 
     def test_semicolon_command_chain_rejected(self):
+        """Verify semicolon command chain rejected."""
         result = _run_mcp_safe_path("/tmp/legit; rm -rf /")
         assert result.returncode != 0
 
     def test_pipe_injection_rejected(self):
+        """Verify pipe injection rejected."""
         result = _run_mcp_safe_path("/tmp/legit|cat /etc/passwd")
         assert result.returncode != 0
 
     def test_metachar_error_message_mentions_metacharacters(self):
+        """Verify metachar error message mentions metacharacters."""
         result = _run_mcp_safe_path("/tmp/path;inject")
         assert result.returncode != 0
         assert "metachar" in result.stderr.lower() or "shell" in result.stderr.lower()
@@ -235,21 +270,25 @@ class TestMcpSafePath:
 
     def test_empty_path_accepted(self):
         # Empty string contains no metacharacters and does not start with dash.
+        """Verify empty path accepted."""
         result = _run_mcp_safe_path("")
         assert result.returncode == 0
 
     def test_single_slash_accepted(self):
+        """Verify single slash accepted."""
         result = _run_mcp_safe_path("/")
         assert result.returncode == 0
 
     def test_double_dot_path_accepted(self):
         # ".." is a valid path component and contains no metacharacters.
+        """Verify double dot path accepted."""
         result = _run_mcp_safe_path("..")
         assert result.returncode == 0
 
     def test_space_in_path_accepted_by_safe_path(self):
         # _safe_path's character class does NOT include space; spaces are
         # handled by quoting at the call site per the inline comment.
+        """Verify space in path accepted by safe path."""
         result = _run_mcp_safe_path("/home/user/my skills")
         assert result.returncode == 0
 
@@ -267,71 +306,88 @@ class TestFirstRunSafePath:
     """
 
     def test_normal_path_accepted(self):
+        """Verify normal path accepted."""
         result = _run_first_run_safe_path("/home/user/.orama-system/skills")
         assert result.returncode == 0
 
     def test_leading_dash_rejected(self):
+        """Verify leading dash rejected."""
         result = _run_first_run_safe_path("-bad")
         assert result.returncode != 0
 
     def test_leading_dash_exits_nonzero(self):
+        """Verify leading dash exits nonzero."""
         result = _run_first_run_safe_path("-n")
         assert result.returncode == 1
 
     def test_dollar_sign_rejected(self):
+        """Verify dollar sign rejected."""
         result = _run_first_run_safe_path("/tmp/$HOME")
         assert result.returncode != 0
 
     def test_backtick_rejected(self):
+        """Verify backtick rejected."""
         result = _run_first_run_safe_path("/tmp/`id`")
         assert result.returncode != 0
 
     def test_semicolon_rejected(self):
+        """Verify semicolon rejected."""
         result = _run_first_run_safe_path("/tmp/dir;evil")
         assert result.returncode != 0
 
     def test_pipe_rejected(self):
+        """Verify pipe rejected."""
         result = _run_first_run_safe_path("/tmp/dir|evil")
         assert result.returncode != 0
 
     def test_newline_in_path_rejected(self):
+        """Verify newline in path rejected."""
         result = _run_first_run_safe_path("/tmp/dir\nevil")
         assert result.returncode != 0
 
     def test_tab_in_path_rejected(self):
+        """Verify tab in path rejected."""
         result = _run_first_run_safe_path("/tmp/dir\tevil")
         assert result.returncode != 0
 
     def test_glob_star_rejected(self):
+        """Verify glob star rejected."""
         result = _run_first_run_safe_path("/tmp/dir*")
         assert result.returncode != 0
 
     def test_glob_question_rejected(self):
+        """Verify glob question rejected."""
         result = _run_first_run_safe_path("/tmp/dir?")
         assert result.returncode != 0
 
     def test_bracket_rejected(self):
+        """Verify bracket rejected."""
         result = _run_first_run_safe_path("/tmp/dir[0]")
         assert result.returncode != 0
 
     def test_backslash_rejected(self):
+        """Verify backslash rejected."""
         result = _run_first_run_safe_path("/tmp/dir\\evil")
         assert result.returncode != 0
 
     def test_single_quote_rejected(self):
+        """Verify single quote rejected."""
         result = _run_first_run_safe_path("/tmp/dir'evil")
         assert result.returncode != 0
 
     def test_double_quote_rejected(self):
+        """Verify double quote rejected."""
         result = _run_first_run_safe_path('/tmp/dir"evil')
         assert result.returncode != 0
 
     def test_path_with_dashes_and_dots_accepted(self):
+        """Verify path with dashes and dots accepted."""
         result = _run_first_run_safe_path("/home/user/.nvm/versions/node/v22.22.2/bin")
         assert result.returncode == 0
 
     # Regression: verify that exit 1 (not some other code) is returned.
     def test_metachar_exits_with_code_1(self):
+        """Verify metachar exits with code 1."""
         result = _run_first_run_safe_path("/tmp/path;inject")
         assert result.returncode == 1
 
@@ -352,127 +408,155 @@ class TestWorktreeSlugValidation:
     # ── Valid slugs ──────────────────────────────────────────────────────────
 
     def test_simple_kebab_slug_accepted(self):
+        """Verify simple kebab slug accepted."""
         result = _run_slug_validation("my-feature")
         assert result.returncode == 0
 
     def test_date_prefixed_slug_accepted(self):
+        """Verify date prefixed slug accepted."""
         result = _run_slug_validation("2026-05-24-my-feature")
         assert result.returncode == 0
 
     def test_alphanumeric_slug_accepted(self):
+        """Verify alphanumeric slug accepted."""
         result = _run_slug_validation("feature123")
         assert result.returncode == 0
 
     def test_slug_with_dots_accepted(self):
+        """Verify slug with dots accepted."""
         result = _run_slug_validation("v2.1.0")
         assert result.returncode == 0
 
     def test_slug_with_underscores_accepted(self):
         # The character class ^[A-Za-z0-9._-]+$ includes underscore (_),
         # so slugs with underscores are valid.
+        """Verify slug with underscores accepted."""
         result = _run_slug_validation("my_feature")
         assert result.returncode == 0
 
     def test_single_char_slug_accepted(self):
+        """Verify single char slug accepted."""
         result = _run_slug_validation("a")
         assert result.returncode == 0
 
     def test_uppercase_slug_accepted(self):
+        """Verify uppercase slug accepted."""
         result = _run_slug_validation("MyFeature")
         assert result.returncode == 0
 
     def test_mixed_case_with_dashes_accepted(self):
+        """Verify mixed case with dashes accepted."""
         result = _run_slug_validation("feat-MyFeature-v2")
         assert result.returncode == 0
 
     # ── Invalid slugs: forbidden characters ─────────────────────────────────
 
     def test_slug_with_space_rejected(self):
+        """Verify slug with space rejected."""
         result = _run_slug_validation("my feature")
         assert result.returncode != 0
 
     def test_slug_with_slash_rejected(self):
+        """Verify slug with slash rejected."""
         result = _run_slug_validation("my/feature")
         assert result.returncode != 0
 
     def test_slug_with_dollar_sign_rejected(self):
+        """Verify slug with dollar sign rejected."""
         result = _run_slug_validation("my$feature")
         assert result.returncode != 0
 
     def test_slug_with_backtick_rejected(self):
+        """Verify slug with backtick rejected."""
         result = _run_slug_validation("my`feature")
         assert result.returncode != 0
 
     def test_slug_with_semicolon_rejected(self):
+        """Verify slug with semicolon rejected."""
         result = _run_slug_validation("my;feature")
         assert result.returncode != 0
 
     def test_slug_with_ampersand_rejected(self):
+        """Verify slug with ampersand rejected."""
         result = _run_slug_validation("my&feature")
         assert result.returncode != 0
 
     def test_slug_with_pipe_rejected(self):
+        """Verify slug with pipe rejected."""
         result = _run_slug_validation("my|feature")
         assert result.returncode != 0
 
     def test_slug_with_newline_rejected(self):
+        """Verify slug with newline rejected."""
         result = _run_slug_validation("my\nfeature")
         assert result.returncode != 0
 
     def test_slug_with_tab_rejected(self):
+        """Verify slug with tab rejected."""
         result = _run_slug_validation("my\tfeature")
         assert result.returncode != 0
 
     def test_slug_with_at_sign_rejected(self):
+        """Verify slug with at sign rejected."""
         result = _run_slug_validation("my@feature")
         assert result.returncode != 0
 
     def test_slug_with_exclamation_rejected(self):
+        """Verify slug with exclamation rejected."""
         result = _run_slug_validation("my!feature")
         assert result.returncode != 0
 
     def test_empty_slug_rejected(self):
         # Empty string does not match ^[A-Za-z0-9._-]+$ (needs at least 1 char).
+        """Verify empty slug rejected."""
         result = _run_slug_validation("")
         assert result.returncode != 0
 
     # ── Invalid slugs: leading dash ──────────────────────────────────────────
 
     def test_slug_starting_with_dash_rejected(self):
+        """Verify slug starting with dash rejected."""
         result = _run_slug_validation("-my-feature")
         assert result.returncode != 0
 
     def test_slug_that_is_just_a_dash_rejected(self):
+        """Verify slug that is just a dash rejected."""
         result = _run_slug_validation("-")
         assert result.returncode != 0
 
     def test_slug_starting_with_double_dash_rejected(self):
+        """Verify slug starting with double dash rejected."""
         result = _run_slug_validation("--my-feature")
         assert result.returncode != 0
 
     # ── Invalid slugs: dot and double-dot ────────────────────────────────────
 
     def test_slug_that_is_single_dot_rejected(self):
+        """Verify slug that is single dot rejected."""
         result = _run_slug_validation(".")
         assert result.returncode != 0
 
     def test_slug_that_is_double_dot_rejected(self):
+        """Verify slug that is double dot rejected."""
         result = _run_slug_validation("..")
         assert result.returncode != 0
 
     # ── Error message content ─────────────────────────────────────────────────
 
     def test_regex_mismatch_error_message_contains_slug(self):
+        """Verify regex mismatch error message contains slug."""
         result = _run_slug_validation("bad slug!")
         assert result.returncode != 0
         assert "bad slug!" in result.stderr or "slug" in result.stderr.lower()
 
     def test_leading_dash_error_message_contains_slug(self):
+        """Verify leading dash error message contains slug."""
         result = _run_slug_validation("-bad")
         assert result.returncode != 0
         assert "-bad" in result.stderr or "slug" in result.stderr.lower()
 
     def test_dot_error_message_contains_slug(self):
+        """Verify dot error message contains slug."""
         result = _run_slug_validation(".")
         assert result.returncode != 0
         assert "." in result.stderr
@@ -481,21 +565,25 @@ class TestWorktreeSlugValidation:
 
     def test_slug_with_dash_in_middle_accepted(self):
         # Ensure the leading-dash case statement doesn't block interior dashes.
+        """Verify slug with dash in middle accepted."""
         result = _run_slug_validation("a-b-c")
         assert result.returncode == 0
 
     def test_slug_ending_with_dash_accepted(self):
         # Trailing dash: matches ^[A-Za-z0-9._-]+$ and does not start with -.
+        """Verify slug ending with dash accepted."""
         result = _run_slug_validation("feature-")
         assert result.returncode == 0
 
     def test_dot_prefix_slug_accepted(self):
         # A slug starting with '.' is accepted (only '-' prefix is banned).
+        """Verify dot prefix slug accepted."""
         result = _run_slug_validation(".hidden")
         assert result.returncode == 0
 
     def test_triple_dot_slug_accepted(self):
         # '...' is not listed as banned (only '.' and '..').
+        """Verify triple dot slug accepted."""
         result = _run_slug_validation("...")
         assert result.returncode == 0
 
@@ -514,14 +602,17 @@ class TestEnvExampleAllowedHosts:
     ENV_EXAMPLE = ROOT / ".env.example"
 
     def test_env_example_exists(self):
+        """Verify env example exists."""
         assert self.ENV_EXAMPLE.exists(), ".env.example must exist in the repo root"
 
     def test_allowed_hosts_default_is_localhost_only(self):
+        """Verify allowed hosts default is localhost only."""
         content = self.ENV_EXAMPLE.read_text(encoding="utf-8")
         # Must contain the explicit localhost default (not commented out).
         assert "ALLOWED_HOSTS=localhost,127.0.0.1" in content
 
     def test_allowed_hosts_wildcard_is_not_the_default(self):
+        """Verify allowed hosts wildcard is not the default."""
         content = self.ENV_EXAMPLE.read_text(encoding="utf-8")
         # The previous default was 'ALLOWED_HOSTS=*'; it must no longer appear
         # as an active (non-commented) assignment.
@@ -536,28 +627,33 @@ class TestEnvExampleAllowedHosts:
             )
 
     def test_allowed_hosts_section_has_security_comment(self):
+        """Verify allowed hosts section has security comment."""
         content = self.ENV_EXAMPLE.read_text(encoding="utf-8")
         # The PR added a comment block explaining the security concern.
         assert "# === SECURITY ===" in content
 
     def test_allowed_hosts_comment_warns_against_wildcard(self):
+        """Verify allowed hosts comment warns against wildcard."""
         content = self.ENV_EXAMPLE.read_text(encoding="utf-8")
         # The comment should mention not using '*' in production.
         assert "Do NOT use '*' in production" in content or \
                "do not use '*' in production" in content.lower()
 
     def test_allowed_hosts_comment_mentions_loopback(self):
+        """Verify allowed hosts comment mentions loopback."""
         content = self.ENV_EXAMPLE.read_text(encoding="utf-8")
         # The comment should mention loopback-only or similar.
         assert "localhost" in content
         assert "127.0.0.1" in content
 
     def test_allowed_hosts_comment_provides_lan_example(self):
+        """Verify allowed hosts comment provides lan example."""
         content = self.ENV_EXAMPLE.read_text(encoding="utf-8")
         # The comment should give an example of LAN configuration.
         assert "192.168." in content or "LAN" in content
 
     def test_allowed_hosts_value_contains_both_loopback_addresses(self):
+        """Verify allowed hosts value contains both loopback addresses."""
         content = self.ENV_EXAMPLE.read_text(encoding="utf-8")
         lines = content.splitlines()
         for line in lines:
@@ -586,6 +682,7 @@ class TestShellScriptSyntax:
         "scripts/worktree-bootstrap.sh",
     ])
     def test_script_is_valid_bash(self, script_path):
+        """Verify script is valid bash."""
         result = subprocess.run(
             ["bash", "-n", script_path],
             cwd=ROOT,

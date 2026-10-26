@@ -1,3 +1,4 @@
+"""Tests for oramaclaw target resolution: explicit paths, manifest target, named catalog entries, the deprecated OPENCLAW_HOME fallback, the default layout and TargetCatalog loading."""
 from __future__ import annotations
 
 import json
@@ -19,6 +20,7 @@ from oramaclaw.types import ConfigTarget
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _make_target(tmp_path: Path, suffix: str = "") -> ConfigTarget:
+    """Build a ConfigTarget whose workspace, config file and state directory live under ``tmp_path``, with ``suffix`` making several targets distinguishable."""
     return ConfigTarget(
         workspace_root=tmp_path / f"workspace{suffix}",
         config_path=tmp_path / f"openclaw{suffix}.json",
@@ -27,13 +29,16 @@ def _make_target(tmp_path: Path, suffix: str = "") -> ConfigTarget:
 
 
 class _FakeManifest:
+    """Minimal stand-in for a manifest, exposing only the ``target`` attribute that resolve_target reads."""
     def __init__(self, target: ConfigTarget | None) -> None:
+        """Store the optional target that resolve_target will see on the manifest."""
         self.target = target
 
 
 # ── resolve_target: explicit CLI args ────────────────────────────────────────
 
 def test_explicit_args_take_priority(tmp_path, monkeypatch):
+    """Passing workspace, config path and state dir explicitly resolves to exactly those paths (made absolute), ignoring OPENCLAW_HOME."""
     monkeypatch.delenv("OPENCLAW_HOME", raising=False)
     ws = tmp_path / "ws"
     cfg = tmp_path / "oc.json"
@@ -45,11 +50,13 @@ def test_explicit_args_take_priority(tmp_path, monkeypatch):
 
 
 def test_explicit_args_partial_raises():
+    """Supplying only some of the three explicit paths is an error that says all three are required."""
     with pytest.raises(ValueError, match="all three are required"):
         resolve_target(workspace="/tmp/ws")
 
 
 def test_explicit_args_override_manifest(tmp_path, monkeypatch):
+    """Explicit path arguments win over a target declared by the manifest."""
     monkeypatch.delenv("OPENCLAW_HOME", raising=False)
     ws = tmp_path / "ws"
     cfg = tmp_path / "oc.json"
@@ -63,6 +70,7 @@ def test_explicit_args_override_manifest(tmp_path, monkeypatch):
 # ── resolve_target: manifest target ──────────────────────────────────────────
 
 def test_manifest_target_used_when_no_explicit_args(tmp_path, monkeypatch):
+    """With no explicit arguments, the manifest's target is returned unchanged."""
     monkeypatch.delenv("OPENCLAW_HOME", raising=False)
     expected = _make_target(tmp_path)
     manifest = _FakeManifest(expected)
@@ -71,6 +79,7 @@ def test_manifest_target_used_when_no_explicit_args(tmp_path, monkeypatch):
 
 
 def test_manifest_without_target_falls_through_to_default(tmp_path, monkeypatch):
+    """A manifest that carries no target falls through to the default OpenClaw home layout."""
     monkeypatch.delenv("OPENCLAW_HOME", raising=False)
     manifest = _FakeManifest(None)
     result = resolve_target(manifest=manifest)
@@ -80,6 +89,7 @@ def test_manifest_without_target_falls_through_to_default(tmp_path, monkeypatch)
 # ── resolve_target: named catalog target ─────────────────────────────────────
 
 def test_named_target_from_explicit_catalog(tmp_path, monkeypatch):
+    """A target name is looked up in the supplied catalog and the catalog entry is returned as is."""
     monkeypatch.delenv("OPENCLAW_HOME", raising=False)
     ws = tmp_path / "named-ws"
     cfg = tmp_path / "named.json"
@@ -95,6 +105,7 @@ def test_named_target_from_explicit_catalog(tmp_path, monkeypatch):
 
 
 def test_unknown_named_target_raises(tmp_path):
+    """Looking up a name that is not in the catalog raises TargetNotFound naming it."""
     catalog = TargetCatalog({}, tmp_path / "targets.json")
     with pytest.raises(TargetNotFound, match="missing"):
         catalog.get("missing")
@@ -103,6 +114,7 @@ def test_unknown_named_target_raises(tmp_path):
 # ── resolve_target: OPENCLAW_HOME legacy migration ───────────────────────────
 
 def test_openclaw_home_env_var_used_as_fallback(tmp_path, monkeypatch):
+    """When no explicit target or manifest exists, OPENCLAW_HOME becomes the workspace root, with config and state placed under it."""
     home = tmp_path / "legacy-home"
     monkeypatch.setenv("OPENCLAW_HOME", str(home))
     result = resolve_target()
@@ -112,6 +124,7 @@ def test_openclaw_home_env_var_used_as_fallback(tmp_path, monkeypatch):
 
 
 def test_openclaw_home_emits_deprecation_warning(tmp_path, monkeypatch, caplog):
+    """Using the legacy OPENCLAW_HOME variable logs a deprecation warning from the oramaclaw.target logger."""
     home = tmp_path / "legacy-home"
     monkeypatch.setenv("OPENCLAW_HOME", str(home))
     with caplog.at_level(logging.WARNING, logger="oramaclaw.target"):
@@ -120,6 +133,7 @@ def test_openclaw_home_emits_deprecation_warning(tmp_path, monkeypatch, caplog):
 
 
 def test_default_layout_when_no_env_or_manifest(monkeypatch):
+    """With no environment variable and no manifest, the built-in default home and state subdirectory are used."""
     monkeypatch.delenv("OPENCLAW_HOME", raising=False)
     result = resolve_target()
     assert result.workspace_root == _DEFAULT_OPENCLAW_HOME
@@ -130,12 +144,14 @@ def test_default_layout_when_no_env_or_manifest(monkeypatch):
 # ── TargetCatalog.default_path ────────────────────────────────────────────────
 
 def test_catalog_default_path_reads_env_var(tmp_path, monkeypatch):
+    """TargetCatalog.default_path honours the ORAMACLAW_TARGETS_PATH override."""
     custom = tmp_path / "custom-targets.json"
     monkeypatch.setenv("ORAMACLAW_TARGETS_PATH", str(custom))
     assert TargetCatalog.default_path() == custom.resolve()
 
 
 def test_catalog_default_path_without_env_var(monkeypatch):
+    """Without the override, the catalog lives at the default file name inside the default OpenClaw home."""
     monkeypatch.delenv("ORAMACLAW_TARGETS_PATH", raising=False)
     expected = _DEFAULT_OPENCLAW_HOME / "oramaclaw-targets.json"
     assert TargetCatalog.default_path() == expected
@@ -144,12 +160,14 @@ def test_catalog_default_path_without_env_var(monkeypatch):
 # ── TargetCatalog.load ────────────────────────────────────────────────────────
 
 def test_catalog_load_nonexistent_file_returns_empty(tmp_path):
+    """Loading a catalog file that does not exist yields an empty catalog, not an error."""
     catalog = TargetCatalog.load(tmp_path / "does-not-exist.json")
     assert len(catalog) == 0
     assert catalog.names() == []
 
 
 def test_catalog_load_valid_file(tmp_path):
+    """A well-formed catalog file loads its named target with all three paths resolved."""
     catalog_path = tmp_path / "targets.json"
     ws = tmp_path / "ws"
     cfg = tmp_path / "oc.json"
@@ -172,6 +190,7 @@ def test_catalog_load_valid_file(tmp_path):
 
 
 def test_catalog_load_skips_malformed_entry(tmp_path, caplog):
+    """A catalog entry that is not an object is skipped with a warning naming it, while valid entries still load."""
     catalog_path = tmp_path / "targets.json"
     catalog_path.write_text(json.dumps({
         "targets": {
@@ -190,6 +209,7 @@ def test_catalog_load_skips_malformed_entry(tmp_path, caplog):
 
 
 def test_catalog_load_invalid_json_returns_empty(tmp_path, caplog):
+    """A catalog file containing invalid JSON loads as an empty catalog (with a warning) instead of raising."""
     catalog_path = tmp_path / "targets.json"
     catalog_path.write_bytes(b"{not valid json")
     with caplog.at_level(logging.WARNING, logger="oramaclaw.target"):
@@ -198,8 +218,11 @@ def test_catalog_load_invalid_json_returns_empty(tmp_path, caplog):
 
 
 def test_catalog_get_missing_target_raises(tmp_path):
+    """Catalog get missing target raises."""
     catalog = TargetCatalog({}, tmp_path / "t.json")
     with pytest.raises(TargetNotFound) as exc_info:
         catalog.get("nonexistent")
-    assert "nonexistent" in str(exc_info.value)
-    assert str(tmp_path / "t.json") in str(exc_info.value)
+    # KeyError.__str__ reprs its message (doubling Windows backslashes); read the raw arg.
+    message = str(exc_info.value.args[0])
+    assert "nonexistent" in message
+    assert str(tmp_path / "t.json") in message

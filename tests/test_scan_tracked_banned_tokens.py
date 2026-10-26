@@ -16,7 +16,16 @@ LIB = ROOT / "scripts/git/banned_attribution_lib.sh"
 pytestmark = pytest.mark.unit
 
 
+def _symlink_or_skip(link: Path, target: Path) -> None:
+    """Create ``link`` -> ``target`` or skip when symlinks are not permitted."""
+    try:
+        link.symlink_to(target)
+    except (OSError, NotImplementedError) as exc:
+        pytest.skip(f"symlink creation not permitted on this platform: {exc}")
+
+
 def _init_fixture_repo(tmp_path: Path) -> tuple[Path, Path, Path]:
+    """Helper for init fixture repo."""
     repo = tmp_path / "repo"
     repo.mkdir()
     subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
@@ -44,6 +53,7 @@ def _run_scan(
     # whatever happens to exist on the machine running it, not just on the
     # fixture it explicitly sets up. Pin PATH and HOME to known values and
     # set only the one variable the test cares about.
+    """Helper for run scan."""
     path = os.pathsep.join(path_dirs) if path_dirs is not None else os.environ.get("PATH", "/usr/bin:/bin")
     env = {
         "PATH": path,
@@ -60,6 +70,7 @@ def _run_scan(
 
 
 def test_key_name_collision_is_line_scoped_for_internal_bootstrap_files(tmp_path: Path) -> None:
+    """Verify key name collision is line scoped for internal bootstrap files."""
     repo, patterns, home = _init_fixture_repo(tmp_path)
     patterns.write_text("forbidden_attribution\n", encoding="utf-8")
     target = repo / "scripts/cursor/seed-banned-attribution-patterns.sh"
@@ -80,6 +91,7 @@ def test_key_name_collision_is_line_scoped_for_internal_bootstrap_files(tmp_path
 
 
 def test_key_name_collision_rejects_non_key_name_occurrence(tmp_path: Path) -> None:
+    """Verify key name collision rejects non key name occurrence."""
     repo, patterns, home = _init_fixture_repo(tmp_path)
     patterns.write_text("forbidden_attribution\n", encoding="utf-8")
     target = repo / "scripts/cursor/seed-banned-attribution-patterns.sh"
@@ -100,6 +112,7 @@ def test_key_name_collision_rejects_non_key_name_occurrence(tmp_path: Path) -> N
 
 
 def test_internal_bootstrap_files_still_fail_on_other_banned_values(tmp_path: Path) -> None:
+    """Verify internal bootstrap files still fail on other banned values."""
     repo, patterns, home = _init_fixture_repo(tmp_path)
     patterns.write_text("real-banned-value\n", encoding="utf-8")
     target = repo / "scripts/cursor/seed-banned-attribution-patterns.sh"
@@ -127,6 +140,7 @@ def test_fails_loudly_when_ripgrep_is_missing(tmp_path: Path) -> None:
     # anything. This silently passed on GitHub Actions runners lacking
     # ripgrep, on both this test suite and the production git-hygiene CI gate.
     # A missing dependency must fail loudly, never masquerade as "clean".
+    """Verify fails loudly when ripgrep is missing."""
     git_bin = shutil.which("git")
     bash_bin = shutil.which("bash")
     tr_bin = shutil.which("tr")
@@ -155,7 +169,7 @@ def test_fails_loudly_when_ripgrep_is_missing(tmp_path: Path) -> None:
     tool_dir = tmp_path / "tools"
     tool_dir.mkdir()
     for name, resolved in (("bash", bash_bin), ("git", git_bin), ("tr", tr_bin)):
-        (tool_dir / name).symlink_to(resolved)
+        _symlink_or_skip(tool_dir / name, Path(resolved))
 
     result = _run_scan(repo, patterns, home, path_dirs=[str(tool_dir)])
 

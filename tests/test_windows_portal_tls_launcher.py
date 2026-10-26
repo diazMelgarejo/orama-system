@@ -65,9 +65,21 @@ def test_ready_section_prints_fingerprint_lines_not_recomputed():
     ready = _between(src, "# ── Ready", "# ── Verify model fallback")
     assert "--print-fingerprint" in ready
     assert "ca_sha256_file=" in ready and "ca_public_path=" in ready
+    assert "ca_sha256_der=" in ready
     assert "https://localhost:" in ready
     assert "separate channel" in ready
     assert "Get-FileHash" not in ready
+
+
+def test_ready_section_names_the_certificate_fingerprint_as_the_value_to_pin():
+    """The banner tells the operator to give the certificate fingerprint to the peer, and labels the file hash as fragile."""
+    ready = _between(_src(), "# ── Ready", "# ── Verify model fallback")
+    assert "$tlsCaDer" in ready
+    assert "give THIS to the peer operator to pin" in ready
+    assert "openssl x509 -noout -fingerprint -sha256" in ready
+    assert "exact PEM file bytes only" in ready
+    # the pin line must come before the fragile file-hash line
+    assert ready.index("give THIS to the peer operator to pin") < ready.index("exact PEM file bytes only")
 
 
 def test_stop_kills_proxy_by_pid_file_with_command_line_match():

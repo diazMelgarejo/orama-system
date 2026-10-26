@@ -320,6 +320,10 @@ def test_cost_gate_fail_closed() -> None:
 def test_live_guidance_has_no_stale_defaults() -> None:
     """Live guidance files carry no stale model ids and the skill and workflow docs name the current defaults."""
     for path in LIVE_GUIDANCE:
+        if path.parts[0] == "skills" and Path("skills").is_file():
+            # core.symlinks=false: `skills` is a git-symlink placeholder file;
+            # the same content is checked via its bin/orama-system/skills target.
+            continue
         text = path.read_text(encoding="utf-8")
         assert "Haiku 4.5" not in text
         assert "Sonnet 4.6" not in text

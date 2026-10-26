@@ -1,8 +1,11 @@
 """Observable workspace contracts shared by the v1/v2 proof of concept."""
 import hashlib
 import importlib
+import ipaddress
 import json
 import socket
+import sys
+import threading
 
 import pytest
 from fastapi.testclient import TestClient
@@ -18,6 +21,7 @@ FIXTURE = {
 
 @pytest.fixture
 def client(monkeypatch):
+    """A TestClient for the portal app in insecure-dev mode on localhost with LAN binding off, so workspace endpoints are callable without a token."""
     monkeypatch.setenv("ORAMA_INSECURE_DEV", "1")
     monkeypatch.setenv("ORAMA_LISTEN_HOST", "localhost")
     monkeypatch.delenv("ORAMA_BIND_LAN", raising=False)
@@ -26,8 +30,33 @@ def client(monkeypatch):
 
 
 def test_offline_run_delivers_bound_csv_and_canonical_receipt(client, monkeypatch):
-    def forbidden(*args, **kwargs):
+    """Offline run delivers bound csv and canonical receipt."""
+    real_connect = socket.socket.connect
+    real_socketpair = socket.socketpair
+    # Windows has no AF_UNIX socketpair(): asyncio's self-pipe is a loopback TCP
+    # connection made inside socket.socketpair(). Exempt only connects issued by
+    # a thread that is currently inside that call, not arbitrary loopback ones.
+    in_socketpair: set[int] = set()
+
+    def tracking_socketpair(*args, **kwargs):
+        """Run the real socketpair while marking this thread as the harness."""
+        ident = threading.get_ident()
+        in_socketpair.add(ident)
+        try:
+            return real_socketpair(*args, **kwargs)
+        finally:
+            in_socketpair.discard(ident)
+
+    def forbidden(self, address, *args, **kwargs):
+        """Fail on any outbound connect; the Windows asyncio self-pipe socketpair is exempt."""
+        if sys.platform == "win32" and threading.get_ident() in in_socketpair and isinstance(address, tuple):
+            try:
+                if ipaddress.ip_address(address[0]).is_loopback:
+                    return real_connect(self, address, *args, **kwargs)
+            except ValueError:
+                pass
         pytest.fail("Offline task attempted a network connection")
+    monkeypatch.setattr(socket, "socketpair", tracking_socketpair)
     monkeypatch.setattr(socket.socket, "connect", forbidden)
     response = client.post("/api/workspace/run", json=FIXTURE)
     assert response.status_code == 200, response.text
@@ -48,6 +77,7 @@ def test_offline_run_delivers_bound_csv_and_canonical_receipt(client, monkeypatc
 
 @pytest.mark.parametrize("privacy", ["local", "sources", "redacted", "open"])
 def test_sharing_opt_in_does_not_create_egress(client, privacy):
+    """Every privacy level, including the sharing opt-ins, echoes back unchanged but still reports actual_disclosure none: choosing to share does not cause any egress."""
     result = client.post("/api/workspace/run", json={**FIXTURE, "privacy": privacy}).json()
     assert result["privacy"] == privacy
     assert result["receipt"]["actual_disclosure"] == "none"
@@ -68,6 +98,7 @@ def test_sharing_opt_in_does_not_create_egress(client, privacy):
     {"privacy": None},
 ])
 def test_invalid_or_unsupported_inputs_do_not_publish(client, change):
+    """Each malformed or dishonest request (bad privacy, empty sources or records, blank task, claim or quote not backed by the source, unknown or duplicated source, escaping output path, null privacy) gets 422 and no csv is published."""
     response = client.post("/api/workspace/run", json={**FIXTURE, **change})
     assert response.status_code == 422
     assert "csv" not in response.json()
@@ -75,6 +106,7 @@ def test_invalid_or_unsupported_inputs_do_not_publish(client, change):
 
 @pytest.mark.parametrize("value", ["=SUM(A1)", " +cmd", "\t@formula", "-2+3"])
 def test_spreadsheet_formula_cells_are_refused(client, value):
+    """A cell that starts like a spreadsheet formula (=, +, -, @, optionally after whitespace) is rejected with 422 to prevent CSV formula injection."""
     payload = {**FIXTURE, "sources": [{"id": "s1", "title": value,
                "passage": value, "kind": "unverified"}],
                "records": [{"claim": value, "source_id": "s1", "quote": value}]}
@@ -82,6 +114,7 @@ def test_spreadsheet_formula_cells_are_refused(client, value):
 
 
 def test_capability_inventory_is_explicit_about_current_limits(client):
+    """The capabilities endpoint states the current limits: default privacy is local, no models are listed and the network is disabled."""
     result = client.get("/api/workspace/capabilities")
     assert result.status_code == 200
     assert result.json()["default_privacy"] == "local"
@@ -90,6 +123,7 @@ def test_capability_inventory_is_explicit_about_current_limits(client):
 
 
 def test_control_plane_auth_remains_required(client, monkeypatch):
+    """With the dev bypass off and a control-plane token set, a run without credentials gets 401 and the same run with the bearer token succeeds."""
     monkeypatch.setenv("ORAMA_INSECURE_DEV", "0")
     monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "fixture-operator-capability-12345")
     response = client.post("/api/workspace/run", json=FIXTURE)
@@ -100,6 +134,7 @@ def test_control_plane_auth_remains_required(client, monkeypatch):
 
 
 def test_verifier_rejects_tampering_independently(client):
+    """The standalone verifier accepts the genuine csv and receipt but fails when the csv content or the receipt's source passage is altered."""
     result = client.post("/api/workspace/run", json=FIXTURE).json()
     verifier = importlib.import_module("orama_system.workspace_verify")
     assert verifier.verify_artifact(result["csv"], result["receipt"])["passed"]
@@ -111,6 +146,7 @@ def test_verifier_rejects_tampering_independently(client):
 
 
 def test_observation_excludes_task_source_and_private_text(client):
+    """The observation returned for the run is a message and contains none of the task, source passage or source title text."""
     result = client.post("/api/workspace/run", json=FIXTURE).json()
     observation = json.dumps(result["observation"])
     for private in [FIXTURE["task"], FIXTURE["sources"][0]["passage"],
@@ -120,6 +156,7 @@ def test_observation_excludes_task_source_and_private_text(client):
 
 
 def test_oversized_request_is_refused_before_validation(client):
+    """A request body over the size limit (270000 bytes of whitespace) is refused with 413 before any JSON validation happens."""
     response = client.post("/api/workspace/run", content=b" " * 270000,
                            headers={"Content-Type": "application/json"})
     assert response.status_code == 413

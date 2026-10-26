@@ -9,16 +9,22 @@ live file with "w" before a same-directory temp write has fully landed.
 """
 from __future__ import annotations
 
-import fcntl
 import json
 import os
 import re
 import sys
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping, Sequence
 
+try:  # POSIX
+    import fcntl
+except ImportError:  # Windows has no fcntl; msvcrt provides the same exclusive lock
+    fcntl = None
+    import msvcrt
+
 MAX_BACKUPS = 10
+_WIN_LOCK_TIMEOUT_ERRNO = 36  # errno.EDEADLOCK: msvcrt LK_LOCK gave up after its retries
 # Metadata fields that live alongside a provider's "settings" dict (set by
 # this script itself when activating a profile, see switch_provider below)
 # and would always differ between snapshots even for an otherwise-identical
@@ -33,6 +39,7 @@ _METADATA_KEYS = ("updatedAt", "tokenSource")
 
 
 def atomic_write_json(path: str, data: Mapping[str, Any]) -> None:
+    """Write ``data`` as JSON to ``path`` via a same-directory temp file, fsync, then ``os.replace`` so readers never see a half-written file; the temp file is removed on failure."""
     directory = os.path.dirname(path)
     fd, tmp_path = tempfile.mkstemp(dir=directory, prefix=".tmp-", suffix=".json")
     try:
@@ -49,25 +56,46 @@ def atomic_write_json(path: str, data: Mapping[str, Any]) -> None:
 
 
 def load_json(path: str) -> dict[str, Any]:
+    """Return the parsed JSON object stored at ``path``."""
     with open(path) as f:
         return json.load(f)
 
 
 def latest_backup(backup_dir: str) -> str | None:
+    """Return the path of the lexicographically newest ``.json`` backup in ``backup_dir`` (timestamped names sort chronologically), or None when there are none."""
     entries = sorted(e for e in os.listdir(backup_dir) if e.endswith(".json"))
     return os.path.join(backup_dir, entries[-1]) if entries else None
 
 
+_BACKUP_NAME_RE = re.compile(r"^openai-compatible-(\d{8}T\d{6}\.\d{6})Z\.json$")
+
+
+def _backup_stamp(path: str) -> datetime | None:
+    """Return the naive timestamp encoded in a backup file name, or None when the name is not one this script wrote."""
+    m = _BACKUP_NAME_RE.match(os.path.basename(path))
+    if not m:
+        return None
+    try:
+        return datetime.strptime(m.group(1), "%Y%m%dT%H%M%S.%f")
+    except ValueError:
+        # Pattern matched but the calendar fields are invalid (e.g. month 13).
+        # Treat like an unexpected filename so switch can continue.
+        return None
+
+
 def comparable(block: Mapping[str, Any]) -> dict[str, Any]:
+    """Return ``block`` without the metadata keys, so two settings dicts can be compared on real configuration only."""
     return {k: v for k, v in block.items() if k not in _METADATA_KEYS}
 
 
 def resolve_template(tmpl_path: str, env: Mapping[str, str] | None = None) -> dict[str, Any]:
+    """Read the profile template, substitute ``${NAME}`` placeholders from ``env`` (default ``os.environ``) and return its ``settings`` dict; an unset variable aborts via SystemExit."""
     env = env if env is not None else os.environ
     with open(tmpl_path) as f:
         raw = f.read()
 
     def resolve(m: re.Match[str]) -> str:
+        """Replacement callback for one ``${NAME}`` match: return the env value or exit with an error naming the unset variable."""
         name = m.group(1)
         val = env.get(name)
         if val is None:
@@ -78,6 +106,7 @@ def resolve_template(tmpl_path: str, env: Mapping[str, str] | None = None) -> di
 
 
 def rotate_backups(backup_dir: str, max_backups: int = MAX_BACKUPS) -> None:
+    """Delete the oldest ``.json`` backups so that at most ``max_backups`` newest ones remain."""
     entries = sorted(e for e in os.listdir(backup_dir) if e.endswith(".json"))
     for stale in entries[:-max_backups]:
         os.unlink(os.path.join(backup_dir, stale))
@@ -113,6 +142,17 @@ def switch_provider(
         # Microsecond precision: two switches inside the same wall-clock
         # second (a realistic rate for an automated agent) must not
         # collide on the same filename and silently clobber each other.
+        # Names sort chronologically and rotation/dedupe rely on that. A coarse
+        # clock (Windows ticks about every 15 ms) or a clock stepped backwards can
+        # hand a switch a stamp that is not newer than the latest backup, which
+        # would overwrite it and break the order: jump straight to one microsecond
+        # past the latest backup's stamp. A name that does not parse (not one this
+        # script wrote) is ignored for ordering.
+        prior_stamp = _backup_stamp(prior) if prior else None
+        if prior_stamp is not None:
+            now_naive = now.replace(tzinfo=None)
+            if now_naive <= prior_stamp:
+                now = now + (prior_stamp - now_naive) + timedelta(microseconds=1)
         ts = now.strftime("%Y%m%dT%H%M%S.%fZ")
         snapshot = {"settings": outgoing, "savedAt": now.isoformat()}
         atomic_write_json(os.path.join(backup_dir, f"openai-compatible-{ts}.json"), snapshot)
@@ -133,14 +173,41 @@ def switch_provider(
     return "activated"
 
 
+def _lock_exclusive(fd: int) -> None:
+    """Block until this process holds an exclusive lock on ``fd`` (flock on POSIX, a one-byte msvcrt lock on Windows)."""
+    if fcntl is not None:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        return
+    # LK_LOCK gives up with EDEADLOCK after ~10 one-second retries; flock waits
+    # indefinitely, so keep waiting on contention and surface any other error.
+    while True:
+        os.lseek(fd, 0, os.SEEK_SET)
+        try:
+            msvcrt.locking(fd, msvcrt.LK_LOCK, 1)
+            return
+        except OSError as exc:
+            if exc.errno != _WIN_LOCK_TIMEOUT_ERRNO:
+                raise
+
+
+def _unlock(fd: int) -> None:
+    """Release the lock taken by ``_lock_exclusive``."""
+    if fcntl is not None:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        return
+    os.lseek(fd, 0, os.SEEK_SET)
+    msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+
+
 def main(argv: Sequence[str]) -> None:
+    """CLI entry: take providers path, template, profile name, backup dir and lock path from ``argv``, switch under an exclusive lock, then print whether the profile was activated or already live."""
     providers_path, tmpl_path, profile, backup_dir, lock_path = argv[1:6]
     lock_fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
-    fcntl.flock(lock_fd, fcntl.LOCK_EX)
+    _lock_exclusive(lock_fd)
     try:
         status = switch_provider(providers_path, tmpl_path, profile, backup_dir)
     finally:
-        fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        _unlock(lock_fd)
         os.close(lock_fd)
 
     if status == "no-op":

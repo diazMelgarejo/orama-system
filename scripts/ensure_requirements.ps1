@@ -1,4 +1,4 @@
-# scripts/ensure_requirements.ps1 — Windows hard-requirements probe + installer
+﻿# scripts/ensure_requirements.ps1 — Windows hard-requirements probe + installer
 # orama-system v1.1.0.0 — Run on the Windows GPU box
 #
 # HARD requirements:
@@ -15,6 +15,29 @@
 #   LM_STUDIO_WIN_PORT — override default 1234
 #   ORAMA_SKIP_MCP_ENSURE=1 — skip ai-cli-mcp readiness only
 
+<#
+.SYNOPSIS
+    Probe the Windows hard requirements for orama-system and install what is missing.
+
+.DESCRIPTION
+    Phase 1 finds the LM Studio binary and installs it with winget when absent.
+    Phase 2 checks that the LM Studio local server answers on its port (a warning, not a failure).
+    Phase 3 creates the repo virtual environment and reinstalls requirements.txt when its SHA-256 differs from the stamp file.
+    Phase 4 runs the ai-cli-mcp readiness helper unless ORAMA_SKIP_MCP_ENSURE is set to a true value.
+    Every line is also appended to ensure-win.log in the repo log directory. The script exits 1 when any hard requirement failed and 0 otherwise.
+
+.PARAMETER CheckOnly
+    Probe only: report what is missing and fail, without installing anything.
+
+.PARAMETER Force
+    Reinstall Python dependencies and force the MCP readiness helper even when already satisfied.
+
+.PARAMETER Quiet
+    Suppress INFO lines on the console (they are still written to the log).
+
+.EXAMPLE
+    .\scripts\ensure_requirements.ps1 -CheckOnly
+#>
 param(
     [switch]$CheckOnly,
     [switch]$Force,
@@ -30,15 +53,31 @@ $HardFail     = $false
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
 function Write-Log($Level, $Msg) {
+    <#
+    .SYNOPSIS
+    Print a timestamped "[time] LEVEL [ensure-win] message" line (INFO lines are hidden by -Quiet) and append it to ensure-win.log, ignoring log write errors.
+    #>
     $ts = (Get-Date).ToString("HH:mm:ss")
     $line = "[$ts] $Level [ensure-win] $Msg"
     if ($Level -ne "INFO " -or -not $Quiet) { Write-Host $line }
     Add-Content -Path (Join-Path $LogDir "ensure-win.log") -Value $line -ErrorAction SilentlyContinue
 }
-function ok($m)   { Write-Log "OK   " $m }
-function info($m) { Write-Log "INFO " $m }
-function warn($m) { Write-Log "WARN " $m }
-function err($m)  { Write-Log "ERROR" $m; $script:HardFail = $true }
+function ok($m)   { <#
+    .SYNOPSIS
+    Log a message at OK level through Write-Log.
+    #> Write-Log "OK   " $m }
+function info($m) { <#
+    .SYNOPSIS
+    Log a message at INFO level through Write-Log (hidden on the console by -Quiet).
+    #> Write-Log "INFO " $m }
+function warn($m) { <#
+    .SYNOPSIS
+    Log a message at WARN level through Write-Log; does not fail the run.
+    #> Write-Log "WARN " $m }
+function err($m)  { <#
+    .SYNOPSIS
+    Log a message at ERROR level and set the script-scope HardFail flag so the run ends with exit code 1.
+    #> Write-Log "ERROR" $m; $script:HardFail = $true }
 
 # ── OS fingerprint ─────────────────────────────────────────────────────────────
 $WinVer = (Get-CimInstance Win32_OperatingSystem).Caption
