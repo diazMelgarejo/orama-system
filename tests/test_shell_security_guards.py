@@ -9,6 +9,8 @@
 from __future__ import annotations
 
 import subprocess
+import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -25,6 +27,19 @@ def _bash(script: str, env: dict | None = None) -> subprocess.CompletedProcess:
     full_env = os.environ.copy()
     if env:
         full_env.update(env)
+    if sys.platform == "win32":
+        # Windows argv quoting mangles the backslash/quote sequences these
+        # snippets contain, so hand bash a LF-only script file instead.
+        with tempfile.TemporaryDirectory() as tmp:
+            script_file = Path(tmp) / "snippet.sh"
+            script_file.write_bytes(script.encode("utf-8"))
+            return subprocess.run(
+                ["bash", str(script_file)],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                env=full_env,
+            )
     return subprocess.run(
         ["bash", "-c", script],
         capture_output=True,
