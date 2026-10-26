@@ -23,7 +23,6 @@ to consume without duplicate edit when body already contains the follow-up block
 from __future__ import annotations
 
 import argparse
-import fcntl
 import hashlib
 import hmac
 import json
@@ -37,6 +36,12 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+try:  # POSIX advisory locking; absent on Windows.
+    import fcntl
+except ImportError:  # pragma: no cover - exercised on Windows only
+    fcntl = None  # type: ignore[assignment]
+    import msvcrt
 
 GRANT_MARKER = "operator-grant-v2"
 GRANT_TTL_SECONDS = 8 * 3600
@@ -338,12 +343,30 @@ def _grant_ttl_ok(issued_raw: str) -> bool:
     return 0 <= age <= GRANT_TTL_SECONDS
 
 
+def _lock_exclusive(handle: Any) -> None:
+    """Take an exclusive lock on ``handle`` (flock on POSIX, msvcrt byte lock on Windows)."""
+    if fcntl is not None:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        return
+    handle.seek(0)
+    msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)  # type: ignore[attr-defined]
+
+
+def _unlock(handle: Any) -> None:
+    """Release the lock taken by ``_lock_exclusive``."""
+    if fcntl is not None:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        return
+    handle.seek(0)
+    msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)  # type: ignore[attr-defined]
+
+
 @contextmanager
 def _locked_nonce_state():
     NONCE_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
     handle = open(NONCE_STATE_PATH, "a+", encoding="utf-8")
     try:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        _lock_exclusive(handle)
         handle.seek(0)
         raw = handle.read()
         if raw.strip():
@@ -359,7 +382,7 @@ def _locked_nonce_state():
             state["reservations"] = {}
         yield handle, state
     finally:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        _unlock(handle)
         handle.close()
 
 
