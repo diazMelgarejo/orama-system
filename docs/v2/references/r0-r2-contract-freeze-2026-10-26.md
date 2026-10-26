@@ -102,12 +102,37 @@ ratified name is renamed.
 | `authorized` | `authorized` | none |
 | `dispatched` | outbox `send_started = 1` | none |
 | `acknowledged` | outcome `confirmed` | `confirmed_applied` |
-| `refused` (pre-dispatch) | `AuthorizationRefused`, written as a terminal refusal record | none |
+| `refused` (pre-dispatch) | `AuthorizationRefused`, a terminal disposition record | none |
 | `refused` (target refuses after dispatch) | stored `failed` | `confirmed_not_applied` |
 | `unknown` | outcome `unknown` (blocking; never auto-rolled back) | `unknown` |
 
-A pre-dispatch refusal is terminal for that attempt identity. A replay with the same identity
-returns the same refusal.
+### Pre-dispatch refusal record and replay
+
+`AuthorizationRefused` is the `authorization_refused` **disposition**, not an outcome value. The
+ratified E1 outcome vocabulary remains `confirmed`, `failed`, and `unknown`; a refusal is recorded
+only before an outbox send starts, so it has no outcome and cannot be represented as `failed`.
+
+The existing attempt store holds one refusal record per `attempt_id` with the discriminator
+`disposition: "authorization_refused"` and exactly these contract fields: `attempt_id`,
+`disposition`, `refusal_code` (one Section 3 `deny.*` code), opaque `receipt_ref`, and
+`recorded_at`. It stores no grant id, key id, target, payload, or internal verifier reason.
+
+Within the existing `BEGIN IMMEDIATE` authorization transaction, the consumer first looks up the
+bound attempt identity. If no row exists and final authorization refuses the attempt, that same
+transaction writes the refusal record and commits before returning. It does not consume a use,
+write an intent or outbox item, or set `send_started`. The unique `attempt_id` makes concurrent
+refusals converge on the committed record.
+
+An exact replay first looks up `attempt_id`; when it finds `authorization_refused`, it performs no
+new authorization or dispatch and returns the stored refusal. Its public body is exactly:
+
+```json
+{"error":{"code":"<stored refusal_code>","correlation_id":"<new uuid>"},"receipt_ref":"<stored opaque receipt_ref>"}
+```
+
+The fresh correlation id is request tracing only; the stored code and receipt reference identify
+the same terminal refusal on every replay. A request with the same `attempt_id` but different
+bound identity is a conflict and must not replace the committed record.
 
 ## 5. Release 2 frozen items
 
