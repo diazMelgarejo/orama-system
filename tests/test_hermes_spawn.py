@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
+import sys
 import textwrap
 from pathlib import Path
 
@@ -15,6 +17,21 @@ ROOT = Path(__file__).resolve().parents[1]
 SPAWN_SH = ROOT / "bin/orama-system/skills/hermes-harness/scripts/hermes_spawn.sh"
 RESOLVE_SH = ROOT / "bin/orama-system/skills/hermes-harness/scripts/resolve_perp_harness.sh"
 FAKE_PERP = ROOT / "tests/fixtures/hermes_harness_stub.py"
+
+
+def _uid() -> int:
+    """Return the numeric uid the spawn script derives via ``id -u`` (MSYS id on Windows)."""
+    if hasattr(os, "getuid"):
+        return os.getuid()
+    out = subprocess.run(["bash", "-c", "id -u"], capture_output=True, text=True, check=True)
+    return int(out.stdout.strip())
+
+
+_NEEDS_POSIX_PROCESS_TABLE = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="hermes_spawn.sh verifies the child via ps/proc matching of a POSIX process table; "
+    "under MSYS bash the native python3 child is not visible to it",
+)
 
 
 def _run_spawn(
@@ -144,14 +161,14 @@ def test_pid_dir_uses_numeric_uid(isolated_runtime: Path, monkeypatch: pytest.Mo
             "HERMES_HOME": str(isolated_runtime / "hermes-home"),
         },
     )
-    uid = str(os.getuid())
+    uid = str(_uid())
     pid_dir = isolated_runtime / "runtime" / f"hermes-spawn-{uid}"
     assert pid_dir.exists()
     assert proc.returncode == 1
 
 
 def test_lock_without_metadata_is_busy(isolated_runtime: Path) -> None:
-    uid = os.getuid()
+    uid = _uid()
     pid_dir = isolated_runtime / "runtime" / f"hermes-spawn-{uid}"
     pid_dir.mkdir(parents=True)
     lock_dir = pid_dir / "default.lock"
@@ -170,6 +187,7 @@ def test_lock_without_metadata_is_busy(isolated_runtime: Path) -> None:
     assert "without owner metadata" in proc.stderr
 
 
+@_NEEDS_POSIX_PROCESS_TABLE
 def test_start_writes_pid_and_status_ok(isolated_runtime: Path) -> None:
     env = {
         "PERPETUA_TOOLS_ROOT": str(isolated_runtime / "pt"),
@@ -195,6 +213,8 @@ def test_start_writes_pid_and_status_ok(isolated_runtime: Path) -> None:
         assert stop.returncode == 0
 
 
+@_NEEDS_POSIX_PROCESS_TABLE
+@pytest.mark.skipif(shutil.which("jq") is None, reason="json-response.sh requires jq, which is not installed")
 def test_start_json_includes_pid(isolated_runtime: Path) -> None:
     import json
     import re
@@ -220,7 +240,7 @@ def test_start_json_includes_pid(isolated_runtime: Path) -> None:
 
 
 def test_stop_cleans_stale_pid_file(isolated_runtime: Path) -> None:
-    uid = os.getuid()
+    uid = _uid()
     pid_dir = isolated_runtime / "runtime" / f"hermes-spawn-{uid}"
     pid_dir.mkdir(parents=True)
     pid_file = pid_dir / "default.pid"
