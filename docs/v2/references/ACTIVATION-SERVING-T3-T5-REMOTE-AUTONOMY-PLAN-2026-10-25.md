@@ -173,9 +173,12 @@ dispatch receipt, terminal taxonomy, redaction envelope, and replay rules. The o
    conceptual only (see [RELEASE12-IMPLEMENTATION-ROUND-2026-10-26.md](RELEASE12-IMPLEMENTATION-ROUND-2026-10-26.md)).
    Every externally visible effect still uses a durable idempotency key and a fencing epoch.
    Pre-dispatch refusal stays required: revocation or a cascade that blocks work before the
-   outbox send records a terminal `failed` (with an explicit refusal reason) under the same
-   idempotency key; a replay returns that same refusal so the attempt can neither stay pending
-   nor dispatch. After a send may have started, unsettled work remains `unknown`.
+   outbox send writes a terminal refusal record (`AuthorizationRefused`) for that attempt
+   identity under the same idempotency key; a replay with the same identity returns that same
+   refusal so the attempt can neither stay pending nor dispatch. Stored `failed` is only a
+   post-dispatch target refusal (R4 `confirmed_not_applied`); see the contract freeze
+   [§4](r0-r2-contract-freeze-2026-10-26.md#4-terminal-taxonomy-mapping). After a send may have
+   started, unsettled work remains `unknown`.
 2. **Authorization second:** verify the bound approval/permit at the final execution boundary.
    Revocation and cascades refuse future dispatch, including attempts not yet dispatched (the
    pre-dispatch refusal above); already uncertain work becomes an explicit `unknown` disposition,
