@@ -73,7 +73,9 @@ internal. Body shape:
 {"error": {"code": "<code>", "correlation_id": "<uuid>"}}
 ```
 
-Where a durable record exists the body also carries `"receipt_ref": "<opaque>"`. Nothing else.
+Where a durable record exists the `error` object also carries `"receipt_ref": "<opaque>"`, so the
+body is `{"error": {"code", "correlation_id", "receipt_ref"}}`. There is exactly one placement:
+`receipt_ref` is never a sibling of `error`. Nothing else.
 
 Verifier denial codes (mapped from the Phylax internal reasons):
 
@@ -89,6 +91,27 @@ Verifier denial codes (mapped from the Phylax internal reasons):
 
 Serving codes: `serving.not_ready` (HTTP 503, stable), `serving.disabled` (HTTP 503) and
 `serving.route_not_exposed` (HTTP 404).
+
+HTTP status of each `deny.*` code, one table for every surface:
+
+| Public code | HTTP |
+| --- | --- |
+| `deny.malformed_grant` | 400 |
+| `deny.unauthorized_caller` | 401 |
+| `deny.unknown_key`, `deny.revoked_grant`, `deny.missing_capability_record` | 403 |
+| `deny.revocation_stale`, `deny.verifier_unavailable` | 503 |
+
+Two rules are fixed here, in the body of the contract, and apply to every route:
+
+- **Unauthenticated caller.** A caller that is not authenticated, or is not the principal bound to
+  the attempt, on a route that is exposed gets HTTP 401 with `deny.unauthorized_caller` in the
+  Section 3 body. A bare framework body such as `{"detail": ...}` is not a conforming answer on an
+  exposed route. A route that is not exposed answers `serving.route_not_exposed` (404) instead.
+- **In-doubt dispatch.** When the send marker is set (Section 4) and the outcome is not proven, or a
+  verifier, clock or outcome cannot be vouched for, the answer is HTTP 503 with
+  `deny.verifier_unavailable` and the opaque `receipt_ref` of the durable attempt record. It is a
+  deny, never an allow, and never a refusal record: the attempt stays `unknown` (blocking) until
+  an authenticated operator reconciliation settles it.
 
 ## 4. Terminal taxonomy mapping
 
@@ -108,31 +131,42 @@ ratified name is renamed.
 
 ### Pre-dispatch refusal record and replay
 
-`AuthorizationRefused` is the `authorization_refused` **disposition**, not an outcome value. The
-ratified E1 outcome vocabulary remains `confirmed`, `failed`, and `unknown`; a refusal is recorded
-only before an outbox send starts, so it has no outcome and cannot be represented as `failed`.
+One rule set; the activation plan restates it and must not differ.
 
-The existing attempt store holds one refusal record per `attempt_id` with the discriminator
-`disposition: "authorization_refused"` and exactly these contract fields: `attempt_id`,
-`disposition`, `refusal_code` (one Section 3 `deny.*` code), opaque `receipt_ref`, and
-`recorded_at`. It stores no grant id, key id, target, payload, or internal verifier reason.
+1. **Terminal refusal record before dispatch.** `AuthorizationRefused` is the
+   `authorization_refused` **disposition**, not an outcome value. The ratified E1 outcome
+   vocabulary remains `confirmed`, `failed`, and `unknown`; a refusal is recorded only before an
+   outbox send starts, so it has no outcome and cannot be represented as `failed`.
+2. **Record shape.** The existing attempt store holds one refusal record per `attempt_id` with the
+   discriminator `disposition: "authorization_refused"` and exactly these contract fields:
+   `attempt_id`, `disposition`, `refusal_code` (one Section 3 `deny.*` code), opaque `receipt_ref`,
+   and `recorded_at`. It stores no grant id, key id, target, payload, or internal verifier reason.
+   Internal reasons appear only in logs, never in the record or a response.
+3. **Written in the authorization transaction.** Within the existing `BEGIN IMMEDIATE`
+   authorization transaction, the consumer first looks up the bound attempt identity. If no row
+   exists and final authorization refuses the attempt, that same transaction writes the refusal
+   record and commits before returning. It does not consume a use, write an intent or outbox item,
+   or set `send_started`. The unique `attempt_id` makes concurrent refusals converge on the
+   committed record, and the first record wins.
+4. **Replay returns the same refusal.** An exact replay first looks up `attempt_id`; when it finds
+   `authorization_refused`, it performs no new authorization or dispatch and returns the stored
+   refusal with the HTTP status of the stored `refusal_code` (Section 3). Its public body is
+   exactly:
 
-Within the existing `BEGIN IMMEDIATE` authorization transaction, the consumer first looks up the
-bound attempt identity. If no row exists and final authorization refuses the attempt, that same
-transaction writes the refusal record and commits before returning. It does not consume a use,
-write an intent or outbox item, or set `send_started`. The unique `attempt_id` makes concurrent
-refusals converge on the committed record.
+   ```json
+   {"error":{"code":"<stored refusal_code>","correlation_id":"<new uuid>","receipt_ref":"<stored opaque receipt_ref>"}}
+   ```
 
-An exact replay first looks up `attempt_id`; when it finds `authorization_refused`, it performs no
-new authorization or dispatch and returns the stored refusal. Its public body is exactly:
-
-```json
-{"error":{"code":"<stored refusal_code>","correlation_id":"<new uuid>"},"receipt_ref":"<stored opaque receipt_ref>"}
-```
-
-The fresh correlation id is request tracing only; the stored code and receipt reference identify
-the same terminal refusal on every replay. A request with the same `attempt_id` but different
-bound identity is a conflict and must not replace the committed record.
+   The fresh correlation id is request tracing only; the stored code and receipt reference
+   identify the same terminal refusal on every replay. A request with the same `attempt_id` but a
+   different bound identity is a conflict and must not replace the committed record.
+5. **No terminal refusal after the send marker.** Once the outbox send marker (`send_started = 1`)
+   is set, no refusal record may be written for that attempt, and an existing refusal is never
+   rewritten into a send. From that point the only stored outcomes are `confirmed`, `failed`
+   (target refused after dispatch) and `unknown`.
+6. **In-doubt dispatch.** After the send marker, an unproven outcome is `unknown` and is answered
+   as HTTP 503 `deny.verifier_unavailable` with its `receipt_ref` (Section 3). It is never
+   converted into a refusal record and never auto-rolled back.
 
 ## 5. Release 2 frozen items
 
@@ -147,6 +181,21 @@ existing attempt store; no second ledger is created.
 - **Reservation and fencing epoch.** Committed in the same `BEGIN IMMEDIATE` transaction as the
   ledger transition (the existing `_authorize_in_transaction`). An explicit integer fencing
   epoch column is added if absent.
+- **Fencing epoch (defined).** A positive integer owned by the attempt store: one monotonic
+  current mark per store, stamped once on an attempt at authorization. Authorizing below the
+  current mark is refused as stale, a later send is refused when the mark has moved past the
+  attempt's stamp, and the mark is raised only by an authenticated operator action that is
+  logged append-only. It fences stale writers and stale attempts.
+- **Lease epoch (defined, distinct).** A positive integer naming the generation of the consumer's
+  lease, carried as a verified fact of the signed grant (`consumer_lease_epoch`) and checked
+  again at send time. It proves that the consumer holding the grant is the current lease holder.
+  It is never compared with, substituted for, derived from or stored in the fencing epoch field,
+  and neither epoch implies the other: a send needs both to hold.
+- **One send path.** The final-boundary send path of the attempt store is the only way an effect
+  is sent. The send-time checks (expiry, revocation, divergence and quarantine state, clock and
+  anchor checks, consumer lease validation) live in one shared helper that every send entry point
+  calls. A composer verifies the signed grant and binds it into that path; no second path sends
+  around effects gating, single-use approval consumption, fencing or those rechecks.
 - **Outbox item and dispatch receipt.** The existing outbox, plus a redacted receipt record
   `{attempt_ref, outcome, receipt_digest, recorded_at}` carrying no payload, no grant id and no
   key id.

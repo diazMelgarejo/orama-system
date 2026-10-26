@@ -183,7 +183,7 @@ def test_unknown_schema_and_bad_timestamp_fail() -> None:
 def test_pre_dispatch_refusal_contract_preserves_e1_outcomes() -> None:
     """A pre-dispatch refusal is durable without becoming a fourth E1 outcome."""
     text = DOCS[1].read_text(encoding="utf-8")
-    contract = _pre_dispatch_refusal_section(text)
+    contract = " ".join(_pre_dispatch_refusal_section(text).split())
 
     assert "`authorization_refused` **disposition**, not an outcome value" in contract
     assert "`confirmed`, `failed`, and `unknown`" in contract
@@ -194,6 +194,55 @@ def test_pre_dispatch_refusal_contract_preserves_e1_outcomes() -> None:
     assert "An exact replay first looks up `attempt_id`" in contract
     assert '"<stored refusal_code>"' in contract
     assert '"<stored opaque receipt_ref>"' in contract
+
+
+@pytest.mark.unit
+def test_refusal_replay_body_nests_receipt_ref_inside_error() -> None:
+    """The replay body places receipt_ref inside the error object, never beside it."""
+    contract = _pre_dispatch_refusal_section(DOCS[1].read_text(encoding="utf-8"))
+    match = re.search(r"```json\n(.+?)\n\s*```", contract, re.DOTALL)
+    assert match
+    body = json.loads(match.group(1).replace("<", "").replace(">", ""))
+    assert set(body) == {"error"}
+    assert set(body["error"]) == {"code", "correlation_id", "receipt_ref"}
+
+
+@pytest.mark.unit
+def test_refusal_rules_cover_send_marker_and_in_doubt() -> None:
+    """No terminal refusal after the send marker; in-doubt dispatch is a 503 with a receipt_ref."""
+    contract = " ".join(_pre_dispatch_refusal_section(DOCS[1].read_text(encoding="utf-8")).split())
+    assert "No terminal refusal after the send marker" in contract
+    assert "no refusal record may be written" in contract
+    assert "HTTP 503 `deny.verifier_unavailable` with its `receipt_ref`" in contract
+    assert "never converted into a refusal record" in contract
+
+
+@pytest.mark.unit
+def test_public_error_section_fixes_statuses_and_unauthorized_rule() -> None:
+    """Section 3 states the HTTP status table, the 401 rule and the in-doubt rule in the body."""
+    text = DOCS[1].read_text(encoding="utf-8")
+    start = text.index("## 3. Public error vocabulary")
+    section = text[start : text.index("## 4. Terminal taxonomy mapping", start)]
+    assert "| `deny.unauthorized_caller` | 401 |" in section
+    assert "| `deny.malformed_grant` | 400 |" in section
+    assert "`deny.revocation_stale`, `deny.verifier_unavailable` | 503 |" in section
+    assert "HTTP 401 with `deny.unauthorized_caller`" in section
+    flat = " ".join(section.split())
+    assert "HTTP 503 with `deny.verifier_unavailable` and the opaque `receipt_ref`" in flat
+    assert "`receipt_ref` is never a sibling of `error`" in section
+
+
+@pytest.mark.unit
+def test_lease_epoch_and_fencing_epoch_are_defined_and_distinct() -> None:
+    """Both epochs are defined, kept apart, and every send goes through one shared helper."""
+    text = DOCS[1].read_text(encoding="utf-8")
+    start = text.index("## 5. Release 2 frozen items")
+    section = " ".join(text[start : text.index("## 6. Out of scope", start)].split())
+    assert "**Fencing epoch (defined).**" in section
+    assert "**Lease epoch (defined, distinct).**" in section
+    assert "neither epoch implies the other" in section
+    assert "one shared helper that every send entry" in section
+    assert "no second path sends" in section
 
 
 @pytest.mark.parametrize("doc", DOCS, ids=lambda p: p.name)
