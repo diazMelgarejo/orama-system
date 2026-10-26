@@ -1,4 +1,5 @@
 #Requires -Version 5.1
+
 <#
 .SYNOPSIS
     Idempotently prepare Windows partner CLIs for the current session.
@@ -32,6 +33,15 @@ param(
 $ErrorActionPreference = 'Stop'
 
 function Add-UserPathEntry {
+    <#
+    .SYNOPSIS
+    Prepend an existing directory to the process PATH, and to the User PATH unless -SessionOnly is set.
+    Honors -WhatIf (reports without changing anything).
+    .PARAMETER Dir
+    Directory to add; ignored when it does not exist.
+    .OUTPUTS
+    True when something was (or would be) added, false when nothing changed.
+    #>
     param([string]$Dir)
     if (-not $Dir) { return $false }
     $resolved = $Dir

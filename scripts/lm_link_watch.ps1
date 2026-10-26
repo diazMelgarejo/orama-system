@@ -1,10 +1,29 @@
-# lm_link_watch.ps1 — Windows counterpart of scripts/lm_link_watch.py (PS 5.1-compatible).
-# LOCAL = LM Studio on loopback :1234 /v1/models ; PEER = Mac Ollama from
-# last_discovery.json (endpoints.mac.ip + :11434). Same state schema/file as the
-# Python watcher: %USERPROFILE%\.openclaw\state\lm_link.json — orama AND perpetua
-# read this one file. Gossip heartbeats carry model ids + queue depth only (no prompts).
-# Run persistent:  powershell -ExecutionPolicy Bypass -File scripts\lm_link_watch.ps1
-# Single cycle:    ... -File scripts\lm_link_watch.ps1 -Once
+<#
+.SYNOPSIS
+    lm_link_watch.ps1 — Windows counterpart of scripts/lm_link_watch.py (PS 5.1-compatible).
+
+.DESCRIPTION
+    LOCAL = LM Studio on loopback :1234 /v1/models ; PEER = Mac Ollama from
+    last_discovery.json (endpoints.mac.ip + :11434). Same state schema/file as the
+    Python watcher: %USERPROFILE%\.openclaw\state\lm_link.json — orama AND perpetua
+    read this one file. Gossip heartbeats carry model ids + queue depth only (no prompts).
+    Without switches it loops forever, one cycle every LM_LINK_INTERVAL seconds
+    (default 60), and retries a long-degraded peer every LM_LINK_DEGRADED_RETRY seconds.
+
+.PARAMETER Once
+    Run a single cycle, print the resulting state as JSON and exit.
+
+.PARAMETER Status
+    Print the saved state as JSON and exit without probing.
+
+.EXAMPLE
+    powershell -ExecutionPolicy Bypass -File scripts\lm_link_watch.ps1
+    Run persistently.
+
+.EXAMPLE
+    powershell -ExecutionPolicy Bypass -File scripts\lm_link_watch.ps1 -Once
+    Run a single cycle.
+#>
 
 param([switch]$Once, [switch]$Status)
 
@@ -21,9 +40,20 @@ $GossipSec = if ($env:LM_LINK_GOSSIP_INTERVAL) { [int]$env:LM_LINK_GOSSIP_INTERV
 $RetrySec  = if ($env:LM_LINK_DEGRADED_RETRY) { [int]$env:LM_LINK_DEGRADED_RETRY } else { 900 }
 $MaxFails  = 10
 
-function Get-NowIso { (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ") }
+function Get-NowIso {
+    <#
+    .SYNOPSIS
+    Return the current UTC time as an ISO-8601 string (yyyy-MM-ddTHH:mm:ssZ).
+    #>
+    (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ") }
 
 function Probe-Endpoint([string]$Url) {
+    <#
+    .SYNOPSIS
+    Probe a model-list URL with a 5 s timeout.
+    .OUTPUTS
+    A hashtable with up (bool) and models (up to 12 model ids).
+    #>
     try {
         $r = Invoke-RestMethod -Uri $Url -TimeoutSec 5 -ErrorAction Stop
         $ids = @()
@@ -34,6 +64,12 @@ function Probe-Endpoint([string]$Url) {
 }
 
 function Get-PeerUrl {
+    <#
+    .SYNOPSIS
+    Build the Mac Ollama tags URL from last_discovery.json.
+    .OUTPUTS
+    The URL, or null when the discovery file or the Mac address is missing.
+    #>
     try {
         $d = Get-Content $Discovery -Raw -Encoding UTF8 | ConvertFrom-Json
         $ip = $d.endpoints.mac.ip
@@ -43,10 +79,24 @@ function Get-PeerUrl {
 }
 
 function Load-State {
+    <#
+    .SYNOPSIS
+    Read the shared lm_link.json state file.
+    .OUTPUTS
+    The parsed state, or null when it is missing or unreadable.
+    #>
     try { Get-Content $StateFile -Raw -Encoding UTF8 | ConvertFrom-Json } catch { $null }
 }
 
 function Run-Cycle($prev) {
+    <#
+    .SYNOPSIS
+    Run one watch cycle: probe local and peer, compute the link mode, publish gossip and queue events, and rewrite the state file.
+    .PARAMETER prev
+    State from the previous cycle, or null.
+    .OUTPUTS
+    The new state.
+    #>
     # Loopback by address: the name localhost costs ~2 s per probe on IPv6-first hosts.
     $loopHost = [System.Net.IPAddress]::Loopback.IPAddressToString
     $local = Probe-Endpoint "http://${loopHost}:1234/v1/models"
