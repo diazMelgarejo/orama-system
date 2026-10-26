@@ -860,7 +860,7 @@ def scan_macos_ghost_git_refs(root: Path) -> list[str]:
             rel = repo_relative(path, root)
             errors.append(
                 f"macOS ghost git ref file: {rel} — "
-                f"fix: rm '{rel}' (duplicate of '{path.parent / path.name.rsplit(' ', 1)[0]}')"
+                f"fix: rm '{rel}' (duplicate of '{(path.parent / path.name.rsplit(' ', 1)[0]).as_posix()}')"
             )
     return errors
 
@@ -1045,7 +1045,7 @@ def check_workflow_permissions(root: Path) -> list[str]:
         needs_write = any(marker in text for marker in WORKFLOW_WRITE_MARKERS)
         if not needs_write:
             continue
-        rel = path.relative_to(root)
+        rel = path.relative_to(root).as_posix()
         if (
             "contents: write" not in text
             and "pull-requests: write" not in text
