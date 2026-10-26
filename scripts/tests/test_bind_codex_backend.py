@@ -1,6 +1,8 @@
 import json, os, subprocess, shutil, sys
 from pathlib import Path
 
+import pytest
+
 REPO = Path(__file__).resolve().parents[2]
 SKILL = REPO / "bin/orama-system/skills/openclaw-skills/codex-openclaw-agent"
 PROBE_LIB = SKILL / "scripts/lib/codex_probe.sh"
@@ -25,7 +27,9 @@ def test_discover_endpoint_from_server_info_dir(tmp_path):
     assert out == "http://127.0.0.1:1455", out
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows filesystems cannot hold a newline in a file name")
 def test_discover_endpoint_accepts_newlines_in_json_filenames(tmp_path):
+    """Discover endpoint accepts newlines in json filenames."""
     d = tmp_path / "codex_apps_server_info"
     d.mkdir()
     shutil.copy(FIX / "server_info_sample.json", d / "server\ninfo.json")

@@ -18,7 +18,10 @@ import os
 import re
 import stat
 import subprocess
+import sys
 from pathlib import Path
+
+import pytest
 
 
 ROOT = Path(__file__).parent.parent
@@ -207,14 +210,18 @@ class TestSecureStorage:
         secrets_file = result.home / ".openclaw" / "secrets" / "glm52-api-key"
         assert secrets_file.read_text(encoding="utf-8") == "my-secret-value"
 
+    @pytest.mark.skipif(sys.platform == "win32", reason="POSIX permission bits are not enforced on Windows")
     def test_secrets_file_has_mode_600(self, tmp_path):
+        """Secrets file has mode 600."""
         result = _run_setup(tmp_path, env={"GLM52_API_KEY": "k"})
         assert result.returncode == 0, result.stdout + result.stderr
         secrets_file = result.home / ".openclaw" / "secrets" / "glm52-api-key"
         mode = stat.S_IMODE(secrets_file.stat().st_mode)
         assert mode == 0o600, f"expected mode 0o600, got {oct(mode)}"
 
+    @pytest.mark.skipif(sys.platform == "win32", reason="POSIX permission bits are not enforced on Windows")
     def test_env_file_has_mode_600(self, tmp_path):
+        """Env file has mode 600."""
         result = _run_setup(tmp_path, env={"GLM52_API_KEY": "k"})
         assert result.returncode == 0, result.stdout + result.stderr
         env_file = result.home / ".openclaw" / ".env.glm52"

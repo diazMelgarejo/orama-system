@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -61,19 +62,29 @@ def test_is_git_root_rejects_missing_marker(tmp_path: Path) -> None:
     assert result.stdout.strip() == "NO"
 
 
+def _symlink_or_skip(link: Path, target: Path) -> None:
+    """Create a symlink, skipping the test when the OS refuses (Windows without privilege)."""
+    try:
+        link.symlink_to(target)
+    except (OSError, NotImplementedError) as exc:
+        pytest.skip(f"cannot create symlinks on this host: {exc}")
+
+
 def test_is_git_root_rejects_symlink(tmp_path: Path) -> None:
+    """Is git root rejects symlink."""
     real = _make_repo(tmp_path / "real")
     link = tmp_path / "link"
-    link.symlink_to(real)
+    _symlink_or_skip(link, real)
     result = _run(f'sibling_repo_is_git_root "{link}" "" && echo YES || echo NO')
     assert result.stdout.strip() == "NO"
 
 
 def test_is_git_root_rejects_symlinked_git_entry(tmp_path: Path) -> None:
+    """Is git root rejects symlinked git entry."""
     repo = _make_repo(tmp_path / "repo")
     real_git = repo / ".git-real"
     (repo / ".git").rename(real_git)
-    (repo / ".git").symlink_to(real_git)
+    _symlink_or_skip(repo / ".git", real_git)
 
     result = _run(f'sibling_repo_is_git_root "{repo}" "" && echo YES || echo NO')
 
@@ -124,7 +135,11 @@ def test_crawl_collect_finds_nested_repo_at_depth(tmp_path: Path) -> None:
         f'sibling_repo_finalize "Target"'
     )
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == str(nested)
+    if sys.platform == "win32":
+        # bash prints MSYS-style paths (/tmp/...) for a native tmp dir.
+        assert result.stdout.strip().endswith(nested.relative_to(tmp_path.parent).as_posix())
+    else:
+        assert result.stdout.strip() == str(nested)
 
 
 def test_crawl_collect_depth_zero_only_checks_base(tmp_path: Path) -> None:
