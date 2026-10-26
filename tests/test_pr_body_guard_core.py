@@ -49,7 +49,7 @@ def test_append_pr_body_allowed_with_grant_emits_backup(guard_core, grant_setup,
     append = tmp_path / "x.md"
     append.write_text("follow-up body", encoding="utf-8")
     grant_setup.mint_grant("a/b", "1", str(append), None)
-    cmd = f"bash scripts/cursor/append-pr-body.sh a/b 1 --file {append}"
+    cmd = f"bash scripts/cursor/append-pr-body.sh a/b 1 --file {append.as_posix()}"
     lines = guard_core._shell_decision_lines(cmd)
     assert any(line.startswith("BACKUP|a/b|1") for line in lines)
     assert lines[-1] == "ALLOW"
@@ -62,7 +62,7 @@ def test_newline_hidden_body_edit_after_valid_append_still_denied(
     append.write_text("ok", encoding="utf-8")
     grant_setup.mint_grant("a/b", "1", str(append), None)
     cmd = (
-        f"bash scripts/cursor/append-pr-body.sh a/b 1 --file {append}\n"
+        f"bash scripts/cursor/append-pr-body.sh a/b 1 --file {append.as_posix()}\n"
         "gh pr edit 1 --body evil.md"
     )
     lines = guard_core._shell_decision_lines(cmd)
@@ -74,7 +74,7 @@ def test_newline_hidden_manage_pr_update_is_still_denied(guard_core, grant_setup
     append.write_text("ok", encoding="utf-8")
     grant_setup.mint_grant("a/b", "1", str(append), None)
     cmd = (
-        f"bash scripts/cursor/append-pr-body.sh a/b 1 --file {append}\n"
+        f"bash scripts/cursor/append-pr-body.sh a/b 1 --file {append.as_posix()}\n"
         'ManagePullRequest update_pr body="evil"'
     )
     lines = guard_core._shell_decision_lines(cmd)

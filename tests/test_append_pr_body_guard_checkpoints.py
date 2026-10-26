@@ -162,6 +162,7 @@ def _mint_grant(gh_bin: Path, append: Path, tmp_path: Path) -> dict[str, str]:
         "PR_BODY_GRANT_HMAC_SECRET": "ledger-secret",
         "GH_BIN": str(gh_bin),
         "HOME": str(tmp_path),
+        "USERPROFILE": str(tmp_path),  # Path.home() on Windows
     }
     mint = _run(
         [

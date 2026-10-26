@@ -80,6 +80,7 @@ def _mint_grant(gh_bin: Path, append: Path, tmp_path: Path) -> dict[str, str]:
         "PR_BODY_GRANT_HMAC_SECRET": "append-flow-secret",
         "GH_BIN": str(gh_bin),
         "HOME": str(tmp_path),
+        "USERPROFILE": str(tmp_path),  # Path.home() on Windows
     }
     mint = _run(
         [
@@ -217,7 +218,7 @@ def test_append_pr_body_rejects_oversized_file_before_snapshot(
 
     proc = _run(
         ["bash", str(APPEND_SH), "owner/repo", "99", "--file", str(append)],
-        env={"GH_BIN": str(gh_bin), "HOME": str(tmp_path)},
+        env={"GH_BIN": str(gh_bin), "HOME": str(tmp_path), "USERPROFILE": str(tmp_path)},
     )
 
     assert proc.returncode != 0
