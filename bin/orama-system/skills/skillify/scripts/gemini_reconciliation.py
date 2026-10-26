@@ -1,3 +1,4 @@
+"""Reconcile Gemini skill roots against canonical skills with archive receipts."""
 from __future__ import annotations
 
 import errno
@@ -19,6 +20,7 @@ import yaml
 
 @dataclass(frozen=True)
 class GeminiOwnership:
+    """Manifest record describing how one skill is reconciled for Gemini."""
     owner: str
     action: str
     canonical_slug: str
@@ -27,6 +29,7 @@ class GeminiOwnership:
 
 
 def load_gemini_ownership(manifest_path: Path) -> dict[str, GeminiOwnership]:
+    """Load and validate the Gemini ownership manifest into a slug-keyed mapping."""
     if not manifest_path.exists():
         return {}
     data = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -64,6 +67,7 @@ class RootFinding:
 
 
 def _validate_frontmatter(source_text: str) -> str:
+    """Return the validated YAML frontmatter block of a skill source, or raise on malformed input."""
     frontmatter = ""
     if source_text.startswith("---"):
         # Normalize CRLF before the fence match: a file authored/edited on
@@ -109,6 +113,7 @@ def _validate_frontmatter(source_text: str) -> str:
 
 
 def gemini_adapter(ownership: GeminiOwnership, source_text: str = "") -> str:
+    """Render the generated Gemini adapter text for an ownership record."""
     frontmatter = ""
     if ownership.metadata_policy == "validated":
         frontmatter = _validate_frontmatter(source_text)
@@ -116,6 +121,7 @@ def gemini_adapter(ownership: GeminiOwnership, source_text: str = "") -> str:
 
 
 def cross_repo_wrapper(ownership: GeminiOwnership, source_text: str = "") -> str:
+    """Render the cross-repository adapter text for an ownership record."""
     frontmatter = ""
     if ownership.metadata_policy == "validated":
         frontmatter = _validate_frontmatter(source_text)
@@ -129,6 +135,7 @@ class ReconcileLockHeldError(RuntimeError):
 
 
 def _remove_path(path: Path) -> None:
+    """Remove a file, symlink or directory tree if present."""
     if path.is_symlink() or path.is_file():
         path.unlink()
     elif path.exists():
@@ -169,6 +176,7 @@ def _tree_sha256(path: Path) -> str:
 
 
 def _recognized_symlink_error_numbers() -> set[int]:
+    """Return the errno values that mean this platform cannot create symlinks."""
     return {
         value
         for name in ("EPERM", "ENOSYS", "EOPNOTSUPP")
@@ -256,6 +264,7 @@ def _pid_is_live(pid: object) -> bool:
 
 
 def _read_lock_payload(lock_path: Path) -> dict[str, object]:
+    """Parse the JSON payload of a reconcile lock, failing closed when unreadable."""
     try:
         payload = json.loads(lock_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
@@ -295,6 +304,7 @@ def acquire_reconcile_lock(archive_root: Path, source_root: Path, only: set[str]
 
 
 def release_reconcile_lock(lock_path: Path) -> None:
+    """Release a reconcile lock created by acquire_reconcile_lock."""
     lock_path.unlink(missing_ok=True)
 
 
@@ -333,6 +343,7 @@ def force_unlock_gemini(root: Path, slug: str) -> dict[str, object]:
 
 
 def _index_lock_path(index_path: Path) -> Path:
+    """Return the lock file path guarding the archive index.json."""
     return index_path.with_name(".index.json.lock")
 
 
@@ -368,6 +379,7 @@ def _acquire_index_lock(index_path: Path, attempts: int = 50, delay: float = 0.0
 
 
 def _release_index_lock(lock_path: Path) -> None:
+    """Release the archive index lock."""
     lock_path.unlink(missing_ok=True)
 
 
@@ -379,6 +391,7 @@ def _write_receipt(
     final_target_kind: str,
     canonical_target: Path,
 ) -> None:
+    """Write the reconciliation receipt and update the archive index atomically."""
     receipt_path = archive_root / slug / ".receipt.json"
 
     if final_target_kind == "symlink":
@@ -661,6 +674,7 @@ def reconcile_gemini(
 
 
 def _gemini_slugs(root: Path, only: set[str] | None) -> set[str]:
+    """Return the Gemini slugs to verify, optionally narrowed to ``only``."""
     if only is not None:
         return only
     if not root.is_dir():

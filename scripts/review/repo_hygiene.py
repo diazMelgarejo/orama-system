@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""Repository hygiene gate: scans tracked files for policy violations."""
 from __future__ import annotations
 
 import argparse
@@ -44,6 +45,7 @@ def openclaw_workspace_root(root: Path) -> Path:
 
 
 def private_literal_values(root: Path, key: str) -> list[str]:
+    """Return the registry values stored under ``key`` in the local-only literal registry."""
     configured_path = os.getenv("OPENCLAW_VERBOTEN_LITERALS")
     path = Path(configured_path) if configured_path else openclaw_workspace_root(root) / ".verboten-literals.local"
     if not path.is_file():
@@ -292,6 +294,7 @@ def _line_outside_yaml_strings(line: str) -> str:
 def _private_network_line_allowed(
     line: str, *, is_json: bool, is_yaml: bool = False
 ) -> bool:
+    """Return True when a private-network literal on this line is explicitly allowed."""
     if is_json:
         check_line = _line_outside_json_strings(line)
     elif is_yaml:
@@ -379,6 +382,7 @@ SECRET_PLACEHOLDER_MARKERS = (
 
 
 def run_git(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    """Run a git command in ``root`` and return the completed process."""
     return subprocess.run(
         ["git", "-C", str(root), *args],
         check=False,
@@ -390,6 +394,7 @@ def run_git(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
 
 
 def tracked_files(root: Path) -> list[str]:
+    """List the repository's tracked files relative to ``root``."""
     proc = run_git(root, "ls-files")
     if proc.returncode != 0:
         raise RuntimeError(proc.stderr.strip() or "git ls-files failed")
@@ -405,6 +410,7 @@ def staged_tracked_files(root: Path) -> list[str]:
 
 
 def is_binary(path: Path) -> bool:
+    """Return True when the file looks binary (contains a NUL byte)."""
     try:
         chunk = path.read_bytes()[:4096]
     except OSError:
@@ -413,6 +419,7 @@ def is_binary(path: Path) -> bool:
 
 
 def scan_forbidden_identity(root: Path, files: list[str]) -> list[str]:
+    """Report tracked files that carry a forbidden identity token."""
     errors: list[str] = []
     for rel in files:
         if rel in IDENTITY_DOC_EXCEPTIONS:
@@ -440,6 +447,7 @@ def scan_private_verboten_literals(root: Path, files: list[str]) -> list[str]:
     # banned phrase can hide just because they're exempt from the
     # identity check). Scanned separately so the exemption can't
     # accidentally widen to cover the class it was never meant for.
+    """Report tracked files that contain values from the private literal registry."""
     identity_tokens = [
         token.casefold()
         for key in ("owner_gmail", "owner_name")
@@ -669,6 +677,7 @@ def scan_mojibake(root: Path, files: list[str]) -> list[str]:
 
 
 def check_private_generated_tracking(files: list[str]) -> list[str]:
+    """Report tracked paths that belong to private generated output."""
     return [
         f"private/generated config is tracked: {rel}"
         for rel in files
@@ -677,6 +686,7 @@ def check_private_generated_tracking(files: list[str]) -> list[str]:
 
 
 def check_markdown_link_hygiene(root: Path, files: list[str]) -> list[str]:
+    """Report broken or non-portable links in tracked markdown files."""
     errors: list[str] = []
     for rel in files:
         if not rel.endswith(".md"):
@@ -700,6 +710,7 @@ def check_markdown_link_hygiene(root: Path, files: list[str]) -> list[str]:
 
 
 def changed_markdown_files(root: Path) -> set[str]:
+    """Return the markdown files changed relative to HEAD."""
     changed: set[str] = set()
     for args in (
         ("diff", "--name-only", "--diff-filter=ACMR", "HEAD", "--", "*.md"),
@@ -712,6 +723,7 @@ def changed_markdown_files(root: Path) -> set[str]:
 
 
 def exists_in_head(root: Path, rel: str) -> bool:
+    """Return True when ``rel`` exists in the HEAD commit."""
     proc = run_git(root, "cat-file", "-e", f"HEAD:{rel}")
     return proc.returncode == 0
 
@@ -722,6 +734,7 @@ def check_markdown_size_warnings(
     changed: set[str] | None = None,
     existing: set[str] | None = None,
 ) -> list[str]:
+    """Report oversized markdown files as warnings."""
     warnings: list[str] = []
     changed = changed_markdown_files(root) if changed is None else changed
     for rel in sorted(changed):
@@ -751,6 +764,7 @@ def check_markdown_size_warnings(
 
 
 def check_generated_artifact_tracking(files: list[str]) -> list[str]:
+    """Report tracked generated artifacts that must not be committed."""
     errors: list[str] = []
     for rel in files:
         if any(fnmatch.fnmatch(rel, pattern) for pattern in GENERATED_ARTIFACT_PATTERNS):
@@ -986,6 +1000,7 @@ CC_OPENCLAW_SUBMODULE = "bin/orama-system/skills/openclaw-skills/cc-openclaw"
 
 
 def _gitlink_sha(root: Path, rel_path: str) -> str | None:
+    """Return the gitlink commit sha recorded for ``rel_path``, or None."""
     mode_line = run_git(root, "ls-files", "-s", rel_path).stdout.strip()
     if not mode_line:
         return None
@@ -996,6 +1011,7 @@ def _gitlink_sha(root: Path, rel_path: str) -> str | None:
 
 
 def check_ecc(root: Path, files: list[str]) -> list[str]:
+    """Validate the ECC submodule pointer and related tracked files."""
     if ".ecc" not in files:
         return []
     ecc_path = root / ".ecc"
@@ -1036,6 +1052,7 @@ def check_cc_openclaw_gitlink(root: Path) -> list[str]:
 
 
 def check_workflow_permissions(root: Path) -> list[str]:
+    """Report workflows that may write but lack an explicit write permission."""
     errors: list[str] = []
     workflow_dir = root / ".github" / "workflows"
     if not workflow_dir.exists():
@@ -1056,6 +1073,7 @@ def check_workflow_permissions(root: Path) -> list[str]:
 
 
 def check_stale_skill_path_refs(root: Path, files: list[str]) -> list[str]:
+    """Report references to skill paths that no longer exist."""
     errors: list[str] = []
     for rel in files:
         path = root / rel
@@ -1073,6 +1091,7 @@ def check_stale_skill_path_refs(root: Path, files: list[str]) -> list[str]:
 
 
 def _line_has_secret_placeholder(line: str) -> bool:
+    """Return True when the line holds an obvious secret placeholder."""
     return any(marker in line for marker in SECRET_PLACEHOLDER_MARKERS)
 
 
@@ -1282,6 +1301,7 @@ def scan_tracked_secrets(root: Path, files: list[str]) -> list[str]:
 
 
 def classify_legacy_name_refs(root: Path, files: list[str]) -> tuple[int, int]:
+    """Count active versus historical or allowed legacy-name references."""
     active = 0
     historical = 0
     for rel in files:
@@ -1350,6 +1370,7 @@ def _parsed_address_token(raw: str) -> str | None:
 
 
 def _prohibited_classes_in_text(text: str) -> list[str]:
+    """Return the prohibited address classes found in ``text``."""
     found: list[str] = []
     seen: set[str] = set()
     for match in _STAGED_ADDRESS_TOKEN_RE.finditer(text):
@@ -1479,6 +1500,7 @@ def scan_staged_prohibited_address_literals(
 
 
 def report_status(root: Path) -> list[str]:
+    """Return the repository status summary lines."""
     warnings: list[str] = []
     status = run_git(root, "status", "--short", "--branch")
     if status.returncode != 0:
@@ -1492,6 +1514,7 @@ def report_status(root: Path) -> list[str]:
 
 
 def main() -> int:
+    """Run every hygiene check against the repository and return the exit code."""
     parser = argparse.ArgumentParser(description="Repo hygiene guard for orama-system salvage work")
     parser.add_argument("repo", nargs="?", default=".", help="repository root")
     parser.add_argument(
