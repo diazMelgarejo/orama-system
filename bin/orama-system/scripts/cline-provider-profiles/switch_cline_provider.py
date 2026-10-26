@@ -61,12 +61,6 @@ def load_json(path: str) -> dict[str, Any]:
         return json.load(f)
 
 
-def latest_backup(backup_dir: str) -> str | None:
-    """Return the path of the lexicographically newest ``.json`` backup in ``backup_dir`` (timestamped names sort chronologically), or None when there are none."""
-    entries = sorted(e for e in os.listdir(backup_dir) if e.endswith(".json"))
-    return os.path.join(backup_dir, entries[-1]) if entries else None
-
-
 _BACKUP_NAME_RE = re.compile(r"^openai-compatible-(\d{8}T\d{6}\.\d{6})Z\.json$")
 
 
@@ -81,6 +75,28 @@ def _backup_stamp(path: str) -> datetime | None:
         # Pattern matched but the calendar fields are invalid (e.g. month 13).
         # Treat like an unexpected filename so switch can continue.
         return None
+
+
+def _stamped_backups(backup_dir: str) -> list[str]:
+    """Return the names in ``backup_dir`` whose stamp parses via ``_backup_stamp``, oldest first.
+
+    Any other name -- an impossible date that sorts newest, or a file an operator put
+    there -- is left out, so it never steers ordering, dedupe or rotation and is never
+    deleted by rotation.
+    """
+    stamped: list[tuple[datetime, str]] = []
+    for name in os.listdir(backup_dir):
+        stamp = _backup_stamp(name)
+        if stamp is not None:
+            stamped.append((stamp, name))
+    stamped.sort()
+    return [name for _stamp, name in stamped]
+
+
+def latest_backup(backup_dir: str) -> str | None:
+    """Return the path of the newest backup in ``backup_dir`` whose stamp parses, or None when there is none; unparseable names are ignored."""
+    entries = _stamped_backups(backup_dir)
+    return os.path.join(backup_dir, entries[-1]) if entries else None
 
 
 def comparable(block: Mapping[str, Any]) -> dict[str, Any]:
@@ -106,8 +122,8 @@ def resolve_template(tmpl_path: str, env: Mapping[str, str] | None = None) -> di
 
 
 def rotate_backups(backup_dir: str, max_backups: int = MAX_BACKUPS) -> None:
-    """Delete the oldest ``.json`` backups so that at most ``max_backups`` newest ones remain."""
-    entries = sorted(e for e in os.listdir(backup_dir) if e.endswith(".json"))
+    """Delete the oldest backups whose stamp parses so that at most ``max_backups`` newest ones remain; unparseable names are neither counted nor deleted."""
+    entries = _stamped_backups(backup_dir)
     for stale in entries[:-max_backups]:
         os.unlink(os.path.join(backup_dir, stale))
 
@@ -146,8 +162,8 @@ def switch_provider(
         # clock (Windows ticks about every 15 ms) or a clock stepped backwards can
         # hand a switch a stamp that is not newer than the latest backup, which
         # would overwrite it and break the order: jump straight to one microsecond
-        # past the latest backup's stamp. A name that does not parse (not one this
-        # script wrote) is ignored for ordering.
+        # past the latest backup's stamp. latest_backup() only returns names whose
+        # stamp parses, so an unparseable name never hides the real latest stamp.
         prior_stamp = _backup_stamp(prior) if prior else None
         if prior_stamp is not None:
             now_naive = now.replace(tzinfo=None)

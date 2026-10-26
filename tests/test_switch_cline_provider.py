@@ -227,9 +227,9 @@ def test_switch_continues_when_latest_backup_name_has_invalid_date(
 ) -> None:
     """A lexicographically-newest backup with an impossible stamp must not stop activation.
 
-    The live settings differ from the bogus backup's, so the backup branch runs and parses
-    the bogus name's stamp. Without the ValueError guard in ``_backup_stamp`` that parse
-    raises, so neither the backup nor the activation happens and this test fails.
+    Finding the latest backup parses every backup name's stamp, the bogus one included.
+    Without the ValueError guard in ``_backup_stamp`` that parse raises, so neither the
+    backup nor the activation happens and this test fails.
     """
     providers_path, backup_dir, tmpl_path = workspace
     _write_json(providers_path, _providers_cfg(_settings("model-prior", "key-prior")))
@@ -253,6 +253,155 @@ def test_switch_continues_when_latest_backup_name_has_invalid_date(
     assert switch_cline_provider._backup_stamp(new_backups[0]) is not None, new_backups
     assert _read_json(backup_dir / new_backups[0])["settings"]["model"] == "model-prior"
     assert _read_json(bogus)["settings"]["model"] == "model-older", "bogus backup must be untouched"
+
+
+# Regex-shaped backup names whose stamps cannot parse (month 13, February 31).
+# The first sorts after every real 2026 name, the second before them.
+_BOGUS_NEWEST = "openai-compatible-20261301T120000.000000Z.json"
+_BOGUS_OLDEST = "openai-compatible-20250231T000000.000000Z.json"
+# An operator file that is not a backup name at all; sorts before "openai-".
+_OPERATOR_FILE = "manual-snapshot.json"
+
+
+def _real_backups(backup_dir: Path) -> list[str]:
+    """Return the backup names in ``backup_dir`` whose stamp parses, oldest first."""
+    return sorted(
+        name for name in os.listdir(backup_dir)
+        if switch_cline_provider._backup_stamp(name) is not None
+    )
+
+
+def _write_profile(tmpl_dir: Path, name: str, model: str, var: str) -> Path:
+    """Write a profile template for ``model`` whose apiKey is the ``${var}`` placeholder and return its path."""
+    tmpl = tmpl_dir / f"{name}.json.tmpl"
+    _write_json(tmpl, {"settings": {**_settings(model, f"${{{var}}}"), "apiKey": f"${{{var}}}"}})
+    return tmpl
+
+
+def test_bogus_newest_name_does_not_let_same_tick_switches_overwrite_backups(
+    workspace: Workspace,
+) -> None:
+    """Two switches in one clock tick keep two distinct backups despite a bogus newest-sorting name.
+
+    The unparseable name used to be returned as the latest backup, so its stamp parsed to
+    None, the strictly-newer bump was skipped and the second switch overwrote the first
+    switch's backup.
+    """
+    providers_path, backup_dir, tmpl_path = workspace
+    tmpl_b = _write_profile(tmpl_path.parent, "profile-b", "model-b", "B_KEY")
+    _write_json(providers_path, _providers_cfg(_settings("model-prior", "key-prior")))
+    bogus = backup_dir / _BOGUS_NEWEST
+    _write_json(bogus, {"settings": _settings("model-bogus", "key-bogus")})
+    frozen = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+
+    switch_provider(str(providers_path), str(tmpl_path), "profile-a", str(backup_dir),
+                    env={"A_KEY": "key-a"}, now=frozen)
+    switch_provider(str(providers_path), str(tmpl_b), "profile-b", str(backup_dir),
+                    env={"B_KEY": "key-b"}, now=frozen)
+
+    real = _real_backups(backup_dir)
+    assert len(real) == 2, real
+    assert [_read_json(backup_dir / n)["settings"]["model"] for n in real] == [
+        "model-prior", "model-a"]
+    assert _read_json(bogus)["settings"]["model"] == "model-bogus", "bogus file must be untouched"
+
+
+def test_dedupe_skips_a_duplicate_of_the_real_newest_backup_despite_a_bogus_name(
+    workspace: Workspace,
+) -> None:
+    """The outgoing state matches the real newest backup, so no new backup is written.
+
+    A bogus newest-sorting name holding different settings used to be the dedupe target,
+    so the already-recorded outgoing state was written again as a duplicate.
+    """
+    providers_path, backup_dir, tmpl_path = workspace
+    _write_json(providers_path, _providers_cfg(_settings("model-prior", "key-prior")))
+    _write_json(
+        backup_dir / "openai-compatible-20260101T000000.000000Z.json",
+        {"settings": _settings("model-prior", "key-prior")},
+    )
+    _write_json(backup_dir / _BOGUS_NEWEST, {"settings": _settings("model-bogus", "key-bogus")})
+    before = sorted(os.listdir(backup_dir))
+
+    status = switch_provider(
+        str(providers_path), str(tmpl_path), "profile-a", str(backup_dir),
+        env={"A_KEY": "key-a"}, now=datetime(2026, 1, 2, tzinfo=timezone.utc),
+    )
+
+    assert status == "activated"
+    assert sorted(os.listdir(backup_dir)) == before, "a duplicate of the real newest backup was written"
+
+
+def test_dedupe_records_outgoing_state_that_only_a_bogus_name_matches(
+    workspace: Workspace,
+) -> None:
+    """The outgoing state differs from the real newest backup, so it is backed up.
+
+    A bogus newest-sorting name holding the same settings as the live state used to be the
+    dedupe target, so the outgoing state was treated as already recorded and never saved.
+    """
+    providers_path, backup_dir, tmpl_path = workspace
+    _write_json(providers_path, _providers_cfg(_settings("model-prior", "key-prior")))
+    _write_json(
+        backup_dir / "openai-compatible-20260101T000000.000000Z.json",
+        {"settings": _settings("model-older", "key-older")},
+    )
+    _write_json(backup_dir / _BOGUS_NEWEST, {"settings": _settings("model-prior", "key-prior")})
+
+    switch_provider(
+        str(providers_path), str(tmpl_path), "profile-a", str(backup_dir),
+        env={"A_KEY": "key-a"}, now=datetime(2026, 1, 2, tzinfo=timezone.utc),
+    )
+
+    real = _real_backups(backup_dir)
+    assert [_read_json(backup_dir / n)["settings"]["model"] for n in real] == [
+        "model-older", "model-prior"]
+
+
+def test_rotation_keeps_max_real_backups_and_never_deletes_unparseable_files(
+    workspace: Workspace,
+) -> None:
+    """Rotation counts only parseable backups and leaves bogus and operator files in place.
+
+    Unparseable names used to take a slot among the newest kept files (leaving fewer real
+    backups than configured), and any that sorted oldest were deleted.
+    """
+    providers_path, backup_dir, tmpl_path = workspace
+    _write_json(providers_path, _providers_cfg(_settings("model-0", "key-0")))
+    untouchable = {
+        _BOGUS_NEWEST: {"settings": _settings("model-bogus-new", "key-x")},
+        _BOGUS_OLDEST: {"settings": _settings("model-bogus-old", "key-y")},
+        _OPERATOR_FILE: {"note": "operator-owned, not a backup"},
+    }
+    for name, data in untouchable.items():
+        _write_json(backup_dir / name, data)
+
+    for i in range(1, 13):
+        tmpl = _write_profile(tmpl_path.parent, f"profile-{i}", f"model-{i}", f"K{i}")
+        switch_provider(
+            str(providers_path), str(tmpl), f"profile-{i}", str(backup_dir),
+            env={f"K{i}": f"key-{i}"},
+            now=datetime(2026, 1, i, tzinfo=timezone.utc),
+        )
+
+    real = _real_backups(backup_dir)
+    assert [_read_json(backup_dir / n)["settings"]["model"] for n in real] == [
+        f"model-{i}" for i in range(2, 12)], "must keep exactly the ten newest real backups"
+    for name, data in untouchable.items():
+        assert (backup_dir / name).exists(), f"rotation deleted unparseable file {name}"
+        assert _read_json(backup_dir / name) == data, f"rotation changed unparseable file {name}"
+
+
+def test_latest_backup_ignores_unparseable_names(tmp_path: Path) -> None:
+    """latest_backup returns the newest parseable backup, or None when only unparseable names exist."""
+    latest_backup = switch_cline_provider.latest_backup
+    for name in (_BOGUS_NEWEST, _BOGUS_OLDEST, _OPERATOR_FILE):
+        _write_json(tmp_path / name, {"settings": {}})
+    assert latest_backup(str(tmp_path)) is None
+
+    real = "openai-compatible-20260101T000000.000000Z.json"
+    _write_json(tmp_path / real, {"settings": {}})
+    assert latest_backup(str(tmp_path)) == os.path.join(str(tmp_path), real)
 
 
 def test_backup_rotation_caps_at_ten(
