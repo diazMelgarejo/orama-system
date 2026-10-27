@@ -297,6 +297,11 @@ orama-system/docs/v2/
   recorded in [the T0 evidence record](references/r4-safety-compatibility-platform-2026-10-10/T0-RESTORATION-AND-REGISTRY-BASELINE-2026-10-10.md);
   documentation only, with P0 pin promotion still gated.
 
+- [Activation-readiness baseline receipt (2026-10-26)](references/activation-readiness-baseline-2026-10-26.md)
+  — dated metadata-only record of `main` heads, pins, digests and E1 heads; not an activation.
+  The [Release 0 to 2 contract freeze](references/r0-r2-contract-freeze-2026-10-26.md) is its
+  DRAFT companion (capability record, refusal matrix, error vocabulary).
+
 ---
 
 ## Open questions (live)

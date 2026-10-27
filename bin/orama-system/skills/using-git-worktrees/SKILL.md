@@ -208,6 +208,9 @@ shared branch. Method and exceptions:
 The few legitimate hard-reset cases and their gate:
 [`hard-reset-qualified-uses.md`](../../references/hard-reset-qualified-uses.md).
 
+Integrating other agents' commits (merge commit only), unique-tag stashes, short Windows paths:
+[`integration-synthesis-and-verification.md`](../../references/integration-synthesis-and-verification.md).
+
 ### Inference (GPU)
 
 - **Never POST directly to LM Studio or Ollama.** Always via PT.

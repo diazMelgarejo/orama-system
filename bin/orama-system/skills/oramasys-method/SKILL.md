@@ -127,6 +127,9 @@ Before Done, Demand Elegance, Autonomous Bug Fixing.
 This is the same protocol as `bin/orama-system/references/multi-agent-collaboration-protocol.md`
 § Nested-Branch Merge, packaged for PR work and agent harnesses.
 
+When both branches solved the same problem, keep the stronger guarantee from each and record the decision; verify reports against live origin and local code before push:
+[`integration-synthesis-and-verification.md`](../../references/integration-synthesis-and-verification.md).
+
 ### Contract migrations (mandatory at cross-module boundaries)
 
 When a change alters persisted state, a return shape, an event envelope, a

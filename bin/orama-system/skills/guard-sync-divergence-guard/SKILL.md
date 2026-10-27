@@ -12,6 +12,11 @@ version: 1.0.0
 license: Apache 2.0
 compatibility: orama-system, cursor, claude-code, codex, openclaw
 parent_skill: git-history-surgery
+triggers:
+  - guard sync
+  - sync-attribution-guard-scripts
+  - GUARD_SYNC_E_DIVERGENCE
+  - sibling ahead of canonical
 allowed-tools: bash, file-operations
 ---
 
@@ -21,7 +26,7 @@ Internal orama development helper. Prevents the guard-sync epic failure mode:
 blind `sync-attribution-guard-scripts.sh` overwriting a sibling's more advanced
 mutations.
 
-## When to load
+## When to Use
 
 - Before any `sync-attribution-guard-scripts.sh` invocation
 - When `verify-guard-parity.sh` reports DRIFTED but sync "fixes" feel wrong
@@ -91,5 +96,7 @@ canonical grant remediation commit.
 - [`references/divergence-check-reference-card.md`](references/divergence-check-reference-card.md)
   — algorithm, hooks, epic saga context
 - [`../git-history-surgery/SKILL.md`](../git-history-surgery/SKILL.md) — tree-twin / re-anchor companion
+- [`../../references/integration-synthesis-and-verification.md`](../../references/integration-synthesis-and-verification.md)
+  — synthesize sibling and canonical guards (keep the stronger guarantee), verify against live code
 - `scripts/git/check-guard-sync-divergence.sh` — implementation
 - `scripts/git/guard-sync-manifest.sh` — path manifest

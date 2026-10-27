@@ -171,15 +171,33 @@ dispatch receipt, terminal taxonomy, redaction envelope, and replay rules. The o
    and the existing atomic intent/use/outbox transaction — do not freeze a second T3 state machine.
    The roadmap labels `prepared → authorized → dispatched → acknowledged/unknown/refused` remain
    conceptual only (see [RELEASE12-IMPLEMENTATION-ROUND-2026-10-26.md](RELEASE12-IMPLEMENTATION-ROUND-2026-10-26.md)).
-   Every externally visible effect still uses a durable idempotency key and a fencing epoch.
-   Pre-dispatch refusal stays required: revocation or a cascade that blocks work before the
-   outbox send records a terminal `failed` (with an explicit refusal reason) under the same
-   idempotency key; a replay returns that same refusal so the attempt can neither stay pending
-   nor dispatch. After a send may have started, unsettled work remains `unknown`.
+   Every externally visible effect still uses a durable idempotency key and a fencing epoch. The
+   rule set below is the plan's wording of the contract freeze
+   [§4](r0-r2-contract-freeze-2026-10-26.md#4-terminal-taxonomy-mapping) and must not differ from it:
+   - Pre-dispatch refusal stays required: revocation or a cascade that blocks work before the
+     outbox send writes a terminal refusal record (`AuthorizationRefused`, the
+     `authorization_refused` disposition) for that attempt identity under the same idempotency
+     key, in the authorization transaction.
+   - A replay with the same identity returns that same refusal (stored code and opaque
+     `receipt_ref`), so the attempt can neither stay pending nor dispatch.
+   - No terminal refusal is written after the send marker (`send_started = 1`). Stored `failed` is
+     only a post-dispatch target refusal (R4 `confirmed_not_applied`).
+   - After a send may have started, unsettled work remains `unknown`; an in-doubt dispatch is
+     answered HTTP 503 `deny.verifier_unavailable` with its `receipt_ref`, never a refusal record.
+   - An unauthenticated caller on an exposed route gets HTTP 401 `deny.unauthorized_caller` in the
+     contract body.
 2. **Authorization second:** verify the bound approval/permit at the final execution boundary.
    Revocation and cascades refuse future dispatch, including attempts not yet dispatched (the
    pre-dispatch refusal above); already uncertain work becomes an explicit `unknown` disposition,
    never a silent rollback.
+
+   The send path is single: the attempt store's final-boundary send is the only way an effect is
+   sent. The send-time checks (expiry, revocation, divergence and quarantine state, clock and
+   anchor checks, consumer lease validation) live in one shared helper called by every send entry
+   point; a composer verifies and binds into that path and never sends around it. The fencing
+   epoch (store-owned monotonic mark stamped on the attempt) and the lease epoch (the consumer's
+   lease generation, a verified grant fact) are distinct and neither implies the other; see the
+   contract freeze [§5](r0-r2-contract-freeze-2026-10-26.md#5-release-2-frozen-items).
 3. **Driver third:** introduce one local, inert/dry-run effect driver. It accepts a sealed command
    envelope and returns a receipt; it cannot execute arbitrary shell text.
 4. **HITL fourth:** require explicit, scoped human approval for the concrete attempt identity.

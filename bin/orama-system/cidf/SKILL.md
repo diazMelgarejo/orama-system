@@ -223,6 +223,9 @@ Do not amputate either input by picking one PR's version wholesale.
 See integrative-editing-examples §9 and
 [`path-scoped-pr-replay-reference-card.md`](../skills/git-history-surgery/references/path-scoped-pr-replay-reference-card.md).
 
+When two sides wrote the same content, keep the stronger guarantee from each, drop duplicate mechanisms, and record the decision:
+[`integration-synthesis-and-verification.md`](../references/integration-synthesis-and-verification.md).
+
 ---
 
 ## Lint Rules (pre-execution guard)
@@ -376,6 +379,7 @@ pytest bin/orama-system/cidf/tests/test_conformance.py -v   # must be 34 passed,
   never accept a visual/UI-appears-updated confirmation as ground truth.
 - Bump all four version-alignment surfaces (SKILL.md, FRAMEWORK.md, the
   policy JSON, and the test assertion) together in the same commit.
+- Before a merge-write or push, verify reports against live origin and local code ([card](../references/integration-synthesis-and-verification.md)).
 
 ### Ask First
 

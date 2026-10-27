@@ -413,6 +413,8 @@ See: [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent
 
 ## References
 
+- [`../../references/integration-synthesis-and-verification.md`](../../references/integration-synthesis-and-verification.md)
+  — leftover reuse, synthesis of two sides, live-code verification before push; merge-commit-only for others' work
 - [`references/safe-cross-host-sync-reference-card.md`](references/safe-cross-host-sync-reference-card.md)
   — stash-first Mac↔Win `main` sync (non-destructive; distinct from history surgery)
 - [`references/stash-hooks-safeguard-reference-card.md`](references/stash-hooks-safeguard-reference-card.md)

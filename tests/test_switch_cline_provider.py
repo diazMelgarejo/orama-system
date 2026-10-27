@@ -33,11 +33,13 @@ Workspace = tuple[Path, Path, Path]
 
 
 def _read_json(path: Path) -> Any:
+    """Return the parsed JSON stored at ``path``."""
     with path.open() as file:
         return json.load(file)
 
 
 def _write_json(path: Path, data: Mapping[str, Any]) -> None:
+    """Write ``data`` to ``path`` as indented JSON."""
     with path.open("w") as f:
         json.dump(data, f, indent=2)
 
@@ -46,6 +48,7 @@ def _providers_cfg(
     openai_compatible_settings: Mapping[str, Any] | None = None,
     extra_providers: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """Build a providers.json document with an optional openai-compatible entry and extra providers."""
     providers: dict[str, Any] = dict(extra_providers or {})
     if openai_compatible_settings is not None:
         providers["openai-compatible"] = {
@@ -57,6 +60,7 @@ def _providers_cfg(
 
 
 def _settings(model: str = "model-a", api_key: str = "key-a") -> dict[str, Any]:
+    """Return a synthetic openai-compatible settings dict for ``model`` and ``api_key``."""
     return {
         "provider": "openai-compatible",
         "apiKey": api_key,
@@ -70,6 +74,7 @@ def _settings(model: str = "model-a", api_key: str = "key-a") -> dict[str, Any]:
 
 @pytest.fixture
 def workspace(tmp_path: Path) -> Workspace:
+    """Return (providers path, empty backup dir, profile-a template) under ``tmp_path``."""
     providers_path = tmp_path / "providers.json"
     backup_dir = tmp_path / "history"
     backup_dir.mkdir()
@@ -80,6 +85,7 @@ def workspace(tmp_path: Path) -> Workspace:
 
 
 def test_first_switch_backs_up_prior_state_and_activates(workspace: Workspace) -> None:
+    """The first switch snapshots the outgoing settings once and activates the new profile."""
     providers_path, backup_dir, tmpl_path = workspace
     _write_json(providers_path, _providers_cfg(_settings("model-prior", "key-prior")))
 
@@ -219,11 +225,17 @@ def test_backup_stamp_treats_invalid_calendar_fields_as_unparseable() -> None:
 def test_switch_continues_when_latest_backup_name_has_invalid_date(
     workspace: Workspace,
 ) -> None:
-    """A lexicographically-newest backup with an impossible stamp must not stop activation."""
+    """A lexicographically-newest backup with an impossible stamp must not stop activation.
+
+    Finding the latest backup parses every backup name's stamp, the bogus one included.
+    Without the ValueError guard in ``_backup_stamp`` that parse raises, so neither the
+    backup nor the activation happens and this test fails.
+    """
     providers_path, backup_dir, tmpl_path = workspace
     _write_json(providers_path, _providers_cfg(_settings("model-prior", "key-prior")))
     bogus = backup_dir / "openai-compatible-20261301T120000.000000Z.json"
-    _write_json(bogus, {"settings": _settings("model-prior", "key-prior")})
+    _write_json(bogus, {"settings": _settings("model-older", "key-older")})
+    before = set(os.listdir(backup_dir))
 
     status = switch_provider(
         str(providers_path),
@@ -233,13 +245,169 @@ def test_switch_continues_when_latest_backup_name_has_invalid_date(
         env={"A_KEY": "key-a"},
         now=datetime(2026, 1, 1, tzinfo=timezone.utc),
     )
+
     assert status == "activated"
     assert _read_json(providers_path)["providers"]["openai-compatible"]["settings"]["model"] == "model-a"
+    new_backups = sorted(set(os.listdir(backup_dir)) - before)
+    assert len(new_backups) == 1, new_backups
+    assert switch_cline_provider._backup_stamp(new_backups[0]) is not None, new_backups
+    assert _read_json(backup_dir / new_backups[0])["settings"]["model"] == "model-prior"
+    assert _read_json(bogus)["settings"]["model"] == "model-older", "bogus backup must be untouched"
+
+
+# Regex-shaped backup names whose stamps cannot parse (month 13, February 31).
+# The first sorts after every real 2026 name, the second before them.
+_BOGUS_NEWEST = "openai-compatible-20261301T120000.000000Z.json"
+_BOGUS_OLDEST = "openai-compatible-20250231T000000.000000Z.json"
+# An operator file that is not a backup name at all; sorts before "openai-".
+_OPERATOR_FILE = "manual-snapshot.json"
+
+
+def _real_backups(backup_dir: Path) -> list[str]:
+    """Return the backup names in ``backup_dir`` whose stamp parses, oldest first."""
+    return sorted(
+        name for name in os.listdir(backup_dir)
+        if switch_cline_provider._backup_stamp(name) is not None
+    )
+
+
+def _write_profile(tmpl_dir: Path, name: str, model: str, var: str) -> Path:
+    """Write a profile template for ``model`` whose apiKey is the ``${var}`` placeholder and return its path."""
+    tmpl = tmpl_dir / f"{name}.json.tmpl"
+    _write_json(tmpl, {"settings": {**_settings(model, f"${{{var}}}"), "apiKey": f"${{{var}}}"}})
+    return tmpl
+
+
+def test_bogus_newest_name_does_not_let_same_tick_switches_overwrite_backups(
+    workspace: Workspace,
+) -> None:
+    """Two switches in one clock tick keep two distinct backups despite a bogus newest-sorting name.
+
+    The unparseable name used to be returned as the latest backup, so its stamp parsed to
+    None, the strictly-newer bump was skipped and the second switch overwrote the first
+    switch's backup.
+    """
+    providers_path, backup_dir, tmpl_path = workspace
+    tmpl_b = _write_profile(tmpl_path.parent, "profile-b", "model-b", "B_KEY")
+    _write_json(providers_path, _providers_cfg(_settings("model-prior", "key-prior")))
+    bogus = backup_dir / _BOGUS_NEWEST
+    _write_json(bogus, {"settings": _settings("model-bogus", "key-bogus")})
+    frozen = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+
+    switch_provider(str(providers_path), str(tmpl_path), "profile-a", str(backup_dir),
+                    env={"A_KEY": "key-a"}, now=frozen)
+    switch_provider(str(providers_path), str(tmpl_b), "profile-b", str(backup_dir),
+                    env={"B_KEY": "key-b"}, now=frozen)
+
+    real = _real_backups(backup_dir)
+    assert len(real) == 2, real
+    assert [_read_json(backup_dir / n)["settings"]["model"] for n in real] == [
+        "model-prior", "model-a"]
+    assert _read_json(bogus)["settings"]["model"] == "model-bogus", "bogus file must be untouched"
+
+
+def test_dedupe_skips_a_duplicate_of_the_real_newest_backup_despite_a_bogus_name(
+    workspace: Workspace,
+) -> None:
+    """The outgoing state matches the real newest backup, so no new backup is written.
+
+    A bogus newest-sorting name holding different settings used to be the dedupe target,
+    so the already-recorded outgoing state was written again as a duplicate.
+    """
+    providers_path, backup_dir, tmpl_path = workspace
+    _write_json(providers_path, _providers_cfg(_settings("model-prior", "key-prior")))
+    _write_json(
+        backup_dir / "openai-compatible-20260101T000000.000000Z.json",
+        {"settings": _settings("model-prior", "key-prior")},
+    )
+    _write_json(backup_dir / _BOGUS_NEWEST, {"settings": _settings("model-bogus", "key-bogus")})
+    before = sorted(os.listdir(backup_dir))
+
+    status = switch_provider(
+        str(providers_path), str(tmpl_path), "profile-a", str(backup_dir),
+        env={"A_KEY": "key-a"}, now=datetime(2026, 1, 2, tzinfo=timezone.utc),
+    )
+
+    assert status == "activated"
+    assert sorted(os.listdir(backup_dir)) == before, "a duplicate of the real newest backup was written"
+
+
+def test_dedupe_records_outgoing_state_that_only_a_bogus_name_matches(
+    workspace: Workspace,
+) -> None:
+    """The outgoing state differs from the real newest backup, so it is backed up.
+
+    A bogus newest-sorting name holding the same settings as the live state used to be the
+    dedupe target, so the outgoing state was treated as already recorded and never saved.
+    """
+    providers_path, backup_dir, tmpl_path = workspace
+    _write_json(providers_path, _providers_cfg(_settings("model-prior", "key-prior")))
+    _write_json(
+        backup_dir / "openai-compatible-20260101T000000.000000Z.json",
+        {"settings": _settings("model-older", "key-older")},
+    )
+    _write_json(backup_dir / _BOGUS_NEWEST, {"settings": _settings("model-prior", "key-prior")})
+
+    switch_provider(
+        str(providers_path), str(tmpl_path), "profile-a", str(backup_dir),
+        env={"A_KEY": "key-a"}, now=datetime(2026, 1, 2, tzinfo=timezone.utc),
+    )
+
+    real = _real_backups(backup_dir)
+    assert [_read_json(backup_dir / n)["settings"]["model"] for n in real] == [
+        "model-older", "model-prior"]
+
+
+def test_rotation_keeps_max_real_backups_and_never_deletes_unparseable_files(
+    workspace: Workspace,
+) -> None:
+    """Rotation counts only parseable backups and leaves bogus and operator files in place.
+
+    Unparseable names used to take a slot among the newest kept files (leaving fewer real
+    backups than configured), and any that sorted oldest were deleted.
+    """
+    providers_path, backup_dir, tmpl_path = workspace
+    _write_json(providers_path, _providers_cfg(_settings("model-0", "key-0")))
+    untouchable = {
+        _BOGUS_NEWEST: {"settings": _settings("model-bogus-new", "key-x")},
+        _BOGUS_OLDEST: {"settings": _settings("model-bogus-old", "key-y")},
+        _OPERATOR_FILE: {"note": "operator-owned, not a backup"},
+    }
+    for name, data in untouchable.items():
+        _write_json(backup_dir / name, data)
+
+    for i in range(1, 13):
+        tmpl = _write_profile(tmpl_path.parent, f"profile-{i}", f"model-{i}", f"K{i}")
+        switch_provider(
+            str(providers_path), str(tmpl), f"profile-{i}", str(backup_dir),
+            env={f"K{i}": f"key-{i}"},
+            now=datetime(2026, 1, i, tzinfo=timezone.utc),
+        )
+
+    real = _real_backups(backup_dir)
+    assert [_read_json(backup_dir / n)["settings"]["model"] for n in real] == [
+        f"model-{i}" for i in range(2, 12)], "must keep exactly the ten newest real backups"
+    for name, data in untouchable.items():
+        assert (backup_dir / name).exists(), f"rotation deleted unparseable file {name}"
+        assert _read_json(backup_dir / name) == data, f"rotation changed unparseable file {name}"
+
+
+def test_latest_backup_ignores_unparseable_names(tmp_path: Path) -> None:
+    """latest_backup returns the newest parseable backup, or None when only unparseable names exist."""
+    latest_backup = switch_cline_provider.latest_backup
+    for name in (_BOGUS_NEWEST, _BOGUS_OLDEST, _OPERATOR_FILE):
+        _write_json(tmp_path / name, {"settings": {}})
+    assert latest_backup(str(tmp_path)) is None
+
+    real = "openai-compatible-20260101T000000.000000Z.json"
+    _write_json(tmp_path / real, {"settings": {}})
+    assert latest_backup(str(tmp_path)) == os.path.join(str(tmp_path), real)
 
 
 def test_backup_rotation_caps_at_ten(
     workspace: Workspace, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Twelve distinct switches keep only the ten newest backups, evicting the oldest first."""
     providers_path, backup_dir, tmpl_path = workspace
     _write_json(providers_path, _providers_cfg(_settings("model-0", "key-0")))
 
@@ -260,6 +428,7 @@ def test_backup_rotation_caps_at_ten(
 
 
 def test_unrelated_provider_entries_are_preserved_not_mutated(workspace: Workspace) -> None:
+    """Other provider entries are carried over unchanged and the caller's dict is not mutated."""
     providers_path, backup_dir, tmpl_path = workspace
     extra = {"anthropic": {"settings": {"apiKey": "anthropic-key"}}, "ollama": {"settings": {}}}
     original_cfg = _providers_cfg(_settings("model-prior", "key-prior"), extra_providers=extra)
@@ -277,6 +446,7 @@ def test_unrelated_provider_entries_are_preserved_not_mutated(workspace: Workspa
 
 
 def test_missing_env_var_raises_before_any_write(workspace: Workspace) -> None:
+    """An unset template variable aborts before any backup or live-config write."""
     providers_path, backup_dir, tmpl_path = workspace
     _write_json(providers_path, _providers_cfg(_settings("model-prior", "key-prior")))
 
@@ -288,11 +458,12 @@ def test_missing_env_var_raises_before_any_write(workspace: Workspace) -> None:
 
 
 def test_atomic_write_cleans_up_temp_file_on_serialization_failure(tmp_path: Path) -> None:
+    """A serialization failure leaves the target untouched and removes the temp file."""
     target = tmp_path / "providers.json"
     target.write_text('{"original": true}')
 
     class Unserializable:
-        pass
+        """An object json.dump cannot encode, used to force a mid-write failure."""
 
     with pytest.raises(TypeError):
         switch_cline_provider.atomic_write_json(str(target), {"bad": Unserializable()})
@@ -305,6 +476,7 @@ def test_atomic_write_cleans_up_temp_file_on_serialization_failure(tmp_path: Pat
 def test_main_wires_lock_and_switch_and_prints_activated(
     workspace: Workspace, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """main() takes the lock, switches the profile and reports the activation."""
     providers_path, backup_dir, tmpl_path = workspace
     _write_json(providers_path, _providers_cfg(_settings("model-prior", "key-prior")))
     lock_path = tmpl_path.parent / "switch.lock"
@@ -324,6 +496,7 @@ def test_main_wires_lock_and_switch_and_prints_activated(
 def test_main_prints_no_changes_when_already_on_profile(
     workspace: Workspace, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """main() reports no changes when the requested profile is already live."""
     providers_path, backup_dir, tmpl_path = workspace
     _write_json(providers_path, _providers_cfg(_settings("model-a", "key-a")))
     lock_path = tmpl_path.parent / "switch.lock"
