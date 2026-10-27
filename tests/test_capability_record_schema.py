@@ -225,10 +225,13 @@ def test_public_error_section_fixes_statuses_and_unauthorized_rule() -> None:
     section = text[start : text.index("## 4. Terminal taxonomy mapping", start)]
     assert "| `deny.unauthorized_caller` | 401 |" in section
     assert "| `deny.malformed_grant` | 400 |" in section
+    assert "| `deny.attempt_binding_conflict` | 409 |" in section
     assert "`deny.revocation_stale`, `deny.verifier_unavailable` | 503 |" in section
     assert "HTTP 401 with `deny.unauthorized_caller`" in section
     flat = " ".join(section.split())
     assert "HTTP 503 with `deny.verifier_unavailable` and the opaque `receipt_ref`" in flat
+    assert "HTTP 409 with `deny.attempt_binding_conflict`" in flat
+    assert "no `receipt_ref` and no stored refusal fields" in flat
     assert "`receipt_ref` is never a sibling of `error`" in section
 
 
@@ -266,8 +269,9 @@ def test_refusal_replay_binding_digest_and_existing_attempt_transition() -> None
     refusal = " ".join(_pre_dispatch_refusal_section(text).split())
     assert "verifiable `binding_digest`" in refusal
     assert "compares the incoming request's bound identity against the stored `binding_digest`" in refusal
-    assert "fails the binding digest check, is rejected as a conflict" in refusal
-    assert "Existing unsent attempt blocked by revocation" in refusal
+    assert "fails the binding digest check, is rejected as HTTP 409 `deny.attempt_binding_conflict`" in refusal
+    assert "without exposing the stored refusal" in refusal
+    assert "Existing unsent attempt blocked by revocation or a cascade" in refusal
     assert 'atomically transitions the existing attempt to `disposition: "authorization_refused"`' in refusal
     assert "releases any held reservation, clears pending outbox intent" in refusal
 

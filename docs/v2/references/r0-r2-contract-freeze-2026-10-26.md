@@ -87,6 +87,7 @@ Verifier denial codes (mapped from the Phylax internal reasons):
 | `deny.revoked_grant` | `grant.revoked` |
 | `deny.missing_capability_record` | capability record absent or invalid (new) |
 | `deny.unauthorized_caller` | caller not authenticated or authorized for the surface (new) |
+| `deny.attempt_binding_conflict` | `attempt.binding_conflict` (same `attempt_id`, different bound identity) |
 | `deny.verifier_unavailable` | `verifier.unavailable` |
 
 Serving codes: `serving.not_ready` (HTTP 503, stable), `serving.disabled` (HTTP 503) and
@@ -99,6 +100,7 @@ HTTP status of each `deny.*` code, one table for every surface:
 | `deny.malformed_grant` | 400 |
 | `deny.unauthorized_caller` | 401 |
 | `deny.unknown_key`, `deny.revoked_grant`, `deny.missing_capability_record` | 403 |
+| `deny.attempt_binding_conflict` | 409 |
 | `deny.revocation_stale`, `deny.verifier_unavailable` | 503 |
 
 Two rules are fixed here, in the body of the contract, and apply to every route:
@@ -112,6 +114,10 @@ Two rules are fixed here, in the body of the contract, and apply to every route:
   `deny.verifier_unavailable` and the opaque `receipt_ref` of the durable attempt record. It is a
   deny, never an allow, and never a refusal record: the attempt stays `unknown` (blocking) until
   an authenticated operator reconciliation settles it.
+- **Attempt binding conflict.** A request that reuses an `attempt_id` with a different bound
+  identity (Section 4 replay check) gets HTTP 409 with `deny.attempt_binding_conflict` in the
+  Section 3 body. The body carries only `code` and `correlation_id` — no `receipt_ref` and no
+  stored refusal fields — so the response does not expose whether a prior refusal exists.
 
 ## 4. Terminal taxonomy mapping
 
@@ -149,9 +155,9 @@ One rule set; the activation plan restates it and must not differ.
    authorization transaction, the consumer looks up the attempt by `attempt_id`.
    - *No prior row:* If no row exists and final authorization refuses the attempt, that same
      transaction writes the refusal record with its `binding_digest` and commits before returning.
-   - *Existing unsent attempt blocked by revocation:* If an attempt row already exists before
-     dispatch (`send_started = 0`) and revocation blocks authorization before `send_started`, that
-     same transaction atomically transitions the existing attempt to
+   - *Existing unsent attempt blocked by revocation or a cascade:* If an attempt row already
+     exists before dispatch (`send_started = 0`) and revocation or a cascade blocks authorization
+     before `send_started`, that same transaction atomically transitions the existing attempt to
      `disposition: "authorization_refused"`, releases any held reservation, clears pending outbox
      intent, updates the refusal metadata (`refusal_code`, opaque `receipt_ref`, `recorded_at`),
      and commits without setting `send_started`.
@@ -170,7 +176,8 @@ One rule set; the activation plan restates it and must not differ.
 
    The fresh correlation id is request tracing only; the stored code and receipt reference
    identify the same terminal refusal on every replay. A request with the same `attempt_id` but a
-   different bound identity fails the binding digest check, is rejected as a conflict, and must not
+   different bound identity fails the binding digest check, is rejected as HTTP 409
+   `deny.attempt_binding_conflict` (Section 3) without exposing the stored refusal, and must not
    replace the committed record.
 5. **No terminal refusal after the send marker.** Once the outbox send marker (`send_started = 1`)
    is set, no refusal record may be written for that attempt, and an existing refusal is never
