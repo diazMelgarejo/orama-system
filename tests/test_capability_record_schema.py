@@ -260,6 +260,18 @@ def test_envelope_epoch_replay_and_refusal_audit_rules() -> None:
     assert "It stores no grant id, key id, target or payload." in refusal
 
 
+def test_refusal_replay_binding_digest_and_existing_attempt_transition() -> None:
+    """Refusal records persist binding_digest for replay check; existing attempts transition atomically."""
+    text = DOCS[1].read_text(encoding="utf-8")
+    refusal = " ".join(_pre_dispatch_refusal_section(text).split())
+    assert "verifiable `binding_digest`" in refusal
+    assert "compares the incoming request's bound identity against the stored `binding_digest`" in refusal
+    assert "fails the binding digest check, is rejected as a conflict" in refusal
+    assert "Existing unsent attempt blocked by revocation" in refusal
+    assert 'atomically transitions the existing attempt to `disposition: "authorization_refused"`' in refusal
+    assert "releases any held reservation, clears pending outbox intent" in refusal
+
+
 @pytest.mark.parametrize("doc", DOCS, ids=lambda p: p.name)
 def test_docs_contain_no_ip_literals_or_workstation_paths(doc: Path) -> None:
     """Documents carry no IP literals or workstation paths."""

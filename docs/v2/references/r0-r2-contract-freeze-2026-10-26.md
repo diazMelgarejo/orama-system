@@ -138,23 +138,31 @@ One rule set; the activation plan restates it and must not differ.
    vocabulary remains `confirmed`, `failed`, and `unknown`; a refusal is recorded only before an
    outbox send starts, so it has no outcome and cannot be represented as `failed`.
 2. **Record shape.** The existing attempt store holds one refusal record per `attempt_id` with the
-   discriminator `disposition: "authorization_refused"` and exactly these contract fields:
-   `attempt_id`, `disposition`, `refusal_code` (one Section 3 `deny.*` code), opaque `receipt_ref`,
-   and `recorded_at`. It stores no grant id, key id, target or payload. One rule covers internal
-   detail: an attempt refusal record may store the internal kind, rule or reason for audit only,
-   and never exposes it. The public fields are exactly `disposition`, `refusal_code`,
-   `receipt_ref` and `recorded_at`; internal reasons otherwise appear only in logs, never in a
-   response.
+   discriminator `disposition: "authorization_refused"` and contract fields: `attempt_id`,
+   verifiable `binding_digest` (bound identity tuple hash for replay verification), `disposition`,
+   `refusal_code` (one Section 3 `deny.*` code), opaque `receipt_ref`, and `recorded_at`. It stores
+   no grant id, key id, target or payload. One rule covers internal detail: an attempt refusal record
+   may store the internal kind, rule or reason for audit only, and never exposes it. The public
+   fields are exactly `disposition`, `refusal_code`, `receipt_ref` and `recorded_at`; internal
+   reasons otherwise appear only in logs, never in a response.
 3. **Written in the authorization transaction.** Within the existing `BEGIN IMMEDIATE`
-   authorization transaction, the consumer first looks up the bound attempt identity. If no row
-   exists and final authorization refuses the attempt, that same transaction writes the refusal
-   record and commits before returning. It does not consume a use, write an intent or outbox item,
-   or set `send_started`. The unique `attempt_id` makes concurrent refusals converge on the
-   committed record, and the first record wins.
+   authorization transaction, the consumer looks up the attempt by `attempt_id`.
+   - *No prior row:* If no row exists and final authorization refuses the attempt, that same
+     transaction writes the refusal record with its `binding_digest` and commits before returning.
+   - *Existing unsent attempt blocked by revocation:* If an attempt row already exists before
+     dispatch (`send_started = 0`) and revocation blocks authorization before `send_started`, that
+     same transaction atomically transitions the existing attempt to
+     `disposition: "authorization_refused"`, releases any held reservation, clears pending outbox
+     intent, updates the refusal metadata (`refusal_code`, opaque `receipt_ref`, `recorded_at`),
+     and commits without setting `send_started`.
+   It does not consume a use, write an intent or outbox item, or set `send_started` in either
+   case. The unique `attempt_id` makes concurrent refusals converge on the committed record, and the
+   first record wins.
 4. **Replay returns the same refusal.** An exact replay first looks up `attempt_id`; when it finds
-   `authorization_refused`, it performs no new authorization or dispatch and returns the stored
-   refusal with the HTTP status of the stored `refusal_code` (Section 3). Its public body is
-   exactly:
+   `authorization_refused`, it compares the incoming request's bound identity against the stored
+   `binding_digest`. If the bound identity matches, it performs no new authorization or dispatch and
+   returns the stored refusal with the HTTP status of the stored `refusal_code` (Section 3). Its
+   public body is exactly:
 
    ```json
    {"error":{"code":"<stored refusal_code>","correlation_id":"<new uuid>","receipt_ref":"<stored opaque receipt_ref>"}}
@@ -162,7 +170,8 @@ One rule set; the activation plan restates it and must not differ.
 
    The fresh correlation id is request tracing only; the stored code and receipt reference
    identify the same terminal refusal on every replay. A request with the same `attempt_id` but a
-   different bound identity is a conflict and must not replace the committed record.
+   different bound identity fails the binding digest check, is rejected as a conflict, and must not
+   replace the committed record.
 5. **No terminal refusal after the send marker.** Once the outbox send marker (`send_started = 1`)
    is set, no refusal record may be written for that attempt, and an existing refusal is never
    rewritten into a send. From that point the only stored outcomes are `confirmed`, `failed`
