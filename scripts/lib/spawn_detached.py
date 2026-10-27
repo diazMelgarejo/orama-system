@@ -9,6 +9,12 @@ PYTHONUNBUFFERED=1 (so secrets are never put on a command line). Its stdout and
 stderr are appended to LOG, stdin is the null device, and the child PID is
 written to PIDFILE and printed. This launcher exits immediately and the child
 keeps running and keeps logging.
+
+Windows job objects: the launcher asks to break away from the caller's job so
+the service outlives the caller. If the job forbids breakaway, the child is
+still started but WILL DIE when the caller's job closes; that degraded case is
+reported (stderr warning plus a ``breakaway=unavailable`` line on stdout before
+the PID line, which stays the last line) and never silent.
 """
 from __future__ import annotations
 
@@ -42,8 +48,19 @@ def _parse(argv: list[str]) -> tuple[str, str, str, dict[str, str], list[str]]:
 def spawn(log: str, pidfile: str, cwd: str, extras: dict[str, str], cmd: list[str]) -> int:
     """Launch cmd detached with output appended to log, write its PID to pidfile and return the PID.
 
+    See ``spawn_with_status`` for the breakaway outcome; this wrapper returns only the PID.
+    """
+    return spawn_with_status(log, pidfile, cwd, extras, cmd)[0]
+
+
+def spawn_with_status(
+    log: str, pidfile: str, cwd: str, extras: dict[str, str], cmd: list[str]
+) -> tuple[int, bool]:
+    """Launch cmd detached; return (PID, breakaway_ok).
+
     On Windows the child gets no console and its own process group, and tries to break away from the
-    caller's job object, retrying without breakaway when that is denied.
+    caller's job object. When that is denied it still starts without breakaway, warns on stderr and
+    returns breakaway_ok=False: the child will die with the caller's job. POSIX always returns True.
     """
     env = {**os.environ, **extras, "PYTHONUNBUFFERED": "1"}
     os.makedirs(os.path.dirname(os.path.abspath(log)), exist_ok=True)
@@ -57,6 +74,7 @@ def spawn(log: str, pidfile: str, cwd: str, extras: dict[str, str], cmd: list[st
         stderr=subprocess.STDOUT,
         close_fds=True,
     )
+    breakaway_ok = True
     try:
         if os.name == "nt":
             base = (
@@ -67,10 +85,12 @@ def spawn(log: str, pidfile: str, cwd: str, extras: dict[str, str], cmd: list[st
             try:
                 proc = subprocess.Popen(cmd, creationflags=base | breakaway, **kwargs)
             except PermissionError:
+                breakaway_ok = False
                 proc = subprocess.Popen(cmd, creationflags=base, **kwargs)
             except OSError as exc:
                 if getattr(exc, "winerror", None) != 5:
                     raise
+                breakaway_ok = False
                 proc = subprocess.Popen(cmd, creationflags=base, **kwargs)
         else:
             proc = subprocess.Popen(cmd, start_new_session=True, **kwargs)
@@ -78,13 +98,21 @@ def spawn(log: str, pidfile: str, cwd: str, extras: dict[str, str], cmd: list[st
         logf.close()
     with open(pidfile, "w", encoding="ascii") as fh:
         fh.write(str(proc.pid))
-    return proc.pid
+    if not breakaway_ok:
+        print(
+            "spawn_detached: WARNING CREATE_BREAKAWAY_FROM_JOB refused; child pid "
+            f"{proc.pid} is NOT detached from the caller's job and will die when that job closes",
+            file=sys.stderr,
+        )
+    return proc.pid, breakaway_ok
 
 
 def main(argv: list[str]) -> int:
-    """Parse argv, spawn the service, print its PID and return exit status 0."""
+    """Parse argv, spawn the service, print [breakaway=unavailable and] its PID last; return exit status 0."""
     log, pidfile, cwd, extras, cmd = _parse(argv)
-    pid = spawn(log, pidfile, cwd, extras, cmd)
+    pid, breakaway_ok = spawn_with_status(log, pidfile, cwd, extras, cmd)
+    if not breakaway_ok:
+        print("breakaway=unavailable")
     print(pid)
     return 0
 
