@@ -29,6 +29,7 @@ WS_FAIL_BEFORE_SSE = 2
 
 
 def local_platform() -> str:
+    """Return 'win' or 'mac' for this host, honouring ORAMA_PLATFORM."""
     explicit = __import__("os").environ.get("ORAMA_PLATFORM", "").strip().lower()
     if explicit in ("windows", "win"):
         return "win"
@@ -92,6 +93,7 @@ def ws_handshake_headers(token: str) -> dict[str, str] | None:
 
 
 def make_envelope(msg_type: str, data: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Build a peer message envelope dict for the given event."""
     return {
         "type": msg_type,
         "source": local_platform(),
@@ -104,6 +106,7 @@ class LanPeerChannel:
     """Channel manager: inbound WS peers, outbound queue for SSE, optional peer client."""
 
     def __init__(self) -> None:
+        """Initialise channel state for the local peer identity."""
         self.state: str = "idle"
         self._ws_peers: set[WebSocket] = set()
         self._out_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
@@ -112,19 +115,23 @@ class LanPeerChannel:
         self._closed = False
 
     def register_inbound_handler(self, handler: Any) -> None:
+        """Register a callback invoked for each inbound peer message."""
         self._inbound_handlers.append(handler)
 
     async def register_ws_peer(self, ws: WebSocket) -> None:
+        """Track a connected WebSocket peer for outbound delivery."""
         self._ws_peers.add(ws)
         if self.state == "idle":
             self.state = "ws_connected"
 
     async def unregister_ws_peer(self, ws: WebSocket) -> None:
+        """Forget a WebSocket peer once it disconnects."""
         self._ws_peers.discard(ws)
         if not self._ws_peers and self.state == "ws_connected":
             self.state = "idle"
 
     async def on_inbound(self, event: dict[str, Any]) -> None:
+        """Dispatch an inbound envelope to the registered handlers."""
         if event.get("type") == "probe":
             pong = make_envelope("probe-ack", {"ok": True})
             await self.send(pong)
@@ -136,11 +143,13 @@ class LanPeerChannel:
                 log.exception("lan_peer inbound handler failed")
 
     async def outbound_queue(self) -> AsyncIterator[dict[str, Any]]:
+        """Yield queued outbound events for SSE consumers."""
         while not self._closed:
             event = await self._out_queue.get()
             yield event
 
     async def send(self, event: dict[str, Any]) -> None:
+        """Send an envelope to the peer over the best available transport."""
         await self._out_queue.put(event)
         dead: list[WebSocket] = []
         for ws in list(self._ws_peers):
@@ -152,6 +161,7 @@ class LanPeerChannel:
             self._ws_peers.discard(ws)
 
     async def connect(self, peer: str | TransportIdentity, port: int = 8002) -> None:
+        """Start the background client loop that connects to the peer."""
         if self._client_task and not self._client_task.done():
             return
         identity = peer if isinstance(peer, TransportIdentity) else parse_transport_identity(peer)
@@ -160,6 +170,7 @@ class LanPeerChannel:
         self._client_task = asyncio.create_task(self._client_loop(identity, port))
 
     async def close(self) -> None:
+        """Stop the client loop and release transport resources."""
         self._closed = True
         if self._client_task and not self._client_task.done():
             self._client_task.cancel()
@@ -169,6 +180,7 @@ class LanPeerChannel:
                 pass
 
     async def _client_loop(self, identity: TransportIdentity, port: int) -> None:
+        """Run the reconnecting client loop, falling back from WebSocket to SSE."""
         ws_fails = 0
         while not self._closed:
             self.state = "ws_connecting"
@@ -255,6 +267,7 @@ class LanPeerChannel:
             raise last_exc
 
     async def _heartbeat_ws(self, ws: Any) -> None:
+        """Send periodic heartbeat frames on an open WebSocket."""
         while True:
             await asyncio.sleep(HEARTBEAT_INTERVAL_S)
             await ws.send(json.dumps(make_envelope("heartbeat")))
