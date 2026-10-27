@@ -18,7 +18,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import shutil
 import subprocess
 import sys
 import urllib.request
@@ -30,6 +29,18 @@ from enum import Enum
 HERMES_CANARY_MODEL = "stepfun/step-3.7-flash:free"
 LM_STUDIO_LOG_HINT = os.path.expanduser("~/.lmstudio/server-logs")
 from pathlib import Path
+
+_SRC_ROOT = Path(__file__).resolve().parents[4] / "src"
+if _SRC_ROOT.is_dir() and str(_SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(_SRC_ROOT))
+
+from utils.win_exec import (  # noqa: E402
+    WinExecError,
+    resolve_executable,
+    popen_tree_kwargs,
+    safe_argv,
+    terminate_tree,
+)
 
 
 class Status(str, Enum):
@@ -90,13 +101,25 @@ def _trunc(text: str, limit: int = 80) -> str:
 
 
 def _run(cmd: list[str], timeout: int = 30) -> tuple[int, str, str]:
+    """Run ``cmd`` (absolute executable first); on timeout kill its whole process tree."""
     try:
-        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
-        return p.returncode, p.stdout.strip(), p.stderr.strip()
-    except subprocess.TimeoutExpired:
-        return -1, "", "timed out"
+        argv = safe_argv(cmd[0], cmd[1:])
+    except WinExecError as exc:
+        return -2, "", f"refused: {exc}"
+    try:
+        p = subprocess.Popen(
+            argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, **popen_tree_kwargs(),
+        )
     except (FileNotFoundError, PermissionError):
         return -2, "", f"{cmd[0]!r} not found on PATH"
+    try:
+        out, err = p.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        containment = terminate_tree(p)
+        p.communicate()
+        return -1, "", f"timed out (tree containment: {containment})"
+    return p.returncode, out.strip(), err.strip()
 
 
 def _run_partner(name: str, args: list[str], timeout: int = 30) -> tuple[int, str, str]:
@@ -283,21 +306,19 @@ def _windows_partner_dirs() -> list[Path]:
 
 
 def _partner_cli_in_dir(base: Path, name: str) -> str | None:
-    for ext in (".exe", ".cmd", ".ps1", ".bat"):
+    """Absolute path of ``name`` (.exe/.cmd/.bat only) in ``base``; ``.ps1`` is never launchable."""
+    for ext in (".exe", ".cmd", ".bat"):
         candidate = base / f"{name}{ext}"
         if candidate.is_file():
-            return str(candidate)
+            return os.path.abspath(candidate)
     nested = list(base.glob(f"**/versions/*/{name}.cmd"))
     if nested:
-        return str(nested[0])
-    nested = list(base.glob(f"**/versions/*/{name}.ps1"))
-    if nested:
-        return str(nested[0])
+        return os.path.abspath(nested[0])
     return None
 
 
 def _resolve_partner_cli(name: str) -> str | None:
-    """Resolve partner CLI on PATH; on Windows also find .cmd/.ps1 shims."""
+    """Resolve a partner CLI to an absolute path (known Windows dirs, then PATH only); None if absent."""
     if sys.platform == "win32":
         for base in _windows_partner_dirs():
             if not base.is_dir():
@@ -305,10 +326,10 @@ def _resolve_partner_cli(name: str) -> str | None:
             hit = _partner_cli_in_dir(base, name)
             if hit:
                 return hit
-    found = shutil.which(name)
-    if found:
-        return found
-    return None
+    try:
+        return resolve_executable(name)
+    except WinExecError:
+        return None
 
 
 def _ensure_windows_partner_path() -> None:

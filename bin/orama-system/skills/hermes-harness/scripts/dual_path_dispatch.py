@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import shutil
 import subprocess
 import sys
 import time
@@ -20,6 +19,13 @@ if _SRC_ROOT.is_dir() and str(_SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(_SRC_ROOT))
 
 from orama_system.lan_peer_files import lan_peer_state_dir  # noqa: E402
+from utils.win_exec import (  # noqa: E402
+    WinExecError,
+    popen_tree_kwargs,
+    resolve_executable,
+    safe_argv,
+    terminate_tree,
+)
 
 
 @dataclass(frozen=True)
@@ -45,9 +51,18 @@ def openclaw_agent_for_role(role: str) -> str:
     return os.environ.get("OPENCLAW_MAC_ORCHESTRATOR_AGENT", "orchestrator")
 
 
+def _resolve_or_none(name: str) -> str | None:
+    """Absolute path of ``name`` via the shared resolver (never cwd, never a bare name), else None."""
+    try:
+        return resolve_executable(name)
+    except WinExecError:
+        return None
+
+
 def build_candidates(prompt: str, role: str) -> list[Candidate]:
+    """Build dispatch candidates from CLIs resolved to absolute paths; unresolvable CLIs are skipped."""
     candidates: list[Candidate] = []
-    cursor = shutil.which(os.environ.get("CURSOR_AGENT_BIN", "cursor-agent"))
+    cursor = _resolve_or_none(os.environ.get("CURSOR_AGENT_BIN", "cursor-agent"))
     if cursor:
         candidates.append(
             Candidate(
@@ -65,7 +80,7 @@ def build_candidates(prompt: str, role: str) -> list[Candidate]:
 
     # openclaw uses: openclaw agent --agent <agent-id> -m <prompt>
     # (not 'openclaw run' which does not exist in OpenClaw 2026.6.x)
-    openclaw = shutil.which(os.environ.get("OPENCLAW_BIN", "openclaw"))
+    openclaw = _resolve_or_none(os.environ.get("OPENCLAW_BIN", "openclaw"))
     if openclaw:
         candidates.append(
             Candidate(
@@ -83,18 +98,13 @@ def build_candidates(prompt: str, role: str) -> list[Candidate]:
     return candidates
 
 
-def _terminate(process: subprocess.Popen[str]) -> None:
-    if process.poll() is not None:
-        return
-    process.terminate()
-    try:
-        process.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        process.kill()
-        process.wait(timeout=5)
+def _terminate(process: subprocess.Popen[str]) -> str:
+    """Kill the candidate's whole process tree and return its containment status."""
+    return terminate_tree(process, grace=5.0)
 
 
 def run_candidates(candidates: list[Candidate], log_dir: Path, timeout: int) -> dict[str, Any]:
+    """Run candidates in parallel, keep the first success and tree-kill the rest, reporting containment."""
     if not candidates:
         return {"status": "error", "reason": "no dispatch candidates available", "winner": None, "attempts": []}
 
@@ -102,6 +112,7 @@ def run_candidates(candidates: list[Candidate], log_dir: Path, timeout: int) -> 
     deadline = time.monotonic() + timeout
     running: dict[str, tuple[Candidate, subprocess.Popen[str], Any, Path]] = {}
     attempts: list[dict[str, Any]] = []
+    containment: dict[str, str] = {}
 
     for candidate in candidates:
         log_path = log_dir / f"{candidate.name}.log"
@@ -112,12 +123,20 @@ def run_candidates(candidates: list[Candidate], log_dir: Path, timeout: int) -> 
         # an inherited-but-unfed stdin can leave a CLI (e.g. Codex) blocked
         # on "Reading additional input..." forever instead of using the
         # prompt already in candidate.command. See dispatch_codex_partner.py.
+        try:
+            argv = safe_argv(candidate.command[0], candidate.command[1:])
+        except WinExecError as exc:
+            handle.write(f"refused: {exc}" + chr(10))
+            handle.close()
+            attempts.append({"name": candidate.name, "returncode": "refused", "log": str(log_path), "error": str(exc)})
+            continue
         proc = subprocess.Popen(
-            candidate.command,
+            argv,
             stdout=handle,
             stderr=subprocess.STDOUT,
             stdin=subprocess.DEVNULL,
             text=True,
+            **popen_tree_kwargs(),
         )
         running[candidate.name] = (candidate, proc, handle, log_path)
 
@@ -139,8 +158,8 @@ def run_candidates(candidates: list[Candidate], log_dir: Path, timeout: int) -> 
                 del running[name]
                 if rc == 0:
                     winner = attempts[-1]
-                    for _, other_proc, other_handle, _ in running.values():
-                        _terminate(other_proc)
+                    for other_name, (_, other_proc, other_handle, _) in running.items():
+                        containment[other_name] = _terminate(other_proc)
                         other_handle.close()
                     running.clear()
                     break
@@ -148,12 +167,12 @@ def run_candidates(candidates: list[Candidate], log_dir: Path, timeout: int) -> 
                 break
             time.sleep(0.2)
     finally:
-        for _, proc, handle, _ in running.values():
-            _terminate(proc)
+        for name, (_, proc, handle, _) in running.items():
+            containment[name] = _terminate(proc)
             handle.close()
 
     if winner:
-        return {"status": "ok", "winner": winner, "attempts": attempts}
+        return {"status": "ok", "winner": winner, "attempts": attempts, "containment": containment}
 
     if running:
         attempts.extend(
@@ -161,6 +180,7 @@ def run_candidates(candidates: list[Candidate], log_dir: Path, timeout: int) -> 
                 "name": candidate.name,
                 "returncode": "timeout",
                 "log": str(log_path),
+                "containment": containment.get(candidate.name, "unknown"),
             }
             for candidate, _proc, _handle, log_path in running.values()
         )
