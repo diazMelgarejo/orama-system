@@ -186,12 +186,21 @@ class LanPeerChannel:
                     try:
                         await self._sse_client_session(identity, port)
                         ws_fails = 0
+                    except ModelEndpointPolicyError:
+                        self.state = "disconnected"
+                        log.warning("lan_peer rejected peer endpoint by policy")
+                        return
                     except Exception:
                         log.warning("lan_peer sse fallback failed")
             self.state = "disconnected"
             await asyncio.sleep(RETRY_WAIT_S)
 
     async def _ws_client_session(self, identity: TransportIdentity, port: int) -> None:
+        """Connect to the peer WebSocket, sending the bearer only in the Authorization header over wss://.
+
+        A token with a non-wss URL raises ModelEndpointPolicyError before any connection; the
+        client loop treats that as terminal (no retry, no unauthenticated fallback).
+        """
         from utils.control_plane_auth import outbound_control_plane_tokens
 
         tokens = outbound_control_plane_tokens()
@@ -251,6 +260,12 @@ class LanPeerChannel:
             await ws.send(json.dumps(make_envelope("heartbeat")))
 
     async def _sse_client_session(self, identity: TransportIdentity, port: int) -> None:
+        """Stream peer events over SSE, sending auth headers only over https://.
+
+        If auth headers would be sent to a non-https URL this raises ModelEndpointPolicyError
+        before any request; the client loop treats that as terminal (no retry, no
+        unauthenticated fallback).
+        """
         from utils.control_plane_auth import auth_headers
 
         url = build_peer_transport_url(
@@ -259,8 +274,13 @@ class LanPeerChannel:
             "/events/peer-stream",
             websocket=False,
         )
+        headers = auth_headers()
+        if headers and not url.startswith("https://"):
+            raise ModelEndpointPolicyError(
+                "refusing to send control-plane credentials over unencrypted http://; https:// is required"
+            )
         self.state = "sse_connected"
-        async with httpx.AsyncClient(timeout=None, headers=auth_headers()) as client:
+        async with httpx.AsyncClient(timeout=None, headers=headers) as client:
             async with client.stream("GET", url) as resp:
                 resp.raise_for_status()
                 async for line in resp.aiter_lines():

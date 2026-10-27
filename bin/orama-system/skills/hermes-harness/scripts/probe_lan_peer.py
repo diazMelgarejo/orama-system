@@ -404,10 +404,8 @@ def check_ws_peer(peer_ip: str, portal_port: int, tokens: list[str], *, timeout:
                     ) from imp_exc
 
                 headers = {"Authorization": f"Bearer {tok}"} if tok else None
-                # SECURITY: header only; a ?token= query would be recorded by access logs.
-                # SECURITY: Bearer tokens are never sent over unencrypted ws://.
-                # RFC 6750 §5.3 mandates TLS for all bearer token transmissions.
-                # When a token is present, require wss:// (fail-closed).
+                # SECURITY: the bearer goes only in the Authorization header (never the URL,
+                # which access logs record) and only over wss:// (RFC 6750 s5.3, fail-closed).
                 scheme = "wss" if tok else "ws"
                 url = f"{scheme}://{peer_ip}:{portal_port}/ws/portal-peer"
                 # Per-stack trust (PEER_CA_FILE / pins) for wss://; with none

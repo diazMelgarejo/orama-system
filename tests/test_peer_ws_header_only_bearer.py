@@ -137,7 +137,7 @@ def test_refusal_never_logs_token_value(client, caplog) -> None:
             f"/ws/portal-peer?token={secret}", headers=_hdr(GOOD)
         ):
             pass
-    assert "token query parameter" in caplog.text
+    assert "credential query parameters" in caplog.text
     assert secret not in caplog.text and GOOD not in caplog.text
 
 
@@ -198,3 +198,29 @@ async def test_client_sends_header_over_wss(monkeypatch) -> None:
     monkeypatch.setitem(sys.modules, "websockets", mod)
     await LanPeerChannel()._ws_client_session(TransportIdentity(scheme="https", hostname=PEER, port=9443), 9443)
     assert calls[0]["additional_headers"] == {"Authorization": "Bearer secret-tok"}
+
+
+@pytest.mark.parametrize("qs", ["TOKEN=x", "access_token=x", "api_key=x"])
+def test_server_refuses_credential_query_keys_even_with_valid_header(client, qs) -> None:
+    """Credential-looking query keys are refused case-insensitively, even with a valid header."""
+    with pytest.raises(WebSocketDisconnect) as ei, client.websocket_connect(
+        f"/ws/portal-peer?{qs}", headers=_hdr(GOOD)
+    ):
+        pass
+    assert ei.value.code == 1008
+
+
+@pytest.mark.asyncio
+async def test_sse_refuses_auth_headers_over_http(monkeypatch) -> None:
+    """An http SSE peer with auth headers makes no HTTP request."""
+    import orama_system.lan_peer_channel as lpc
+    import utils.control_plane_auth as cpa
+
+    monkeypatch.setattr(cpa, "auth_headers", lambda: {"Authorization": "Bearer secret-tok"})
+    monkeypatch.setattr(lpc, "build_peer_transport_url", lambda *a, **k: f"http://{PEER}:8002/events/peer-stream")
+    made: list[tuple] = []
+    monkeypatch.setattr(lpc.httpx, "AsyncClient", lambda *a, **k: made.append((a, k)))
+    with pytest.raises(ModelEndpointPolicyError) as ei:
+        await LanPeerChannel()._sse_client_session(TransportIdentity(scheme="http", hostname=PEER, port=8002), 8002)
+    assert made == []
+    assert "secret-tok" not in str(ei.value) and PEER not in str(ei.value)

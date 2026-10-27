@@ -3,8 +3,12 @@
 
 ## [Unreleased] — Sites MCP prompt workspace
 
-- Security: `/ws/portal-peer` and its clients now carry the control-plane bearer only in the
-  `Authorization` header; a `?token=` query is refused (1008) so access logs never record it.
+- Security: our clients never put the bearer in a URL; `/ws/portal-peer` refuses
+  credential-looking query parameters (1008) and authenticates from the `Authorization` header
+  only. A reverse proxy or uvicorn access log may still record the raw request line of a refused
+  request. Peer clients (WS and SSE) refuse to send a token over ws:// or http://: a peer
+  reachable only that way with a token configured is refused terminally (no retry, no
+  unauthenticated fallback).
 - Added an independent v1 HTTP MCP adapter, private prompt UI, reviewed PT snapshot parity gate,
   real SQLite lifecycle tests and hosting assembly instructions.
 - Added tool SPECS and an evidence-based audit separating deterministic prompt structure from

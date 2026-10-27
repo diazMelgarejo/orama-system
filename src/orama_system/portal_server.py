@@ -1552,16 +1552,19 @@ def _hardware_policy_status(services: Dict[str, Any]) -> Dict[str, Any]:
 # ── Routes ─────────────────────────────────────────────────────────────────────
 
 
+_WS_FORBIDDEN_QUERY_KEYS = frozenset({"token", "access_token", "bearer", "authorization", "api_key", "apikey"})
+
+
 async def _verify_ws_control_plane(ws: WebSocket) -> None:
     """Authenticate a peer WebSocket handshake from the Authorization header only.
 
     Runs BEFORE ``ws.accept()`` so a refusal closes the handshake with 1008.
-    Any ``token`` query parameter is refused outright (even alongside a valid
+    Any credential-looking query parameter (token, access_token, bearer, authorization, api_key, apikey; case-insensitive) is refused outright (even alongside a valid
     header) because URLs are recorded by access logs; the query value is never
     compared or logged.
     """
-    if "token" in ws.query_params:
-        log.warning("peer ws refused: token query parameter is not accepted; use the Authorization header")
+    if any(k.lower() in _WS_FORBIDDEN_QUERY_KEYS for k in ws.query_params.keys()):
+        log.warning("peer ws refused: credential query parameters are not accepted; use the Authorization header")
         await ws.close(code=1008)
         raise WebSocketDisconnect(code=1008)
     if not auth_enforced():
