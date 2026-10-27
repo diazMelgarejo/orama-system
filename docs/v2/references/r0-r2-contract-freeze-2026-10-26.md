@@ -54,8 +54,9 @@ Rules:
   `unsigned_enablement`. A missing or non-boolean bit is `bit_invalid`; any other malformed
   record is `record_invalid`. The `startup.*` codes in Section 2 are consumer-only.
   `capability.ok` is Phylax-internal and is never a public or startup code.
-- The consumer parser rejects a record that has a duplicate key at any level and a record larger
-  than 8 KiB (8192 bytes), both as `record_invalid`.
+- The consumer parser and Phylax reject a record that has a duplicate key at any level or is larger
+  than 8 KiB (8192 bytes, measured as encoded bytes) as `record_unreadable`; a JSON value that
+  parses but is not an object is `record_invalid`.
 - `signature: null` is allowed only while every bit is false. The schema enforces this shape: any
   `true` bit requires `signature` to be a string. Any `true` bit also needs a verified
   operator signature. In Releases 0 to 2 no signing path exists, so any `true` bit is refused at
@@ -148,7 +149,7 @@ level. No response carries a `detail` key. The framework and transport failures 
 | authentication middleware rejects the caller | 401 | `deny.unauthorized_caller` |
 | the authentication token is not configured | 503 | `serving.not_ready` |
 | unknown route or method (404, 405) | 404 | `serving.route_not_exposed` |
-| request validation failure | 400 | `deny.malformed_grant` |
+| request validation failure, including an oversized or unparsable body (never 413 or 422) | 400 | `deny.malformed_grant` |
 | any other unhandled failure | 503 | `deny.verifier_unavailable` |
 
 Route-level mappings. `/run`: a missing authenticated context is 401
@@ -157,6 +158,11 @@ Route-level mappings. `/run`: a missing authenticated context is 401
 is 409 `deny.grant_conflict` (a definitive ledger answer, do not retry, with the reason hidden); a
 principal mismatch is 401 `deny.unauthorized_caller`; a clock regression is 503
 `deny.verifier_unavailable`. Per-route handlers remain only to attach the audit `receipt_ref`.
+
+Every emitted pair of HTTP status and public code matches the status table exactly. The one
+exemption is the public JSON-RPC endpoints `/api/mcp` and `/api/a2a`: a malformed JSON-RPC request
+is answered with the protocol's own 400 error object, which carries no `detail` key and no internal
+reason.
 
 ## 4. Terminal taxonomy mapping
 
