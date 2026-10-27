@@ -199,6 +199,25 @@ def test_ack_peer_returns_false_when_remember_peer_rejects(trust: ModuleType, mo
     assert OLD not in trust.load_known_peer_ips()
 
 
+def test_filter_endpoints_skips_remember_peer_for_loopback(trust: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Loopback trust must not call remember_peer (strict mode would raise)."""
+    monkeypatch.setenv("ORAMA_STRICT_CONFIG_PEERS", "1")
+    calls: list[str] = []
+    original = trust.remember_peer
+
+    def tracked(ip: str) -> None:
+        """Record remember_peer attempts while preserving production behavior."""
+        calls.append(ip)
+        original(ip)
+
+    monkeypatch.setattr(trust, "remember_peer", tracked)
+    endpoints = {"mac": {"ip": "127.0.0.1"}, "win": None, "win_peers": []}
+    out, blocked = trust.filter_endpoints_for_trust(endpoints)
+    assert out["mac"] == {"ip": "127.0.0.1"}
+    assert blocked == []
+    assert calls == []
+
+
 def test_delivery_tries_next_canonical_credential_only_on_auth_refusal(trust: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
     """A rejected peer credential can fall back without following redirects."""
     monkeypatch.setattr(trust, "_control_plane_tokens", lambda: ["synthetic-first", "synthetic-second"])

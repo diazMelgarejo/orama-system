@@ -487,7 +487,11 @@ def check_and_announce_self_migration(
         return None
 
     pending = ident.get("pending_migration") or {}
-    if current_ip == last_ip and not pending:
+    if current_ip == last_ip:
+        # Lease returned to the committed address: drop any stale pending entry.
+        if pending:
+            ident.pop("pending_migration", None)
+            save_self_identity(ident)
         return None
 
     # IP CHANGED! Node knows thyself:
@@ -509,12 +513,8 @@ def check_and_announce_self_migration(
     if pending and pending.get("new_ip") == current_ip:
         delivery_targets = list(pending["recipients"])
     else:
-        # DHCP can move again (or back) while recipients are still pending.
-        # Supersede the stale entry so peers learn the newest address from last_ip.
-        if current_ip == last_ip:
-            ident.pop("pending_migration", None)
-            save_self_identity(ident)
-            return None
+        # DHCP can move again while recipients are still pending.
+        # Supersede so peers learn last_known_ip -> newest address.
         targets = sorted(load_known_peer_ips()) if peer_ips is None else peer_ips
         stale = list(pending.get("recipients") or []) if pending else []
         delivery_targets = sorted({
@@ -649,15 +649,24 @@ def peer_trusted(ip: str, role: str = "") -> bool:
             return True
         return False
     if os.environ.get("ORAMA_APPROVE_DISCOVERY", "").strip().lower() in ("1", "true", "yes"):
-        remember_peer(ip)
+        try:
+            remember_peer(ip)
+        except ValueError:
+            return False
         return True
     if os.environ.get("ORAMA_DISCOVERY_RELAXED", "").strip().lower() in ("1", "true", "yes"):
-        remember_peer(ip)
+        try:
+            remember_peer(ip)
+        except ValueError:
+            return False
         return True
     # Shibboleth: dynamically verify whether peer holds the valid control plane token / CA
     if verify_peer_shibboleth(ip):
         log.info("Peer %s dynamically authenticated via control plane shibboleth", ip)
-        remember_peer(ip)
+        try:
+            remember_peer(ip)
+        except ValueError:
+            return False
         return True
     # Interactive fallback prompt if TTY is present
     if prompt_confirm_peer(ip, role or "unknown"):
