@@ -136,6 +136,13 @@ class LanPeerChannel:
             pong = make_envelope("probe-ack", {"ok": True})
             await self.send(pong)
             return
+        if event.get("type") == "mesh_ip_migration_announcement":
+            try:
+                from mesh.discovery_trust import apply_migration_announcement
+                apply_migration_announcement(event)
+            except Exception:
+                log.exception("Failed to apply mesh IP migration announcement")
+            return
         for handler in self._inbound_handlers:
             try:
                 await handler(event)

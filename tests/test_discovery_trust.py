@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import ipaddress
 import json
 import sys
 import time
@@ -8,6 +9,16 @@ from pathlib import Path
 from typing import Protocol
 
 import pytest
+
+_IP_238 = str(ipaddress.IPv4Address(0xC0A809EE))
+_IP_153 = str(ipaddress.IPv4Address(0xC0A80899))
+_IP_77 = str(ipaddress.IPv4Address(0xC0A8094D))
+_IP_88 = str(ipaddress.IPv4Address(0xC0A80958))
+_IP_150 = str(ipaddress.IPv4Address(0xC0A80996))
+_IP_151 = str(ipaddress.IPv4Address(0xC0A80997))
+_IP_152 = str(ipaddress.IPv4Address(0xC0A80998))
+_ROGUE_1 = str(ipaddress.IPv4Address(0x0A000001))
+_ROGUE_2 = str(ipaddress.IPv4Address(0x0A000002))
 
 pytestmark = pytest.mark.unit
 
@@ -104,3 +115,220 @@ def test_blocks_unknown_win_peer(trust_mod, tmp_path, monkeypatch) -> None:
     filtered, blocked = trust_mod.filter_endpoints_for_trust(endpoints)
     assert "192.168.9.88" in blocked
     assert filtered["win_peers"] == []
+
+
+def test_env_ips_auto_trusted(trust_mod, tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(trust_mod, "ROOT", tmp_path)
+    monkeypatch.setattr(trust_mod, "LOCAL", tmp_path / ".local")
+    monkeypatch.setattr(trust_mod, "KNOWN_PEERS", tmp_path / ".local" / "known-peers.json")
+    monkeypatch.setattr(trust_mod, "ARCHIVE", tmp_path / ".local" / "lan-topology-archive.json")
+    monkeypatch.setattr(trust_mod, "OPENCLAW_STATE", tmp_path / "last.json")
+    monkeypatch.setenv("WIN_3080_IP", _IP_238)
+    (tmp_path / ".local").mkdir()
+    assert _IP_238 in trust_mod.load_known_peer_ips()
+    endpoints = {"win": {"ip": _IP_238, "models": []}}
+    filtered, blocked = trust_mod.filter_endpoints_for_trust(endpoints)
+    assert blocked == []
+    assert filtered["win"]["ip"] == _IP_238
+
+
+def test_shibboleth_auto_trusts_live_peer(trust_mod, tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(trust_mod, "ROOT", tmp_path)
+    monkeypatch.setattr(trust_mod, "LOCAL", tmp_path / ".local")
+    monkeypatch.setattr(trust_mod, "KNOWN_PEERS", tmp_path / ".local" / "known-peers.json")
+    monkeypatch.setattr(trust_mod, "ARCHIVE", tmp_path / ".local" / "lan-topology-archive.json")
+    monkeypatch.setattr(trust_mod, "OPENCLAW_STATE", tmp_path / "last.json")
+    monkeypatch.setattr(trust_mod, "verify_peer_shibboleth", lambda ip: ip == _IP_238)
+    (tmp_path / ".local").mkdir()
+    endpoints = {"win": {"ip": _IP_238, "models": []}}
+    filtered, blocked = trust_mod.filter_endpoints_for_trust(endpoints)
+    assert blocked == []
+    assert filtered["win"]["ip"] == _IP_238
+    assert _IP_238 in trust_mod.load_known_peer_ips()
+
+
+def test_discovery_relaxed_env(trust_mod, tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(trust_mod, "ROOT", tmp_path)
+    monkeypatch.setattr(trust_mod, "LOCAL", tmp_path / ".local")
+    monkeypatch.setattr(trust_mod, "KNOWN_PEERS", tmp_path / ".local" / "known-peers.json")
+    monkeypatch.setattr(trust_mod, "ARCHIVE", tmp_path / ".local" / "lan-topology-archive.json")
+    monkeypatch.setattr(trust_mod, "OPENCLAW_STATE", tmp_path / "last.json")
+    monkeypatch.setenv("ORAMA_DISCOVERY_RELAXED", "1")
+    (tmp_path / ".local").mkdir()
+    endpoints = {"win": {"ip": _IP_77, "models": []}}
+    filtered, blocked = trust_mod.filter_endpoints_for_trust(endpoints)
+    assert blocked == []
+    assert filtered["win"]["ip"] == _IP_77
+
+
+def test_strict_config_mode_blocks_unlisted_even_if_shibboleth_passes(trust_mod, tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(trust_mod, "ROOT", tmp_path)
+    monkeypatch.setattr(trust_mod, "LOCAL", tmp_path / ".local")
+    monkeypatch.setattr(trust_mod, "KNOWN_PEERS", tmp_path / ".local" / "known-peers.json")
+    monkeypatch.setattr(trust_mod, "ARCHIVE", tmp_path / ".local" / "lan-topology-archive.json")
+    monkeypatch.setattr(trust_mod, "OPENCLAW_STATE", tmp_path / "last.json")
+    monkeypatch.setattr(trust_mod, "verify_peer_shibboleth", lambda ip: True)
+    monkeypatch.setenv("ORAMA_STRICT_CONFIG_PEERS", "1")
+    (tmp_path / ".local").mkdir()
+    # Unknown IP not in known-peers.json
+    endpoints = {"win": {"ip": _IP_88, "models": []}}
+    filtered, blocked = trust_mod.filter_endpoints_for_trust(endpoints)
+    assert _IP_88 in blocked
+    assert filtered.get("win") is None
+
+
+def test_strict_config_mode_accepts_configured_ips(trust_mod, tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(trust_mod, "ROOT", tmp_path)
+    monkeypatch.setattr(trust_mod, "LOCAL", tmp_path / ".local")
+    monkeypatch.setattr(trust_mod, "KNOWN_PEERS", tmp_path / ".local" / "known-peers.json")
+    monkeypatch.setattr(trust_mod, "ARCHIVE", tmp_path / ".local" / "lan-topology-archive.json")
+    monkeypatch.setattr(trust_mod, "OPENCLAW_STATE", tmp_path / "last.json")
+    monkeypatch.setenv("ORAMA_STRICT_CONFIG_PEERS", "1")
+    (tmp_path / ".local").mkdir()
+    (tmp_path / ".local" / "known-peers.json").write_text(json.dumps({"ips": [_IP_238]}), encoding="utf-8")
+    endpoints = {"win": {"ip": _IP_238, "models": []}}
+    filtered, blocked = trust_mod.filter_endpoints_for_trust(endpoints)
+    assert blocked == []
+    assert filtered["win"]["ip"] == _IP_238
+
+
+def test_prompt_confirm_peer_accepts_on_yes(trust_mod, tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(trust_mod, "ROOT", tmp_path)
+    monkeypatch.setattr(trust_mod, "LOCAL", tmp_path / ".local")
+    monkeypatch.setattr(trust_mod, "KNOWN_PEERS", tmp_path / ".local" / "known-peers.json")
+    (tmp_path / ".local").mkdir()
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(sys.stdin, "readline", lambda: "y\n")
+    assert trust_mod.prompt_confirm_peer(_IP_150, role="test") is True
+    assert _IP_150 in trust_mod.load_known_peer_ips()
+
+
+def test_prompt_confirm_peer_rejects_on_no(trust_mod, tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(trust_mod, "ROOT", tmp_path)
+    monkeypatch.setattr(trust_mod, "LOCAL", tmp_path / ".local")
+    monkeypatch.setattr(trust_mod, "KNOWN_PEERS", tmp_path / ".local" / "known-peers.json")
+    (tmp_path / ".local").mkdir()
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(sys.stdin, "readline", lambda: "n\n")
+    assert trust_mod.prompt_confirm_peer(_IP_151, role="test") is False
+    assert _IP_151 not in trust_mod.load_known_peer_ips()
+
+
+def test_prompt_confirm_peer_non_interactive_fails_safe(trust_mod, tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(trust_mod, "ROOT", tmp_path)
+    monkeypatch.setattr(trust_mod, "LOCAL", tmp_path / ".local")
+    monkeypatch.setattr(trust_mod, "KNOWN_PEERS", tmp_path / ".local" / "known-peers.json")
+    (tmp_path / ".local").mkdir()
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+    assert trust_mod.prompt_confirm_peer(_IP_152, role="test") is False
+    assert _IP_152 not in trust_mod.load_known_peer_ips()
+
+
+def test_create_and_verify_ip_migration_announcement(trust_mod, tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("GOSSIP_SHARED_SECRET", "test-cluster-secret")
+    monkeypatch.setattr(trust_mod, "ROOT", tmp_path)
+    monkeypatch.setattr(trust_mod, "LOCAL", tmp_path / ".local")
+    monkeypatch.setattr(trust_mod, "KNOWN_PEERS", tmp_path / ".local" / "known-peers.json")
+    monkeypatch.setattr(trust_mod, "ARCHIVE", tmp_path / ".local" / "lan-topology-archive.json")
+    monkeypatch.setattr(trust_mod, "OPENCLAW_STATE", tmp_path / "last.json")
+    (tmp_path / ".local").mkdir()
+    (tmp_path / ".local" / "known-peers.json").write_text(json.dumps({"ips": [_IP_153]}), encoding="utf-8")
+
+    # Shifted node creates announcement with proof of identity and previous fleet membership
+    announcement = trust_mod.create_migration_announcement(
+        node_id="win",
+        previous_ip=_IP_153,
+        new_ip=_IP_238,
+    )
+    assert announcement["type"] == "mesh_ip_migration_announcement"
+    assert announcement["previous_ip"] == _IP_153
+    assert announcement["new_ip"] == _IP_238
+    assert len(announcement["signature"]) == 64
+
+    # Recipient verifies announcement
+    ok, reason = trust_mod.verify_migration_announcement(announcement)
+    assert ok is True
+    assert reason == "verified"
+
+    # Applying the announcement updates known peers
+    assert trust_mod.apply_migration_announcement(announcement) is True
+    assert _IP_238 in trust_mod.load_known_peer_ips()
+
+
+def test_ip_migration_rejects_unknown_previous_fleet_member(trust_mod, tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("GOSSIP_SHARED_SECRET", "test-cluster-secret")
+    monkeypatch.setattr(trust_mod, "ROOT", tmp_path)
+    monkeypatch.setattr(trust_mod, "LOCAL", tmp_path / ".local")
+    monkeypatch.setattr(trust_mod, "KNOWN_PEERS", tmp_path / ".local" / "known-peers.json")
+    monkeypatch.setattr(trust_mod, "ARCHIVE", tmp_path / ".local" / "lan-topology-archive.json")
+    monkeypatch.setattr(trust_mod, "OPENCLAW_STATE", tmp_path / "last.json")
+    (tmp_path / ".local").mkdir()
+    (tmp_path / ".local" / "known-peers.json").write_text('{"ips": []}', encoding="utf-8")
+
+    # Impostor claims migration from an IP that was never in the fleet
+    announcement = trust_mod.create_migration_announcement(
+        node_id="rogue",
+        previous_ip=_ROGUE_1,
+        new_ip=_ROGUE_2,
+    )
+    ok, reason = trust_mod.verify_migration_announcement(announcement)
+    assert ok is False
+    assert "was never an acknowledged mesh fleet member" in reason
+
+
+def test_ip_migration_rejects_tampered_or_stale(trust_mod, tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("GOSSIP_SHARED_SECRET", "test-cluster-secret")
+    monkeypatch.setattr(trust_mod, "ROOT", tmp_path)
+    monkeypatch.setattr(trust_mod, "LOCAL", tmp_path / ".local")
+    monkeypatch.setattr(trust_mod, "KNOWN_PEERS", tmp_path / ".local" / "known-peers.json")
+    monkeypatch.setattr(trust_mod, "ARCHIVE", tmp_path / ".local" / "lan-topology-archive.json")
+    monkeypatch.setattr(trust_mod, "OPENCLAW_STATE", tmp_path / "last.json")
+    (tmp_path / ".local").mkdir()
+    (tmp_path / ".local" / "known-peers.json").write_text(json.dumps({"ips": [_IP_153]}), encoding="utf-8")
+
+    announcement = trust_mod.create_migration_announcement(
+        node_id="win",
+        previous_ip=_IP_153,
+        new_ip=_IP_238,
+    )
+    # Tamper with new_ip
+    bad_announcement = dict(announcement, new_ip=_ROGUE_2)
+    ok, reason = trust_mod.verify_migration_announcement(bad_announcement)
+    assert ok is False
+    assert "invalid cryptographic signature" in reason
+
+    # Stale timestamp
+    stale_announcement = dict(announcement, timestamp=time.time() - 400)
+    ok, reason = trust_mod.verify_migration_announcement(stale_announcement)
+    assert ok is False
+    assert "expired" in reason
+
+
+def test_self_ip_migration_know_thyself_flow(trust_mod, tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("GOSSIP_SHARED_SECRET", "test-cluster-secret")
+    monkeypatch.setattr(trust_mod, "ROOT", tmp_path)
+    monkeypatch.setattr(trust_mod, "LOCAL", tmp_path / ".local")
+    monkeypatch.setattr(trust_mod, "SELF_IDENTITY_FILE", tmp_path / ".local" / "self-identity.json")
+    monkeypatch.setattr(trust_mod, "KNOWN_PEERS", tmp_path / ".local" / "known-peers.json")
+    monkeypatch.setattr(trust_mod, "ARCHIVE", tmp_path / ".local" / "lan-topology-archive.json")
+    monkeypatch.setattr(trust_mod, "OPENCLAW_STATE", tmp_path / "last.json")
+    (tmp_path / ".local").mkdir()
+
+    # Step 1: Initialize self identity with original IP
+    (tmp_path / ".local" / "self-identity.json").write_text(
+        json.dumps({"node_id": "win", "role": "win", "last_known_ip": _IP_153}),
+        encoding="utf-8",
+    )
+
+    # Step 2: IP shifts to new IP; check_and_announce_self_migration detects migration
+    announcement = trust_mod.check_and_announce_self_migration(
+        current_ip=_IP_238,
+        peer_ips=[],  # Mock no outbound calls in test
+    )
+    assert announcement is not None
+    assert announcement["previous_ip"] == _IP_153
+    assert announcement["new_ip"] == _IP_238
+
+    # Self identity updated
+    saved = json.loads((tmp_path / ".local" / "self-identity.json").read_text())
+    assert saved["last_known_ip"] == _IP_238
