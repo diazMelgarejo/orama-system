@@ -4,8 +4,9 @@
 ## [Unreleased] — Sites MCP prompt workspace
 
 - Security: our clients never put the bearer in a URL; `/ws/portal-peer` refuses
-  credential-looking query parameters (1008) and authenticates from the `Authorization` header
-  only. A reverse proxy or uvicorn access log may still record the raw request line of a refused
+  credential-looking query parameters with an HTTP 403 handshake denial before the WebSocket
+  upgrade and authenticates from the `Authorization` header only. A reverse proxy or uvicorn
+  access log may still record the raw request line of a refused
   request. Peer clients (WS and SSE) refuse to send a token over ws:// or http://: a peer
   reachable only that way with a token configured is refused terminally (no retry, no
   unauthenticated fallback).

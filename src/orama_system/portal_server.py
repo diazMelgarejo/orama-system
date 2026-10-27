@@ -1583,7 +1583,8 @@ _WS_FORBIDDEN_QUERY_KEYS = frozenset({"token", "access_token", "bearer", "author
 async def _verify_ws_control_plane(ws: WebSocket) -> None:
     """Authenticate a peer WebSocket handshake from the Authorization header only.
 
-    Runs BEFORE ``ws.accept()`` so a refusal closes the handshake with 1008.
+    Runs BEFORE ``ws.accept()``. The ASGI close code is 1008, while network
+    clients receive an HTTP 403 handshake denial before an upgrade completes.
     Any credential-looking query parameter (token, access_token, bearer, authorization, api_key, apikey; case-insensitive) is refused outright (even alongside a valid
     header) because URLs are recorded by access logs; the query value is never
     compared or logged.
