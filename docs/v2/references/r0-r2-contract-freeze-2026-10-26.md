@@ -43,8 +43,11 @@ Rules:
 
 - Each bit is independent; none is inferred from another. `serving=true` never implies
   `effects`.
-- A missing record, unreadable record, unknown `schema`, missing bit, non-boolean bit, or digest
-  mismatch makes every bit effectively `false` (deny), and readiness reports the reason.
+- A missing record, unreadable record, unknown `schema`, missing bit, non-boolean bit, digest
+  mismatch, or a true bit with no expected digest makes every bit effectively `false` (deny), and
+  readiness reports the reason. Digest checks run in a fixed order: any supplied digest that
+  differs is `digest_mismatch` first, then a missing digest with a true bit is
+  `digest_unverified`, then a true bit is `unsigned_enablement`.
 - The reason set is closed and shared by the consumer and Phylax: `record_missing`,
   `record_unreadable`, `schema_unsupported`, `record_invalid`, `bit_invalid`, `digest_mismatch`,
   `digest_unverified` (a bit is true and no expected digest is available to compare) and
