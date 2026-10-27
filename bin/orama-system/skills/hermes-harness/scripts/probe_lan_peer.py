@@ -23,7 +23,6 @@ from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 if str(_SCRIPT_DIR) not in sys.path:
@@ -405,12 +404,10 @@ def check_ws_peer(peer_ip: str, portal_port: int, tokens: list[str], *, timeout:
                     ) from imp_exc
 
                 headers = {"Authorization": f"Bearer {tok}"} if tok else None
-                qs = f"?token={quote(tok, safe='')}" if tok else ""
-                # SECURITY: Bearer tokens are never sent over unencrypted ws://.
-                # RFC 6750 §5.3 mandates TLS for all bearer token transmissions.
-                # When a token is present, require wss:// (fail-closed).
+                # SECURITY: the bearer goes only in the Authorization header (never the URL,
+                # which access logs record) and only over wss:// (RFC 6750 s5.3, fail-closed).
                 scheme = "wss" if tok else "ws"
-                url = f"{scheme}://{peer_ip}:{portal_port}/ws/portal-peer{qs}"
+                url = f"{scheme}://{peer_ip}:{portal_port}/ws/portal-peer"
                 # Per-stack trust (PEER_CA_FILE / pins) for wss://; with none
                 # configured the default context applies (SSL_CERT_FILE works).
                 # Resolved before connecting, so a failure sends no token.

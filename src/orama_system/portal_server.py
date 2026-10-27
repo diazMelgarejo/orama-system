@@ -1552,17 +1552,30 @@ def _hardware_policy_status(services: Dict[str, Any]) -> Dict[str, Any]:
 # ── Routes ─────────────────────────────────────────────────────────────────────
 
 
+_WS_FORBIDDEN_QUERY_KEYS = frozenset({"token", "access_token", "bearer", "authorization", "api_key", "apikey"})
+
+
 async def _verify_ws_control_plane(ws: WebSocket) -> None:
+    """Authenticate a peer WebSocket handshake from the Authorization header only.
+
+    Runs BEFORE ``ws.accept()`` so a refusal closes the handshake with 1008.
+    Any credential-looking query parameter (token, access_token, bearer, authorization, api_key, apikey; case-insensitive) is refused outright (even alongside a valid
+    header) because URLs are recorded by access logs; the query value is never
+    compared or logged.
+    """
+    if any(k.lower() in _WS_FORBIDDEN_QUERY_KEYS for k in ws.query_params.keys()):
+        log.warning("peer ws refused: credential query parameters are not accepted; use the Authorization header")
+        await ws.close(code=1008)
+        raise WebSocketDisconnect(code=1008)
     if not auth_enforced():
         return
     if not accepted_control_plane_tokens():
         await ws.close(code=1013)
         raise WebSocketDisconnect(code=1013)
-    provided = (ws.query_params.get("token") or "").strip()
-    if not provided:
-        auth_header = ws.headers.get("authorization", "")
-        if auth_header.startswith("Bearer "):
-            provided = auth_header[7:].strip()
+    provided = ""
+    auth_header = ws.headers.get("authorization", "")
+    if auth_header.startswith("Bearer "):
+        provided = auth_header[7:].strip()
     if not token_matches_control_plane(provided, scope="orama"):
         await ws.close(code=1008)
         raise WebSocketDisconnect(code=1008)
@@ -1570,8 +1583,12 @@ async def _verify_ws_control_plane(ws: WebSocket) -> None:
 
 @app.websocket("/ws/portal-peer")
 async def ws_portal_peer(ws: WebSocket):
+    """Peer WebSocket endpoint: header-authenticate, then accept and relay envelopes to the LAN peer channel."""
+    try:
+        await _verify_ws_control_plane(ws)
+    except WebSocketDisconnect:
+        return
     await ws.accept()
-    await _verify_ws_control_plane(ws)
     await _lan_peer_channel.register_ws_peer(ws)
     try:
         while True:
