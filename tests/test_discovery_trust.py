@@ -260,6 +260,18 @@ def test_prompt_confirm_peer_non_interactive_fails_safe(trust_mod, tmp_path, mon
     assert _IP_152 not in trust_mod.load_known_peer_ips()
 
 
+def test_non_ip_peer_is_refused_without_prompt_or_discovery_crash(trust_mod, tmp_path, monkeypatch) -> None:
+    """Non-IP endpoint text cannot reach approval or shibboleth discovery paths."""
+    monkeypatch.setattr(trust_mod, "KNOWN_PEERS", tmp_path / "known-peers.json")
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(sys.stdin, "readline", lambda: pytest.fail("non-IP peer must not prompt"))
+    monkeypatch.setattr(trust_mod, "verify_peer_shibboleth", lambda _: pytest.fail("non-IP peer must not probe"))
+    assert trust_mod.peer_trusted("not-an-ip", "win") is False
+    filtered, blocked = trust_mod.filter_endpoints_for_trust({"win": {"ip": "not-an-ip"}})
+    assert filtered["win"] is None
+    assert blocked == ["not-an-ip"]
+
+
 def test_create_and_verify_ip_migration_announcement(trust_mod, tmp_path, monkeypatch) -> None:
     """Verify create and verify ip migration announcement."""
     monkeypatch.setenv("GOSSIP_SHARED_SECRET", "test-cluster-secret")

@@ -287,6 +287,12 @@ def forget_peer(ip: str) -> bool:
     store["revoked_ips"] = sorted(set(store.get("revoked_ips") or []) | {ip})
     store["updated_at"] = time.time()
     _save_json(KNOWN_PEERS, store)
+    ident = load_self_identity()
+    pending = ident.get("pending_migration")
+    if isinstance(pending, dict) and _remove_recipients(pending, {ip}):
+        # Revocation is an explicit operator decision. It removes the peer from
+        # both the current retry and every future superseding announcement.
+        save_self_identity(ident)
     return True
 
 
@@ -298,6 +304,11 @@ def prompt_confirm_peer(ip: str, role: str = "peer") -> bool:
     """
     if not ip or ip in (_LOOPBACK_V4, "localhost"):
         return True
+    try:
+        ipaddress.ip_address(ip)
+    except ValueError:
+        log.warning("Refusing non-IP peer %s (%s)", ip, role)
+        return False
     if not sys.stdin.isatty():
         return False
     try:
@@ -339,6 +350,20 @@ def load_self_identity() -> dict:
             "history": [],
         }
     return data
+
+
+def _remove_recipients(pending: dict, removed: set[str]) -> bool:
+    """Remove explicitly retired recipients from every durable migration audience."""
+    changed = False
+    for field in ("recipients", "all_recipients"):
+        recipients = pending.get(field)
+        if not isinstance(recipients, list):
+            continue
+        retained = [peer for peer in recipients if peer not in removed]
+        if retained != recipients:
+            pending[field] = retained
+            changed = True
+    return changed
 
 
 def save_self_identity(data: dict) -> None:
@@ -491,6 +516,9 @@ def check_and_announce_self_migration(
     if pending and "all_recipients" not in pending:
         log.warning("Legacy migration lacks its full audience; operator reconciliation required before retry")
         return None
+    revoked = set(_load_json(KNOWN_PEERS).get("revoked_ips") or [])
+    if pending and _remove_recipients(pending, revoked):
+        save_self_identity(ident)
     if current_ip == last_ip and not pending:
         return None
 
@@ -519,7 +547,7 @@ def check_and_announce_self_migration(
         stale = list(pending.get("all_recipients") or pending.get("recipients") or [])
         delivery_targets = sorted({
             peer for peer in [*targets, *stale]
-            if peer not in (current_ip, last_ip, _LOOPBACK_V4, "localhost")
+            if peer not in (current_ip, last_ip, _LOOPBACK_V4, "localhost") and peer not in revoked
         })
         pending = {
             "new_ip": current_ip,
@@ -642,10 +670,15 @@ def initiate_handshake(ip: str) -> tuple[str, str]:
 
 def peer_trusted(ip: str, role: str = "") -> bool:
     """Evaluate revocation before all automatic or configured admission paths."""
-    if ip in set(_load_json(KNOWN_PEERS).get("revoked_ips") or []):
-        return False
     if not ip or ip in (_LOOPBACK_V4, "localhost"):
         return True
+    try:
+        ipaddress.ip_address(ip)
+    except ValueError:
+        log.warning("Refusing non-IP peer %s (%s)", ip, role or "unknown")
+        return False
+    if ip in set(_load_json(KNOWN_PEERS).get("revoked_ips") or []):
+        return False
     if ip in load_known_peer_ips():
         return True
     if is_strict_config_mode():

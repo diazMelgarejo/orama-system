@@ -43,8 +43,11 @@ address remains unchanged until all recipients acknowledge. Empty recipient list
 are respected and never expanded implicitly.
 
 Pending recipients are never retired automatically by age or failure count.
-An operator must explicitly reconcile a permanently retired recipient in the
-local self-identity state, preserving a local backup and evidence of the decision.
+An explicit `--remove-ip` revocation retires that address from both the current
+retry list and the durable audience used by any later superseding migration, so
+it cannot receive a bearer or block completion. Other permanent retirements
+require an explicit local reconciliation with a backup and evidence of the
+decision.
 If the local address changes again while a migration is still pending, the
 sender supersedes the stale pending entry and announces `last_known_ip` to the
 newest address to the union of fresh targets and **all** original recipients,

@@ -60,7 +60,7 @@ Interactive shells may use repo `scripts/env/load-local.ps1` — **do not** add 
 
 ### 6. Peer-file 401 + `SECURITY_STOP`
 
-**Expected on plain `http://` when a real control-plane token is configured.** `lan_peer_assign.py` requires verified HTTPS before attaching `Authorization: Bearer`; credential-bearing HTTP requests fail closed (RFC 6750). This is **not** proof of token mismatch.
+**Expected on plain `http://` when a real control-plane token is configured.** `lan_peer_assign.py` attaches `Authorization: Bearer` only to HTTPS requests. If TLS verification fails, no HTTP request is transmitted; plain HTTP requests proceed without the bearer credential (RFC 6750). This is **not** proof of token mismatch.
 
 | Symptom | Meaning |
 |---------|---------|

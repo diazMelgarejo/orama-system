@@ -112,6 +112,48 @@ def test_revocation_overrides_archive_and_relaxed_admission(trust: ModuleType, m
     assert trust.peer_trusted(OLD) is False
 
 
+def test_revocation_removes_pending_migration_recipient_and_future_audience(trust: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
+    """An explicit revocation cannot receive or block a current or superseding migration."""
+    latest = str(ipaddress.IPv4Address(0xC0000205))
+    calls: list[str] = []
+
+    def first_delivery(request: urllib.request.Request, context: object, timeout: float) -> Response:
+        """Acknowledge only A so B remains pending before its revocation."""
+        calls.append(request.host)
+        if request.host.startswith(B):
+            raise OSError("offline")
+        announcement = json.loads(request.data)["data"]
+        return Response({"ok": True, "migration_id": trust.migration_digest(announcement)})
+
+    monkeypatch.setattr(trust, "_open_peer", first_delivery)
+    trust.check_and_announce_self_migration(NEW, [A, B])
+    assert trust.load_self_identity()["pending_migration"] == {
+        "new_ip": NEW,
+        "all_recipients": [A, B],
+        "recipients": [B],
+    }
+
+    assert trust.forget_peer(B) is True
+    assert trust.load_self_identity()["pending_migration"] == {
+        "new_ip": NEW,
+        "all_recipients": [A],
+        "recipients": [],
+    }
+    calls.clear()
+
+    def latest_delivery(request: urllib.request.Request, context: object, timeout: float) -> Response:
+        """Acknowledge the one still-authorized recipient after a newer address appears."""
+        calls.append(request.host)
+        announcement = json.loads(request.data)["data"]
+        return Response({"ok": True, "migration_id": trust.migration_digest(announcement)})
+
+    monkeypatch.setattr(trust, "_open_peer", latest_delivery)
+    trust.check_and_announce_self_migration(latest, [B])
+    assert calls == [f"{A}:8443"]
+    assert trust.load_self_identity()["last_known_ip"] == latest
+    assert "pending_migration" not in trust.load_self_identity()
+
+
 def test_partial_ack_retries_only_pending_recipient_after_reload(trust: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
     """One acknowledgement never suppresses another recipient's durable retry."""
     calls: list[str] = []
