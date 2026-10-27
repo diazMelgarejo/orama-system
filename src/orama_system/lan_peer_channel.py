@@ -139,7 +139,10 @@ class LanPeerChannel:
         if event.get("type") == "mesh_ip_migration_announcement":
             try:
                 from mesh.discovery_trust import apply_migration_announcement
-                apply_migration_announcement(event)
+                payload = event.get("data")
+                if not isinstance(payload, dict) or not payload:
+                    payload = event
+                apply_migration_announcement(payload)
             except Exception:
                 log.exception("Failed to apply mesh IP migration announcement")
             return

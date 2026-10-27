@@ -40,13 +40,19 @@ class DiscoveryTrustModule(Protocol):
     def verify_handshake(self, ip: str, nonce: str, signature: str) -> bool: ...
 
 
+@pytest.fixture(autouse=True)
+def hermetic_test_environment(monkeypatch) -> None:
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+
+
 @pytest.fixture
-def trust_mod() -> DiscoveryTrustModule:
+def trust_mod(tmp_path, monkeypatch) -> DiscoveryTrustModule:
     spec = importlib.util.spec_from_file_location("discovery_trust", TRUST)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
+    monkeypatch.setattr(module, "PENDING_HANDSHAKES", tmp_path / ".local" / "pending.json")
     return module  # type: ignore[return-value]
 
 
@@ -110,10 +116,11 @@ def test_blocks_unknown_win_peer(trust_mod, tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(trust_mod, "ARCHIVE", tmp_path / ".local" / "lan-topology-archive.json")
     monkeypatch.setattr(trust_mod, "OPENCLAW_STATE", tmp_path / "last.json")
     monkeypatch.setattr(trust_mod, "PENDING_HANDSHAKES", tmp_path / ".local" / "pending.json")
+    monkeypatch.setattr(trust_mod, "verify_peer_shibboleth", lambda ip: False)
     (tmp_path / ".local").mkdir()
-    endpoints = {"win_peers": [{"ip": "192.168.9.88", "models": ["m1"]}]}
+    endpoints = {"win_peers": [{"ip": _IP_88, "models": ["m1"]}]}
     filtered, blocked = trust_mod.filter_endpoints_for_trust(endpoints)
-    assert "192.168.9.88" in blocked
+    assert _IP_88 in blocked
     assert filtered["win_peers"] == []
 
 
@@ -167,6 +174,7 @@ def test_strict_config_mode_blocks_unlisted_even_if_shibboleth_passes(trust_mod,
     monkeypatch.setattr(trust_mod, "KNOWN_PEERS", tmp_path / ".local" / "known-peers.json")
     monkeypatch.setattr(trust_mod, "ARCHIVE", tmp_path / ".local" / "lan-topology-archive.json")
     monkeypatch.setattr(trust_mod, "OPENCLAW_STATE", tmp_path / "last.json")
+    monkeypatch.setattr(trust_mod, "PENDING_HANDSHAKES", tmp_path / ".local" / "pending.json")
     monkeypatch.setattr(trust_mod, "verify_peer_shibboleth", lambda ip: True)
     monkeypatch.setenv("ORAMA_STRICT_CONFIG_PEERS", "1")
     (tmp_path / ".local").mkdir()
@@ -332,3 +340,117 @@ def test_self_ip_migration_know_thyself_flow(trust_mod, tmp_path, monkeypatch) -
     # Self identity updated
     saved = json.loads((tmp_path / ".local" / "self-identity.json").read_text())
     assert saved["last_known_ip"] == _IP_238
+
+
+def test_ip_migration_rejects_invalid_types_and_loopback(trust_mod, tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("GOSSIP_SHARED_SECRET", "test-cluster-secret")
+    monkeypatch.setattr(trust_mod, "ROOT", tmp_path)
+    monkeypatch.setattr(trust_mod, "LOCAL", tmp_path / ".local")
+    monkeypatch.setattr(trust_mod, "KNOWN_PEERS", tmp_path / ".local" / "known-peers.json")
+    monkeypatch.setattr(trust_mod, "ARCHIVE", tmp_path / ".local" / "lan-topology-archive.json")
+    (tmp_path / ".local").mkdir()
+    (tmp_path / ".local" / "known-peers.json").write_text(json.dumps({"ips": [_IP_153]}), encoding="utf-8")
+
+    loopback_ip = str(ipaddress.IPv4Address(0x7F000001))
+
+    # Invalid timestamp type
+    bad_ts_announcement = {
+        "type": "mesh_ip_migration_announcement",
+        "node_id": "win",
+        "previous_ip": _IP_153,
+        "new_ip": _IP_238,
+        "timestamp": "not-a-number",
+        "nonce": "test-nonce",
+        "signature": "test-sig",
+    }
+    ok, reason = trust_mod.verify_migration_announcement(bad_ts_announcement)
+    assert ok is False
+    assert reason == "invalid timestamp"
+
+    # Loopback previous_ip
+    loopback_announcement = {
+        "type": "mesh_ip_migration_announcement",
+        "node_id": "win",
+        "previous_ip": loopback_ip,
+        "new_ip": _IP_238,
+        "timestamp": int(time.time()),
+        "nonce": "test-nonce",
+        "signature": "test-sig",
+    }
+    ok, reason = trust_mod.verify_migration_announcement(loopback_announcement)
+    assert ok is False
+    assert "loopback" in reason
+
+    # Invalid IP address syntax
+    bad_ip_announcement = {
+        "type": "mesh_ip_migration_announcement",
+        "node_id": "win",
+        "previous_ip": "invalid-ip-string",
+        "new_ip": _IP_238,
+        "timestamp": int(time.time()),
+        "nonce": "test-nonce",
+        "signature": "test-sig",
+    }
+    ok, reason = trust_mod.verify_migration_announcement(bad_ip_announcement)
+    assert ok is False
+    assert "invalid previous_ip address format" in reason
+
+
+def test_self_ip_migration_retries_if_no_peer_acks(trust_mod, tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("GOSSIP_SHARED_SECRET", "test-cluster-secret")
+    monkeypatch.setattr(trust_mod, "ROOT", tmp_path)
+    monkeypatch.setattr(trust_mod, "LOCAL", tmp_path / ".local")
+    monkeypatch.setattr(trust_mod, "SELF_IDENTITY_FILE", tmp_path / ".local" / "self-identity.json")
+    monkeypatch.setattr(trust_mod, "KNOWN_PEERS", tmp_path / ".local" / "known-peers.json")
+    (tmp_path / ".local").mkdir()
+
+    # Initial state
+    (tmp_path / ".local" / "self-identity.json").write_text(
+        json.dumps({"node_id": "win", "role": "win", "last_known_ip": _IP_153}),
+        encoding="utf-8",
+    )
+
+    # When targets exist but all calls fail, last_known_ip MUST NOT advance!
+    def mock_fail_urlopen(*args, **kwargs):
+        raise OSError("unreachable")
+
+    monkeypatch.setattr(trust_mod.urllib.request, "urlopen", mock_fail_urlopen)
+
+    announcement = trust_mod.check_and_announce_self_migration(
+        current_ip=_IP_238,
+        peer_ips=[_IP_88],
+    )
+    assert announcement is not None
+    saved = json.loads((tmp_path / ".local" / "self-identity.json").read_text())
+    assert saved["last_known_ip"] == _IP_153  # Kept prior IP for retry!
+
+
+@pytest.mark.asyncio
+async def test_lan_peer_channel_on_inbound_wire_envelope(trust_mod, tmp_path, monkeypatch) -> None:
+    from orama_system.lan_peer_channel import LanPeerChannel
+
+    monkeypatch.setenv("GOSSIP_SHARED_SECRET", "test-cluster-secret")
+    monkeypatch.setattr(trust_mod, "ROOT", tmp_path)
+    monkeypatch.setattr(trust_mod, "LOCAL", tmp_path / ".local")
+    monkeypatch.setattr(trust_mod, "KNOWN_PEERS", tmp_path / ".local" / "known-peers.json")
+    monkeypatch.setattr(trust_mod, "ARCHIVE", tmp_path / ".local" / "lan-topology-archive.json")
+    (tmp_path / ".local").mkdir()
+    (tmp_path / ".local" / "known-peers.json").write_text(json.dumps({"ips": [_IP_153]}), encoding="utf-8")
+
+    announcement = trust_mod.create_migration_announcement(
+        node_id="win",
+        previous_ip=_IP_153,
+        new_ip=_IP_238,
+    )
+
+    channel = LanPeerChannel()
+    wire_event = {
+        "type": "mesh_ip_migration_announcement",
+        "source": "win",
+        "ts": int(time.time()),
+        "data": announcement,
+    }
+    monkeypatch.setitem(sys.modules, "mesh.discovery_trust", trust_mod)
+
+    await channel.on_inbound(wire_event)
+    assert _IP_238 in trust_mod.load_known_peer_ips()

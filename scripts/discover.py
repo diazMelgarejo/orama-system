@@ -1107,8 +1107,8 @@ def run_discovery(force: bool = True, cached: bool = False) -> int:
         print("🔍 Probing LM Studio endpoints...", file=sys.stderr)
         try:
             check_and_announce_self_migration()
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.warning("self IP migration announcement failed: %s", exc, exc_info=True)
         endpoints = discover_endpoints()
         tier = 1
         # Windows evidence from THIS run must also veto stale-cache Mac entries.

@@ -43,12 +43,12 @@ def _load_json(path: Path) -> dict:
 
 
 def _secret() -> str:
-    for key in ("GOSSIP_SHARED_SECRET", "ORAMA_CONTROL_PLANE_TOKEN"):
+    for key in ("MESH_MIGRATION_SECRET", "GOSSIP_SHARED_SECRET"):
         val = os.environ.get(key, "").strip()
         if val:
             return val
     data = _load_json(ROOT / ".local" / "mesh-secrets.json")
-    secret = (data.get("GOSSIP_SHARED_SECRET") or "").strip()
+    secret = (data.get("MESH_MIGRATION_SECRET") or data.get("GOSSIP_SHARED_SECRET") or "").strip()
     return str(secret) if secret else ""
 
 
@@ -88,23 +88,47 @@ def _control_plane_token() -> str:
     return ""
 
 
-def _get_ssl_context() -> ssl.SSLContext:
-    """Return SSL context validating against cluster CA if present, else fallback."""
+def _find_ca_file() -> str | None:
+    env_ca = os.environ.get("ORAMA_LAN_CA_FILE", "").strip()
+    if env_ca and Path(env_ca).is_file():
+        return env_ca
+    if (LOCAL / "certs").is_dir():
+        for ca_p in sorted((LOCAL / "certs").glob("*.pem")):
+            if ca_p.is_file():
+                return str(ca_p)
     for ca_path in (
-        os.environ.get("ORAMA_LAN_CA_FILE", ""),
-        str(LOCAL / "certs" / "orama-lan-ca-PHLab-H2LGBV3.pem"),
         str(LOCAL / "orama-lan-ca.pem"),
         str(ROOT / "certs" / "ca.pem"),
         str(Path.home() / ".openclaw" / "certs" / "ca.pem"),
     ):
-        if ca_path and Path(ca_path).is_file():
-            try:
-                ctx = ssl.create_default_context(cafile=ca_path)
-                ctx.check_hostname = False
-                return ctx
-            except Exception:
-                pass
-    return ssl._create_unverified_context()
+        if Path(ca_path).is_file():
+            return ca_path
+    return None
+
+
+def _get_ssl_context() -> ssl.SSLContext | None:
+    """Return SSL context validating against cluster CA if present.
+
+    Fails closed (returns None) if no CA is found or CA loading fails,
+    unless relaxed discovery is explicitly enabled via ORAMA_DISCOVERY_RELAXED=1.
+    """
+    ca_file = _find_ca_file()
+    if ca_file:
+        try:
+            ctx = ssl.create_default_context(cafile=ca_file)
+            ctx.check_hostname = False
+            return ctx
+        except Exception as exc:
+            log.warning("Failed to load cluster CA from %s: %s", ca_file, exc)
+
+    if is_strict_config_mode() or os.environ.get("ORAMA_REQUIRE_PINNED_CA", "").strip().lower() in ("1", "true", "yes"):
+        log.warning("Cluster CA required but unavailable; refusing insecure SSL context")
+        return None
+
+    if os.environ.get("ORAMA_DISCOVERY_RELAXED", "").strip().lower() in ("1", "true", "yes"):
+        return ssl._create_unverified_context()
+
+    return None
 
 
 def is_strict_config_mode() -> bool:
@@ -129,8 +153,13 @@ def _ips_from_env() -> set[str]:
 def verify_peer_shibboleth(ip: str, timeout: float = 0.5) -> bool:
     """Probe peer over TLS with known control plane token (shibboleth).
 
-    If peer answers on port 8443 and returns 200 with our token, it is a known cluster peer.
-    Timeout is clamped to prevent accumulation during subnet scans.
+    Performs a 2-stage verification against authenticated route /api/peer-inbox:
+      1. Probe without token: MUST fail with HTTP 401 Unauthorized (proves endpoint
+         is an authentic portal that enforces control plane authentication).
+      2. Probe with token: MUST return HTTP 200 OK (proves peer shares our cluster token).
+
+    If no trusted CA context is available, verification fails closed to prevent token
+    disclosure over untrusted TLS. Timeout is clamped to prevent subnet scan delays.
     """
     if not ip or ip in (_LOOPBACK_V4, "localhost"):
         return True
@@ -140,13 +169,34 @@ def verify_peer_shibboleth(ip: str, timeout: float = 0.5) -> bool:
     except Exception:
         return False
 
-    token = _control_plane_token()
     ctx = _get_ssl_context()
-    req = urllib.request.Request(f"https://{ip}:8443/health")
-    if token:
-        req.add_header("Authorization", f"Bearer {token}")
+    if ctx is None:
+        log.warning("No cluster CA available; refusing unverified shibboleth probe for %s", ip)
+        return False
+
+    token = _control_plane_token()
+    if not token:
+        return False
+
+    # Stage 1: Unauthenticated probe must be rejected with 401
+    unauth_req = urllib.request.Request(f"https://{ip}:8443/api/peer-inbox")
     try:
-        with urllib.request.urlopen(req, context=ctx, timeout=timeout) as resp:
+        with urllib.request.urlopen(unauth_req, context=ctx, timeout=timeout) as resp:
+            # If an unauthenticated request returns 200, the peer does not enforce auth (rogue/untrusted)
+            log.warning("Peer %s returned %d to unauthenticated probe; untrusted", ip, resp.status)
+            return False
+    except urllib.error.HTTPError as exc:
+        if exc.code != 401:
+            log.debug("Peer %s unauthenticated probe returned HTTP %d (expected 401)", ip, exc.code)
+            return False
+    except Exception:
+        return False
+
+    # Stage 2: Authenticated probe must return 200 OK
+    auth_req = urllib.request.Request(f"https://{ip}:8443/api/peer-inbox")
+    auth_req.add_header("Authorization", f"Bearer {token}")
+    try:
+        with urllib.request.urlopen(auth_req, context=ctx, timeout=timeout) as resp:
             if resp.status == 200:
                 return True
     except Exception:
@@ -286,9 +336,10 @@ def verify_migration_announcement(announcement: dict, window_sec: int = 300) -> 
     """Verify proof of identity and previous mesh fleet membership.
 
     Checks:
-      1. Envelope structure and timestamp freshness.
-      2. Cryptographic signature under cluster secret.
-      3. Fleet membership: previous_ip MUST be an established member in known_peers or archive.
+      1. Envelope structure, field types, and timestamp freshness.
+      2. IP address validity (must be valid non-loopback addresses).
+      3. Cryptographic signature under cluster secret.
+      4. Fleet membership: previous_ip MUST be an established member in known_peers or archive.
     """
     if not isinstance(announcement, dict):
         return False, "invalid envelope"
@@ -298,12 +349,25 @@ def verify_migration_announcement(announcement: dict, window_sec: int = 300) -> 
     node_id = str(announcement.get("node_id") or "").strip()
     previous_ip = str(announcement.get("previous_ip") or "").strip()
     new_ip = str(announcement.get("new_ip") or "").strip()
-    ts = int(announcement.get("timestamp") or 0)
+
+    try:
+        ts = int(announcement.get("timestamp") or 0)
+    except (TypeError, ValueError):
+        return False, "invalid timestamp"
+
     nonce = str(announcement.get("nonce") or "").strip()
     signature = str(announcement.get("signature") or "").strip()
 
     if not (node_id and previous_ip and new_ip and ts and nonce and signature):
         return False, "missing required migration fields"
+
+    for label, ip_str in (("previous_ip", previous_ip), ("new_ip", new_ip)):
+        try:
+            addr = ipaddress.ip_address(ip_str)
+            if addr.is_loopback:
+                return False, f"{label} cannot be a loopback address"
+        except ValueError:
+            return False, f"invalid {label} address format"
 
     if abs(time.time() - ts) > window_sec:
         return False, "announcement expired or clock drift exceeded"
@@ -391,35 +455,60 @@ def check_and_announce_self_migration(
         current_ip,
     )
 
-    ident["last_known_ip"] = current_ip
-    ident.setdefault("history", []).append({
-        "ip": current_ip,
-        "previous_ip": last_ip,
-        "timestamp": time.time(),
-    })
-    save_self_identity(ident)
+    targets = list(load_known_peer_ips()) if peer_ips is None else peer_ips
+    delivery_targets = [
+        peer for peer in targets
+        if peer not in (current_ip, last_ip, _LOOPBACK_V4, "localhost")
+    ]
 
-    targets = peer_ips or list(load_known_peer_ips())
-    token = _control_plane_token()
-    ctx = _get_ssl_context()
-    payload_bytes = json.dumps(announcement).encode("utf-8")
+    ack_count = 0
+    if delivery_targets:
+        ctx = _get_ssl_context()
+        if ctx is None:
+            log.warning("No cluster CA available; cannot announce migration over TLS")
+        else:
+            token = _control_plane_token()
+            payload_bytes = json.dumps({
+                "type": announcement["type"],
+                "source": announcement.get("node_id", ""),
+                "ts": int(announcement.get("timestamp", 0)),
+                "data": announcement,
+            }).encode("utf-8")
 
-    for peer in targets:
-        if peer in (current_ip, last_ip, _LOOPBACK_V4, "localhost"):
-            continue
-        req = urllib.request.Request(
-            f"https://{peer}:8443/api/peer-event",
-            data=payload_bytes,
-            headers={"Content-Type": "application/json"},
+            for peer in delivery_targets:
+                req = urllib.request.Request(
+                    f"https://{peer}:8443/api/peer-event",
+                    data=payload_bytes,
+                    headers={"Content-Type": "application/json"},
+                )
+                if token:
+                    req.add_header("Authorization", f"Bearer {token}")
+                try:
+                    with urllib.request.urlopen(req, context=ctx, timeout=1.0) as resp:
+                        if resp.status == 200:
+                            ack_count += 1
+                            log.info("Announced IP migration to peer %s: 200 OK", peer)
+                except Exception as e:
+                    log.debug("Peer %s unreachable during migration announcement: %s", peer, e)
+
+    # Persist the new IP only if at least one peer acknowledged or there were no delivery targets
+    if not delivery_targets or ack_count > 0:
+        ident["last_known_ip"] = current_ip
+        ident.setdefault("history", []).append({
+            "ip": current_ip,
+            "previous_ip": last_ip,
+            "timestamp": time.time(),
+        })
+        save_self_identity(ident)
+        log.info(
+            "Self IP migration committed to self-identity.json (%d peer acks)",
+            ack_count,
         )
-        if token:
-            req.add_header("Authorization", f"Bearer {token}")
-        try:
-            with urllib.request.urlopen(req, context=ctx, timeout=1.0) as resp:
-                if resp.status == 200:
-                    log.info("Announced IP migration to peer %s: 200 OK", peer)
-        except Exception as e:
-            log.debug("Peer %s unreachable during migration announcement: %s", peer, e)
+    else:
+        log.warning(
+            "Self IP migration announcement delivered to 0 peers; keeping last_known_ip=%s to retry next run",
+            last_ip,
+        )
 
     return announcement
 
