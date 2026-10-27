@@ -12,6 +12,7 @@ from starlette.websockets import WebSocketDisconnect
 import orama_system.portal_server as portal_server
 from orama_system.lan_peer_channel import LanPeerChannel, ws_handshake_headers
 from utils.endpoint_policy_core import TransportIdentity
+from utils.model_endpoint_url import ModelEndpointPolicyError
 
 pytestmark = pytest.mark.unit
 
@@ -138,3 +139,62 @@ def test_refusal_never_logs_token_value(client, caplog) -> None:
             pass
     assert "token query parameter" in caplog.text
     assert secret not in caplog.text and GOOD not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_client_refuses_bearer_over_plain_ws(monkeypatch) -> None:
+    """With a token and a non-wss URL the client never connects and raises a fixed, secret-free error."""
+    import orama_system.lan_peer_channel as lpc
+    import utils.control_plane_auth as cpa
+
+    monkeypatch.setattr(cpa, "outbound_control_plane_tokens", lambda: ["secret-tok"])
+    monkeypatch.setattr(lpc, "build_peer_transport_url", lambda *a, **k: f"ws://{PEER}:8002/ws/portal-peer")
+    calls: list[tuple] = []
+    mod = types.ModuleType("websockets")
+    mod.connect = lambda *a, **k: calls.append((a, k))
+    monkeypatch.setitem(sys.modules, "websockets", mod)
+    ident = TransportIdentity(scheme="http", hostname=PEER, port=8002)
+    with pytest.raises(ModelEndpointPolicyError) as ei:
+        await LanPeerChannel()._ws_client_session(ident, 8002)
+    assert calls == []
+    assert "secret-tok" not in str(ei.value) and PEER not in str(ei.value)
+
+
+@pytest.mark.asyncio
+async def test_client_sends_header_over_wss(monkeypatch) -> None:
+    """Over wss the bearer header is sent."""
+    import orama_system.lan_peer_channel as lpc
+    import utils.control_plane_auth as cpa
+
+    monkeypatch.setattr(cpa, "outbound_control_plane_tokens", lambda: ["secret-tok"])
+    monkeypatch.setattr(lpc, "build_peer_transport_url", lambda *a, **k: f"wss://{PEER}:9443/ws/portal-peer")
+    calls: list[dict] = []
+
+    class _Conn:
+        """Fake connection that records kwargs and yields no frames."""
+
+        def __init__(self, url, **kw):
+            """Record kwargs."""
+            calls.append(kw)
+
+        async def __aenter__(self):
+            """Return self."""
+            return self
+
+        async def __aexit__(self, *exc):
+            """Do not suppress."""
+            return False
+
+        def __aiter__(self):
+            """Return self as iterator."""
+            return self
+
+        async def __anext__(self):
+            """End iteration."""
+            raise StopAsyncIteration
+
+    mod = types.ModuleType("websockets")
+    mod.connect = _Conn
+    monkeypatch.setitem(sys.modules, "websockets", mod)
+    await LanPeerChannel()._ws_client_session(TransportIdentity(scheme="https", hostname=PEER, port=9443), 9443)
+    assert calls[0]["additional_headers"] == {"Authorization": "Bearer secret-tok"}

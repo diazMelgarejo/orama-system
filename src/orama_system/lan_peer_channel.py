@@ -213,6 +213,12 @@ class LanPeerChannel:
             # (Caddy, uvicorn) record.
             headers = ws_handshake_headers(token)
             url = endpoint
+            if token and not url.startswith("wss://"):
+                # SECURITY: RFC 6750 s5.3 - never send a bearer over ws://, and
+                # never silently downgrade to an unauthenticated connection.
+                raise ModelEndpointPolicyError(
+                    "refusing to send control-plane bearer over unencrypted ws://; wss:// is required"
+                )
             try:
                 async with websockets.connect(
                     url,
