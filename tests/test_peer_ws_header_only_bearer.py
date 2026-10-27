@@ -114,11 +114,13 @@ def test_server_refuses_missing_token(client: TestClient) -> None:
 @pytest.mark.integration
 def test_network_refusal_is_http_403_before_upgrade(client: TestClient) -> None:
     """A network client receives HTTP 403 when a peer upgrade is refused."""
+    host = socket.gethostbyname("localhost")
     server = uvicorn.Server(
         uvicorn.Config(
             portal_server.app,
-            host="127.0.0.1",
+            host=host,
             port=0,
+            ws="websockets",
             log_level="critical",
             access_log=False,
             lifespan="off",
@@ -136,13 +138,13 @@ def test_network_refusal_is_http_403_before_upgrade(client: TestClient) -> None:
         port = listener.getsockname()[1]
         request = (
             "GET /ws/portal-peer HTTP/1.1\r\n"
-            f"Host: 127.0.0.1:{port}\r\n"
+            f"Host: {host}:{port}\r\n"
             "Connection: Upgrade\r\n"
             "Upgrade: websocket\r\n"
             "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
             "Sec-WebSocket-Version: 13\r\n\r\n"
         )
-        with socket.create_connection(("127.0.0.1", port), timeout=2) as connection:
+        with socket.create_connection((host, port), timeout=2) as connection:
             connection.sendall(request.encode("ascii"))
             status_line = connection.recv(1024).splitlines()[0]
         assert status_line == b"HTTP/1.1 403 Forbidden"
