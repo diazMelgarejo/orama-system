@@ -181,7 +181,8 @@ dispatch receipt, terminal taxonomy, redaction envelope, and replay rules. The o
      attempt; the reservation and outbox row are kept.
    - A replay by the bound principal returns that same refusal (stored code and opaque
      `receipt_ref`), so the attempt can neither stay pending nor dispatch. A caller that is not the
-     bound principal, or an unknown `attempt_id`, gets the identical 401.
+     bound principal, or an unknown `attempt_id`, gets the identical HTTP 401
+     `deny.unauthorized_caller` body with no `receipt_ref`; neither caller sees the stored refusal.
    - No terminal refusal is written after the send marker (`send_started = 1`). Stored `failed` is
      only a post-dispatch target refusal (R4 `confirmed_not_applied`).
    - After a send may have started, unsettled work remains `unknown`; an in-doubt dispatch is
@@ -189,7 +190,7 @@ dispatch receipt, terminal taxonomy, redaction envelope, and replay rules. The o
    - An unauthenticated caller on an exposed route gets HTTP 401 `deny.unauthorized_caller` in the
      contract body.
    - There is no separate disabled-serving code, and `deny.grant_conflict` (409) is the public
-     answer to a ledger consumption conflict.
+     answer only to a definitive, non-retryable ledger consumption conflict on `/adjustments`.
 2. **Authorization second:** verify the bound approval/permit at the final execution boundary.
    Revocation and cascades refuse future dispatch, including attempts not yet dispatched (the
    pre-dispatch refusal above); already uncertain work becomes an explicit `unknown` disposition,
