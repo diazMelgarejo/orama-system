@@ -37,8 +37,27 @@
       }
     },
     "signature": {
-      "type": ["object", "null"],
-      "description": "null while every bit is false. An object is an operator signature envelope whose verification is outside this schema."
+      "type": ["string", "null"],
+      "minLength": 1,
+      "pattern": "\\S",
+      "description": "null while every bit is false. A non-blank string is an operator signature envelope whose verification is outside this schema."
     }
+  },
+  "if": {
+    "properties": {
+      "capabilities": {
+        "anyOf": [
+          { "properties": { "serving": { "const": true } }, "required": ["serving"] },
+          { "properties": { "effects": { "const": true } }, "required": ["effects"] },
+          { "properties": { "transport": { "const": true } }, "required": ["transport"] },
+          { "properties": { "continuation": { "const": true } }, "required": ["continuation"] },
+          { "properties": { "autonomous_settlement": { "const": true } }, "required": ["autonomous_settlement"] }
+        ]
+      }
+    },
+    "required": ["capabilities"]
+  },
+  "then": {
+    "properties": { "signature": { "type": "string" } }
   }
 }

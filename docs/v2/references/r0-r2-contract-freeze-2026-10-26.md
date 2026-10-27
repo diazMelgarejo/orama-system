@@ -35,13 +35,26 @@ Owner: this repository defines the schema; Phylax, Oramasys and Telos enforce it
 }
 ```
 
+`signature` is `null` or a non-blank string (an operator signature envelope in text form; its
+verification is not in the schema). An object, an empty string or a whitespace-only string is
+invalid.
+
 Rules:
 
 - Each bit is independent; none is inferred from another. `serving=true` never implies
   `effects`.
 - A missing record, unreadable record, unknown `schema`, missing bit, non-boolean bit, or digest
   mismatch makes every bit effectively `false` (deny), and readiness reports the reason.
-- `signature: null` is allowed only while every bit is false. Any `true` bit needs a verified
+- The reason set is closed and shared by the consumer and Phylax: `record_missing`,
+  `record_unreadable`, `schema_unsupported`, `record_invalid`, `bit_invalid`, `digest_mismatch`,
+  `digest_unverified` (a bit is true and no expected digest is available to compare) and
+  `unsigned_enablement`. A missing or non-boolean bit is `bit_invalid`; any other malformed
+  record is `record_invalid`. The `startup.*` codes in Section 2 are consumer-only.
+  `capability.ok` is Phylax-internal and is never a public or startup code.
+- The consumer parser rejects a record that has a duplicate key at any level and a record larger
+  than 8 KiB (8192 bytes), both as `record_invalid`.
+- `signature: null` is allowed only while every bit is false. The schema enforces this shape: any
+  `true` bit requires `signature` to be a string. Any `true` bit also needs a verified
   operator signature. In Releases 0 to 2 no signing path exists, so any `true` bit is refused at
   startup with `capability.unsigned_enablement`.
 - Readiness prints each bit's effective value and the reason when it differs from the record.
@@ -77,21 +90,28 @@ Where a durable record exists the `error` object also carries `"receipt_ref": "<
 body is `{"error": {"code", "correlation_id", "receipt_ref"}}`. There is exactly one placement:
 `receipt_ref` is never a sibling of `error`. Nothing else.
 
-Verifier denial codes (mapped from the Phylax internal reasons):
+Verifier denial codes (mapped from the Phylax internal reasons). The consumer-side codes that
+Phylax does not produce are in the second table below.
 
 | Public code | Internal reason(s) |
 | --- | --- |
-| `deny.revocation_stale` | `revocation.stale`; must actually be raised when the observation is older than 60 seconds (ADR 71 REVOCATION_MAX_AGE_SECONDS) |
+| `deny.revocation_stale` | `revocation.stale`; raised when the observation is older than 60 seconds, more than 5 seconds in the future, or has no timezone (ADR 71 REVOCATION_MAX_AGE_SECONDS); an observation exactly 60 seconds old is fresh |
 | `deny.unknown_key` | `grant.key_unknown` |
 | `deny.malformed_grant` | `grant.malformed`, `grant.schema_unsupported`, `grant.signature_invalid`, `grant.expired`, `grant.future_dated` |
 | `deny.revoked_grant` | `grant.revoked` |
 | `deny.missing_capability_record` | capability record absent or invalid (new) |
-| `deny.unauthorized_caller` | caller not authenticated or authorized for the surface (new) |
-| `deny.attempt_binding_conflict` | `attempt.binding_conflict` (same `attempt_id`, different bound identity) |
 | `deny.verifier_unavailable` | `verifier.unavailable` |
 
-Serving codes: `serving.not_ready` (HTTP 503, stable), `serving.disabled` (HTTP 503) and
-`serving.route_not_exposed` (HTTP 404).
+Consumer-side codes (raised by the consumer itself, with no Phylax internal reason):
+
+| Public code | Condition |
+| --- | --- |
+| `deny.unauthorized_caller` | caller not authenticated, not the principal bound to the attempt, or the `attempt_id` is unknown (new) |
+| `deny.grant_conflict` | the consumption ledger refuses a definitive, non-retryable conflict on `/adjustments` (hold not eligible, units exceed remaining, digest conflict, epoch fenced, basis or store mismatch and similar); the internal reason is never exposed (new) |
+
+Serving codes: `serving.not_ready` (HTTP 503, stable) and `serving.route_not_exposed`
+(HTTP 404). There is no separate disabled-serving code: `serving.route_not_exposed` covers a disabled
+surface without revealing whether the route exists.
 
 HTTP status of each `deny.*` code, one table for every surface:
 
@@ -100,24 +120,40 @@ HTTP status of each `deny.*` code, one table for every surface:
 | `deny.malformed_grant` | 400 |
 | `deny.unauthorized_caller` | 401 |
 | `deny.unknown_key`, `deny.revoked_grant`, `deny.missing_capability_record` | 403 |
-| `deny.attempt_binding_conflict` | 409 |
+| `deny.grant_conflict` | 409 |
 | `deny.revocation_stale`, `deny.verifier_unavailable` | 503 |
 
 Two rules are fixed here, in the body of the contract, and apply to every route:
 
 - **Unauthenticated caller.** A caller that is not authenticated, or is not the principal bound to
   the attempt, on a route that is exposed gets HTTP 401 with `deny.unauthorized_caller` in the
-  Section 3 body. A bare framework body such as `{"detail": ...}` is not a conforming answer on an
+  Section 3 body. On the effect route an `attempt_id` that does not exist gets the identical
+  answer (same status, same body shape, no `receipt_ref`), so a caller cannot learn whether an
+  attempt exists. A bare framework body such as `{"detail": ...}` is not a conforming answer on an
   exposed route. A route that is not exposed answers `serving.route_not_exposed` (404) instead.
 - **In-doubt dispatch.** When the send marker is set (Section 4) and the outcome is not proven, or a
   verifier, clock or outcome cannot be vouched for, the answer is HTTP 503 with
   `deny.verifier_unavailable` and the opaque `receipt_ref` of the durable attempt record. It is a
   deny, never an allow, and never a refusal record: the attempt stays `unknown` (blocking) until
   an authenticated operator reconciliation settles it.
-- **Attempt binding conflict.** A request that reuses an `attempt_id` with a different bound
-  identity (Section 4 replay check) gets HTTP 409 with `deny.attempt_binding_conflict` in the
-  Section 3 body. The body carries only `code` and `correlation_id` — no `receipt_ref` and no
-  stored refusal fields — so the response does not expose whether a prior refusal exists.
+
+One closed error envelope covers every response of the application, installed once at application
+level. No response carries a `detail` key. The framework and transport failures map as follows:
+
+| Failure | HTTP | Code |
+| --- | --- | --- |
+| authentication middleware rejects the caller | 401 | `deny.unauthorized_caller` |
+| the authentication token is not configured | 503 | `serving.not_ready` |
+| unknown route or method (404, 405) | 404 | `serving.route_not_exposed` |
+| request validation failure | 400 | `deny.malformed_grant` |
+| any other unhandled failure | 503 | `deny.verifier_unavailable` |
+
+Route-level mappings. `/run`: a missing authenticated context is 401
+`deny.unauthorized_caller`; every other admission refusal is 503 `deny.verifier_unavailable`.
+`/adjustments`: verifier failures use the Section 3 verifier codes; a ledger consumption refusal
+is 409 `deny.grant_conflict` (a definitive ledger answer, do not retry, with the reason hidden); a
+principal mismatch is 401 `deny.unauthorized_caller`; a clock regression is 503
+`deny.verifier_unavailable`. Per-route handlers remain only to attach the audit `receipt_ref`.
 
 ## 4. Terminal taxonomy mapping
 
@@ -143,42 +179,49 @@ One rule set; the activation plan restates it and must not differ.
    `authorization_refused` **disposition**, not an outcome value. The ratified E1 outcome
    vocabulary remains `confirmed`, `failed`, and `unknown`; a refusal is recorded only before an
    outbox send starts, so it has no outcome and cannot be represented as `failed`.
-2. **Record shape.** The existing attempt store holds one refusal record per `attempt_id` with the
-   discriminator `disposition: "authorization_refused"` and contract fields: `attempt_id`,
-   verifiable `binding_digest` (bound identity tuple hash for replay verification), `disposition`,
-   `refusal_code` (one Section 3 `deny.*` code), opaque `receipt_ref`, and `recorded_at`. It stores
-   no grant id, key id, target or payload. One rule covers internal detail: an attempt refusal record
-   may store the internal kind, rule or reason for audit only, and never exposes it. The public
-   fields are exactly `disposition`, `refusal_code`, `receipt_ref` and `recorded_at`; internal
-   reasons otherwise appear only in logs, never in a response.
-3. **Written in the authorization transaction.** Within the existing `BEGIN IMMEDIATE`
-   authorization transaction, the consumer looks up the attempt by `attempt_id`.
-   - *No prior row:* If no row exists and final authorization refuses the attempt, that same
-     transaction writes the refusal record with its `binding_digest` and commits before returning.
-   - *Existing unsent attempt blocked by revocation or a cascade:* If an attempt row already
-     exists before dispatch (`send_started = 0`) and revocation or a cascade blocks authorization
-     before `send_started`, that same transaction atomically transitions the existing attempt to
-     `disposition: "authorization_refused"`, releases any held reservation, clears pending outbox
-     intent, updates the refusal metadata (`refusal_code`, opaque `receipt_ref`, `recorded_at`),
-     and commits without setting `send_started`.
-   It does not consume a use, write an intent or outbox item, or set `send_started` in either
-   case. The unique `attempt_id` makes concurrent refusals converge on the committed record, and the
-   first record wins.
-4. **Replay returns the same refusal.** An exact replay first looks up `attempt_id`; when it finds
-   `authorization_refused`, it compares the incoming request's bound identity against the stored
-   `binding_digest`. If the bound identity matches, it performs no new authorization or dispatch and
-   returns the stored refusal with the HTTP status of the stored `refusal_code` (Section 3). Its
-   public body is exactly:
+2. **Record shape.** The existing attempt store holds one append-only refusal row per
+   `attempt_id`. The stored fields are `attempt_id`, `disposition` (always
+   `"authorization_refused"`), `kind`, `rule`, `reason`, `refusal_code` (one Section 3 `deny.*`
+   code), the opaque `receipt_ref` and `recorded_at`. It stores no grant id, key id, target,
+   payload or binding digest. The public fields are exactly `disposition`, `refusal_code`,
+   `receipt_ref` and `recorded_at`. The `kind`, `rule` and `reason` fields are internal: they may
+   be stored for audit only, and never appear in a response or outside logs.
+3. **Overlay, not rewrite.** The refusal row is an overlay that fences the attempt. Refusing never
+   releases the reservation, deletes the outbox row or rewrites the attempt. A database trigger
+   aborts any update of `send_started` on an outbox row whose attempt has a refusal row, so a
+   refused attempt can never start a send. The refusal row is written in the existing
+   `BEGIN IMMEDIATE` authorization transaction, which re-checks `send_started = 0` before it
+   inserts. When a verifier or other I/O has to run before the refusal is known, the row is
+   recorded afterwards in its own transaction: no write lock is held across I/O, and the trigger
+   plus the re-check close the gap.
+   - *No prior row:* if final authorization refuses an attempt that has no row, the refusal row is
+     committed before returning.
+   - *Revocation or a cascade found at the send boundary:* the send-time recheck writes the
+     terminal refusal in the same begin-send transaction (kind `final_boundary`, reason the fact:
+     `grant_revoked`, `issuer_revoked` or `cascade_listed`, code `deny.revoked_grant`),
+     commits, and then raises the refusal with its `receipt_ref`. The inert path never runs.
+   The refusal does not consume a use, write an intent or an outbox item, or set `send_started`.
+   The unique `attempt_id` makes concurrent refusals converge on the committed row, and the first
+   row wins.
+4. **Replay returns the same refusal.** The bound tuple is immutable. The `effect_grant_bindings`
+   table accepts no UPDATE and no DELETE (append-only triggers), and
+   `reservations.consumed_attempt_id` cannot change once it is set; the same triggers are applied
+   when an existing database is migrated. The request body carries only `attempt_id`, and the
+   grant, scope, target and epoch come from that stored binding. So the replay check is the
+   authenticated principal equal to the bound principal, made before the refusal lookup; there is
+   no binding digest. An exact replay first looks up `attempt_id`; when it finds
+   `authorization_refused`, it performs no new authorization or dispatch and returns the stored
+   refusal with the HTTP status of the stored `refusal_code` (Section 3). Its public body is
+   exactly:
 
    ```json
    {"error":{"code":"<stored refusal_code>","correlation_id":"<new uuid>","receipt_ref":"<stored opaque receipt_ref>"}}
    ```
 
    The fresh correlation id is request tracing only; the stored code and receipt reference
-   identify the same terminal refusal on every replay. A request with the same `attempt_id` but a
-   different bound identity fails the binding digest check, is rejected as HTTP 409
-   `deny.attempt_binding_conflict` (Section 3) without exposing the stored refusal, and must not
-   replace the committed record.
+   identify the same terminal refusal on every replay. A caller that is not the bound principal,
+   and an unknown `attempt_id`, both get the identical 401 `deny.unauthorized_caller` of Section 3
+   and never see the stored refusal.
 5. **No terminal refusal after the send marker.** Once the outbox send marker (`send_started = 1`)
    is set, no refusal record may be written for that attempt, and an existing refusal is never
    rewritten into a send. From that point the only stored outcomes are `confirmed`, `failed`
@@ -186,6 +229,30 @@ One rule set; the activation plan restates it and must not differ.
 6. **In-doubt dispatch.** After the send marker, an unproven outcome is `unknown` and is answered
    as HTTP 503 `deny.verifier_unavailable` with its `receipt_ref` (Section 3). It is never
    converted into a refusal record and never auto-rolled back.
+
+### Synthesis decisions
+
+Recorded 2026-10-27 when the documented contract and the code were reconciled, keeping the
+stronger guarantee of each side. Nothing here enables serving or effects.
+
+- **F1.** No binding-conflict code or 409; wrong principal and unknown `attempt_id` both get
+  the same 401, which removes an existence oracle.
+- **F2.** No binding digest; the replay check is principal equality, and the bound tuple is
+  immutable in storage through append-only triggers.
+- **F3.** The refusal row is an append-only overlay, fenced by a trigger on `send_started`; the
+  reservation and outbox row are kept.
+- **F4.** Revocation found at the send boundary writes its refusal in the begin-send transaction,
+  so replay returns the same `receipt_ref`.
+- **F5.** One closed error envelope at application level; no `detail` key; new public code
+  `deny.grant_conflict` (409) keeps the ledger answer definitive while hiding internal reasons.
+- **F6.** Stored and public refusal fields are listed explicitly; `kind`, `rule` and `reason`
+  stay internal.
+- **F7.** The 401 and 409 codes sit in a consumer-side table, so "Two rules" is accurate.
+- **F8.** One freshness rule everywhere: stale if older than 60 s, more than 5 s in the future or
+  naive; exactly 60 s is fresh.
+- **F9.** Schema `signature` is a non-blank string or null, and a true bit requires a string.
+- **F10.** One closed capability reason set shared by both sides; `startup.*` is consumer-only.
+- **F11.** The disabled-serving code is removed; `serving.route_not_exposed` covers it.
 
 ## 5. Release 2 frozen items
 
