@@ -9,6 +9,7 @@ import sys
 import pytest
 
 from bin.agents import dispatcher
+from utils import win_exec
 
 
 pytestmark = pytest.mark.integration
@@ -24,6 +25,7 @@ EXPECTED_COMMANDS = {
     "windsurf": "windsurf",
     "cline": "cline",
     "kimi": "kimi",
+    "hermes": "hermes",
 }
 
 
@@ -138,7 +140,7 @@ def test_windows_explicit_paths_respect_executable_suffixes(
     binary.write_text("fixture", encoding="utf-8")
     monkeypatch.setattr(sys, "platform", "win32")
     monkeypatch.setenv("PATHEXT", ".EXE;.CMD")
-    monkeypatch.setattr(dispatcher.shutil, "which", lambda candidate, path=None: str(binary))
+    monkeypatch.setattr(win_exec.shutil, "which", lambda candidate, path=None: str(binary))
     if accepted:
         assert dispatcher.resolve_binary_path("codex", str(binary)) == str(binary)
     else:
@@ -212,7 +214,7 @@ def test_windows_drive_qualified_name_is_not_a_bare_command(
 ) -> None:
     """Drive-qualified Windows names cannot escape the configured PATH entries."""
     monkeypatch.setattr(sys, "platform", "win32")
-    assert not dispatcher._is_bare_command(r"C:codex.exe")
+    assert not win_exec._is_bare_command(r"C:codex.exe")
 
 
 def test_empty_path_entry_does_not_search_the_working_directory(
@@ -238,7 +240,7 @@ def test_quoted_path_entries_resolve_end_to_end(tmp_path: Path, monkeypatch: pyt
 def test_unset_path_falls_back_to_the_default_search_path(monkeypatch: pytest.MonkeyPatch) -> None:
     """An unset PATH uses os.defpath for both lookup and the PATH-only guard."""
     monkeypatch.delenv("PATH", raising=False)
-    assert dispatcher._search_path() == os.defpath
+    assert win_exec._search_path() == os.defpath
 
 
 def test_relative_pathname_resolves_against_current_directory(
@@ -287,8 +289,8 @@ def test_windows_candidates_use_pathext_spelling_in_configured_order(
     monkeypatch.setenv("PATHEXT", ".EXE;.Cmd")
     monkeypatch.setenv("PATH", str(tmp_path))
     monkeypatch.setattr(Path, "is_file", lambda self: tried.append(self.name) or False)
-    assert dispatcher._find_bare_command("codex") is None
+    assert win_exec.find_bare_command("codex") is None
     assert tried == ["codex.EXE", "codex.Cmd", "codex"]
     tried.clear()
-    assert dispatcher._find_bare_command("codex.EXE") is None
+    assert win_exec.find_bare_command("codex.EXE") is None
     assert tried == ["codex.EXE", "codex.EXE.EXE", "codex.EXE.Cmd"]

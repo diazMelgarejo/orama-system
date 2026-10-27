@@ -63,9 +63,14 @@ if not _LOG.handlers:
 
 @dataclass(frozen=True)
 class _FileSpec:
+    """One shared module to compare between the two repos, and how strictly."""
+
     filename: str
     policy_functions: tuple[str, ...]
     require_identical_bytes: bool = False
+    # True until Perpetua-Tools carries its copy: a missing peer file is then a
+    # reported skip, not a failure. Once present it is compared byte-for-byte.
+    peer_optional: bool = False
 
 
 FILES_TO_CHECK: tuple[_FileSpec, ...] = (
@@ -77,6 +82,12 @@ FILES_TO_CHECK: tuple[_FileSpec, ...] = (
     _FileSpec(
         "endpoint_policy_core.py",
         ("parse_transport_identity", "build_transport_url"),
+    ),
+    _FileSpec(
+        "win_exec.py",
+        ("resolve_executable", "safe_argv", "terminate_tree"),
+        require_identical_bytes=True,
+        peer_optional=True,
     ),
 )
 
@@ -115,11 +126,15 @@ def _sibling_utils_dir() -> Path | None:
 
 
 def _check_one(spec: _FileSpec, local_dir: Path, peer_dir: Path) -> bool:
+    """Compare one shared module with its peer copy; True when it passes (or an optional peer is absent)."""
     local_path = local_dir / spec.filename
     peer_path = peer_dir / spec.filename
     if not local_path.is_file():
         print(f"model-endpoint-policy-parity: local file missing: {local_path}", file=sys.stderr)
         return False
+    if not peer_path.is_file() and spec.peer_optional:
+        print(f"model-endpoint-policy-parity: SKIP ({spec.filename}: peer copy not yet present)")
+        return True
     if not peer_path.is_file():
         print(f"model-endpoint-policy-parity: peer file missing: {peer_path}", file=sys.stderr)
         return False

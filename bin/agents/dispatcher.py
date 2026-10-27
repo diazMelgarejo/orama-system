@@ -30,12 +30,18 @@ import argparse
 import asyncio
 import json
 import os
-import shutil
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Dict, List, Mapping, Optional
+
+
+# ── shared Windows-safe executable resolver (src/utils/win_exec.py) ───────────
+_SRC_ROOT = Path(__file__).resolve().parents[2] / "src"
+if _SRC_ROOT.is_dir() and str(_SRC_ROOT) not in sys.path:
+    sys.path.append(str(_SRC_ROOT))
+from utils.win_exec import WinExecError, resolve_executable  # noqa: E402
 
 
 # ── PT path bootstrap ─────────────────────────────────────────────────────────
@@ -71,67 +77,8 @@ BINARY_REGISTRY: Mapping[str, BinaryRegistration] = MappingProxyType({
     "windsurf": BinaryRegistration("WINDSURF_BIN", "windsurf"),
     "cline": BinaryRegistration("CLINE_BIN", "cline"),
     "kimi": BinaryRegistration("KIMI_BIN", "kimi"),
+    "hermes": BinaryRegistration("HERMES_BIN", "hermes"),
 })
-
-
-def _is_bare_command(candidate: str) -> bool:
-    """True when ``candidate`` names a command to look up, not a pathname."""
-    if "/" in candidate or "\\" in candidate:
-        return False
-    return not (sys.platform == "win32" and len(candidate) >= 2 and candidate[1] == ":")
-
-
-def _search_path() -> str:
-    """The ``PATH`` string used for lookup, with any quotes around entries removed.
-
-    Windows ``PATH`` entries are often quoted, which ``shutil.which`` does not
-    expect. An unset ``PATH`` falls back to ``os.defpath``.
-    """
-    raw = os.environ.get("PATH", os.defpath)
-    return os.pathsep.join(entry.strip().strip('"') for entry in raw.split(os.pathsep))
-
-
-def _search_path_entries() -> tuple[str, ...]:
-    """Return trusted PATH directories, excluding empty current-directory entries."""
-    return tuple(entry for entry in _search_path().split(os.pathsep) if entry)
-
-
-def _windows_pathext() -> tuple[str, ...]:
-    """Return the PATHEXT suffixes exactly as configured, in order, without empty entries."""
-    return tuple(
-        extension.strip()
-        for extension in os.environ.get("PATHEXT", ".COM;.EXE;.BAT;.CMD").split(";")
-        if extension.strip()
-    )
-
-
-def _windows_executable_extensions() -> tuple[str, ...]:
-    """Return normalized executable suffixes used to compare, never to build, file names."""
-    return tuple(extension.casefold() for extension in _windows_pathext())
-
-
-def _find_bare_command(command: str) -> Optional[str]:
-    """Find ``command`` only through explicit non-empty PATH directories.
-
-    ``shutil.which`` can consult the working directory on Windows before a
-    supplied PATH. Joining each approved directory ourselves keeps a planted
-    local command from shadowing a later, configured installation.
-    """
-    for directory in _search_path_entries():
-        base = Path(directory) / command
-        candidates = (base,)
-        if sys.platform == "win32":
-            # File names use the PATHEXT casing as configured, so a case-sensitive
-            # filesystem finds the same file Windows would; comparison is case-insensitive.
-            candidates = (base, *(
-                base.with_name(f"{base.name}{extension}") for extension in _windows_pathext()
-            ))
-            if base.suffix.casefold() not in _windows_executable_extensions():
-                candidates = (*candidates[1:], base)
-        for candidate in candidates:
-            if candidate.is_file() and (sys.platform == "win32" or os.access(candidate, os.X_OK)):
-                return str(candidate)
-    return None
 
 
 def resolve_binary_path(binary_name: str, explicit_path: Optional[str] = None) -> str:
@@ -157,16 +104,10 @@ def resolve_binary_path(binary_name: str, explicit_path: Optional[str] = None) -
     )
     if not candidate.strip() or "\x00" in candidate:
         raise ValueError(f"Invalid executable configuration. {repair}")
-    candidate = os.path.expanduser(candidate)
-    found = _find_bare_command(candidate) if _is_bare_command(candidate) else shutil.which(candidate)
-    if found is None or not Path(found).is_file():
-        raise ValueError(f"Agent executable is unavailable or not executable. {repair}")
-    if sys.platform == "win32":
-        # Python 3.10/3.11 which() can accept any directly named regular file.
-        extensions = set(_windows_executable_extensions())
-        if Path(found).suffix.casefold() not in extensions:
-            raise ValueError(f"Agent executable has no permitted Windows extension. {repair}")
-    return os.path.abspath(found)
+    try:
+        return resolve_executable(candidate)
+    except WinExecError as error:
+        raise ValueError(f"Agent executable rejected ({error}). {repair}") from error
 
 
 def main(argv: Optional[List[str]] = None) -> int:
