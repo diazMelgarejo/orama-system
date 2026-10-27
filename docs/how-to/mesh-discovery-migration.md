@@ -18,8 +18,11 @@ not certificate trust, credentials, firewall rules, or serving activation.
 
 Strict configuration mode refuses automatic migration to an address that has
 not been explicitly configured or approved. Signature validity does not override
-this policy. Explicit revocation overrides every positive source, including
-archives, discovery state, environment configuration, and relaxed admission.
+this policy. Peers already stored in `known-peers.json` remain trusted under
+strict mode even if they were admitted automatically before the flag was
+enabled; revoke unwanted entries with `--remove-ip` before relying on strict
+mode. Explicit revocation overrides every positive source, including archives,
+discovery state, environment configuration, and relaxed admission.
 
 `scripts/mesh/discovery_trust.py --remove-ip <address>` revokes effective trust.
 Only explicit `--trust-ip <address>` or an affirmative interactive approval can
@@ -41,9 +44,11 @@ are respected and never expanded implicitly.
 Pending recipients are never retired automatically by age or failure count.
 An operator must explicitly reconcile a permanently retired recipient in the
 local self-identity state, preserving a local backup and evidence of the decision.
-A second address change while another migration is pending stops automatic
-notification until that outstanding migration is reconciled. No bulk queue flush
-or live topology rewrite is implied by this workflow.
+If the local address changes again while a migration is still pending, the
+sender supersedes the stale pending entry and announces `last_known_ip` to the
+newest address to the union of fresh targets and still-pending recipients. If
+the address returns to the last committed value, the stale pending entry is
+dropped. No bulk queue flush or live topology rewrite is implied by this workflow.
 
 ## Regression evidence
 

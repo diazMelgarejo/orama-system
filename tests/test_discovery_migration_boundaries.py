@@ -151,6 +151,54 @@ def test_http_success_without_exact_application_ack_is_pending(trust: ModuleType
     assert trust.load_self_identity()["last_known_ip"] == OLD
 
 
+def test_stale_pending_migration_is_superseded_on_newer_address(trust: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A later DHCP move must announce last_ip→newest and retain unpaid recipients."""
+    c = str(ipaddress.IPv4Address(0xC0000205))
+    calls: list[str] = []
+
+    def fail(request: urllib.request.Request, context: object, timeout: float) -> Response:
+        """Keep every recipient pending on the first address change."""
+        calls.append(json.loads(request.data)["data"]["new_ip"])
+        raise OSError("offline")
+
+    monkeypatch.setattr(trust, "_open_peer", fail)
+    trust.check_and_announce_self_migration(NEW, [A, B])
+    assert trust.load_self_identity()["pending_migration"]["new_ip"] == NEW
+    calls.clear()
+
+    def still_offline(request: urllib.request.Request, context: object, timeout: float) -> Response:
+        """Observe the superseded announcement while recipients stay pending."""
+        payload = json.loads(request.data)["data"]
+        calls.append(f"{request.host}:{payload['previous_ip']}->{payload['new_ip']}")
+        raise OSError("offline")
+
+    monkeypatch.setattr(trust, "_open_peer", still_offline)
+    trust.check_and_announce_self_migration(c, [A])
+    saved = trust.load_self_identity()
+    assert saved["last_known_ip"] == OLD
+    assert saved["pending_migration"]["new_ip"] == c
+    assert saved["pending_migration"]["recipients"] == [A, B]
+    assert calls == [f"{A}:8443:{OLD}->{c}", f"{B}:8443:{OLD}->{c}"]
+
+
+def test_pending_migration_cleared_when_address_returns_to_last_known(trust: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Returning to the committed address drops a stale pending migration."""
+    monkeypatch.setattr(trust, "_open_peer", lambda *args: (_ for _ in ()).throw(OSError("offline")))
+    trust.check_and_announce_self_migration(NEW, [A])
+    assert "pending_migration" in trust.load_self_identity()
+    assert trust.check_and_announce_self_migration(OLD, [A]) is None
+    assert "pending_migration" not in trust.load_self_identity()
+    assert trust.load_self_identity()["last_known_ip"] == OLD
+
+
+def test_ack_peer_returns_false_when_remember_peer_rejects(trust: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verified handshake cannot bypass revocation or strict allowlist policy."""
+    trust.forget_peer(OLD)
+    monkeypatch.setattr(trust, "verify_handshake", lambda *args: True)
+    assert trust.ack_peer(OLD, "nonce", "signature") is False
+    assert OLD not in trust.load_known_peer_ips()
+
+
 def test_delivery_tries_next_canonical_credential_only_on_auth_refusal(trust: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
     """A rejected peer credential can fall back without following redirects."""
     monkeypatch.setattr(trust, "_control_plane_tokens", lambda: ["synthetic-first", "synthetic-second"])

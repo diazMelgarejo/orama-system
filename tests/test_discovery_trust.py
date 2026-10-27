@@ -432,11 +432,13 @@ def test_self_ip_migration_retries_if_no_peer_acks(trust_mod, tmp_path, monkeypa
     )
 
     # When targets exist but all calls fail, last_known_ip MUST NOT advance!
-    def mock_fail_urlopen(*args, **kwargs):
-        """Verify mock fail urlopen."""
+    def mock_fail_open_peer(*args, **kwargs):
+        """Fail delivery through the production opener path."""
         raise OSError("unreachable")
 
-    monkeypatch.setattr(trust_mod.urllib.request, "urlopen", mock_fail_urlopen)
+    monkeypatch.setattr(trust_mod, "_get_ssl_context", lambda: object())
+    monkeypatch.setattr(trust_mod, "_control_plane_tokens", lambda: ["synthetic-bearer"])
+    monkeypatch.setattr(trust_mod, "_open_peer", mock_fail_open_peer)
 
     announcement = trust_mod.check_and_announce_self_migration(
         current_ip=_IP_238,
@@ -445,6 +447,7 @@ def test_self_ip_migration_retries_if_no_peer_acks(trust_mod, tmp_path, monkeypa
     assert announcement is not None
     saved = json.loads((tmp_path / ".local" / "self-identity.json").read_text())
     assert saved["last_known_ip"] == _IP_153  # Kept prior IP for retry!
+    assert saved["pending_migration"]["recipients"] == [_IP_88]
 
 
 @pytest.mark.asyncio
@@ -485,6 +488,7 @@ def test_ssl_context_never_unverified_even_when_relaxed(trust_mod, tmp_path, mon
     monkeypatch.setattr(trust_mod, "LOCAL", tmp_path / ".local")
     (tmp_path / ".local").mkdir()
     monkeypatch.delenv("ORAMA_LAN_CA_FILE", raising=False)
+    monkeypatch.setattr(trust_mod, "_find_ca_file", lambda: None)
     monkeypatch.setenv("ORAMA_DISCOVERY_RELAXED", "1")
     assert trust_mod._get_ssl_context() is None
     src = TRUST.read_text(encoding="utf-8")
@@ -511,6 +515,7 @@ def test_shibboleth_fails_closed_without_ca_even_when_relaxed(trust_mod, tmp_pat
     monkeypatch.setattr(trust_mod, "LOCAL", tmp_path / ".local")
     (tmp_path / ".local").mkdir()
     monkeypatch.delenv("ORAMA_LAN_CA_FILE", raising=False)
+    monkeypatch.setattr(trust_mod, "_find_ca_file", lambda: None)
     monkeypatch.setenv("ORAMA_DISCOVERY_RELAXED", "1")
     monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "bearer-token")
     # TCP connect succeeds so we reach the SSL gate.

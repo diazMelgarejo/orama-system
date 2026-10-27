@@ -509,12 +509,16 @@ def check_and_announce_self_migration(
     if pending and pending.get("new_ip") == current_ip:
         delivery_targets = list(pending["recipients"])
     else:
-        if pending:
-            log.warning("Prior migration still pending; reconcile recipients before another address change")
+        # DHCP can move again (or back) while recipients are still pending.
+        # Supersede the stale entry so peers learn the newest address from last_ip.
+        if current_ip == last_ip:
+            ident.pop("pending_migration", None)
+            save_self_identity(ident)
             return None
         targets = sorted(load_known_peer_ips()) if peer_ips is None else peer_ips
+        stale = list(pending.get("recipients") or []) if pending else []
         delivery_targets = sorted({
-            peer for peer in targets
+            peer for peer in [*targets, *stale]
             if peer not in (current_ip, last_ip, _LOOPBACK_V4, "localhost")
         })
         pending = {"new_ip": current_ip, "recipients": list(delivery_targets)}
@@ -689,7 +693,13 @@ def filter_endpoints_for_trust(endpoints: dict) -> tuple[dict, list[str]]:
         if not ip:
             continue
         if peer_trusted(ip, role):
-            remember_peer(ip)
+            if ip not in (_LOOPBACK_V4, "localhost"):
+                try:
+                    remember_peer(ip)
+                except ValueError:
+                    _block_untrusted_peer(ip, role, blocked)
+                    out[role] = None
+                    continue
             continue
         _block_untrusted_peer(ip, role, blocked)
         out[role] = None
@@ -702,7 +712,12 @@ def filter_endpoints_for_trust(endpoints: dict) -> tuple[dict, list[str]]:
         if not ip:
             continue
         if peer_trusted(ip, "win_peer"):
-            remember_peer(ip)
+            if ip not in (_LOOPBACK_V4, "localhost"):
+                try:
+                    remember_peer(ip)
+                except ValueError:
+                    _block_untrusted_peer(ip, "win_peer", blocked)
+                    continue
             peers_in.append(peer)
             continue
         _block_untrusted_peer(ip, "win_peer", blocked)
@@ -714,7 +729,10 @@ def ack_peer(ip: str, nonce: str, signature: str) -> bool:
     """Admit an acknowledged challenge only within current trust policy."""
     if not verify_handshake(ip, nonce, signature):
         return False
-    remember_peer(ip)
+    try:
+        remember_peer(ip)
+    except ValueError:
+        return False
     return True
 
 
