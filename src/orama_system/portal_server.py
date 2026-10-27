@@ -41,7 +41,7 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, StrictBool
-from starlette.responses import StreamingResponse
+from starlette.responses import JSONResponse, StreamingResponse
 
 from orama_system.lan_peer_channel import (
     LanPeerChannel,
@@ -1764,7 +1764,11 @@ class PeerEventBody(BaseModel):
 @app.post("/api/peer-event")
 async def post_peer_event(body: PeerEventBody):
     """Accept a peer event and hand it to the LAN peer channel."""
-    await _lan_peer_channel.on_inbound(body.model_dump())
+    result = await _lan_peer_channel.on_inbound(body.model_dump())
+    if result is not None:
+        if not result.get("ok"):
+            return JSONResponse(status_code=409, content=result)
+        return result
     return {"ok": True}
 
 

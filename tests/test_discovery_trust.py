@@ -42,11 +42,13 @@ class DiscoveryTrustModule(Protocol):
 
 @pytest.fixture(autouse=True)
 def hermetic_test_environment(monkeypatch) -> None:
+    """Verify hermetic test environment."""
     monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
 
 
 @pytest.fixture
 def trust_mod(tmp_path, monkeypatch) -> DiscoveryTrustModule:
+    """Verify trust mod."""
     spec = importlib.util.spec_from_file_location("discovery_trust", TRUST)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
@@ -57,6 +59,7 @@ def trust_mod(tmp_path, monkeypatch) -> DiscoveryTrustModule:
 
 
 def test_grandfather_known_peer_from_archive(trust_mod, tmp_path, monkeypatch):
+    """Verify grandfather known peer from archive."""
     monkeypatch.setattr(trust_mod, "ROOT", tmp_path)
     monkeypatch.setattr(trust_mod, "LOCAL", tmp_path / ".local")
     monkeypatch.setattr(trust_mod, "KNOWN_PEERS", tmp_path / ".local" / "known-peers.json")
@@ -73,6 +76,7 @@ def test_grandfather_known_peer_from_archive(trust_mod, tmp_path, monkeypatch):
 
 
 def test_blocks_unknown_peer_until_approve(trust_mod, tmp_path, monkeypatch):
+    """Verify blocks unknown peer until approve."""
     monkeypatch.setattr(trust_mod, "ROOT", tmp_path)
     monkeypatch.setattr(trust_mod, "LOCAL", tmp_path / ".local")
     monkeypatch.setattr(trust_mod, "KNOWN_PEERS", tmp_path / ".local" / "known-peers.json")
@@ -87,6 +91,7 @@ def test_blocks_unknown_peer_until_approve(trust_mod, tmp_path, monkeypatch):
 
 
 def test_handshake_requires_matching_nonce(trust_mod, tmp_path, monkeypatch) -> None:
+    """Verify handshake requires matching nonce."""
     monkeypatch.setenv("GOSSIP_SHARED_SECRET", "test-secret")
     monkeypatch.setattr(trust_mod, "PENDING_HANDSHAKES", tmp_path / "pending.json")
     nonce, sig = trust_mod.initiate_handshake("192.168.9.50")
@@ -96,6 +101,7 @@ def test_handshake_requires_matching_nonce(trust_mod, tmp_path, monkeypatch) -> 
 
 
 def test_expired_handshake_rejected(trust_mod, tmp_path, monkeypatch) -> None:
+    """Verify expired handshake rejected."""
     monkeypatch.setenv("GOSSIP_SHARED_SECRET", "test-secret")
     pending_path = tmp_path / "pending.json"
     monkeypatch.setattr(trust_mod, "PENDING_HANDSHAKES", pending_path)
@@ -110,6 +116,7 @@ def test_expired_handshake_rejected(trust_mod, tmp_path, monkeypatch) -> None:
 
 
 def test_blocks_unknown_win_peer(trust_mod, tmp_path, monkeypatch) -> None:
+    """Verify blocks unknown win peer."""
     monkeypatch.setattr(trust_mod, "ROOT", tmp_path)
     monkeypatch.setattr(trust_mod, "LOCAL", tmp_path / ".local")
     monkeypatch.setattr(trust_mod, "KNOWN_PEERS", tmp_path / ".local" / "known-peers.json")
@@ -125,6 +132,7 @@ def test_blocks_unknown_win_peer(trust_mod, tmp_path, monkeypatch) -> None:
 
 
 def test_env_ips_auto_trusted(trust_mod, tmp_path, monkeypatch) -> None:
+    """Verify env ips auto trusted."""
     monkeypatch.setattr(trust_mod, "ROOT", tmp_path)
     monkeypatch.setattr(trust_mod, "LOCAL", tmp_path / ".local")
     monkeypatch.setattr(trust_mod, "KNOWN_PEERS", tmp_path / ".local" / "known-peers.json")
@@ -140,6 +148,7 @@ def test_env_ips_auto_trusted(trust_mod, tmp_path, monkeypatch) -> None:
 
 
 def test_shibboleth_auto_trusts_live_peer(trust_mod, tmp_path, monkeypatch) -> None:
+    """Verify shibboleth auto trusts live peer."""
     monkeypatch.setattr(trust_mod, "ROOT", tmp_path)
     monkeypatch.setattr(trust_mod, "LOCAL", tmp_path / ".local")
     monkeypatch.setattr(trust_mod, "KNOWN_PEERS", tmp_path / ".local" / "known-peers.json")
@@ -155,6 +164,7 @@ def test_shibboleth_auto_trusts_live_peer(trust_mod, tmp_path, monkeypatch) -> N
 
 
 def test_discovery_relaxed_env(trust_mod, tmp_path, monkeypatch) -> None:
+    """Verify discovery relaxed env."""
     monkeypatch.setattr(trust_mod, "ROOT", tmp_path)
     monkeypatch.setattr(trust_mod, "LOCAL", tmp_path / ".local")
     monkeypatch.setattr(trust_mod, "KNOWN_PEERS", tmp_path / ".local" / "known-peers.json")
@@ -169,6 +179,7 @@ def test_discovery_relaxed_env(trust_mod, tmp_path, monkeypatch) -> None:
 
 
 def test_strict_config_mode_blocks_unlisted_even_if_shibboleth_passes(trust_mod, tmp_path, monkeypatch) -> None:
+    """Verify strict config mode blocks unlisted even if shibboleth passes."""
     monkeypatch.setattr(trust_mod, "ROOT", tmp_path)
     monkeypatch.setattr(trust_mod, "LOCAL", tmp_path / ".local")
     monkeypatch.setattr(trust_mod, "KNOWN_PEERS", tmp_path / ".local" / "known-peers.json")
@@ -186,6 +197,7 @@ def test_strict_config_mode_blocks_unlisted_even_if_shibboleth_passes(trust_mod,
 
 
 def test_strict_config_mode_accepts_configured_ips(trust_mod, tmp_path, monkeypatch) -> None:
+    """Verify strict config mode accepts configured ips."""
     monkeypatch.setattr(trust_mod, "ROOT", tmp_path)
     monkeypatch.setattr(trust_mod, "LOCAL", tmp_path / ".local")
     monkeypatch.setattr(trust_mod, "KNOWN_PEERS", tmp_path / ".local" / "known-peers.json")
@@ -201,6 +213,7 @@ def test_strict_config_mode_accepts_configured_ips(trust_mod, tmp_path, monkeypa
 
 
 def test_prompt_confirm_peer_accepts_on_yes(trust_mod, tmp_path, monkeypatch) -> None:
+    """Verify prompt confirm peer accepts on yes."""
     monkeypatch.setattr(trust_mod, "ROOT", tmp_path)
     monkeypatch.setattr(trust_mod, "LOCAL", tmp_path / ".local")
     monkeypatch.setattr(trust_mod, "KNOWN_PEERS", tmp_path / ".local" / "known-peers.json")
@@ -212,6 +225,7 @@ def test_prompt_confirm_peer_accepts_on_yes(trust_mod, tmp_path, monkeypatch) ->
 
 
 def test_prompt_confirm_peer_rejects_on_no(trust_mod, tmp_path, monkeypatch) -> None:
+    """Verify prompt confirm peer rejects on no."""
     monkeypatch.setattr(trust_mod, "ROOT", tmp_path)
     monkeypatch.setattr(trust_mod, "LOCAL", tmp_path / ".local")
     monkeypatch.setattr(trust_mod, "KNOWN_PEERS", tmp_path / ".local" / "known-peers.json")
@@ -223,6 +237,7 @@ def test_prompt_confirm_peer_rejects_on_no(trust_mod, tmp_path, monkeypatch) -> 
 
 
 def test_prompt_confirm_peer_non_interactive_fails_safe(trust_mod, tmp_path, monkeypatch) -> None:
+    """Verify prompt confirm peer non interactive fails safe."""
     monkeypatch.setattr(trust_mod, "ROOT", tmp_path)
     monkeypatch.setattr(trust_mod, "LOCAL", tmp_path / ".local")
     monkeypatch.setattr(trust_mod, "KNOWN_PEERS", tmp_path / ".local" / "known-peers.json")
@@ -233,6 +248,7 @@ def test_prompt_confirm_peer_non_interactive_fails_safe(trust_mod, tmp_path, mon
 
 
 def test_create_and_verify_ip_migration_announcement(trust_mod, tmp_path, monkeypatch) -> None:
+    """Verify create and verify ip migration announcement."""
     monkeypatch.setenv("GOSSIP_SHARED_SECRET", "test-cluster-secret")
     monkeypatch.setattr(trust_mod, "ROOT", tmp_path)
     monkeypatch.setattr(trust_mod, "LOCAL", tmp_path / ".local")
@@ -264,6 +280,7 @@ def test_create_and_verify_ip_migration_announcement(trust_mod, tmp_path, monkey
 
 
 def test_ip_migration_rejects_unknown_previous_fleet_member(trust_mod, tmp_path, monkeypatch) -> None:
+    """Verify ip migration rejects unknown previous fleet member."""
     monkeypatch.setenv("GOSSIP_SHARED_SECRET", "test-cluster-secret")
     monkeypatch.setattr(trust_mod, "ROOT", tmp_path)
     monkeypatch.setattr(trust_mod, "LOCAL", tmp_path / ".local")
@@ -285,6 +302,7 @@ def test_ip_migration_rejects_unknown_previous_fleet_member(trust_mod, tmp_path,
 
 
 def test_ip_migration_rejects_tampered_or_stale(trust_mod, tmp_path, monkeypatch) -> None:
+    """Verify ip migration rejects tampered or stale."""
     monkeypatch.setenv("GOSSIP_SHARED_SECRET", "test-cluster-secret")
     monkeypatch.setattr(trust_mod, "ROOT", tmp_path)
     monkeypatch.setattr(trust_mod, "LOCAL", tmp_path / ".local")
@@ -313,6 +331,7 @@ def test_ip_migration_rejects_tampered_or_stale(trust_mod, tmp_path, monkeypatch
 
 
 def test_self_ip_migration_know_thyself_flow(trust_mod, tmp_path, monkeypatch) -> None:
+    """Verify self ip migration know thyself flow."""
     monkeypatch.setenv("GOSSIP_SHARED_SECRET", "test-cluster-secret")
     monkeypatch.setattr(trust_mod, "ROOT", tmp_path)
     monkeypatch.setattr(trust_mod, "LOCAL", tmp_path / ".local")
@@ -343,6 +362,7 @@ def test_self_ip_migration_know_thyself_flow(trust_mod, tmp_path, monkeypatch) -
 
 
 def test_ip_migration_rejects_invalid_types_and_loopback(trust_mod, tmp_path, monkeypatch) -> None:
+    """Verify ip migration rejects invalid types and loopback."""
     monkeypatch.setenv("GOSSIP_SHARED_SECRET", "test-cluster-secret")
     monkeypatch.setattr(trust_mod, "ROOT", tmp_path)
     monkeypatch.setattr(trust_mod, "LOCAL", tmp_path / ".local")
@@ -397,6 +417,7 @@ def test_ip_migration_rejects_invalid_types_and_loopback(trust_mod, tmp_path, mo
 
 
 def test_self_ip_migration_retries_if_no_peer_acks(trust_mod, tmp_path, monkeypatch) -> None:
+    """Verify self ip migration retries if no peer acks."""
     monkeypatch.setenv("GOSSIP_SHARED_SECRET", "test-cluster-secret")
     monkeypatch.setattr(trust_mod, "ROOT", tmp_path)
     monkeypatch.setattr(trust_mod, "LOCAL", tmp_path / ".local")
@@ -412,6 +433,7 @@ def test_self_ip_migration_retries_if_no_peer_acks(trust_mod, tmp_path, monkeypa
 
     # When targets exist but all calls fail, last_known_ip MUST NOT advance!
     def mock_fail_urlopen(*args, **kwargs):
+        """Verify mock fail urlopen."""
         raise OSError("unreachable")
 
     monkeypatch.setattr(trust_mod.urllib.request, "urlopen", mock_fail_urlopen)
@@ -427,6 +449,7 @@ def test_self_ip_migration_retries_if_no_peer_acks(trust_mod, tmp_path, monkeypa
 
 @pytest.mark.asyncio
 async def test_lan_peer_channel_on_inbound_wire_envelope(trust_mod, tmp_path, monkeypatch) -> None:
+    """Verify lan peer channel on inbound wire envelope."""
     from orama_system.lan_peer_channel import LanPeerChannel
 
     monkeypatch.setenv("GOSSIP_SHARED_SECRET", "test-cluster-secret")
@@ -472,6 +495,10 @@ def test_control_plane_token_excludes_gossip_shared_secret(trust_mod, monkeypatc
     """HMAC signing secrets must not double as the control-plane bearer."""
     monkeypatch.delenv("ORAMA_CONTROL_PLANE_TOKEN", raising=False)
     monkeypatch.delenv("ORAMA_CONTROL_PLANE_TOKEN_PEER", raising=False)
+    monkeypatch.delenv("ORAMA_CONTROL_PLANE_TOKEN_LOCAL", raising=False)
+    monkeypatch.delenv("PT_CONTROL_PLANE_TOKEN", raising=False)
+    import utils.control_plane_auth as auth
+    monkeypatch.setattr(auth, "persisted_control_plane_token", lambda: "")
     monkeypatch.setenv("GOSSIP_SHARED_SECRET", "gossip-only-secret")
     monkeypatch.setenv("MESH_MIGRATION_SECRET", "migration-only-secret")
     assert trust_mod._control_plane_token() == ""
@@ -479,6 +506,7 @@ def test_control_plane_token_excludes_gossip_shared_secret(trust_mod, monkeypatc
 
 
 def test_shibboleth_fails_closed_without_ca_even_when_relaxed(trust_mod, tmp_path, monkeypatch) -> None:
+    """Verify shibboleth fails closed without ca even when relaxed."""
     monkeypatch.setattr(trust_mod, "ROOT", tmp_path)
     monkeypatch.setattr(trust_mod, "LOCAL", tmp_path / ".local")
     (tmp_path / ".local").mkdir()

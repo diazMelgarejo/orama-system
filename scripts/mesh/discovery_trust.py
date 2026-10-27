@@ -11,6 +11,7 @@ import secrets
 import socket
 import ssl
 import sys
+import tempfile
 import time
 import urllib.request
 from pathlib import Path
@@ -34,6 +35,7 @@ log = get_mesh_logger("orama.mesh.discovery_trust", repo_root=ROOT)
 
 
 def _load_json(path: Path) -> dict:
+    """Read optional JSON state, returning an empty mapping when unavailable."""
     if not path.is_file():
         return {}
     try:
@@ -43,6 +45,7 @@ def _load_json(path: Path) -> dict:
 
 
 def _secret() -> str:
+    """Resolve the migration signing key independently of bearer credentials."""
     for key in ("MESH_MIGRATION_SECRET", "GOSSIP_SHARED_SECRET"):
         val = os.environ.get(key, "").strip()
         if val:
@@ -53,11 +56,29 @@ def _secret() -> str:
 
 
 def _save_json(path: Path, data: dict) -> None:
+    """Atomically replace private state after flushing its durable contents."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    fd, name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            json.dump(data, stream, indent=2)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(name, path)
+        if os.name == "posix":
+            directory = os.open(path.parent, os.O_RDONLY)
+            try:
+                os.fsync(directory)
+            finally:
+                os.close(directory)
+    finally:
+        if os.path.exists(name):
+            os.unlink(name)
 
 
 def _ips_from_archive() -> set[str]:
+    """Extract grandfathered peer candidates from the local topology archive."""
     data = _load_json(ARCHIVE)
     ips: set[str] = set()
     for url in (data.get("endpoints") or {}).values():
@@ -69,31 +90,39 @@ def _ips_from_archive() -> set[str]:
     return ips
 
 
-def _control_plane_token() -> str:
-    """Return the control-plane bearer only.
+def _control_plane_tokens() -> list[str]:
+    """Use the shared peer-first outbound credential contract, never signing secrets."""
+    source = str(Path(__file__).resolve().parents[2] / "src")
+    if source not in sys.path:
+        sys.path.insert(0, source)
+    from utils.control_plane_auth import outbound_control_plane_tokens
 
-    Intentionally excludes MESH_MIGRATION_SECRET / GOSSIP_SHARED_SECRET so a
-    captured bearer cannot forge migration HMAC signatures (and vice versa).
-    """
-    for key in ("ORAMA_CONTROL_PLANE_TOKEN", "ORAMA_CONTROL_PLANE_TOKEN_PEER"):
-        val = os.environ.get(key, "").strip()
-        if val:
-            return val
-    for p in (
-        Path.home() / ".openclaw" / "state" / "control_plane_token",
-        ROOT.parent / ".state" / "control_plane_token",
-    ):
-        if p.is_file():
-            try:
-                t = p.read_text(encoding="utf-8").strip()
-                if t:
-                    return t
-            except OSError:
-                pass
-    return ""
+    return outbound_control_plane_tokens()
+
+
+def _control_plane_token() -> str:
+    """Return the first canonical outbound candidate for compatibility callers."""
+    return next(iter(_control_plane_tokens()), "")
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuse every redirect before credentials can leave the verified origin."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        """Leave redirects as HTTP errors rather than constructing another request."""
+        return None
+
+
+def _open_peer(request: urllib.request.Request, context: ssl.SSLContext, timeout: float):
+    """Open one verified HTTPS request with redirects and ambient proxies disabled."""
+    opener = urllib.request.build_opener(
+        urllib.request.ProxyHandler({}), _NoRedirect(), urllib.request.HTTPSHandler(context=context)
+    )
+    return opener.open(request, timeout=timeout)
 
 
 def _find_ca_file() -> str | None:
+    """Locate the explicitly configured or existing cluster trust bundle."""
     env_ca = os.environ.get("ORAMA_LAN_CA_FILE", "").strip()
     if env_ca and Path(env_ca).is_file():
         return env_ca
@@ -123,7 +152,6 @@ def _get_ssl_context() -> ssl.SSLContext | None:
     if ca_file:
         try:
             ctx = ssl.create_default_context(cafile=ca_file)
-            ctx.check_hostname = False
             return ctx
         except Exception as exc:
             log.warning("Failed to load cluster CA from %s: %s", ca_file, exc)
@@ -142,6 +170,7 @@ def is_strict_config_mode() -> bool:
 
 
 def _ips_from_env() -> set[str]:
+    """Read explicitly configured peer-address allowlists."""
     ips: set[str] = set()
     for key in ("WIN_3080_IP", "WIN_5080_IP", "WIN_PEER_IPS", "PEER_IPS"):
         for part in os.environ.get(key, "").split(","):
@@ -155,9 +184,10 @@ def verify_peer_shibboleth(ip: str, timeout: float = 0.5) -> bool:
     """Probe peer over TLS with known control plane token (shibboleth).
 
     Performs a 2-stage verification against authenticated route /api/peer-inbox:
-      1. Probe without token: MUST fail with HTTP 401 Unauthorized (proves endpoint
-         is an authentic portal that enforces control plane authentication).
-      2. Probe with token: MUST return HTTP 200 OK (proves peer shares our cluster token).
+      1. Probe without token: MUST fail with HTTP 401 Unauthorized.
+      2. Probe with canonical outbound candidates: MUST return HTTP 200 OK.
+
+    TLS authenticates the server; status codes only check portal access behavior.
 
     If no trusted CA context is available, verification fails closed to prevent token
     disclosure over untrusted TLS. Timeout is clamped to prevent subnet scan delays.
@@ -175,14 +205,14 @@ def verify_peer_shibboleth(ip: str, timeout: float = 0.5) -> bool:
         log.warning("No cluster CA available; refusing unverified shibboleth probe for %s", ip)
         return False
 
-    token = _control_plane_token()
-    if not token:
+    tokens = _control_plane_tokens()
+    if not tokens:
         return False
 
     # Stage 1: Unauthenticated probe must be rejected with 401
     unauth_req = urllib.request.Request(f"https://{ip}:8443/api/peer-inbox")
     try:
-        with urllib.request.urlopen(unauth_req, context=ctx, timeout=timeout) as resp:
+        with _open_peer(unauth_req, ctx, timeout) as resp:
             # If an unauthenticated request returns 200, the peer does not enforce auth (rogue/untrusted)
             log.warning("Peer %s returned %d to unauthenticated probe; untrusted", ip, resp.status)
             return False
@@ -194,18 +224,22 @@ def verify_peer_shibboleth(ip: str, timeout: float = 0.5) -> bool:
         return False
 
     # Stage 2: Authenticated probe must return 200 OK
-    auth_req = urllib.request.Request(f"https://{ip}:8443/api/peer-inbox")
-    auth_req.add_header("Authorization", f"Bearer {token}")
-    try:
-        with urllib.request.urlopen(auth_req, context=ctx, timeout=timeout) as resp:
-            if resp.status == 200:
-                return True
-    except Exception:
-        pass
+    for token in tokens:
+        auth_req = urllib.request.Request(f"https://{ip}:8443/api/peer-inbox")
+        auth_req.add_header("Authorization", f"Bearer {token}")
+        try:
+            with _open_peer(auth_req, ctx, timeout) as resp:
+                return resp.status == 200
+        except urllib.error.HTTPError as exc:
+            if exc.code not in (401, 403):
+                return False
+        except OSError:
+            return False
     return False
 
 
 def _ips_from_last_discovery() -> set[str]:
+    """Read historical peer candidates without treating them as live probes."""
     data = _load_json(OPENCLAW_STATE)
     ips: set[str] = set()
     for ep in (data.get("endpoints") or {}).values():
@@ -215,20 +249,26 @@ def _ips_from_last_discovery() -> set[str]:
 
 
 def load_known_peer_ips() -> set[str]:
+    """Combine allowed sources and subtract explicit revocations last."""
     store = _load_json(KNOWN_PEERS)
     ips = set(store.get("ips") or [])
     ips |= _ips_from_env()
     if not is_strict_config_mode():
         ips |= _ips_from_archive()
         ips |= _ips_from_last_discovery()
-    return {ip for ip in ips if ip and ip not in (_LOOPBACK_V4, "localhost")}
+    return {ip for ip in ips if ip and ip not in (_LOOPBACK_V4, "localhost")} - set(store.get("revoked_ips") or [])
 
 
 def remember_peer(ip: str) -> None:
+    """Persist admission only when neither explicit revocation nor strict policy forbids it."""
     if not ip:
         return
     store = _load_json(KNOWN_PEERS)
     ips = set(store.get("ips") or [])
+    if ip in set(store.get("revoked_ips") or []):
+        raise ValueError("peer explicitly revoked; operator reapproval required")
+    if is_strict_config_mode() and ip not in ips | _ips_from_env():
+        raise ValueError("strict configuration requires explicit peer approval")
     ips.add(ip)
     store["ips"] = sorted(ips)
     store["updated_at"] = time.time()
@@ -236,17 +276,17 @@ def remember_peer(ip: str) -> None:
 
 
 def forget_peer(ip: str) -> bool:
+    """Revoke effective trust across all positive sources, including rediscovery."""
     if not ip:
         return False
     store = _load_json(KNOWN_PEERS)
     ips = set(store.get("ips") or [])
-    if ip in ips:
-        ips.remove(ip)
-        store["ips"] = sorted(ips)
-        store["updated_at"] = time.time()
-        _save_json(KNOWN_PEERS, store)
-        return True
-    return False
+    ips.discard(ip)
+    store["ips"] = sorted(ips)
+    store["revoked_ips"] = sorted(set(store.get("revoked_ips") or []) | {ip})
+    store["updated_at"] = time.time()
+    _save_json(KNOWN_PEERS, store)
+    return True
 
 
 def prompt_confirm_peer(ip: str, role: str = "peer") -> bool:
@@ -267,7 +307,7 @@ def prompt_confirm_peer(ip: str, role: str = "peer") -> bool:
         sys.stderr.flush()
         answer = sys.stdin.readline().strip().lower()
         if answer in ("y", "yes"):
-            remember_peer(ip)
+            approve_peer(ip)
             log.info("Peer %s (%s) manually confirmed and trusted by operator", ip, role)
             return True
     except (OSError, EOFError, KeyboardInterrupt):
@@ -301,6 +341,7 @@ def load_self_identity() -> dict:
 
 
 def save_self_identity(data: dict) -> None:
+    """Atomically persist observed address and pending recipient state."""
     _save_json(SELF_IDENTITY_FILE, data)
 
 
@@ -391,6 +432,10 @@ def verify_migration_announcement(announcement: dict, window_sec: int = 300) -> 
     known_ips = load_known_peer_ips()
     if previous_ip not in known_ips:
         return False, f"previous IP {previous_ip} was never an acknowledged mesh fleet member"
+    if new_ip in set(_load_json(KNOWN_PEERS).get("revoked_ips") or []):
+        return False, "destination explicitly revoked"
+    if is_strict_config_mode() and new_ip not in known_ips:
+        return False, "strict configuration requires explicit destination approval"
 
     return True, "verified"
 
@@ -416,6 +461,11 @@ def apply_migration_announcement(announcement: dict) -> bool:
     return True
 
 
+def migration_digest(announcement: dict) -> str:
+    """Bind an acknowledgement to the exact canonical signed announcement."""
+    return hashlib.sha256(json.dumps(announcement, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
 def check_and_announce_self_migration(
     current_ip: str | None = None,
     peer_ips: list[str] | None = None,
@@ -436,8 +486,8 @@ def check_and_announce_self_migration(
         save_self_identity(ident)
         return None
 
-    # No change
-    if current_ip == last_ip:
+    pending = ident.get("pending_migration") or {}
+    if current_ip == last_ip and not pending:
         return None
 
     # IP CHANGED! Node knows thyself:
@@ -456,11 +506,20 @@ def check_and_announce_self_migration(
         current_ip,
     )
 
-    targets = list(load_known_peer_ips()) if peer_ips is None else peer_ips
-    delivery_targets = [
-        peer for peer in targets
-        if peer not in (current_ip, last_ip, _LOOPBACK_V4, "localhost")
-    ]
+    if pending and pending.get("new_ip") == current_ip:
+        delivery_targets = list(pending["recipients"])
+    else:
+        if pending:
+            log.warning("Prior migration still pending; reconcile recipients before another address change")
+            return None
+        targets = sorted(load_known_peer_ips()) if peer_ips is None else peer_ips
+        delivery_targets = sorted({
+            peer for peer in targets
+            if peer not in (current_ip, last_ip, _LOOPBACK_V4, "localhost")
+        })
+        pending = {"new_ip": current_ip, "recipients": list(delivery_targets)}
+        ident["pending_migration"] = pending
+        save_self_identity(ident)
 
     ack_count = 0
     if delivery_targets:
@@ -468,7 +527,7 @@ def check_and_announce_self_migration(
         if ctx is None:
             log.warning("No cluster CA available; cannot announce migration over TLS")
         else:
-            token = _control_plane_token()
+            tokens = _control_plane_tokens()
             payload_bytes = json.dumps({
                 "type": announcement["type"],
                 "source": announcement.get("node_id", ""),
@@ -477,23 +536,30 @@ def check_and_announce_self_migration(
             }).encode("utf-8")
 
             for peer in delivery_targets:
-                req = urllib.request.Request(
-                    f"https://{peer}:8443/api/peer-event",
-                    data=payload_bytes,
-                    headers={"Content-Type": "application/json"},
-                )
-                if token:
-                    req.add_header("Authorization", f"Bearer {token}")
-                try:
-                    with urllib.request.urlopen(req, context=ctx, timeout=1.0) as resp:
-                        if resp.status == 200:
-                            ack_count += 1
-                            log.info("Announced IP migration to peer %s: 200 OK", peer)
-                except Exception as e:
-                    log.debug("Peer %s unreachable during migration announcement: %s", peer, e)
+                for token in tokens:
+                    req = urllib.request.Request(
+                        f"https://{peer}:8443/api/peer-event",
+                        data=payload_bytes,
+                        headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"},
+                    )
+                    try:
+                        with _open_peer(req, ctx, 1.0) as resp:
+                            ack = json.loads(resp.read(4096))
+                            if isinstance(ack, dict) and resp.status == 200 and ack.get("ok") is True and ack.get("migration_id") == migration_digest(announcement):
+                                pending["recipients"].remove(peer)
+                                save_self_identity(ident)
+                                ack_count += 1
+                            break
+                    except urllib.error.HTTPError as exc:
+                        if exc.code not in (401, 403):
+                            break
+                    except (OSError, ValueError):
+                        log.debug("Peer migration delivery failed; retaining pending recipient")
+                        break
 
-    # Persist the new IP only if at least one peer acknowledged or there were no delivery targets
-    if not delivery_targets or ack_count > 0:
+    # A recipient is retired only by an explicit operator edit, never a retry timeout.
+    if not pending["recipients"]:
+        ident.pop("pending_migration", None)
         ident["last_known_ip"] = current_ip
         ident.setdefault("history", []).append({
             "ip": current_ip,
@@ -507,7 +573,7 @@ def check_and_announce_self_migration(
         )
     else:
         log.warning(
-            "Self IP migration announcement delivered to 0 peers; keeping last_known_ip=%s to retry next run",
+            "Self IP migration still has pending recipients; keeping last_known_ip=%s to retry next run",
             last_ip,
         )
 
@@ -515,6 +581,7 @@ def check_and_announce_self_migration(
 
 
 def handshake_signature(ip: str, nonce: str) -> str:
+    """Sign a discovery acknowledgement using the migration-secret lane."""
     secret = _secret()
     if not secret:
         return ""
@@ -526,6 +593,7 @@ def handshake_signature(ip: str, nonce: str) -> str:
 
 
 def _pending_entry(ip: str) -> dict | None:
+    """Load a fresh handshake challenge and remove expired challenges."""
     pending = _load_json(PENDING_HANDSHAKES)
     entry = pending.get(ip)
     if not isinstance(entry, dict):
@@ -538,6 +606,7 @@ def _pending_entry(ip: str) -> dict | None:
 
 
 def verify_handshake(ip: str, nonce: str, signature: str) -> bool:
+    """Consume a matching, fresh signed discovery challenge once."""
     entry = _pending_entry(ip)
     if not entry:
         return False
@@ -554,6 +623,7 @@ def verify_handshake(ip: str, nonce: str, signature: str) -> bool:
 
 
 def initiate_handshake(ip: str) -> tuple[str, str]:
+    """Persist a new challenge for operator-mediated peer acknowledgement."""
     nonce = secrets.token_hex(8)
     pending = _load_json(PENDING_HANDSHAKES)
     pending[ip] = {"nonce": nonce, "ts": time.time()}
@@ -563,6 +633,9 @@ def initiate_handshake(ip: str) -> tuple[str, str]:
 
 
 def peer_trusted(ip: str, role: str = "") -> bool:
+    """Evaluate revocation before all automatic or configured admission paths."""
+    if ip in set(_load_json(KNOWN_PEERS).get("revoked_ips") or []):
+        return False
     if not ip or ip in (_LOOPBACK_V4, "localhost"):
         return True
     if ip in load_known_peer_ips():
@@ -589,6 +662,7 @@ def peer_trusted(ip: str, role: str = "") -> bool:
 
 
 def _block_untrusted_peer(ip: str, role: str, blocked: list[str]) -> None:
+    """Record a blocked peer and advertise the explicit approval workflow."""
     nonce, sig = initiate_handshake(ip)
     blocked.append(ip)
     log.warning(
@@ -637,13 +711,24 @@ def filter_endpoints_for_trust(endpoints: dict) -> tuple[dict, list[str]]:
 
 
 def ack_peer(ip: str, nonce: str, signature: str) -> bool:
+    """Admit an acknowledged challenge only within current trust policy."""
     if not verify_handshake(ip, nonce, signature):
         return False
     remember_peer(ip)
     return True
 
 
+def approve_peer(ip: str) -> None:
+    """Apply explicit operator approval, including lifting a prior revocation."""
+    ipaddress.ip_address(ip)
+    store = _load_json(KNOWN_PEERS)
+    store["revoked_ips"] = sorted(set(store.get("revoked_ips") or []) - {ip})
+    store["ips"] = sorted(set(store.get("ips") or []) | {ip})
+    _save_json(KNOWN_PEERS, store)
+
+
 def main() -> int:
+    """Manage explicit approval, revocation and diagnostic probes from the CLI."""
     import argparse
     parser = argparse.ArgumentParser(description="Manage Orama mesh peer trust and discovery trust policies.")
     parser.add_argument("--list", action="store_true", help="List all known trusted peer IPs.")
@@ -667,14 +752,14 @@ def main() -> int:
             if ans not in ("y", "yes"):
                 print("Aborted.")
                 return 1
-        remember_peer(ip)
+        approve_peer(ip)
         print(f"✅ Trusted peer {ip} added to {KNOWN_PEERS}.")
         return 0
 
     if args.remove_ip:
         ip = args.remove_ip.strip()
         if forget_peer(ip):
-            print(f"✅ Removed {ip} from {KNOWN_PEERS}.")
+            print(f"✅ Revoked {ip} across configured, archived and discovered trust sources; explicit --trust-ip required to reapprove.")
             return 0
         else:
             print(f"⚠️  {ip} not found in {KNOWN_PEERS}.")
