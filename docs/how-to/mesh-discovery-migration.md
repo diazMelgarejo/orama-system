@@ -18,10 +18,11 @@ not certificate trust, credentials, firewall rules, or serving activation.
 
 Strict configuration mode refuses automatic migration to an address that has
 not been explicitly configured or approved. Signature validity does not override
-this policy. Peers already stored in `known-peers.json` remain trusted under
-strict mode even if they were admitted automatically before the flag was
-enabled; revoke unwanted entries with `--remove-ip` before relying on strict
-mode. Explicit revocation overrides every positive source, including archives,
+this policy. Strict mode trusts environment allowlists and the `approved_ips`
+entries recorded by explicit operator approval. Legacy `ips` entries have no
+approval provenance and are therefore automatic-admission candidates only;
+operators must explicitly reapprove any legacy entries required in strict mode.
+Explicit revocation overrides every positive source, including archives,
 discovery state, environment configuration, and relaxed admission.
 
 `scripts/mesh/discovery_trust.py --remove-ip <address>` revokes effective trust.
@@ -46,9 +47,16 @@ An operator must explicitly reconcile a permanently retired recipient in the
 local self-identity state, preserving a local backup and evidence of the decision.
 If the local address changes again while a migration is still pending, the
 sender supersedes the stale pending entry and announces `last_known_ip` to the
-newest address to the union of fresh targets and still-pending recipients. If
-the address returns to the last committed value, the stale pending entry is
-dropped. No bulk queue flush or live topology rewrite is implied by this workflow.
+newest address to the union of fresh targets and **all** original recipients,
+including recipients that acknowledged the previous address. Their previous
+acknowledgements do not apply to a newer address. Returning to the last committed
+address is also a new notification, not permission to drop pending work.
+
+The pending record retains `all_recipients` until notification completes. Legacy
+pending records that predate this field cannot reconstruct previously removed
+recipients. Automatic notification stops without changing those records; an
+operator must supply the full original audience in `all_recipients` when
+reconciling such a record. No bulk queue flush or live topology rewrite is implied.
 
 ## Regression evidence
 

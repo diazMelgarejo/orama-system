@@ -251,9 +251,10 @@ def _ips_from_last_discovery() -> set[str]:
 def load_known_peer_ips() -> set[str]:
     """Combine allowed sources and subtract explicit revocations last."""
     store = _load_json(KNOWN_PEERS)
-    ips = set(store.get("ips") or [])
+    ips = set(store.get("approved_ips") or [])
     ips |= _ips_from_env()
     if not is_strict_config_mode():
+        ips |= set(store.get("ips") or [])
         ips |= _ips_from_archive()
         ips |= _ips_from_last_discovery()
     return {ip for ip in ips if ip and ip not in (_LOOPBACK_V4, "localhost")} - set(store.get("revoked_ips") or [])
@@ -267,7 +268,7 @@ def remember_peer(ip: str) -> None:
     ips = set(store.get("ips") or [])
     if ip in set(store.get("revoked_ips") or []):
         raise ValueError("peer explicitly revoked; operator reapproval required")
-    if is_strict_config_mode() and ip not in ips | _ips_from_env():
+    if is_strict_config_mode() and ip not in set(store.get("approved_ips") or []) | _ips_from_env():
         raise ValueError("strict configuration requires explicit peer approval")
     ips.add(ip)
     store["ips"] = sorted(ips)
@@ -487,11 +488,10 @@ def check_and_announce_self_migration(
         return None
 
     pending = ident.get("pending_migration") or {}
-    if current_ip == last_ip:
-        # Lease returned to the committed address: drop any stale pending entry.
-        if pending:
-            ident.pop("pending_migration", None)
-            save_self_identity(ident)
+    if pending and "all_recipients" not in pending:
+        log.warning("Legacy migration lacks its full audience; operator reconciliation required before retry")
+        return None
+    if current_ip == last_ip and not pending:
         return None
 
     # IP CHANGED! Node knows thyself:
@@ -513,15 +513,19 @@ def check_and_announce_self_migration(
     if pending and pending.get("new_ip") == current_ip:
         delivery_targets = list(pending["recipients"])
     else:
-        # DHCP can move again while recipients are still pending.
-        # Supersede so peers learn last_known_ip -> newest address.
+        # A newer lease invalidates every previous acknowledgement, including
+        # when returning to the committed address. Keep the complete audience.
         targets = sorted(load_known_peer_ips()) if peer_ips is None else peer_ips
-        stale = list(pending.get("recipients") or []) if pending else []
+        stale = list(pending.get("all_recipients") or pending.get("recipients") or [])
         delivery_targets = sorted({
             peer for peer in [*targets, *stale]
             if peer not in (current_ip, last_ip, _LOOPBACK_V4, "localhost")
         })
-        pending = {"new_ip": current_ip, "recipients": list(delivery_targets)}
+        pending = {
+            "new_ip": current_ip,
+            "all_recipients": list(delivery_targets),
+            "recipients": list(delivery_targets),
+        }
         ident["pending_migration"] = pending
         save_self_identity(ident)
 
@@ -751,6 +755,7 @@ def approve_peer(ip: str) -> None:
     store = _load_json(KNOWN_PEERS)
     store["revoked_ips"] = sorted(set(store.get("revoked_ips") or []) - {ip})
     store["ips"] = sorted(set(store.get("ips") or []) | {ip})
+    store["approved_ips"] = sorted(set(store.get("approved_ips") or []) | {ip})
     _save_json(KNOWN_PEERS, store)
 
 

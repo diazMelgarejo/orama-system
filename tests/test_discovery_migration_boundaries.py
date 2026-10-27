@@ -181,14 +181,86 @@ def test_stale_pending_migration_is_superseded_on_newer_address(trust: ModuleTyp
     assert calls == [f"{A}:8443:{OLD}->{c}", f"{B}:8443:{OLD}->{c}"]
 
 
-def test_pending_migration_cleared_when_address_returns_to_last_known(trust: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Returning to the committed address drops a stale pending migration."""
+def test_pending_migration_preserved_when_address_returns_to_last_known(trust: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A return to the committed address still needs a recipient notification."""
     monkeypatch.setattr(trust, "_open_peer", lambda *args: (_ for _ in ()).throw(OSError("offline")))
     trust.check_and_announce_self_migration(NEW, [A])
     assert "pending_migration" in trust.load_self_identity()
-    assert trust.check_and_announce_self_migration(OLD, [A]) is None
-    assert "pending_migration" not in trust.load_self_identity()
+    assert trust.check_and_announce_self_migration(OLD, [A]) is not None
+    assert trust.load_self_identity()["pending_migration"]["new_ip"] == OLD
+    assert trust.load_self_identity()["pending_migration"]["recipients"] == [A]
     assert trust.load_self_identity()["last_known_ip"] == OLD
+
+
+@pytest.mark.parametrize("latest", [str(ipaddress.IPv4Address(0xC0000205)), OLD])
+def test_second_move_renotifies_previously_acknowledged_recipient(trust: ModuleType, monkeypatch: pytest.MonkeyPatch, latest: str) -> None:
+    """A->B->C and A->B->A notify peers that already learned B, even if omitted from fresh targets."""
+    calls: list[tuple[str, str]] = []
+
+    def deliver(request: urllib.request.Request, context: object, timeout: float) -> Response:
+        """Acknowledge A while B stays offline on the first move."""
+        announcement = json.loads(request.data)["data"]
+        calls.append((request.host, announcement["new_ip"]))
+        if request.host == f"{B}:8443":
+            raise OSError("offline")
+        return Response({"ok": True, "migration_id": trust.migration_digest(announcement)})
+
+    monkeypatch.setattr(trust, "_open_peer", deliver)
+    trust.check_and_announce_self_migration(NEW, [A, B])
+    assert trust.load_self_identity()["pending_migration"]["recipients"] == [B]
+    calls.clear()
+    trust.check_and_announce_self_migration(latest, [B])
+    assert calls == [(f"{A}:8443", latest), (f"{B}:8443", latest)]
+    state = trust.load_self_identity()["pending_migration"]
+    assert state["all_recipients"] == [A, B]
+    assert state["recipients"] == [B]
+    calls.clear()
+
+    def final_ack(request: urllib.request.Request, context: object, timeout: float) -> Response:
+        """After a process-equivalent reload, finish only the outstanding latest-address delivery."""
+        announcement = json.loads(request.data)["data"]
+        calls.append((request.host, announcement["new_ip"]))
+        return Response({"ok": True, "migration_id": trust.migration_digest(announcement)})
+
+    monkeypatch.setattr(trust, "_open_peer", final_ack)
+    trust.check_and_announce_self_migration(latest, [B])
+    assert calls == [(f"{B}:8443", latest)]
+    assert trust.load_self_identity()["last_known_ip"] == latest
+    assert "pending_migration" not in trust.load_self_identity()
+
+
+def test_strict_mode_excludes_historical_automatic_admission(trust: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Enabling strict mode cannot promote a cached automatic admission to operator approval."""
+    trust.remember_peer(NEW)
+    monkeypatch.setenv("ORAMA_STRICT_CONFIG_PEERS", "1")
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+    assert NEW not in trust.load_known_peer_ips()
+    assert trust.peer_trusted(NEW) is False
+    with pytest.raises(ValueError, match="strict configuration"):
+        trust.remember_peer(NEW)
+    trust.approve_peer(NEW)
+    assert trust.peer_trusted(NEW) is True
+
+
+def test_legacy_pending_audience_is_not_guessed(trust: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Do not silently declare success when old state lost acknowledged recipients."""
+    state = {"node_id": "win", "last_known_ip": OLD, "pending_migration": {"new_ip": NEW, "recipients": [B]}}
+    trust.save_self_identity(state)
+
+    def unexpected_delivery(*args: object) -> None:
+        """Any automatic delivery would guess an incomplete audience."""
+        pytest.fail("legacy migration requires explicit audience reconciliation")
+
+    monkeypatch.setattr(trust, "_open_peer", unexpected_delivery)
+    assert trust.check_and_announce_self_migration(str(ipaddress.IPv4Address(0xC0000205)), [B]) is None
+    assert trust.load_self_identity() == state
+
+
+def test_strict_configured_migration_is_accepted(trust: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Strict policy permits a signed migration only between explicitly configured addresses."""
+    monkeypatch.setenv("ORAMA_STRICT_CONFIG_PEERS", "1")
+    monkeypatch.setenv("PEER_IPS", f"{OLD},{NEW}")
+    assert trust.apply_migration_announcement(trust.create_migration_announcement("win", OLD, NEW)) is True
 
 
 def test_ack_peer_returns_false_when_remember_peer_rejects(trust: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:

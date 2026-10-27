@@ -38,22 +38,35 @@ class DiscoveryTrustModule(Protocol):
     def filter_endpoints_for_trust(self, endpoints: dict) -> tuple[dict, list[str]]: ...
     def initiate_handshake(self, ip: str) -> tuple[str, str]: ...
     def verify_handshake(self, ip: str, nonce: str, signature: str) -> bool: ...
+    def approve_peer(self, ip: str) -> None: ...
 
 
 @pytest.fixture(autouse=True)
-def hermetic_test_environment(monkeypatch) -> None:
-    """Verify hermetic test environment."""
+def hermetic_test_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Isolate policy and signing inputs from workstation environment state."""
     monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+    for name in (
+        "ORAMA_STRICT_CONFIG_PEERS", "ORAMA_APPROVE_DISCOVERY", "ORAMA_DISCOVERY_RELAXED",
+        "MESH_MIGRATION_SECRET", "GOSSIP_SHARED_SECRET",
+        "WIN_3080_IP", "WIN_5080_IP", "WIN_PEER_IPS", "PEER_IPS",
+    ):
+        monkeypatch.delenv(name, raising=False)
 
 
 @pytest.fixture
-def trust_mod(tmp_path, monkeypatch) -> DiscoveryTrustModule:
+def trust_mod(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> DiscoveryTrustModule:
     """Verify trust mod."""
     spec = importlib.util.spec_from_file_location("discovery_trust", TRUST)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
+    monkeypatch.setattr(module, "ROOT", tmp_path)
+    monkeypatch.setattr(module, "LOCAL", tmp_path / ".local")
+    monkeypatch.setattr(module, "KNOWN_PEERS", tmp_path / ".local" / "known-peers.json")
+    monkeypatch.setattr(module, "ARCHIVE", tmp_path / ".local" / "archive.json")
+    monkeypatch.setattr(module, "OPENCLAW_STATE", tmp_path / "last.json")
+    monkeypatch.setattr(module, "SELF_IDENTITY_FILE", tmp_path / "self.json")
     monkeypatch.setattr(module, "PENDING_HANDSHAKES", tmp_path / ".local" / "pending.json")
     return module  # type: ignore[return-value]
 
@@ -196,7 +209,7 @@ def test_strict_config_mode_blocks_unlisted_even_if_shibboleth_passes(trust_mod,
     assert filtered.get("win") is None
 
 
-def test_strict_config_mode_accepts_configured_ips(trust_mod, tmp_path, monkeypatch) -> None:
+def test_strict_config_mode_accepts_configured_ips(trust_mod: DiscoveryTrustModule, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Verify strict config mode accepts configured ips."""
     monkeypatch.setattr(trust_mod, "ROOT", tmp_path)
     monkeypatch.setattr(trust_mod, "LOCAL", tmp_path / ".local")
@@ -205,7 +218,7 @@ def test_strict_config_mode_accepts_configured_ips(trust_mod, tmp_path, monkeypa
     monkeypatch.setattr(trust_mod, "OPENCLAW_STATE", tmp_path / "last.json")
     monkeypatch.setenv("ORAMA_STRICT_CONFIG_PEERS", "1")
     (tmp_path / ".local").mkdir()
-    (tmp_path / ".local" / "known-peers.json").write_text(json.dumps({"ips": [_IP_238]}), encoding="utf-8")
+    trust_mod.approve_peer(_IP_238)
     endpoints = {"win": {"ip": _IP_238, "models": []}}
     filtered, blocked = trust_mod.filter_endpoints_for_trust(endpoints)
     assert blocked == []
