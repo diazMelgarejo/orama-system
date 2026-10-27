@@ -51,7 +51,11 @@ RUNNING_ON_WINDOWS = sys.platform == "win32"
 _SCRIPTS_DIR = Path(__file__).resolve().parent
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
-from mesh.discovery_trust import ack_peer, filter_endpoints_for_trust  # noqa: E402
+from mesh.discovery_trust import (  # noqa: E402
+    ack_peer,
+    check_and_announce_self_migration,
+    filter_endpoints_for_trust,
+)
 
 _SRC_DIR = _SCRIPTS_DIR.parent / "src"
 if str(_SRC_DIR) not in sys.path:
@@ -1101,6 +1105,10 @@ def run_discovery(force: bool = True, cached: bool = False) -> int:
                     return 0
 
         print("🔍 Probing LM Studio endpoints...", file=sys.stderr)
+        try:
+            check_and_announce_self_migration()
+        except Exception:
+            pass
         endpoints = discover_endpoints()
         tier = 1
         # Windows evidence from THIS run must also veto stale-cache Mac entries.
@@ -1378,7 +1386,11 @@ def main():
     p.add_argument("--ack-peer", metavar="IP", help="Acknowledge new discovery peer after handshake")
     p.add_argument("--nonce", help="Handshake nonce from discover output")
     p.add_argument("--signature", help="Handshake HMAC signature")
+    p.add_argument("--strict-peers", action="store_true",
+                   help="Strict config peers mode: only trust IPs explicitly listed in config files")
     args = p.parse_args()
+    if args.strict_peers:
+        os.environ["ORAMA_STRICT_CONFIG_PEERS"] = "1"
     if args.ack_peer:
         if not args.nonce or not args.signature:
             print("❌ --ack-peer requires --nonce and --signature", file=sys.stderr)
