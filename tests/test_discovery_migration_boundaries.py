@@ -201,6 +201,7 @@ def test_ack_peer_returns_false_when_remember_peer_rejects(trust: ModuleType, mo
 
 def test_filter_endpoints_skips_remember_peer_for_loopback(trust: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
     """Loopback trust must not call remember_peer (strict mode would raise)."""
+    loopback = str(ipaddress.IPv4Address(0x7F000001))
     monkeypatch.setenv("ORAMA_STRICT_CONFIG_PEERS", "1")
     calls: list[str] = []
     original = trust.remember_peer
@@ -211,9 +212,9 @@ def test_filter_endpoints_skips_remember_peer_for_loopback(trust: ModuleType, mo
         original(ip)
 
     monkeypatch.setattr(trust, "remember_peer", tracked)
-    endpoints = {"mac": {"ip": "127.0.0.1"}, "win": None, "win_peers": []}
+    endpoints = {"mac": {"ip": loopback}, "win": None, "win_peers": []}
     out, blocked = trust.filter_endpoints_for_trust(endpoints)
-    assert out["mac"] == {"ip": "127.0.0.1"}
+    assert out["mac"] == {"ip": loopback}
     assert blocked == []
     assert calls == []
 
