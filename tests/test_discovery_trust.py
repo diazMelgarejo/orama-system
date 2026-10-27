@@ -454,3 +454,39 @@ async def test_lan_peer_channel_on_inbound_wire_envelope(trust_mod, tmp_path, mo
 
     await channel.on_inbound(wire_event)
     assert _IP_238 in trust_mod.load_known_peer_ips()
+
+
+def test_ssl_context_never_unverified_even_when_relaxed(trust_mod, tmp_path, monkeypatch) -> None:
+    """Bearer-bearing paths must not get an unverified TLS context under ORAMA_DISCOVERY_RELAXED."""
+    monkeypatch.setattr(trust_mod, "ROOT", tmp_path)
+    monkeypatch.setattr(trust_mod, "LOCAL", tmp_path / ".local")
+    (tmp_path / ".local").mkdir()
+    monkeypatch.delenv("ORAMA_LAN_CA_FILE", raising=False)
+    monkeypatch.setenv("ORAMA_DISCOVERY_RELAXED", "1")
+    assert trust_mod._get_ssl_context() is None
+
+
+def test_control_plane_token_excludes_gossip_shared_secret(trust_mod, monkeypatch) -> None:
+    """HMAC signing secrets must not double as the control-plane bearer."""
+    monkeypatch.delenv("ORAMA_CONTROL_PLANE_TOKEN", raising=False)
+    monkeypatch.delenv("ORAMA_CONTROL_PLANE_TOKEN_PEER", raising=False)
+    monkeypatch.setenv("GOSSIP_SHARED_SECRET", "gossip-only-secret")
+    monkeypatch.setenv("MESH_MIGRATION_SECRET", "migration-only-secret")
+    assert trust_mod._control_plane_token() == ""
+    assert trust_mod._secret() == "migration-only-secret"
+
+
+def test_shibboleth_fails_closed_without_ca_even_when_relaxed(trust_mod, tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(trust_mod, "ROOT", tmp_path)
+    monkeypatch.setattr(trust_mod, "LOCAL", tmp_path / ".local")
+    (tmp_path / ".local").mkdir()
+    monkeypatch.delenv("ORAMA_LAN_CA_FILE", raising=False)
+    monkeypatch.setenv("ORAMA_DISCOVERY_RELAXED", "1")
+    monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "bearer-token")
+    # TCP connect succeeds so we reach the SSL gate.
+    monkeypatch.setattr(
+        trust_mod.socket,
+        "create_connection",
+        lambda *args, **kwargs: type("C", (), {"__enter__": lambda s: s, "__exit__": lambda *a: None})(),
+    )
+    assert trust_mod.verify_peer_shibboleth(_IP_88) is False

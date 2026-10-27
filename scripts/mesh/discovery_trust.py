@@ -70,7 +70,12 @@ def _ips_from_archive() -> set[str]:
 
 
 def _control_plane_token() -> str:
-    for key in ("ORAMA_CONTROL_PLANE_TOKEN", "ORAMA_CONTROL_PLANE_TOKEN_PEER", "GOSSIP_SHARED_SECRET"):
+    """Return the control-plane bearer only.
+
+    Intentionally excludes MESH_MIGRATION_SECRET / GOSSIP_SHARED_SECRET so a
+    captured bearer cannot forge migration HMAC signatures (and vice versa).
+    """
+    for key in ("ORAMA_CONTROL_PLANE_TOKEN", "ORAMA_CONTROL_PLANE_TOKEN_PEER"):
         val = os.environ.get(key, "").strip()
         if val:
             return val
@@ -109,8 +114,10 @@ def _find_ca_file() -> str | None:
 def _get_ssl_context() -> ssl.SSLContext | None:
     """Return SSL context validating against cluster CA if present.
 
-    Fails closed (returns None) if no CA is found or CA loading fails,
-    unless relaxed discovery is explicitly enabled via ORAMA_DISCOVERY_RELAXED=1.
+    Always fails closed (returns None) when no CA is available or CA loading
+    fails. Bearer-bearing discovery probes and migration announcements must
+    never use an unverified TLS context — including when
+    ORAMA_DISCOVERY_RELAXED=1 (that flag only relaxes peer auto-trust, not TLS).
     """
     ca_file = _find_ca_file()
     if ca_file:
@@ -121,13 +128,7 @@ def _get_ssl_context() -> ssl.SSLContext | None:
         except Exception as exc:
             log.warning("Failed to load cluster CA from %s: %s", ca_file, exc)
 
-    if is_strict_config_mode() or os.environ.get("ORAMA_REQUIRE_PINNED_CA", "").strip().lower() in ("1", "true", "yes"):
-        log.warning("Cluster CA required but unavailable; refusing insecure SSL context")
-        return None
-
-    if os.environ.get("ORAMA_DISCOVERY_RELAXED", "").strip().lower() in ("1", "true", "yes"):
-        return ssl._create_unverified_context()
-
+    log.warning("Cluster CA unavailable; refusing insecure SSL context")
     return None
 
 
