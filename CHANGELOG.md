@@ -3,6 +3,8 @@
 
 ## [Unreleased] — Sites MCP prompt workspace
 
+- Security: `/ws/portal-peer` and its clients now carry the control-plane bearer only in the
+  `Authorization` header; a `?token=` query is refused (1008) so access logs never record it.
 - Added an independent v1 HTTP MCP adapter, private prompt UI, reviewed PT snapshot parity gate,
   real SQLite lifecycle tests and hosting assembly instructions.
 - Added tool SPECS and an evidence-based audit separating deterministic prompt structure from

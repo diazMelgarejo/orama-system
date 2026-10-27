@@ -13,7 +13,6 @@ import time
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlencode
 
 import httpx
 from fastapi import WebSocket
@@ -85,6 +84,11 @@ def build_peer_transport_url(
     if websocket:
         scheme = "wss" if scheme == "https" else "ws"
     return f"{scheme}://{netloc}{path}"
+
+
+def ws_handshake_headers(token: str) -> dict[str, str] | None:
+    """Return the WebSocket handshake headers carrying the bearer, or None when there is no token; the token is never placed in the URL."""
+    return {"Authorization": f"Bearer {token}"} if token else None
 
 
 def make_envelope(msg_type: str, data: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -204,10 +208,17 @@ class LanPeerChannel:
         )
 
         for token in tokens:
-            qs = f"?{urlencode({'token': token})}" if token else ""
-            url = f"{endpoint}{qs}"
+            # SECURITY: the bearer travels only in the Authorization header of
+            # the handshake. It is never placed in the URL, which access logs
+            # (Caddy, uvicorn) record.
+            headers = ws_handshake_headers(token)
+            url = endpoint
             try:
-                async with websockets.connect(url, open_timeout=WS_OPEN_TIMEOUT_S) as ws:
+                async with websockets.connect(
+                    url,
+                    open_timeout=WS_OPEN_TIMEOUT_S,
+                    additional_headers=headers,
+                ) as ws:
                     self.state = "ws_connected"
                     heartbeat = asyncio.create_task(self._heartbeat_ws(ws))
                     try:
