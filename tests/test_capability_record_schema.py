@@ -62,8 +62,21 @@ def _type_ok(value: Any, name: str) -> bool:
 
 def _check(node: dict[str, Any], value: Any, errors: list[str], path: str = "$") -> None:
     """Minimal structural validator covering the keywords this schema uses."""
-    if "const" in node and value != node["const"]:
+    if "const" in node and (value != node["const"] or type(value) is not type(node["const"])):
         errors.append(f"{path}: const")
+    if "anyOf" in node:
+        branches = []
+        for branch in node["anyOf"]:
+            sub: list[str] = []
+            _check(branch, value, sub, path)
+            branches.append(sub)
+        if all(branches):
+            errors.append(f"{path}: anyOf")
+    if "if" in node:
+        cond: list[str] = []
+        _check(node["if"], value, cond, path)
+        if not cond and "then" in node:
+            _check(node["then"], value, errors, path)
     if "type" in node:
         types = node["type"] if isinstance(node["type"], list) else [node["type"]]
         if not any(_type_ok(value, t) for t in types):
@@ -74,10 +87,11 @@ def _check(node: dict[str, Any], value: Any, errors: list[str], path: str = "$")
             errors.append(f"{path}: minLength")
         if "pattern" in node and not re.search(node["pattern"], value):
             errors.append(f"{path}: pattern")
-    if isinstance(value, dict) and "properties" in node:
-        for key in node.get("required", []):
+    if isinstance(value, dict) and "required" in node:
+        for key in node["required"]:
             if key not in value:
                 errors.append(f"{path}.{key}: required")
+    if isinstance(value, dict) and "properties" in node:
         if node.get("additionalProperties") is False:
             for key in value:
                 if key not in node["properties"]:
@@ -117,11 +131,30 @@ def test_default_all_false_record_validates() -> None:
     assert _errors(_record()) == []
 
 
-def test_signature_object_is_allowed_shape() -> None:
-    """A signature object is accepted by shape."""
+def test_string_signature_is_allowed_shape() -> None:
+    """A non-blank string signature is accepted by shape, with or without a true bit."""
     record = _record()
-    record["signature"] = {"alg": "test", "value": "x"}
+    record["signature"] = "operator-signature-value"
     assert _errors(record) == []
+    record["capabilities"]["serving"] = True
+    assert _errors(record) == []
+
+
+@pytest.mark.parametrize("bad", [{"alg": "test", "value": "x"}, "", " ", "\t\n", 0, False, []])
+def test_object_blank_or_non_string_signature_fails(bad: Any) -> None:
+    """An object, blank, whitespace-only or non-string signature is invalid."""
+    record = _record()
+    record["signature"] = bad
+    assert _errors(record)
+
+
+@pytest.mark.parametrize("bit", BITS)
+def test_true_bit_with_null_signature_fails(bit: str) -> None:
+    """Any true capability bit with a null signature is invalid."""
+    record = _record()
+    record["capabilities"][bit] = True
+    record["signature"] = None
+    assert _errors(record)
 
 
 @pytest.mark.parametrize("bit", BITS)
@@ -190,7 +223,7 @@ def test_pre_dispatch_refusal_contract_preserves_e1_outcomes() -> None:
     for field in ("`attempt_id`", "`disposition`", "`refusal_code`", "`receipt_ref`", "`recorded_at`"):
         assert field in contract
     assert "existing `BEGIN IMMEDIATE` authorization transaction" in contract
-    assert "It does not consume a use" in contract
+    assert "does not consume a use" in contract
     assert "An exact replay first looks up `attempt_id`" in contract
     assert '"<stored refusal_code>"' in contract
     assert '"<stored opaque receipt_ref>"' in contract
@@ -225,13 +258,13 @@ def test_public_error_section_fixes_statuses_and_unauthorized_rule() -> None:
     section = text[start : text.index("## 4. Terminal taxonomy mapping", start)]
     assert "| `deny.unauthorized_caller` | 401 |" in section
     assert "| `deny.malformed_grant` | 400 |" in section
-    assert "| `deny.attempt_binding_conflict` | 409 |" in section
+    assert "| `deny.grant_conflict` | 409 |" in section
     assert "`deny.revocation_stale`, `deny.verifier_unavailable` | 503 |" in section
     assert "HTTP 401 with `deny.unauthorized_caller`" in section
     flat = " ".join(section.split())
     assert "HTTP 503 with `deny.verifier_unavailable` and the opaque `receipt_ref`" in flat
-    assert "HTTP 409 with `deny.attempt_binding_conflict`" in flat
-    assert "no `receipt_ref` and no stored refusal fields" in flat
+    assert "the identical answer (same status, same body shape, no `receipt_ref`)" in flat
+    assert "There is no separate disabled-serving code" in flat
     assert "`receipt_ref` is never a sibling of `error`" in section
 
 
@@ -258,22 +291,46 @@ def test_envelope_epoch_replay_and_refusal_audit_rules() -> None:
     assert "lease check runs in the shared send-time helper inside the send transaction" in section
     assert "fails closed when no lease view is available" in section
     refusal = " ".join(_pre_dispatch_refusal_section(text).split())
-    assert "may store the internal kind, rule or reason for audit only, and never exposes it" in refusal
-    assert "exactly `disposition`, `refusal_code`, `receipt_ref` and `recorded_at`" in refusal
-    assert "It stores no grant id, key id, target or payload." in refusal
+    assert "may be stored for audit only, and never appear in a response" in refusal
+    assert "exactly `disposition`, `refusal_code`,`receipt_ref` and `recorded_at`".replace(",`",", `") in refusal
+    assert "It stores no grant id, key id, target," in refusal
 
 
-def test_refusal_replay_binding_digest_and_existing_attempt_transition() -> None:
-    """Refusal records persist binding_digest for replay check; existing attempts transition atomically."""
+def test_refusal_overlay_model_and_principal_replay_check() -> None:
+    """The refusal row is an append-only overlay; replay checks the principal, not a digest."""
     text = DOCS[1].read_text(encoding="utf-8")
     refusal = " ".join(_pre_dispatch_refusal_section(text).split())
-    assert "verifiable `binding_digest`" in refusal
-    assert "compares the incoming request's bound identity against the stored `binding_digest`" in refusal
-    assert "fails the binding digest check, is rejected as HTTP 409 `deny.attempt_binding_conflict`" in refusal
-    assert "without exposing the stored refusal" in refusal
-    assert "Existing unsent attempt blocked by revocation or a cascade" in refusal
-    assert 'atomically transitions the existing attempt to `disposition: "authorization_refused"`' in refusal
-    assert "releases any held reservation, clears pending outbox intent" in refusal
+    assert "The refusal row is an overlay that fences the attempt" in refusal
+    assert "never releases the reservation, deletes the outbox row" in refusal
+    assert "aborts any update of `send_started`" in refusal
+    assert "re-checks `send_started = 0`" in refusal
+    assert "`final_boundary`" in refusal
+    assert "`deny.revoked_grant`" in refusal
+    assert "authenticated principal equal to the bound principal, made before the refusal lookup" in refusal
+    assert "both get the identical 401 `deny.unauthorized_caller`" in refusal
+
+
+def test_doc_vocabulary_delta_and_synthesis_decisions() -> None:
+    """Removed names are gone, the new code is present, and every decision is recorded."""
+    text = DOCS[1].read_text(encoding="utf-8")
+    assert "attempt_binding_conflict" not in text
+    assert "binding_digest" not in text
+    assert "serving.disabled" not in text
+    assert "deny.grant_conflict" in text
+    start = text.index("### Synthesis decisions")
+    section = text[start : text.index("## 5. Release 2 frozen items", start)]
+    for n in range(1, 12):
+        assert f"- **F{n}.**" in section
+
+
+def test_plan_restatement_matches_synthesis() -> None:
+    """The activation plan restates the overlay, 401 and vocabulary rules without old names."""
+    plan = (DOCS[1].parent / "ACTIVATION-SERVING-T3-T5-REMOTE-AUTONOMY-PLAN-2026-10-25.md").read_text(
+        encoding="utf-8"
+    )
+    assert "attempt_binding_conflict" not in plan
+    assert "binding_digest" not in plan
+    assert "append-only overlay" in " ".join(plan.split())
 
 
 @pytest.mark.parametrize("doc", DOCS, ids=lambda p: p.name)

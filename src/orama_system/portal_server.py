@@ -218,6 +218,7 @@ def _resolve_perpetua_tools_root() -> Path:
     markers = ("orchestrator", "fastapi_app.py")
 
     def _is_pt(path: Path) -> bool:
+        """Return whether the given item belongs to Perpetua-Tools."""
         return (path / markers[0] / markers[1]).is_file()
 
     for key in ("PERPETUA_TOOLS_ROOT", "PERPETUA_TOOLS_PATH", "PERPETUATOOLSROOT"):
@@ -242,6 +243,7 @@ _win_platform_mods: dict[str, Any] = {}
 
 
 def _windows_platform_pkg():
+    """Return the Windows platform package name used by the portal."""
     global _win_platform_pkg
     if _win_platform_pkg is not None:
         return _win_platform_pkg
@@ -263,6 +265,7 @@ def _windows_platform_pkg():
 
 
 def _win_platform_module(name: str):
+    """Import and return the Windows platform helper module."""
     if name not in _win_platform_mods:
         _win_platform_mods[name] = _windows_platform_pkg().load_module(name)
     return _win_platform_mods[name]
@@ -287,6 +290,7 @@ _notification_publisher = PortalNotificationPublisher(_notification_hub)
 
 @asynccontextmanager
 async def _portal_lifespan(_app: FastAPI):
+    """Manage startup and shutdown of portal background resources."""
     peer_identity = read_discovery_peer_identity()
     bind_lan = os.getenv("PORTAL_BIND_LAN", "").strip().lower() in ("1", "true", "yes")
     client_task: asyncio.Task[None] | None = None
@@ -320,11 +324,13 @@ def _portal_untrusted_http_client(**kwargs: Any) -> httpx.AsyncClient:
 
 
 def _portal_http_client(**kwargs: Any) -> httpx.AsyncClient:
+    """Return the shared HTTP client used for portal probes."""
     return _portal_trusted_http_client(**kwargs)
 
 
 @app.middleware("http")
 async def _control_plane_auth_middleware(request: Request, call_next):
+    """Reject control-plane requests lacking valid mesh credentials."""
     if portal_requires_auth(
         request.url.path,
         request.method,
@@ -794,12 +800,14 @@ setTimeout(refreshJobs, 1000);
 
 
 def _status_badge(ok: bool) -> str:
+    """Render a status badge as an HTML fragment."""
     if ok:
         return '<span class="ok">&#9679; ONLINE</span>'
     return '<span class="err">&#9679; OFFLINE</span>'
 
 
 def _render_card(title: str, ok: bool, url: str, role: str = "", models: List[str] = None, extra: str = "") -> str:
+    """Render one dashboard card as an HTML fragment."""
     models_html = ""
     if models:
         items = "".join(
@@ -1005,6 +1013,7 @@ def _render_agent_dispatch_section(agent_availability: Dict[str, bool]) -> str:
 
 
 def _render_routing_section(routing: Dict[str, Any] | None) -> str:
+    """Render the routing section of the dashboard as HTML."""
     if not routing:
         return (
             '<div class="section">'
@@ -1042,6 +1051,7 @@ def _render_routing_section(routing: Dict[str, Any] | None) -> str:
 
 
 def _render_hardware_policy_section(policy_status: Dict[str, Any] | None) -> str:
+    """Render the hardware policy section as HTML."""
     if not policy_status:
         return (
             '<div class="section"><div class="section-title">Hardware Policy</div>'
@@ -1055,6 +1065,7 @@ def _render_hardware_policy_section(policy_status: Dict[str, Any] | None) -> str
     safe = policy_status.get("safe_defaults", {})
 
     def _items(values: list[str]) -> str:
+        """Return the items to render for a section."""
         return "".join(f'<div class="model">› {v}</div>' for v in values) or '<div class="none">none</div>'
 
     mac_opts = "".join(f'<option>{m}</option>' for m in safe.get("mac", []))
@@ -1083,6 +1094,7 @@ def _render_hardware_policy_section(policy_status: Dict[str, Any] | None) -> str
 
 
 def _render_agent_state_section(agents: List[Dict[str, Any]]) -> str:
+    """Render the agent state section as HTML."""
     if not agents:
         return (
             '<div class="section">'
@@ -1114,15 +1126,18 @@ def _render_agent_state_section(agents: List[Dict[str, Any]]) -> str:
 
 
 def _render_activity_section(events: List[Dict[str, Any]]) -> str:
+    """Render the recent activity section as HTML."""
     import datetime
 
     def _fmt_ts(ts: float) -> str:
+        """Format a timestamp for display."""
         try:
             return datetime.datetime.fromtimestamp(ts).strftime("%H:%M:%S")
         except Exception:
             return "—"
 
     def _tag(event: str) -> str:
+        """Wrap text in an HTML tag."""
         safe = _html.escape(str(event))
         if event in ("reply", "reply_received"):
             return '<span class="ev-tag tag-reply">reply</span>'
@@ -1165,6 +1180,7 @@ def _render_activity_section(events: List[Dict[str, Any]]) -> str:
 
 
 def _render_input_section(queue_depth: int) -> str:
+    """Render the user input section as HTML."""
     depth_html = ""
     if queue_depth > 0:
         depth_html = f'<div class="queue-depth">&#9679; {queue_depth} task(s) pending in queue</div>'
@@ -1216,6 +1232,7 @@ def _render_supervisor_jobs_section(jobs: List[Dict[str, Any]]) -> str:
         rows_html = '<tr><td colspan="5" class="jobs-empty">No supervisor jobs yet — submit via PT API or agent dispatch</td></tr>'
     else:
         def _esc(s: str) -> str:
+            """HTML-escape a value for safe display."""
             return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
         row_parts = []
@@ -1263,6 +1280,7 @@ def _loopback_browser_token(request: Request) -> str:
 
 
 def _render_html(status: Dict[str, Any], *, browser_token: str = "") -> str:
+    """Assemble the full portal dashboard HTML page."""
     import datetime
 
     cards = []
@@ -1362,6 +1380,7 @@ def _render_html(status: Dict[str, Any], *, browser_token: str = "") -> str:
 # ── Probes ─────────────────────────────────────────────────────────────────────
 
 async def _probe_http(client: httpx.AsyncClient, url: str) -> tuple[bool, str]:
+    """Probe an HTTP endpoint and return its status result."""
     try:
         r = await client.get(url, timeout=PROBE_TIMEOUT)
         version = ""
@@ -1376,6 +1395,7 @@ async def _probe_http(client: httpx.AsyncClient, url: str) -> tuple[bool, str]:
 
 
 async def _probe_lms_models(client: httpx.AsyncClient, endpoint: str, token: str) -> tuple[bool, List[str]]:
+    """List models served by the LM Studio endpoint."""
     try:
         headers = {"Authorization": f"Bearer {token}"} if token else {}
         r = await client.get(f"{endpoint}/v1/models", headers=headers, timeout=PROBE_TIMEOUT)
@@ -1387,6 +1407,7 @@ async def _probe_lms_models(client: httpx.AsyncClient, endpoint: str, token: str
 
 
 async def _probe_ollama_models(client: httpx.AsyncClient, endpoint: str) -> tuple[bool, List[str]]:
+    """List models served by the Ollama endpoint."""
     try:
         r = await client.get(f"{endpoint}/api/tags", timeout=PROBE_TIMEOUT)
         r.raise_for_status()
@@ -1407,6 +1428,7 @@ async def _probe_ollama_ps(client: httpx.AsyncClient, endpoint: str) -> bool:
 
 
 async def _probe_activity(client: httpx.AsyncClient) -> List[Dict[str, Any]]:
+    """Collect recent activity information for the dashboard."""
     try:
         r = await client.get(f"{PT_URL}/activity?limit=15", timeout=PROBE_TIMEOUT)
         r.raise_for_status()
@@ -1460,6 +1482,7 @@ async def _probe_supervisor_jobs(client: httpx.AsyncClient) -> List[Dict[str, An
 
 
 def _simple_policy_parse(text: str) -> Dict[str, List[str]]:
+    """Parse the simple key/value hardware policy text format."""
     parsed: Dict[str, List[str]] = {"windows_only": [], "mac_only": [], "shared": []}
     current: str | None = None
     for raw_line in text.splitlines():
@@ -1479,6 +1502,7 @@ def _simple_policy_parse(text: str) -> Dict[str, List[str]]:
 
 
 def _load_hardware_policy() -> tuple[Dict[str, List[str]], str]:
+    """Load the hardware policy from disk, tolerating absence."""
     policy_path = PERPETUA_TOOLS_ROOT / "config" / "model_hardware_policy.yml"
     if not policy_path.exists():
         return {"windows_only": [], "mac_only": [], "shared": []}, str(policy_path)
@@ -1523,6 +1547,7 @@ async def _portal_hardware_policy_snapshot() -> Dict[str, Any]:
 
 
 def _hardware_policy_status(services: Dict[str, Any]) -> Dict[str, Any]:
+    """Summarise hardware policy state for the status API."""
     policy, policy_path = _load_hardware_policy()
     win_only = {m.lower() for m in policy.get("windows_only", [])}
     mac_only = {m.lower() for m in policy.get("mac_only", [])}
@@ -1552,17 +1577,31 @@ def _hardware_policy_status(services: Dict[str, Any]) -> Dict[str, Any]:
 # ── Routes ─────────────────────────────────────────────────────────────────────
 
 
+_WS_FORBIDDEN_QUERY_KEYS = frozenset({"token", "access_token", "bearer", "authorization", "api_key", "apikey"})
+
+
 async def _verify_ws_control_plane(ws: WebSocket) -> None:
+    """Authenticate a peer WebSocket handshake from the Authorization header only.
+
+    Runs BEFORE ``ws.accept()``. The ASGI close code is 1008, while network
+    clients receive an HTTP 403 handshake denial before an upgrade completes.
+    Any credential-looking query parameter (token, access_token, bearer, authorization, api_key, apikey; case-insensitive) is refused outright (even alongside a valid
+    header) because URLs are recorded by access logs; the query value is never
+    compared or logged.
+    """
+    if any(k.lower() in _WS_FORBIDDEN_QUERY_KEYS for k in ws.query_params.keys()):
+        log.warning("peer ws refused: credential query parameters are not accepted; use the Authorization header")
+        await ws.close(code=1008)
+        raise WebSocketDisconnect(code=1008)
     if not auth_enforced():
         return
     if not accepted_control_plane_tokens():
         await ws.close(code=1013)
         raise WebSocketDisconnect(code=1013)
-    provided = (ws.query_params.get("token") or "").strip()
-    if not provided:
-        auth_header = ws.headers.get("authorization", "")
-        if auth_header.startswith("Bearer "):
-            provided = auth_header[7:].strip()
+    provided = ""
+    auth_header = ws.headers.get("authorization", "")
+    if auth_header.startswith("Bearer "):
+        provided = auth_header[7:].strip()
     if not token_matches_control_plane(provided, scope="orama"):
         await ws.close(code=1008)
         raise WebSocketDisconnect(code=1008)
@@ -1570,8 +1609,12 @@ async def _verify_ws_control_plane(ws: WebSocket) -> None:
 
 @app.websocket("/ws/portal-peer")
 async def ws_portal_peer(ws: WebSocket):
+    """Peer WebSocket endpoint: header-authenticate, then accept and relay envelopes to the LAN peer channel."""
+    try:
+        await _verify_ws_control_plane(ws)
+    except WebSocketDisconnect:
+        return
     await ws.accept()
-    await _verify_ws_control_plane(ws)
     await _lan_peer_channel.register_ws_peer(ws)
     try:
         while True:
@@ -1585,7 +1628,9 @@ async def ws_portal_peer(ws: WebSocket):
 
 @app.get("/events/peer-stream", response_class=StreamingResponse)
 async def sse_peer_stream(request: Request):
+    """Stream outbound peer events to the client as server-sent events."""
     async def generator():
+        """Yield SSE frames for each outbound peer event."""
         async for event in _lan_peer_channel.outbound_queue():
             yield f"data: {json.dumps(event)}\n\n"
 
@@ -1623,6 +1668,7 @@ async def create_notification_session(request: Request, response: Response) -> N
 
 
 def format_notification_sse(notification: Notification) -> str:
+    """Format a notification as a server-sent-event frame."""
     return (
         f"id: {notification.event_id}\n"
         f"event: {notification.type.value}\n"
@@ -1638,6 +1684,7 @@ class NotificationStreamingResponse(StreamingResponse):
     """StreamingResponse with a bounded ASGI send for this local SSE route."""
 
     async def stream_response(self, send):
+        """Yield notification SSE frames for the streaming response."""
         await send({"type": "http.response.start", "status": self.status_code, "headers": self.raw_headers})
         try:
             async for chunk in self.body_iterator:
@@ -1664,6 +1711,7 @@ class NotificationStreamingResponse(StreamingResponse):
 
 
 async def iter_notification_sse(request: Request, hub: NotificationHub, filters):
+    """Iterate notification SSE frames as they become available."""
     stream = hub.subscribe(filters)
     pending = asyncio.create_task(stream.__anext__())
     try:
@@ -1706,6 +1754,7 @@ async def api_notifications_stream(request: Request, types: Optional[str] = None
 
 
 class PeerEventBody(BaseModel):
+    """Request body for posting a peer event."""
     type: str = "peer-event"
     source: str = ""
     ts: int = 0
@@ -1714,11 +1763,13 @@ class PeerEventBody(BaseModel):
 
 @app.post("/api/peer-event")
 async def post_peer_event(body: PeerEventBody):
+    """Accept a peer event and hand it to the LAN peer channel."""
     await _lan_peer_channel.on_inbound(body.model_dump())
     return {"ok": True}
 
 
 class PeerFileBody(BaseModel):
+    """Request body for dropping a file to a peer."""
     filename: str = Field(..., min_length=1, max_length=128)
     body: str = Field(..., max_length=512_000)
     assignee: str = ""
@@ -1729,6 +1780,7 @@ class PeerFileBody(BaseModel):
 
 @app.post("/api/peer-file")
 async def post_peer_file(body: PeerFileBody):
+    """Accept a peer file drop and store it in the inbox."""
     from orama_system.lan_peer_files import write_inbox_file
 
     try:
@@ -1747,6 +1799,7 @@ async def post_peer_file(body: PeerFileBody):
 
 @app.get("/api/peer-inbox")
 async def get_peer_inbox():
+    """List files in the local peer inbox."""
     from orama_system.lan_peer_files import list_inbox
 
     return {"files": list_inbox(), "scope": "local", "role": local_platform()}
@@ -1766,11 +1819,13 @@ async def _fetch_remote_peer_api(path: str) -> dict[str, Any]:
 
 @app.get("/api/peer-inbox/remote")
 async def get_peer_inbox_remote():
+    """List files in the remote peer inbox."""
     return await _fetch_remote_peer_api("/api/peer-inbox")
 
 
 @app.get("/api/peer-inbox/remote/{filename}/html")
 async def get_peer_inbox_remote_file_html(filename: str):
+    """Render a remote peer inbox file as an HTML page."""
     from orama_system.lan_peer_files import sanitize_filename
 
     markdown_to_html = _win_platform_module("markdown_render").markdown_to_html
@@ -1803,6 +1858,7 @@ async def get_peer_inbox_remote_file_html(filename: str):
 
 @app.get("/api/peer-inbox/remote/{filename}")
 async def get_peer_inbox_remote_file(filename: str):
+    """Return the content of a remote peer inbox file."""
     from orama_system.lan_peer_files import sanitize_filename
 
     try:
@@ -1820,6 +1876,7 @@ async def get_peer_inbox_remote_file(filename: str):
 
 @app.get("/api/peer-inbox/{filename}/html")
 async def get_peer_inbox_file_html(filename: str):
+    """Render a local peer inbox file as an HTML page."""
     from orama_system.lan_peer_files import read_inbox_file
 
     markdown_to_html = _win_platform_module("markdown_render").markdown_to_html
@@ -1841,6 +1898,7 @@ async def get_peer_inbox_file_html(filename: str):
 
 @app.get("/api/peer-inbox/{filename}")
 async def get_peer_inbox_file(filename: str):
+    """Return the content of a local peer inbox file."""
     from orama_system.lan_peer_files import read_inbox_file
 
     try:
@@ -1882,6 +1940,7 @@ async def _fetch_peer_inbox_remote() -> tuple[list[dict[str, Any]], str]:
 
 @app.get("/api/co-orchestration")
 async def api_co_orchestration(platform: str | None = None):
+    """Return co-orchestration state for both peers."""
     from orama_system.portals.co_orchestration import build_co_orchestration_summary
     from orama_system.lan_peer_files import list_inbox
 
@@ -1901,6 +1960,7 @@ PEER_INBOX_PATH = "/peer-inbox"
 
 
 def _peer_inbox_redirect():
+    """Build a redirect response to the peer inbox page."""
     from fastapi.responses import RedirectResponse
 
     return RedirectResponse(url=PEER_INBOX_PATH, status_code=307)
@@ -1926,6 +1986,7 @@ def _co_orchestration_html_response(
 
 @app.get("/co-orchestration", response_class=None)
 async def co_orchestration_page(request: Request):
+    """Serve the co-orchestration page."""
     if local_platform() == "win":
         return _peer_inbox_redirect()
     return _co_orchestration_html_response(request)
@@ -1933,16 +1994,19 @@ async def co_orchestration_page(request: Request):
 
 @app.get("/co-orchestration/macos", response_class=None)
 async def co_orchestration_macos_page(request: Request):
+    """Serve the macOS co-orchestration page."""
     return _co_orchestration_html_response(request, platform_skin="macos")
 
 
 @app.get("/co-orchestration/windows", response_class=None)
 async def co_orchestration_windows_page():
+    """Serve the Windows co-orchestration page."""
     return _peer_inbox_redirect()
 
 
 @app.get("/api/co-orchestration/file/{filename}")
 async def api_co_orchestration_file(filename: str, scope: str = "local"):
+    """Return a co-orchestration file from the peer drop area."""
     from orama_system.lan_peer_files import read_inbox_file
 
     if scope not in ("local", "peer"):
@@ -1989,10 +2053,12 @@ async def api_co_orchestration_file(filename: str, scope: str = "local"):
 
 @app.get("/health")
 async def health():
+    """Report portal liveness."""
     return {"status": "ok", "version": VERSION}
 
 
 class UserInputRequest(BaseModel):
+    """Request body for submitting user input to the portal."""
     message: str = Field(..., min_length=1, max_length=4000)
     source: str = "portal"
 
@@ -2013,6 +2079,7 @@ async def _fetch_pt_section(
     source: str,
     default: Any,
 ) -> AppStateSection:
+    """Fetch one section of Perpetua-Tools state, returning a fallback on error."""
     try:
         r = await client.get(f"{PT_URL}{path}", timeout=PROBE_TIMEOUT)
         r.raise_for_status()
@@ -2027,6 +2094,7 @@ async def _fetch_pt_section(
 
 
 def _normalize_jobs_payload(payload: Any) -> List[Dict[str, Any]]:
+    """Normalise a jobs payload into a list of job dicts."""
     if isinstance(payload, list):
         return [item for item in payload if isinstance(item, dict)]
     if isinstance(payload, dict):
@@ -2037,6 +2105,7 @@ def _normalize_jobs_payload(payload: Any) -> List[Dict[str, Any]]:
 
 
 def _dump_model(model: BaseModel) -> Dict[str, Any]:
+    """Serialise a pydantic model to a dict across pydantic versions."""
     dump = getattr(model, "model_dump", None)
     if callable(dump):
         return dump()
@@ -2044,6 +2113,7 @@ def _dump_model(model: BaseModel) -> Dict[str, Any]:
 
 
 class SwarmPreviewRequest(BaseModel):
+    """Request body for previewing a swarm assignment."""
     objective: str = Field(min_length=1, max_length=4000)
     task_type: Literal["implementation", "coding", "reasoning", "research", "ops"] = "implementation"
     optimize_for: Literal["speed", "quality", "reliability"] = "reliability"
@@ -2051,6 +2121,7 @@ class SwarmPreviewRequest(BaseModel):
 
 
 class SwarmLaunchRequest(SwarmPreviewRequest):
+    """Request body for launching a swarm."""
     approved: StrictBool = False
     preview_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{32}$")
     approval_token: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
@@ -2104,6 +2175,7 @@ async def _route_preview_assignment(
     specialization: str,
     preferred_device: str,
 ) -> Dict[str, Any]:
+    """Preview the backend routing for one swarm assignment."""
     try:
         r = await client.post(
             f"{PT_URL}/models/route",
@@ -2146,6 +2218,7 @@ async def _route_preview_assignment(
 
 
 def _fallback_backend_hint(role: str, hardware_policy: Dict[str, Any]) -> str | None:
+    """Suggest a fallback backend when routing is unavailable."""
     safe_defaults = hardware_policy.get("safe_defaults", {}) if isinstance(hardware_policy, dict) else {}
     if role in {"context-agent", "architect-agent"} and safe_defaults.get("win"):
         return "lmstudio-win"
@@ -2223,6 +2296,7 @@ async def _build_swarm_preview(
 
 
 def _extract_pt_job_id(payload: Any) -> Optional[str]:
+    """Extract the Perpetua-Tools job id from a response payload."""
     if isinstance(payload, dict):
         for key in ("job_id", "id"):
             value = payload.get(key)
@@ -2248,6 +2322,7 @@ _RAW_ARTIFACT_FIELDS = {
 
 
 def _collect_redacted_fields(value: Any, prefix: str = "") -> List[str]:
+    """Collect names of fields that were redacted from a payload."""
     redacted: List[str] = []
     if isinstance(value, dict):
         for key, nested in value.items():
@@ -2263,6 +2338,7 @@ def _collect_redacted_fields(value: Any, prefix: str = "") -> List[str]:
 
 
 def _safe_artifact_index(job_detail: Any) -> Dict[str, Any]:
+    """Build an artifact index without exposing unsafe paths."""
     payload = job_detail if isinstance(job_detail, dict) else {}
     result = payload.get("result") if isinstance(payload.get("result"), dict) else {}
     artifacts = []
@@ -2645,6 +2721,7 @@ async def api_jobs_proxy(status: Optional[str] = None):
 
 @app.get("/api/jobs/{job_id}")
 async def api_job_detail_proxy(job_id: str):
+    """Proxy a job detail request to Perpetua-Tools."""
     async with _portal_trusted_http_client(timeout=5.0) as client:
         try:
             r = await client.get(f"{PT_URL}/v1/jobs/{job_id}")
@@ -2740,6 +2817,7 @@ async def api_job_replay_proxy(job_id: str):
 
 @app.get("/api/jobs/{job_id}/artifacts")
 async def api_job_artifacts_proxy(job_id: str):
+    """Proxy a job artifacts request to Perpetua-Tools."""
     async with _portal_http_client(timeout=5.0) as client:
         try:
             r = await client.get(f"{PT_URL}/v1/jobs/{job_id}")
@@ -2773,6 +2851,7 @@ def _oramaclaw_state_dir() -> Path:
     # V1 limitation: only the default/env-var state dir is visible to the portal.
     # Targets with a custom state_dir field in their ConfigTarget are invisible here.
     # Track for v2: accept a target parameter and thread it from the API routes.
+    """Return the directory holding Oramaclaw state files."""
     raw = os.environ.get("ORAMACLAW_STATE_DIR", "")
     if raw:
         return Path(raw)
@@ -2780,6 +2859,7 @@ def _oramaclaw_state_dir() -> Path:
 
 
 def _read_pending_resolutions() -> list:
+    """Read pending Oramaclaw resolutions from disk."""
     state_file = _oramaclaw_state_dir() / "pending-resolutions.json"
     try:
         if state_file.exists():
@@ -2793,6 +2873,7 @@ def _read_pending_resolutions() -> list:
 
 
 def _write_pending_resolutions(records: list) -> None:
+    """Persist pending Oramaclaw resolutions to disk."""
     from datetime import datetime, timezone as _tz
     state_dir = _oramaclaw_state_dir()
     state_dir.mkdir(parents=True, exist_ok=True)
@@ -2803,6 +2884,7 @@ def _write_pending_resolutions(records: list) -> None:
 
 
 class OramaclawResolveRequest(BaseModel):
+    """Request body for resolving a pending Oramaclaw item."""
     choice: str
 
 
@@ -3099,6 +3181,7 @@ async def _build_portal_status_payload() -> Dict[str, Any]:
 
 @app.get("/api/status")
 async def api_status():
+    """Return aggregated portal status."""
     payload = await _build_portal_status_payload()
     redacted_payload = redact_portal_status_payload(payload)
     if notifications_enabled():
@@ -3121,6 +3204,7 @@ async def api_tools():
 
 
 class ConfigureToolRequest(BaseModel):
+    """Request body for configuring a tool."""
     tool: str        # e.g. "brave", "perplexity", "claude_api"
     env_var: str     # e.g. "BRAVE_API_KEY"
     value: str       # the API key value
@@ -3405,6 +3489,7 @@ async def api_rediscover(request: Request):
     loop = asyncio.get_event_loop()
 
     def _run():
+        """Run the underlying operation and return its result."""
         try:
             result = subprocess.run(
                 [sys.executable, str(discover_script), "--force"],
@@ -3424,6 +3509,7 @@ async def api_rediscover(request: Request):
 
 
 class SpawnAgentRequest(BaseModel):
+    """Request body for spawning an agent."""
     agent: str
     task: str
     model: str = ""
@@ -3471,6 +3557,7 @@ async def api_spawn_agent(req: SpawnAgentRequest):
 
 @app.get("/peer-inbox", response_class=None)
 async def peer_inbox_page(request: Request):
+    """Serve the peer inbox page."""
     from fastapi.responses import HTMLResponse
 
     peer_inbox = _win_platform_module("peer_inbox_portal")
@@ -3744,6 +3831,7 @@ async def serve_assets(path: str):
 
 @app.get("/", response_class=None)
 async def index(request: Request):
+    """Serve the portal dashboard page."""
     from fastapi.responses import FileResponse, HTMLResponse
     # Serve React app when web/dist is built; fall back to legacy HTML dashboard.
     react_index = _WEB_DIST / "index.html"

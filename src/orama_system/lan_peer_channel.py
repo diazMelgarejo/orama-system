@@ -13,7 +13,6 @@ import time
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlencode
 
 import httpx
 from fastapi import WebSocket
@@ -30,6 +29,7 @@ WS_FAIL_BEFORE_SSE = 2
 
 
 def local_platform() -> str:
+    """Return 'win' or 'mac' for this host, honouring ORAMA_PLATFORM."""
     explicit = __import__("os").environ.get("ORAMA_PLATFORM", "").strip().lower()
     if explicit in ("windows", "win"):
         return "win"
@@ -87,7 +87,13 @@ def build_peer_transport_url(
     return f"{scheme}://{netloc}{path}"
 
 
+def ws_handshake_headers(token: str) -> dict[str, str] | None:
+    """Return the WebSocket handshake headers carrying the bearer, or None when there is no token; the token is never placed in the URL."""
+    return {"Authorization": f"Bearer {token}"} if token else None
+
+
 def make_envelope(msg_type: str, data: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Build a peer message envelope dict for the given event."""
     return {
         "type": msg_type,
         "source": local_platform(),
@@ -100,6 +106,7 @@ class LanPeerChannel:
     """Channel manager: inbound WS peers, outbound queue for SSE, optional peer client."""
 
     def __init__(self) -> None:
+        """Initialise channel state for the local peer identity."""
         self.state: str = "idle"
         self._ws_peers: set[WebSocket] = set()
         self._out_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
@@ -108,19 +115,23 @@ class LanPeerChannel:
         self._closed = False
 
     def register_inbound_handler(self, handler: Any) -> None:
+        """Register a callback invoked for each inbound peer message."""
         self._inbound_handlers.append(handler)
 
     async def register_ws_peer(self, ws: WebSocket) -> None:
+        """Track a connected WebSocket peer for outbound delivery."""
         self._ws_peers.add(ws)
         if self.state == "idle":
             self.state = "ws_connected"
 
     async def unregister_ws_peer(self, ws: WebSocket) -> None:
+        """Forget a WebSocket peer once it disconnects."""
         self._ws_peers.discard(ws)
         if not self._ws_peers and self.state == "ws_connected":
             self.state = "idle"
 
     async def on_inbound(self, event: dict[str, Any]) -> None:
+        """Dispatch an inbound envelope to the registered handlers."""
         if event.get("type") == "probe":
             pong = make_envelope("probe-ack", {"ok": True})
             await self.send(pong)
@@ -132,11 +143,13 @@ class LanPeerChannel:
                 log.exception("lan_peer inbound handler failed")
 
     async def outbound_queue(self) -> AsyncIterator[dict[str, Any]]:
+        """Yield queued outbound events for SSE consumers."""
         while not self._closed:
             event = await self._out_queue.get()
             yield event
 
     async def send(self, event: dict[str, Any]) -> None:
+        """Send an envelope to the peer over the best available transport."""
         await self._out_queue.put(event)
         dead: list[WebSocket] = []
         for ws in list(self._ws_peers):
@@ -148,6 +161,7 @@ class LanPeerChannel:
             self._ws_peers.discard(ws)
 
     async def connect(self, peer: str | TransportIdentity, port: int = 8002) -> None:
+        """Start the background client loop that connects to the peer."""
         if self._client_task and not self._client_task.done():
             return
         identity = peer if isinstance(peer, TransportIdentity) else parse_transport_identity(peer)
@@ -156,6 +170,7 @@ class LanPeerChannel:
         self._client_task = asyncio.create_task(self._client_loop(identity, port))
 
     async def close(self) -> None:
+        """Stop the client loop and release transport resources."""
         self._closed = True
         if self._client_task and not self._client_task.done():
             self._client_task.cancel()
@@ -165,6 +180,7 @@ class LanPeerChannel:
                 pass
 
     async def _client_loop(self, identity: TransportIdentity, port: int) -> None:
+        """Run the reconnecting client loop, falling back from WebSocket to SSE."""
         ws_fails = 0
         while not self._closed:
             self.state = "ws_connecting"
@@ -182,12 +198,21 @@ class LanPeerChannel:
                     try:
                         await self._sse_client_session(identity, port)
                         ws_fails = 0
+                    except ModelEndpointPolicyError:
+                        self.state = "disconnected"
+                        log.warning("lan_peer rejected peer endpoint by policy")
+                        return
                     except Exception:
                         log.warning("lan_peer sse fallback failed")
             self.state = "disconnected"
             await asyncio.sleep(RETRY_WAIT_S)
 
     async def _ws_client_session(self, identity: TransportIdentity, port: int) -> None:
+        """Connect to the peer WebSocket, sending the bearer only in the Authorization header over wss://.
+
+        A token with a non-wss URL raises ModelEndpointPolicyError before any connection; the
+        client loop treats that as terminal (no retry, no unauthenticated fallback).
+        """
         from utils.control_plane_auth import outbound_control_plane_tokens
 
         tokens = outbound_control_plane_tokens()
@@ -204,10 +229,23 @@ class LanPeerChannel:
         )
 
         for token in tokens:
-            qs = f"?{urlencode({'token': token})}" if token else ""
-            url = f"{endpoint}{qs}"
+            # SECURITY: the bearer travels only in the Authorization header of
+            # the handshake. It is never placed in the URL, which access logs
+            # (Caddy, uvicorn) record.
+            headers = ws_handshake_headers(token)
+            url = endpoint
+            if token and not url.startswith("wss://"):
+                # SECURITY: RFC 6750 s5.3 - never send a bearer over ws://, and
+                # never silently downgrade to an unauthenticated connection.
+                raise ModelEndpointPolicyError(
+                    "refusing to send control-plane bearer over unencrypted ws://; wss:// is required"
+                )
             try:
-                async with websockets.connect(url, open_timeout=WS_OPEN_TIMEOUT_S) as ws:
+                async with websockets.connect(
+                    url,
+                    open_timeout=WS_OPEN_TIMEOUT_S,
+                    additional_headers=headers,
+                ) as ws:
                     self.state = "ws_connected"
                     heartbeat = asyncio.create_task(self._heartbeat_ws(ws))
                     try:
@@ -229,11 +267,18 @@ class LanPeerChannel:
             raise last_exc
 
     async def _heartbeat_ws(self, ws: Any) -> None:
+        """Send periodic heartbeat frames on an open WebSocket."""
         while True:
             await asyncio.sleep(HEARTBEAT_INTERVAL_S)
             await ws.send(json.dumps(make_envelope("heartbeat")))
 
     async def _sse_client_session(self, identity: TransportIdentity, port: int) -> None:
+        """Stream peer events over SSE, sending auth headers only over https://.
+
+        If auth headers would be sent to a non-https URL this raises ModelEndpointPolicyError
+        before any request; the client loop treats that as terminal (no retry, no
+        unauthenticated fallback).
+        """
         from utils.control_plane_auth import auth_headers
 
         url = build_peer_transport_url(
@@ -242,8 +287,13 @@ class LanPeerChannel:
             "/events/peer-stream",
             websocket=False,
         )
+        headers = auth_headers()
+        if headers and not url.startswith("https://"):
+            raise ModelEndpointPolicyError(
+                "refusing to send control-plane credentials over unencrypted http://; https:// is required"
+            )
         self.state = "sse_connected"
-        async with httpx.AsyncClient(timeout=None, headers=auth_headers()) as client:
+        async with httpx.AsyncClient(timeout=None, headers=headers) as client:
             async with client.stream("GET", url) as resp:
                 resp.raise_for_status()
                 async for line in resp.aiter_lines():
