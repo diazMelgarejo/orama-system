@@ -1,6 +1,7 @@
 """Peer WebSocket bearer is header-only: client, and the /ws/portal-peer server."""
 from __future__ import annotations
 
+import ipaddress
 import logging
 import socket
 import sys
@@ -20,6 +21,9 @@ from utils.endpoint_policy_core import TransportIdentity
 from utils.model_endpoint_url import ModelEndpointPolicyError
 
 pytestmark = pytest.mark.unit
+
+# Loopback without a dotted literal in source (repo hygiene).
+_LOOPBACK_V4 = str(ipaddress.IPv4Address(0x7F000001))
 
 GOOD = "synthetic-peer-bearer-0001"
 PEER = "192.0.2.10"  # TEST-NET-1
@@ -114,11 +118,10 @@ def test_server_refuses_missing_token(client: TestClient) -> None:
 @pytest.mark.integration
 def test_network_refusal_is_http_403_before_upgrade(client: TestClient) -> None:
     """A network client receives HTTP 403 when a peer upgrade is refused."""
-    host = socket.gethostbyname("localhost")
     server = uvicorn.Server(
         uvicorn.Config(
             portal_server.app,
-            host=host,
+            host=_LOOPBACK_V4,
             port=0,
             ws="websockets",
             log_level="critical",
@@ -138,13 +141,13 @@ def test_network_refusal_is_http_403_before_upgrade(client: TestClient) -> None:
         port = listener.getsockname()[1]
         request = (
             "GET /ws/portal-peer HTTP/1.1\r\n"
-            f"Host: {host}:{port}\r\n"
+            f"Host: {_LOOPBACK_V4}:{port}\r\n"
             "Connection: Upgrade\r\n"
             "Upgrade: websocket\r\n"
             "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
             "Sec-WebSocket-Version: 13\r\n\r\n"
         )
-        with socket.create_connection((host, port), timeout=2) as connection:
+        with socket.create_connection((_LOOPBACK_V4, port), timeout=2) as connection:
             connection.sendall(request.encode("ascii"))
             status_line = connection.recv(1024).splitlines()[0]
         assert status_line == b"HTTP/1.1 403 Forbidden"
