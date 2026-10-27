@@ -464,6 +464,8 @@ def test_ssl_context_never_unverified_even_when_relaxed(trust_mod, tmp_path, mon
     monkeypatch.delenv("ORAMA_LAN_CA_FILE", raising=False)
     monkeypatch.setenv("ORAMA_DISCOVERY_RELAXED", "1")
     assert trust_mod._get_ssl_context() is None
+    src = TRUST.read_text(encoding="utf-8")
+    assert "_create_unverified_context" not in src
 
 
 def test_control_plane_token_excludes_gossip_shared_secret(trust_mod, monkeypatch) -> None:
