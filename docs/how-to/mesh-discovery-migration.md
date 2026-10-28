@@ -71,14 +71,25 @@ recipients. Automatic notification stops without changing those records; an
 operator must supply the full original audience in `all_recipients` when
 reconciling such a record. No bulk queue flush or live topology rewrite is implied.
 
-## Outbox flush: live peer resolution
+## Outbox flush: live peer resolution (opt-in)
 
 A queued peer drop stores the peer address it was queued with. If that address
-later changes (DHCP, a moved host), `lan_peer_assign.py flush-outbox` looks the
-peer up again in the live discovery record, but only when all of these hold:
+later changes (DHCP, a moved host), the default `flush-outbox` still uses the
+stored one. To follow the move, the operator opts in and names the stale
+address that belongs to the moved node:
 
-- peer TLS is enabled (`PEER_PORTAL_TLS_ENABLED`), so the new host must present
-  the pinned CA before any bearer token is sent;
+```text
+flush-outbox --retarget-live --retarget-from <stale-ip> [--dry-run]
+```
+
+`--dry-run` lists the intended `from` and `to` hops and sends nothing. Live
+resolution then happens only when all of these hold:
+
+- peer TLS is enabled (`PEER_PORTAL_TLS_ENABLED`) with `PEER_CA_FILE` or
+  `PEER_PINNED_FINGERPRINTS` set, so the new host must present the pinned CA
+  before any bearer token is sent; otherwise the command refuses to start;
+- the item's stored address is one named with `--retarget-from`, so a note
+  queued for a different node is never redirected to the moved node;
 - the stored address no longer accepts a TCP connection;
 - discovery names a different host that does.
 
@@ -86,15 +97,18 @@ The stored target always wins while it answers. Each retarget is per item and
 recorded in that item's history as `from` and `to` with `auto: true`, and the
 flush result carries `retargeted_from`. An automatic hop does not pin the item,
 so the next flush resolves it again; an operator-approved `outbox-resubmit`
-still requires `--only`. Discovery historically records only the LM Studio
-port. A record that also carries `endpoints.<peer>.portal_port` is tried first;
-otherwise `--portal-port` and the stored port are tried in that order.
+still requires `--only`. Resolution is cached per stored address within one
+run, and each probe is capped at 1.5 seconds. Discovery historically records
+only the LM Studio port. A record that also carries
+`endpoints.<peer>.portal_port` is tried first; otherwise `--portal-port` and the
+stored port are tried in that order.
 
 ## Regression evidence
 
 Run `tests/test_lan_peer_live_resolve.py` for the live-resolution rules: stored
-target wins, TLS gate, same-host and unreachable-host refusal, malformed-host
-refusal, and the auto-hop marker.
+opt-in and stale-address scoping, pinned-trust gate, same-host and
+unreachable-host refusal, malformed-host refusal, caching, dry-run, and the
+auto-hop marker.
 
 Run `tests/test_discovery_migration_boundaries.py` for redirect refusal, strict
 policy, revocation, canonical credential selection, partial-delivery recovery,
