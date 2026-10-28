@@ -29,6 +29,16 @@ discovery state, environment configuration, and relaxed admission.
 Only explicit `--trust-ip <address>` or an affirmative interactive approval can
 lift that revocation. Automatic rediscovery cannot undo it.
 
+Trust admission, revocation, and migration-recipient updates share one
+cross-process local transaction lock. The lock covers only local
+read-validate-write state transitions; TLS delivery and other network waits run
+outside it, then an acknowledgement is revalidated against freshly loaded state
+before it can settle a recipient. A malformed or unreadable `known-peers.json`
+or `self-identity.json` is not an empty first run: the affected operation stops
+without overwriting the file, and an operator must repair the authority state.
+The shibboleth probe rejects non-finite or non-positive timeouts and caps each
+network operation at 0.5 seconds; this is not a whole-probe deadline.
+
 ## Delivery and acknowledgement
 
 The receiver acknowledges a migration only after verification and atomic trust
@@ -65,5 +75,7 @@ reconciling such a record. No bulk queue flush or live topology rewrite is impli
 
 Run `tests/test_discovery_migration_boundaries.py` for redirect refusal, strict
 policy, revocation, canonical credential selection, partial-delivery recovery,
-and the producer-to-authenticated-route-to-persistence-to-sender acknowledgement
-path. These are synthetic tests, not evidence of a live LAN round trip.
+the transaction/corruption failure paths, and the
+producer-to-authenticated-route-to-persistence-to-sender acknowledgement path.
+These are synthetic tests, not evidence of a live LAN round trip or serving
+activation.

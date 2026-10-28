@@ -5,6 +5,7 @@ import importlib.util
 import ipaddress
 import json
 import sys
+import threading
 import urllib.error
 import urllib.request
 from email.message import Message
@@ -110,6 +111,107 @@ def test_revocation_overrides_archive_and_relaxed_admission(trust: ModuleType, m
     assert trust.forget_peer(OLD)
     assert OLD not in trust.load_known_peer_ips()
     assert trust.peer_trusted(OLD) is False
+
+
+def test_revocation_survives_overlapping_automatic_admission(trust: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A stale automatic admission cannot overwrite a completed revocation."""
+    admission_at_save = threading.Event()
+    allow_admission_save = threading.Event()
+    original_save = trust._save_json
+
+    def paused_save(path: Path, data: dict) -> None:
+        """Hold the admission write while a competing revocation waits on the transaction."""
+        if path == trust.KNOWN_PEERS and NEW in data.get("ips", []) and OLD in data.get("ips", []):
+            admission_at_save.set()
+            assert allow_admission_save.wait(timeout=2)
+        original_save(path, data)
+
+    monkeypatch.setattr(trust, "_save_json", paused_save)
+    admission = threading.Thread(target=trust.remember_peer, args=(NEW,))
+    revocation = threading.Thread(target=trust.forget_peer, args=(OLD,))
+    admission.start()
+    assert admission_at_save.wait(timeout=2)
+    revocation.start()
+    allow_admission_save.set()
+    admission.join(timeout=2)
+    revocation.join(timeout=2)
+
+    assert not admission.is_alive()
+    assert not revocation.is_alive()
+    assert OLD not in trust.load_known_peer_ips()
+    assert OLD in trust._load_known_peer_store()["revoked_ips"]
+
+
+def test_old_ack_cannot_settle_a_later_return_to_same_address(trust: ModuleType) -> None:
+    """A stale acknowledgement is fenced when a second move returns to its old target."""
+    latest = str(ipaddress.IPv4Address(0xC0000205))
+    first = trust._prepare_self_migration(NEW, [A])
+    assert first is not None
+    _, _, _, first_generation = first
+    second = trust._prepare_self_migration(latest, [A])
+    assert second is not None
+    third = trust._prepare_self_migration(NEW, [A])
+    assert third is not None
+    _, _, _, current_generation = third
+
+    assert current_generation > first_generation
+    assert trust._settle_migration_ack(NEW, A, first_generation) is False
+    assert trust.load_self_identity()["pending_migration"]["recipients"] == [A]
+
+
+@pytest.mark.parametrize("contents", ["not-json", "[]"])
+def test_corrupt_known_peers_blocks_archive_fallback(trust: ModuleType, contents: str) -> None:
+    """Corrupt revocation authority is not treated as an empty first-run store."""
+    trust._save_json(trust.ARCHIVE, {"endpoints": {"win": f"https://{OLD}:8443"}})
+    trust.KNOWN_PEERS.write_text(contents, encoding="utf-8")
+
+    with pytest.raises(trust.DiscoveryStateError, match="known peers"):
+        trust.load_known_peer_ips()
+
+
+def test_corrupt_self_identity_blocks_retry_without_overwriting_bytes(
+    trust: ModuleType, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A broken durable identity prevents migration delivery and remains intact for repair."""
+    original = "{not-json\n"
+    trust.SELF_IDENTITY_FILE.write_text(original, encoding="utf-8")
+    monkeypatch.setattr(trust, "_open_peer", lambda *args: pytest.fail("corrupt state must not send"))
+
+    with pytest.raises(trust.DiscoveryStateError, match="self identity"):
+        trust.check_and_announce_self_migration(NEW, [A])
+
+    assert trust.SELF_IDENTITY_FILE.read_text(encoding="utf-8") == original
+
+
+@pytest.mark.parametrize("requested", [12.0, float("inf"), 0.0])
+def test_shibboleth_probe_rejects_invalid_timeout_or_caps_large_value(
+    trust: ModuleType, monkeypatch: pytest.MonkeyPatch, requested: float,
+) -> None:
+    """Probe timeout is finite, positive and capped before any socket attempt."""
+    seen: list[float] = []
+
+    class RefusedConnection:
+        """Raise from context entry after recording the supplied timeout."""
+
+        def __enter__(self) -> None:
+            """Refuse the synthetic connection."""
+            raise OSError("offline")
+
+        def __exit__(self, *args: object) -> None:
+            """Close the synthetic connection context."""
+
+    def connect(address: tuple[str, int], timeout: float) -> RefusedConnection:
+        """Record the timeout passed to the first network operation."""
+        del address
+        seen.append(timeout)
+        return RefusedConnection()
+
+    monkeypatch.setattr(trust.socket, "create_connection", connect)
+    assert trust.verify_peer_shibboleth(A, timeout=requested) is False
+    if requested == 12.0:
+        assert seen == [0.5]
+    else:
+        assert seen == []
 
 
 def test_revocation_removes_pending_migration_recipient_and_future_audience(trust: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:

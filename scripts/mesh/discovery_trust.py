@@ -2,6 +2,7 @@
 """P6 discovery trust — grandfather known peers, handshake new ones."""
 from __future__ import annotations
 
+from contextlib import contextmanager
 import hashlib
 import hmac
 import ipaddress
@@ -15,6 +16,14 @@ import tempfile
 import time
 import urllib.request
 from pathlib import Path
+
+try:
+    import fcntl
+except ImportError:
+    fcntl = None  # type: ignore[assignment]
+    import msvcrt
+else:
+    msvcrt = None  # type: ignore[assignment]
 
 _LOOPBACK_V4 = str(ipaddress.IPv4Address(0x7F000001))
 
@@ -34,6 +43,61 @@ HANDSHAKE_TTL_SEC = 600
 log = get_mesh_logger("orama.mesh.discovery_trust", repo_root=ROOT)
 
 
+class DiscoveryStateError(RuntimeError):
+    """Raise when durable trust authority cannot be safely interpreted."""
+
+
+def _trust_state_lock_path() -> Path:
+    """Return the lock shared by all trust and migration-state writers."""
+    return LOCAL / ".discovery-trust.lock"
+
+
+def _try_lock_file(handle) -> None:
+    """Acquire the portable advisory lock held across a state transaction."""
+    if fcntl is not None:
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return
+    handle.seek(0)
+    handle.write("0")
+    handle.flush()
+    handle.seek(0)
+    msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+
+
+def _unlock_file(handle) -> None:
+    """Release the portable advisory lock held across a state transaction."""
+    if fcntl is not None:
+        fcntl.flock(handle, fcntl.LOCK_UN)
+        return
+    handle.seek(0)
+    msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+
+
+@contextmanager
+def _state_transaction(timeout: float = 10.0):
+    """Serialize short read-modify-write operations across CLI and portal processes."""
+    lock_path = _trust_state_lock_path()
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    deadline = time.monotonic() + timeout
+    handle = open(lock_path, "a+", encoding="utf-8")
+    locked = False
+    try:
+        while True:
+            try:
+                _try_lock_file(handle)
+                locked = True
+                break
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    raise TimeoutError("discovery trust state lock timeout")
+                time.sleep(0.02)
+        yield
+    finally:
+        if locked:
+            _unlock_file(handle)
+        handle.close()
+
+
 def _load_json(path: Path) -> dict:
     """Read optional JSON state, returning an empty mapping when unavailable."""
     if not path.is_file():
@@ -42,6 +106,75 @@ def _load_json(path: Path) -> dict:
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return {}
+
+
+def _load_authority_mapping(path: Path, label: str) -> dict:
+    """Load one authoritative state mapping without treating corruption as first run."""
+    if not path.exists():
+        return {}
+    if not path.is_file():
+        raise DiscoveryStateError(f"{label} state is not a regular file: {path}")
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise DiscoveryStateError(f"{label} state cannot be read; repair it before retrying") from exc
+    if not isinstance(data, dict):
+        raise DiscoveryStateError(f"{label} state must be a JSON object; repair it before retrying")
+    return data
+
+
+def _require_string_list(data: dict, field: str, label: str) -> list[str]:
+    """Return an optional authority list only when all persisted entries are strings."""
+    value = data.get(field, [])
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        raise DiscoveryStateError(f"{label} state has invalid {field}; repair it before retrying")
+    return value
+
+
+def _load_known_peer_store() -> dict:
+    """Load and validate trust authority before any admission or revocation decision."""
+    store = _load_authority_mapping(KNOWN_PEERS, "known peers")
+    for field in ("ips", "approved_ips", "revoked_ips"):
+        _require_string_list(store, field, "known peers")
+    return store
+
+
+def _load_self_identity_unlocked() -> dict:
+    """Load validated self identity while the shared state transaction is held."""
+    data = _load_authority_mapping(SELF_IDENTITY_FILE, "self identity")
+    if not data:
+        return {
+            "node_id": "win" if sys.platform == "win32" else "mac",
+            "role": "win" if sys.platform == "win32" else "mac",
+            "last_known_ip": "",
+            "history": [],
+        }
+    for field in ("node_id", "role", "last_known_ip"):
+        if field in data and not isinstance(data[field], str):
+            raise DiscoveryStateError(f"self identity state has invalid {field}; repair it before retrying")
+    if "history" in data and not isinstance(data["history"], list):
+        raise DiscoveryStateError("self identity state has invalid history; repair it before retrying")
+    if "migration_generation" in data and (
+        not isinstance(data["migration_generation"], int)
+        or isinstance(data["migration_generation"], bool)
+        or data["migration_generation"] < 0
+    ):
+        raise DiscoveryStateError("self identity state has invalid migration generation; repair it before retrying")
+    pending = data.get("pending_migration")
+    if pending is not None:
+        if not isinstance(pending, dict):
+            raise DiscoveryStateError("self identity state has invalid pending migration; repair it before retrying")
+        if "new_ip" in pending and not isinstance(pending["new_ip"], str):
+            raise DiscoveryStateError("self identity state has invalid pending migration; repair it before retrying")
+        for field in ("recipients", "all_recipients"):
+            if field in pending:
+                _require_string_list(pending, field, "self identity pending migration")
+    return data
+
+
+def _save_self_identity_unlocked(data: dict) -> None:
+    """Persist an already-validated self identity inside the shared transaction."""
+    _save_json(SELF_IDENTITY_FILE, data)
 
 
 def _secret() -> str:
@@ -194,6 +327,9 @@ def verify_peer_shibboleth(ip: str, timeout: float = 0.5) -> bool:
     """
     if not ip or ip in (_LOOPBACK_V4, "localhost"):
         return True
+    if not isinstance(timeout, (int, float)) or isinstance(timeout, bool) or not 0 < timeout < float("inf"):
+        return False
+    timeout = min(float(timeout), 0.5)
     try:
         with socket.create_connection((ip, 8443), timeout=timeout):
             pass
@@ -250,7 +386,7 @@ def _ips_from_last_discovery() -> set[str]:
 
 def load_known_peer_ips() -> set[str]:
     """Combine allowed sources and subtract explicit revocations last."""
-    store = _load_json(KNOWN_PEERS)
+    store = _load_known_peer_store()
     ips = set(store.get("approved_ips") or [])
     ips |= _ips_from_env()
     if not is_strict_config_mode():
@@ -264,35 +400,37 @@ def remember_peer(ip: str) -> None:
     """Persist admission only when neither explicit revocation nor strict policy forbids it."""
     if not ip:
         return
-    store = _load_json(KNOWN_PEERS)
-    ips = set(store.get("ips") or [])
-    if ip in set(store.get("revoked_ips") or []):
-        raise ValueError("peer explicitly revoked; operator reapproval required")
-    if is_strict_config_mode() and ip not in set(store.get("approved_ips") or []) | _ips_from_env():
-        raise ValueError("strict configuration requires explicit peer approval")
-    ips.add(ip)
-    store["ips"] = sorted(ips)
-    store["updated_at"] = time.time()
-    _save_json(KNOWN_PEERS, store)
+    with _state_transaction():
+        store = _load_known_peer_store()
+        ips = set(store.get("ips") or [])
+        if ip in set(store.get("revoked_ips") or []):
+            raise ValueError("peer explicitly revoked; operator reapproval required")
+        if is_strict_config_mode() and ip not in set(store.get("approved_ips") or []) | _ips_from_env():
+            raise ValueError("strict configuration requires explicit peer approval")
+        ips.add(ip)
+        store["ips"] = sorted(ips)
+        store["updated_at"] = time.time()
+        _save_json(KNOWN_PEERS, store)
 
 
 def forget_peer(ip: str) -> bool:
     """Revoke effective trust across all positive sources, including rediscovery."""
     if not ip:
         return False
-    store = _load_json(KNOWN_PEERS)
-    ips = set(store.get("ips") or [])
-    ips.discard(ip)
-    store["ips"] = sorted(ips)
-    store["revoked_ips"] = sorted(set(store.get("revoked_ips") or []) | {ip})
-    store["updated_at"] = time.time()
-    _save_json(KNOWN_PEERS, store)
-    ident = load_self_identity()
-    pending = ident.get("pending_migration")
-    if isinstance(pending, dict) and _remove_recipients(pending, {ip}):
-        # Revocation is an explicit operator decision. It removes the peer from
-        # both the current retry and every future superseding announcement.
-        save_self_identity(ident)
+    with _state_transaction():
+        store = _load_known_peer_store()
+        ips = set(store.get("ips") or [])
+        ips.discard(ip)
+        store["ips"] = sorted(ips)
+        store["revoked_ips"] = sorted(set(store.get("revoked_ips") or []) | {ip})
+        store["updated_at"] = time.time()
+        _save_json(KNOWN_PEERS, store)
+        ident = _load_self_identity_unlocked()
+        pending = ident.get("pending_migration")
+        if isinstance(pending, dict) and _remove_recipients(pending, {ip}):
+            # Revocation is an explicit operator decision. It removes the peer from
+            # both the current retry and every future superseding announcement.
+            _save_self_identity_unlocked(ident)
     return True
 
 
@@ -341,15 +479,8 @@ def get_local_ip() -> str:
 
 def load_self_identity() -> dict:
     """Load the node's durable self-identity from disk."""
-    data = _load_json(SELF_IDENTITY_FILE)
-    if not data:
-        data = {
-            "node_id": "win" if sys.platform == "win32" else "mac",
-            "role": "win" if sys.platform == "win32" else "mac",
-            "last_known_ip": "",
-            "history": [],
-        }
-    return data
+    with _state_transaction():
+        return _load_self_identity_unlocked()
 
 
 def _remove_recipients(pending: dict, removed: set[str]) -> bool:
@@ -368,7 +499,8 @@ def _remove_recipients(pending: dict, removed: set[str]) -> bool:
 
 def save_self_identity(data: dict) -> None:
     """Atomically persist observed address and pending recipient state."""
-    _save_json(SELF_IDENTITY_FILE, data)
+    with _state_transaction():
+        _save_self_identity_unlocked(data)
 
 
 def create_migration_announcement(
@@ -492,6 +624,108 @@ def migration_digest(announcement: dict) -> str:
     return hashlib.sha256(json.dumps(announcement, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
+def _prepare_self_migration(current_ip: str, peer_ips: list[str] | None) -> tuple[dict, str, list[str], int] | None:
+    """Create or reload a pending migration while holding state only for local mutation."""
+    with _state_transaction():
+        ident = _load_self_identity_unlocked()
+        last_ip = ident.get("last_known_ip", "")
+        if not last_ip:
+            ident["last_known_ip"] = current_ip
+            ident["history"] = [{"ip": current_ip, "timestamp": time.time()}]
+            _save_self_identity_unlocked(ident)
+            return None
+
+        pending = ident.get("pending_migration") or {}
+        if pending and "all_recipients" not in pending:
+            log.warning("Legacy migration lacks its full audience; operator reconciliation required before retry")
+            return None
+        revoked = set(_load_known_peer_store().get("revoked_ips") or [])
+        if pending and _remove_recipients(pending, revoked):
+            _save_self_identity_unlocked(ident)
+        if current_ip == last_ip and not pending:
+            return None
+
+        node_id = ident.get("node_id") or ("win" if sys.platform == "win32" else "mac")
+        role = ident.get("role") or node_id
+        announcement = create_migration_announcement(
+            node_id=node_id,
+            previous_ip=last_ip,
+            new_ip=current_ip,
+            role=role,
+        )
+        if pending and pending.get("new_ip") == current_ip:
+            generation = ident.get("migration_generation")
+            if generation is None:
+                generation = 1
+                ident["migration_generation"] = generation
+                _save_self_identity_unlocked(ident)
+            return announcement, last_ip, list(pending.get("recipients") or []), generation
+
+        targets = sorted(load_known_peer_ips()) if peer_ips is None else peer_ips
+        stale = list(pending.get("all_recipients") or pending.get("recipients") or [])
+        delivery_targets = sorted({
+            peer for peer in [*targets, *stale]
+            if peer not in (current_ip, last_ip, _LOOPBACK_V4, "localhost") and peer not in revoked
+        })
+        generation = int(ident.get("migration_generation", 0)) + 1
+        ident["migration_generation"] = generation
+        ident["pending_migration"] = {
+            "new_ip": current_ip,
+            "all_recipients": list(delivery_targets),
+            "recipients": list(delivery_targets),
+        }
+        _save_self_identity_unlocked(ident)
+        return announcement, last_ip, delivery_targets, generation
+
+
+def _settle_migration_ack(current_ip: str, peer: str, generation: int) -> bool:
+    """Record one exact acknowledgement only if its migration and recipient remain current."""
+    with _state_transaction():
+        ident = _load_self_identity_unlocked()
+        pending = ident.get("pending_migration")
+        if (
+            not isinstance(pending, dict)
+            or pending.get("new_ip") != current_ip
+            or ident.get("migration_generation") != generation
+        ):
+            return False
+        revoked = set(_load_known_peer_store().get("revoked_ips") or [])
+        if peer in revoked:
+            if _remove_recipients(pending, {peer}):
+                _save_self_identity_unlocked(ident)
+            return False
+        recipients = pending.get("recipients")
+        if not isinstance(recipients, list) or peer not in recipients:
+            return False
+        recipients.remove(peer)
+        _save_self_identity_unlocked(ident)
+        return True
+
+
+def _commit_migration_if_complete(current_ip: str, last_ip: str, generation: int) -> bool:
+    """Commit a migration only when the current durable retry audience is empty."""
+    with _state_transaction():
+        ident = _load_self_identity_unlocked()
+        pending = ident.get("pending_migration")
+        if (
+            not isinstance(pending, dict)
+            or pending.get("new_ip") != current_ip
+            or ident.get("migration_generation") != generation
+        ):
+            return False
+        if pending.get("recipients"):
+            return False
+        ident.pop("pending_migration", None)
+        ident["last_known_ip"] = current_ip
+        ident.setdefault("history", []).append({
+            "ip": current_ip,
+            "previous_ip": last_ip,
+            "timestamp": time.time(),
+        })
+        _save_self_identity_unlocked(ident)
+        return True
+
+
 def check_and_announce_self_migration(
     current_ip: str | None = None,
     peer_ips: list[str] | None = None,
@@ -502,60 +736,16 @@ def check_and_announce_self_migration(
     if not current_ip or current_ip in (_LOOPBACK_V4, "localhost"):
         return None
 
-    ident = load_self_identity()
-    last_ip = ident.get("last_known_ip", "")
-
-    # First run: record current IP without announcing
-    if not last_ip:
-        ident["last_known_ip"] = current_ip
-        ident["history"] = [{"ip": current_ip, "timestamp": time.time()}]
-        save_self_identity(ident)
+    prepared = _prepare_self_migration(current_ip, peer_ips)
+    if prepared is None:
         return None
-
-    pending = ident.get("pending_migration") or {}
-    if pending and "all_recipients" not in pending:
-        log.warning("Legacy migration lacks its full audience; operator reconciliation required before retry")
-        return None
-    revoked = set(_load_json(KNOWN_PEERS).get("revoked_ips") or [])
-    if pending and _remove_recipients(pending, revoked):
-        save_self_identity(ident)
-    if current_ip == last_ip and not pending:
-        return None
-
-    # IP CHANGED! Node knows thyself:
-    node_id = ident.get("node_id") or ("win" if sys.platform == "win32" else "mac")
-    role = ident.get("role") or node_id
-    announcement = create_migration_announcement(
-        node_id=node_id,
-        previous_ip=last_ip,
-        new_ip=current_ip,
-        role=role,
-    )
+    announcement, last_ip, delivery_targets, generation = prepared
 
     log.info(
         "Self IP migration detected ('know thyself'): %s -> %s. Announcing to peers...",
         last_ip,
         current_ip,
     )
-
-    if pending and pending.get("new_ip") == current_ip:
-        delivery_targets = list(pending["recipients"])
-    else:
-        # A newer lease invalidates every previous acknowledgement, including
-        # when returning to the committed address. Keep the complete audience.
-        targets = sorted(load_known_peer_ips()) if peer_ips is None else peer_ips
-        stale = list(pending.get("all_recipients") or pending.get("recipients") or [])
-        delivery_targets = sorted({
-            peer for peer in [*targets, *stale]
-            if peer not in (current_ip, last_ip, _LOOPBACK_V4, "localhost") and peer not in revoked
-        })
-        pending = {
-            "new_ip": current_ip,
-            "all_recipients": list(delivery_targets),
-            "recipients": list(delivery_targets),
-        }
-        ident["pending_migration"] = pending
-        save_self_identity(ident)
 
     ack_count = 0
     if delivery_targets:
@@ -582,9 +772,7 @@ def check_and_announce_self_migration(
                         with _open_peer(req, ctx, 1.0) as resp:
                             ack = json.loads(resp.read(4096))
                             if isinstance(ack, dict) and resp.status == 200 and ack.get("ok") is True and ack.get("migration_id") == migration_digest(announcement):
-                                pending["recipients"].remove(peer)
-                                save_self_identity(ident)
-                                ack_count += 1
+                                ack_count += _settle_migration_ack(current_ip, peer, generation)
                             break
                     except urllib.error.HTTPError as exc:
                         if exc.code not in (401, 403):
@@ -593,16 +781,8 @@ def check_and_announce_self_migration(
                         log.debug("Peer migration delivery failed; retaining pending recipient")
                         break
 
-    # A recipient is retired only by an explicit operator edit, never a retry timeout.
-    if not pending["recipients"]:
-        ident.pop("pending_migration", None)
-        ident["last_known_ip"] = current_ip
-        ident.setdefault("history", []).append({
-            "ip": current_ip,
-            "previous_ip": last_ip,
-            "timestamp": time.time(),
-        })
-        save_self_identity(ident)
+    # A recipient is retired only by an exact acknowledgement or explicit operator edit.
+    if _commit_migration_if_complete(current_ip, last_ip, generation):
         log.info(
             "Self IP migration committed to self-identity.json (%d peer acks)",
             ack_count,
@@ -785,11 +965,12 @@ def ack_peer(ip: str, nonce: str, signature: str) -> bool:
 def approve_peer(ip: str) -> None:
     """Apply explicit operator approval, including lifting a prior revocation."""
     ipaddress.ip_address(ip)
-    store = _load_json(KNOWN_PEERS)
-    store["revoked_ips"] = sorted(set(store.get("revoked_ips") or []) - {ip})
-    store["ips"] = sorted(set(store.get("ips") or []) | {ip})
-    store["approved_ips"] = sorted(set(store.get("approved_ips") or []) | {ip})
-    _save_json(KNOWN_PEERS, store)
+    with _state_transaction():
+        store = _load_known_peer_store()
+        store["revoked_ips"] = sorted(set(store.get("revoked_ips") or []) - {ip})
+        store["ips"] = sorted(set(store.get("ips") or []) | {ip})
+        store["approved_ips"] = sorted(set(store.get("approved_ips") or []) | {ip})
+        _save_json(KNOWN_PEERS, store)
 
 
 def main() -> int:
