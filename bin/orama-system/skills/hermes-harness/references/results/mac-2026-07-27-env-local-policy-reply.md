@@ -45,7 +45,7 @@ On case-insensitive Windows, a parent `.env.LOCAL` can alias-collide with `.env.
 |-----------|---------------------|
 | Token handoff | Operator scripts (`print-lan-peer-token.ps1` / Mac equivalent) — **out-of-band or SSH**, not bearer over LAN `http://` |
 | GOSSIP / mesh | `ensure_local_mesh_secrets.py` on either repo (harmonizes siblings when paths are set) |
-| Inbox cards | `lan_peer_assign.py drop` **only** over TLS or SSH-tunneled HTTP (see coord-033) |
+| Inbox cards | `lan_peer_assign.py drop` **only** over verified HTTPS; an SSH tunnel does not exempt an HTTP URL from the bearer transport check (see coord-033) |
 
 There is **no** Mac→Win auto-push of full env files over plaintext LAN.
 
@@ -60,12 +60,12 @@ Interactive shells may use repo `scripts/env/load-local.ps1` — **do not** add 
 
 ### 6. Peer-file 401 + `SECURITY_STOP`
 
-**Expected on plain `http://` when a real control-plane token is configured.** `lan_peer_assign.py` refuses to send `Authorization: Bearer` over unauthenticated HTTP (RFC 6750 fail-closed). This is **not** proof of token mismatch.
+**Expected on plain `http://` when a real control-plane token is configured.** `lan_peer_assign.py` attaches `Authorization: Bearer` only to HTTPS requests. If TLS verification fails, no HTTP request is transmitted; plain HTTP requests proceed without the bearer credential (RFC 6750). This is **not** proof of token mismatch.
 
 | Symptom | Meaning |
 |---------|---------|
-| `SECURITY_STOP` on plain LAN `http://` portal URLs | Transport policy — use TLS (`PEER_PORTAL_TLS_ENABLED=1`), SSH tunnel to `http://<LOCAL_FORWARD>/` (coord-033), or operator handoff |
-| 401 after TLS/tunnel with bearer | Then investigate token parity (Mac Keychain / Win User env vs peer portal config) |
+| `SECURITY_STOP` on plain LAN `http://` portal URLs | Transport policy — use verified HTTPS (`PEER_PORTAL_TLS_ENABLED=1`), including through a tunnel with an HTTPS destination, or operator handoff |
+| 401 after verified HTTPS with bearer | Then investigate token parity (Mac Keychain / Win User env vs peer portal config) |
 
 Mac probe 2026-10-27: Win portal health timeout; `portal-status` blocked on HTTP bearer — align with coord-033 pull path.
 
@@ -75,7 +75,7 @@ Mac probe 2026-10-27: Win portal health timeout; `portal-status` blocked on HTTP
 2. Set **User** env vars required for future `coord_pulse` enablement.
 3. Run `ensure_local_mesh_secrets.py` on Win orama root (with `PERPETUA_TOOLS_PATH` pointing at PT).
 4. **Delete** workspace `.env.LOCAL` once migration verified (`start.ps1` + `probe_lan_peer.py --json` interactive).
-5. Leave peer **push** disabled until TLS or SSH tunnel per coord-033; this reply is authoritative via git + local Mac inbox.
+5. Leave peer **push** disabled until verified HTTPS is available per coord-033; a tunnel alone does not change the HTTPS requirement. This reply is authoritative via git + local Mac inbox.
 
 ## Mac state
 

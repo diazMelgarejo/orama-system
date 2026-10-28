@@ -1,0 +1,521 @@
+"""Network-free regressions for migration trust, delivery and recovery boundaries."""
+from __future__ import annotations
+
+import importlib.util
+import ipaddress
+import json
+import sys
+import threading
+import urllib.error
+import urllib.request
+from email.message import Message
+from io import BytesIO
+from pathlib import Path
+from types import ModuleType
+
+import pytest
+
+pytestmark = pytest.mark.unit
+OLD, NEW, A, B = [str(ipaddress.IPv4Address(i)) for i in (0xC0000201, 0xC0000202, 0xC0000203, 0xC0000204)]
+
+
+@pytest.fixture
+def trust(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ModuleType:
+    """Load a fresh module with every writable state location isolated."""
+    path = Path(__file__).resolve().parents[1] / "scripts/mesh/discovery_trust.py"
+    spec = importlib.util.spec_from_file_location("mesh.discovery_trust", path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, "mesh.discovery_trust", module)
+    spec.loader.exec_module(module)
+    for name in ("KNOWN_PEERS", "ARCHIVE", "OPENCLAW_STATE", "SELF_IDENTITY_FILE", "PENDING_HANDSHAKES"):
+        monkeypatch.setattr(module, name, tmp_path / f"{name}.json")
+    for key in ("WIN_3080_IP", "WIN_5080_IP", "WIN_PEER_IPS", "PEER_IPS", "ORAMA_STRICT_CONFIG_PEERS"):
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("MESH_MIGRATION_SECRET", "synthetic-signing-key")
+    monkeypatch.setattr(module, "_get_ssl_context", lambda: object())
+    monkeypatch.setattr(module, "_control_plane_tokens", lambda: ["synthetic-bearer"])
+    module._save_json(module.KNOWN_PEERS, {"ips": [OLD]})
+    module.save_self_identity({"node_id": "win", "last_known_ip": OLD})
+    return module
+
+
+class Response:
+    """Small context-managed HTTP response used by delivery tests."""
+    status = 200
+
+    def __init__(self, payload: dict) -> None:
+        """Keep the supplied response body."""
+        self.payload = payload
+
+    def __enter__(self) -> Response:
+        """Enter the response context."""
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        """Close the synthetic response."""
+
+    def read(self, limit: int) -> bytes:
+        """Return bounded response bytes."""
+        return json.dumps(self.payload).encode()[:limit]
+
+
+@pytest.mark.parametrize("destination", ["http://other.invalid/x", "https://other.invalid/x"])
+def test_redirect_is_never_constructed(trust: ModuleType, destination: str) -> None:
+    """Redirect handling cannot construct a second credential-bearing request."""
+    request = urllib.request.Request("https://peer.invalid/x", headers={"Authorization": "Bearer synthetic"})
+    handler = trust._NoRedirect()
+    assert handler.redirect_request(request, None, 302, "redirect", {}, destination) is None
+
+
+@pytest.mark.parametrize("destination", ["http://other.invalid/x", "https://other.invalid/x"])
+def test_authenticated_request_stops_at_first_redirect(trust: ModuleType, monkeypatch: pytest.MonkeyPatch, destination: str) -> None:
+    """The production opener issues exactly one request when a verified origin redirects."""
+    calls: list[urllib.request.Request] = []
+
+    def respond(handler: object, request: urllib.request.Request) -> object:
+        """Simulate the verified TLS response without opening a network connection."""
+        calls.append(request)
+        headers = Message()
+        headers["Location"] = destination
+        response = urllib.response.addinfourl(BytesIO(b""), headers, request.full_url, 302)
+        response.msg = "Found"
+        return response
+
+    import ssl
+    monkeypatch.setattr(urllib.request.HTTPSHandler, "https_open", respond)
+    request = urllib.request.Request("https://peer.invalid/x", headers={"Authorization": "Bearer synthetic"})
+    with pytest.raises(urllib.error.HTTPError) as caught:
+        trust._open_peer(request, ssl.create_default_context(), 1.0)
+    assert caught.value.code == 302
+    assert len(calls) == 1
+    assert calls[0].full_url == "https://peer.invalid/x"
+
+
+def test_strict_valid_signature_cannot_admit_new_destination(trust: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Signing authority cannot override the operator's strict address allowlist."""
+    monkeypatch.setenv("ORAMA_STRICT_CONFIG_PEERS", "1")
+    announcement = trust.create_migration_announcement("win", OLD, NEW)
+    assert trust.apply_migration_announcement(announcement) is False
+    with pytest.raises(ValueError, match="strict configuration"):
+        trust.remember_peer(NEW)
+    assert NEW not in trust.load_known_peer_ips()
+
+
+def test_revocation_overrides_archive_and_relaxed_admission(trust: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Cached or relaxed admission cannot resurrect an administratively removed peer."""
+    trust._save_json(trust.ARCHIVE, {"endpoints": {"win": f"https://{OLD}:8443"}})
+    trust._save_json(trust.OPENCLAW_STATE, {"endpoints": {"win": {"ip": OLD}}})
+    monkeypatch.setenv("WIN_PEER_IPS", OLD)
+    monkeypatch.setenv("ORAMA_DISCOVERY_RELAXED", "1")
+    assert trust.forget_peer(OLD)
+    assert OLD not in trust.load_known_peer_ips()
+    assert trust.peer_trusted(OLD) is False
+
+
+def test_revocation_survives_overlapping_automatic_admission(trust: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A stale automatic admission cannot overwrite a completed revocation."""
+    admission_at_save = threading.Event()
+    allow_admission_save = threading.Event()
+    original_save = trust._save_json
+
+    def paused_save(path: Path, data: dict) -> None:
+        """Hold the admission write while a competing revocation waits on the transaction."""
+        if path == trust.KNOWN_PEERS and NEW in data.get("ips", []) and OLD in data.get("ips", []):
+            admission_at_save.set()
+            assert allow_admission_save.wait(timeout=2)
+        original_save(path, data)
+
+    monkeypatch.setattr(trust, "_save_json", paused_save)
+    admission = threading.Thread(target=trust.remember_peer, args=(NEW,))
+    revocation = threading.Thread(target=trust.forget_peer, args=(OLD,))
+    admission.start()
+    assert admission_at_save.wait(timeout=2)
+    revocation.start()
+    allow_admission_save.set()
+    admission.join(timeout=2)
+    revocation.join(timeout=2)
+
+    assert not admission.is_alive()
+    assert not revocation.is_alive()
+    assert OLD not in trust.load_known_peer_ips()
+    assert OLD in trust._load_known_peer_store()["revoked_ips"]
+
+
+def test_old_ack_cannot_settle_a_later_return_to_same_address(trust: ModuleType) -> None:
+    """A stale acknowledgement is fenced when a second move returns to its old target."""
+    latest = str(ipaddress.IPv4Address(0xC0000205))
+    first = trust._prepare_self_migration(NEW, [A])
+    assert first is not None
+    _, _, _, first_generation = first
+    second = trust._prepare_self_migration(latest, [A])
+    assert second is not None
+    third = trust._prepare_self_migration(NEW, [A])
+    assert third is not None
+    _, _, _, current_generation = third
+
+    assert current_generation > first_generation
+    assert trust._settle_migration_ack(NEW, A, first_generation) is False
+    assert trust.load_self_identity()["pending_migration"]["recipients"] == [A]
+
+
+@pytest.mark.parametrize("contents", ["not-json", "[]"])
+def test_corrupt_known_peers_blocks_archive_fallback(trust: ModuleType, contents: str) -> None:
+    """Corrupt revocation authority is not treated as an empty first-run store."""
+    trust._save_json(trust.ARCHIVE, {"endpoints": {"win": f"https://{OLD}:8443"}})
+    trust.KNOWN_PEERS.write_text(contents, encoding="utf-8")
+
+    with pytest.raises(trust.DiscoveryStateError, match="known peers"):
+        trust.load_known_peer_ips()
+
+
+def test_corrupt_self_identity_blocks_retry_without_overwriting_bytes(
+    trust: ModuleType, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A broken durable identity prevents migration delivery and remains intact for repair."""
+    original = "{not-json\n"
+    trust.SELF_IDENTITY_FILE.write_text(original, encoding="utf-8")
+    monkeypatch.setattr(trust, "_open_peer", lambda *args: pytest.fail("corrupt state must not send"))
+
+    with pytest.raises(trust.DiscoveryStateError, match="self identity"):
+        trust.check_and_announce_self_migration(NEW, [A])
+
+    assert trust.SELF_IDENTITY_FILE.read_text(encoding="utf-8") == original
+
+
+@pytest.mark.parametrize("requested", [12.0, float("inf"), 0.0])
+def test_shibboleth_probe_rejects_invalid_timeout_or_caps_large_value(
+    trust: ModuleType, monkeypatch: pytest.MonkeyPatch, requested: float,
+) -> None:
+    """Probe timeout is finite, positive and capped before any socket attempt."""
+    seen: list[float] = []
+
+    class RefusedConnection:
+        """Raise from context entry after recording the supplied timeout."""
+
+        def __enter__(self) -> None:
+            """Refuse the synthetic connection."""
+            raise OSError("offline")
+
+        def __exit__(self, *args: object) -> None:
+            """Close the synthetic connection context."""
+
+    def connect(address: tuple[str, int], timeout: float) -> RefusedConnection:
+        """Record the timeout passed to the first network operation."""
+        del address
+        seen.append(timeout)
+        return RefusedConnection()
+
+    monkeypatch.setattr(trust.socket, "create_connection", connect)
+    assert trust.verify_peer_shibboleth(A, timeout=requested) is False
+    if requested == 12.0:
+        assert seen == [0.5]
+    else:
+        assert seen == []
+
+
+def test_revocation_removes_pending_migration_recipient_and_future_audience(trust: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
+    """An explicit revocation cannot receive or block a current or superseding migration."""
+    latest = str(ipaddress.IPv4Address(0xC0000205))
+    calls: list[str] = []
+
+    def first_delivery(request: urllib.request.Request, context: object, timeout: float) -> Response:
+        """Acknowledge only A so B remains pending before its revocation."""
+        calls.append(request.host)
+        if request.host.startswith(B):
+            raise OSError("offline")
+        announcement = json.loads(request.data)["data"]
+        return Response({"ok": True, "migration_id": trust.migration_digest(announcement)})
+
+    monkeypatch.setattr(trust, "_open_peer", first_delivery)
+    trust.check_and_announce_self_migration(NEW, [A, B])
+    assert trust.load_self_identity()["pending_migration"] == {
+        "new_ip": NEW,
+        "all_recipients": [A, B],
+        "recipients": [B],
+    }
+
+    assert trust.forget_peer(B) is True
+    assert trust.load_self_identity()["pending_migration"] == {
+        "new_ip": NEW,
+        "all_recipients": [A],
+        "recipients": [],
+    }
+    calls.clear()
+
+    def latest_delivery(request: urllib.request.Request, context: object, timeout: float) -> Response:
+        """Acknowledge the one still-authorized recipient after a newer address appears."""
+        calls.append(request.host)
+        announcement = json.loads(request.data)["data"]
+        return Response({"ok": True, "migration_id": trust.migration_digest(announcement)})
+
+    monkeypatch.setattr(trust, "_open_peer", latest_delivery)
+    trust.check_and_announce_self_migration(latest, [B])
+    assert calls == [f"{A}:8443"]
+    assert trust.load_self_identity()["last_known_ip"] == latest
+    assert "pending_migration" not in trust.load_self_identity()
+
+
+def test_partial_ack_retries_only_pending_recipient_after_reload(trust: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
+    """One acknowledgement never suppresses another recipient's durable retry."""
+    calls: list[str] = []
+
+    def deliver(request: urllib.request.Request, context: object, timeout: float) -> Response:
+        """Acknowledge A and fail B on the first process-equivalent pass."""
+        calls.append(request.host)
+        if request.host.startswith(B):
+            raise OSError("offline")
+        announcement = json.loads(request.data)["data"]
+        return Response({"ok": True, "migration_id": trust.migration_digest(announcement)})
+
+    monkeypatch.setattr(trust, "_open_peer", deliver)
+    trust.check_and_announce_self_migration(NEW, [A, B])
+    saved = trust.load_self_identity()
+    assert saved["last_known_ip"] == OLD
+    assert saved["pending_migration"]["recipients"] == [B]
+    calls.clear()
+
+    def acknowledge(request: urllib.request.Request, context: object, timeout: float) -> Response:
+        """Acknowledge the retained recipient from freshly read disk state."""
+        calls.append(request.host)
+        return Response({"ok": True, "migration_id": trust.migration_digest(json.loads(request.data)["data"])})
+
+    monkeypatch.setattr(trust, "_open_peer", acknowledge)
+    trust.check_and_announce_self_migration(NEW, [A, B])
+    assert calls == [f"{B}:8443"]
+    assert trust.load_self_identity()["last_known_ip"] == NEW
+    assert "pending_migration" not in trust.load_self_identity()
+
+
+@pytest.mark.parametrize("ack", [{"ok": True}, {"ok": False}, {"ok": True, "migration_id": "wrong"}])
+def test_http_success_without_exact_application_ack_is_pending(trust: ModuleType, monkeypatch: pytest.MonkeyPatch, ack: dict) -> None:
+    """HTTP success alone cannot commit sender migration state."""
+    monkeypatch.setattr(trust, "_open_peer", lambda *args: Response(ack))
+    trust.check_and_announce_self_migration(NEW, [A])
+    assert trust.load_self_identity()["last_known_ip"] == OLD
+
+
+def test_stale_pending_migration_is_superseded_on_newer_address(trust: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A later DHCP move must announce last_ip→newest and retain unpaid recipients."""
+    c = str(ipaddress.IPv4Address(0xC0000205))
+    calls: list[str] = []
+
+    def fail(request: urllib.request.Request, context: object, timeout: float) -> Response:
+        """Keep every recipient pending on the first address change."""
+        calls.append(json.loads(request.data)["data"]["new_ip"])
+        raise OSError("offline")
+
+    monkeypatch.setattr(trust, "_open_peer", fail)
+    trust.check_and_announce_self_migration(NEW, [A, B])
+    assert trust.load_self_identity()["pending_migration"]["new_ip"] == NEW
+    calls.clear()
+
+    def still_offline(request: urllib.request.Request, context: object, timeout: float) -> Response:
+        """Observe the superseded announcement while recipients stay pending."""
+        payload = json.loads(request.data)["data"]
+        calls.append(f"{request.host}:{payload['previous_ip']}->{payload['new_ip']}")
+        raise OSError("offline")
+
+    monkeypatch.setattr(trust, "_open_peer", still_offline)
+    trust.check_and_announce_self_migration(c, [A])
+    saved = trust.load_self_identity()
+    assert saved["last_known_ip"] == OLD
+    assert saved["pending_migration"]["new_ip"] == c
+    assert saved["pending_migration"]["recipients"] == [A, B]
+    assert calls == [f"{A}:8443:{OLD}->{c}", f"{B}:8443:{OLD}->{c}"]
+
+
+def test_pending_migration_preserved_when_address_returns_to_last_known(trust: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A return to the committed address still needs a recipient notification."""
+    monkeypatch.setattr(trust, "_open_peer", lambda *args: (_ for _ in ()).throw(OSError("offline")))
+    trust.check_and_announce_self_migration(NEW, [A])
+    assert "pending_migration" in trust.load_self_identity()
+    assert trust.check_and_announce_self_migration(OLD, [A]) is not None
+    assert trust.load_self_identity()["pending_migration"]["new_ip"] == OLD
+    assert trust.load_self_identity()["pending_migration"]["recipients"] == [A]
+    assert trust.load_self_identity()["last_known_ip"] == OLD
+
+
+@pytest.mark.parametrize("latest", [str(ipaddress.IPv4Address(0xC0000205)), OLD])
+def test_second_move_renotifies_previously_acknowledged_recipient(trust: ModuleType, monkeypatch: pytest.MonkeyPatch, latest: str) -> None:
+    """A->B->C and A->B->A notify peers that already learned B, even if omitted from fresh targets."""
+    calls: list[tuple[str, str]] = []
+
+    def deliver(request: urllib.request.Request, context: object, timeout: float) -> Response:
+        """Acknowledge A while B stays offline on the first move."""
+        announcement = json.loads(request.data)["data"]
+        calls.append((request.host, announcement["new_ip"]))
+        if request.host == f"{B}:8443":
+            raise OSError("offline")
+        return Response({"ok": True, "migration_id": trust.migration_digest(announcement)})
+
+    monkeypatch.setattr(trust, "_open_peer", deliver)
+    trust.check_and_announce_self_migration(NEW, [A, B])
+    assert trust.load_self_identity()["pending_migration"]["recipients"] == [B]
+    calls.clear()
+    trust.check_and_announce_self_migration(latest, [B])
+    assert calls == [(f"{A}:8443", latest), (f"{B}:8443", latest)]
+    state = trust.load_self_identity()["pending_migration"]
+    assert state["all_recipients"] == [A, B]
+    assert state["recipients"] == [B]
+    calls.clear()
+
+    def final_ack(request: urllib.request.Request, context: object, timeout: float) -> Response:
+        """After a process-equivalent reload, finish only the outstanding latest-address delivery."""
+        announcement = json.loads(request.data)["data"]
+        calls.append((request.host, announcement["new_ip"]))
+        return Response({"ok": True, "migration_id": trust.migration_digest(announcement)})
+
+    monkeypatch.setattr(trust, "_open_peer", final_ack)
+    trust.check_and_announce_self_migration(latest, [B])
+    assert calls == [(f"{B}:8443", latest)]
+    assert trust.load_self_identity()["last_known_ip"] == latest
+    assert "pending_migration" not in trust.load_self_identity()
+
+
+def test_strict_mode_excludes_historical_automatic_admission(trust: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Enabling strict mode cannot promote a cached automatic admission to operator approval."""
+    trust.remember_peer(NEW)
+    monkeypatch.setenv("ORAMA_STRICT_CONFIG_PEERS", "1")
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+    assert NEW not in trust.load_known_peer_ips()
+    assert trust.peer_trusted(NEW) is False
+    with pytest.raises(ValueError, match="strict configuration"):
+        trust.remember_peer(NEW)
+    trust.approve_peer(NEW)
+    assert trust.peer_trusted(NEW) is True
+
+
+def test_legacy_pending_audience_is_not_guessed(trust: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Do not silently declare success when old state lost acknowledged recipients."""
+    state = {"node_id": "win", "last_known_ip": OLD, "pending_migration": {"new_ip": NEW, "recipients": [B]}}
+    trust.save_self_identity(state)
+
+    def unexpected_delivery(*args: object) -> None:
+        """Any automatic delivery would guess an incomplete audience."""
+        pytest.fail("legacy migration requires explicit audience reconciliation")
+
+    monkeypatch.setattr(trust, "_open_peer", unexpected_delivery)
+    assert trust.check_and_announce_self_migration(str(ipaddress.IPv4Address(0xC0000205)), [B]) is None
+    assert trust.load_self_identity() == state
+
+
+def test_strict_configured_migration_is_accepted(trust: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Strict policy permits a signed migration only between explicitly configured addresses."""
+    monkeypatch.setenv("ORAMA_STRICT_CONFIG_PEERS", "1")
+    monkeypatch.setenv("PEER_IPS", f"{OLD},{NEW}")
+    assert trust.apply_migration_announcement(trust.create_migration_announcement("win", OLD, NEW)) is True
+
+
+def test_ack_peer_returns_false_when_remember_peer_rejects(trust: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verified handshake cannot bypass revocation or strict allowlist policy."""
+    trust.forget_peer(OLD)
+    monkeypatch.setattr(trust, "verify_handshake", lambda *args: True)
+    assert trust.ack_peer(OLD, "nonce", "signature") is False
+    assert OLD not in trust.load_known_peer_ips()
+
+
+def test_filter_endpoints_skips_remember_peer_for_loopback(trust: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Loopback trust must not call remember_peer (strict mode would raise)."""
+    loopback = str(ipaddress.IPv4Address(0x7F000001))
+    monkeypatch.setenv("ORAMA_STRICT_CONFIG_PEERS", "1")
+    calls: list[str] = []
+    original = trust.remember_peer
+
+    def tracked(ip: str) -> None:
+        """Record remember_peer attempts while preserving production behavior."""
+        calls.append(ip)
+        original(ip)
+
+    monkeypatch.setattr(trust, "remember_peer", tracked)
+    endpoints = {"mac": {"ip": loopback}, "win": None, "win_peers": []}
+    out, blocked = trust.filter_endpoints_for_trust(endpoints)
+    assert out["mac"] == {"ip": loopback}
+    assert blocked == []
+    assert calls == []
+
+
+def test_delivery_tries_next_canonical_credential_only_on_auth_refusal(trust: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A rejected peer credential can fall back without following redirects."""
+    monkeypatch.setattr(trust, "_control_plane_tokens", lambda: ["synthetic-first", "synthetic-second"])
+    calls: list[str] = []
+
+    def deliver(request: urllib.request.Request, context: object, timeout: float) -> Response:
+        """Refuse the first candidate and acknowledge the second."""
+        calls.append(request.get_header("Authorization"))
+        if len(calls) == 1:
+            raise urllib.error.HTTPError(request.full_url, 401, "refused", {}, None)
+        return Response({"ok": True, "migration_id": trust.migration_digest(json.loads(request.data)["data"])})
+
+    monkeypatch.setattr(trust, "_open_peer", deliver)
+    trust.check_and_announce_self_migration(NEW, [A])
+    assert calls == ["Bearer synthetic-first", "Bearer synthetic-second"]
+    assert trust.load_self_identity()["last_known_ip"] == NEW
+
+
+def test_explicit_operator_reapproval_lifts_revocation(trust: ModuleType) -> None:
+    """Only the explicit approval workflow can undo an effective revocation."""
+    trust.forget_peer(OLD)
+    with pytest.raises(ValueError, match="revoked"):
+        trust.remember_peer(OLD)
+    trust.approve_peer(OLD)
+    assert OLD in trust.load_known_peer_ips()
+
+
+@pytest.mark.parametrize("outcome", ["accepted", "signature", "persistence"])
+def test_route_application_ack_controls_sender_commit(trust: ModuleType, monkeypatch: pytest.MonkeyPatch, outcome: str) -> None:
+    """Exercise producer through authenticated route, dispatcher and sender settlement."""
+    from fastapi.testclient import TestClient
+    import orama_system.portal_server as portal
+    from orama_system.lan_peer_channel import LanPeerChannel
+
+    monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "synthetic-route-bearer")
+    monkeypatch.setenv("ORAMA_INSECURE_DEV", "0")
+    monkeypatch.setattr(portal, "_lan_peer_channel", LanPeerChannel())
+    client = TestClient(portal.app)
+    if outcome == "persistence":
+        def fail_write(ip: str) -> None:
+            """Simulate storage refusing the receiver's trust update."""
+            raise OSError("synthetic storage failure")
+        monkeypatch.setattr(trust, "remember_peer", fail_write)
+
+    def deliver(request: urllib.request.Request, context: object, timeout: float) -> Response:
+        """Pass a tampered wire event through the real protected route."""
+        wire = json.loads(request.data)
+        if outcome == "signature":
+            wire["data"]["signature"] = "invalid"
+        response = client.post("/api/peer-event", json=wire, headers={"Authorization": "Bearer synthetic-route-bearer"})
+        assert response.status_code == (200 if outcome == "accepted" else 409)
+        return Response(response.json())
+
+    monkeypatch.setattr(trust, "_open_peer", deliver)
+    trust.check_and_announce_self_migration(NEW, [A])
+    assert trust.load_self_identity()["last_known_ip"] == (NEW if outcome == "accepted" else OLD)
+    assert (NEW in trust.load_known_peer_ips()) is (outcome == "accepted")
+
+
+@pytest.mark.parametrize("lane", ["peer", "local", "pt-root"])
+def test_token_resolver_uses_canonical_lane_contract(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, lane: str) -> None:
+    """Peer precedence, local-only credentials and configured PT token files remain supported."""
+    import utils.control_plane_auth as auth
+    path = Path(__file__).resolve().parents[1] / "scripts/mesh/discovery_trust.py"
+    spec = importlib.util.spec_from_file_location("isolated_discovery_tokens", path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    for key in ("ORAMA_CONTROL_PLANE_TOKEN", "ORAMA_CONTROL_PLANE_TOKEN_PEER", "ORAMA_CONTROL_PLANE_TOKEN_LOCAL", "PT_CONTROL_PLANE_TOKEN"):
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("PERPETUA_TOOLS_ROOT", str(tmp_path))
+    if lane == "peer":
+        monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "synthetic-local")
+        monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN_PEER", "synthetic-peer")
+        expected = "synthetic-peer"
+    elif lane == "local":
+        monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN_LOCAL", "synthetic-local-only")
+        expected = "synthetic-local-only"
+    else:
+        (tmp_path / ".state").mkdir()
+        (tmp_path / ".state/control_plane_token").write_text("synthetic-pt-file", encoding="utf-8")
+        expected = "synthetic-pt-file"
+    assert module._control_plane_tokens() == auth.outbound_control_plane_tokens()
+    assert module._control_plane_tokens()[0] == expected

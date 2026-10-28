@@ -130,12 +130,23 @@ class LanPeerChannel:
         if not self._ws_peers and self.state == "ws_connected":
             self.state = "idle"
 
-    async def on_inbound(self, event: dict[str, Any]) -> None:
+    async def on_inbound(self, event: dict[str, Any]) -> dict[str, Any] | None:
         """Dispatch an inbound envelope to the registered handlers."""
         if event.get("type") == "probe":
             pong = make_envelope("probe-ack", {"ok": True})
             await self.send(pong)
             return
+        if event.get("type") == "mesh_ip_migration_announcement":
+            try:
+                from mesh.discovery_trust import apply_migration_announcement, migration_digest
+                payload = event.get("data")
+                if not isinstance(payload, dict) or not payload:
+                    payload = event
+                accepted = apply_migration_announcement(payload)
+                return {"ok": accepted, "migration_id": migration_digest(payload) if accepted else None}
+            except Exception:
+                log.exception("Failed to apply mesh IP migration announcement")
+                return {"ok": False, "migration_id": None}
         for handler in self._inbound_handlers:
             try:
                 await handler(event)

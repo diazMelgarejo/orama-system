@@ -51,7 +51,11 @@ RUNNING_ON_WINDOWS = sys.platform == "win32"
 _SCRIPTS_DIR = Path(__file__).resolve().parent
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
-from mesh.discovery_trust import ack_peer, filter_endpoints_for_trust  # noqa: E402
+from mesh.discovery_trust import (  # noqa: E402
+    ack_peer,
+    check_and_announce_self_migration,
+    filter_endpoints_for_trust,
+)
 
 _SRC_DIR = _SCRIPTS_DIR.parent / "src"
 if str(_SRC_DIR) not in sys.path:
@@ -1083,7 +1087,20 @@ def _windows_mac_config_stale(repo_paths: dict) -> bool:
     return False
 
 
-def run_discovery(force: bool = True, cached: bool = False) -> int:
+def _retry_pending_self_migration() -> None:
+    """Attempt a pending self-migration without blocking discovery on failure."""
+    try:
+        check_and_announce_self_migration()
+    except Exception as exc:
+        logging.warning("self IP migration announcement failed: %s", exc, exc_info=True)
+
+
+def run_discovery(
+    force: bool = True,
+    cached: bool = False,
+    *,
+    retry_self_migration: bool = True,
+) -> int:
     """Probe endpoints and update configs.
 
     Default behaviour is always-fresh (force=True).  Pass cached=True (or
@@ -1091,6 +1108,11 @@ def run_discovery(force: bool = True, cached: bool = False) -> int:
     (within GOSSIP_TTL_SECONDS).  The legacy --force flag is kept for
     backwards compatibility but is now a no-op (force is already the default).
     """
+    if retry_self_migration:
+        # Keep delivery retries independent from the discovery lock. A pending
+        # migration is durable work and must not wait for topology changes.
+        _retry_pending_self_migration()
+
     with _Lock():
         if cached and not force and DISCOVERY_JSON.exists():
             state = _load_json(DISCOVERY_JSON)
@@ -1334,6 +1356,9 @@ def _watch_loop(interval: int = 30) -> None:
     print(f"👁️  Network watcher started (poll every {interval}s). Ctrl-C to stop.", file=sys.stderr)
 
     while not _stop.wait(timeout=interval):
+        # Retry durable migration delivery even when liveness is unchanged.
+        # This intentionally does not trigger a full endpoint probe.
+        _retry_pending_self_migration()
         current = _current_liveness()
         topology_changed = (
             current["mac"] != last_liveness["mac"] or
@@ -1347,7 +1372,7 @@ def _watch_loop(interval: int = 30) -> None:
                 f"mac_lan={last_liveness['mac_lan']}→{current['mac_lan']}",
                 file=sys.stderr,
             )
-            run_discovery(force=True, cached=False)
+            run_discovery(force=True, cached=False, retry_self_migration=False)
             # Phase 4: query peer topology on LAN interface change
             _query_peer_topology_on_change()
             last_liveness = _current_liveness()
@@ -1378,7 +1403,11 @@ def main():
     p.add_argument("--ack-peer", metavar="IP", help="Acknowledge new discovery peer after handshake")
     p.add_argument("--nonce", help="Handshake nonce from discover output")
     p.add_argument("--signature", help="Handshake HMAC signature")
+    p.add_argument("--strict-peers", action="store_true",
+                   help="Strict config peers mode: only trust IPs explicitly listed in config files")
     args = p.parse_args()
+    if args.strict_peers:
+        os.environ["ORAMA_STRICT_CONFIG_PEERS"] = "1"
     if args.ack_peer:
         if not args.nonce or not args.signature:
             print("❌ --ack-peer requires --nonce and --signature", file=sys.stderr)
