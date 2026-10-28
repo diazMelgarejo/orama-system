@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import errno
 import importlib.util
 import ipaddress
 import json
@@ -7,6 +8,7 @@ import sys
 import time
 from pathlib import Path
 from typing import Protocol
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -550,3 +552,62 @@ def test_shibboleth_fails_closed_without_ca_even_when_relaxed(trust_mod, tmp_pat
         lambda *args, **kwargs: type("C", (), {"__enter__": lambda s: s, "__exit__": lambda *a: None})(),
     )
     assert trust_mod.verify_peer_shibboleth(_IP_88) is False
+
+
+def test_try_lock_file_msvcrt_translates_oserror_to_blocking_io(trust_mod, tmp_path, monkeypatch) -> None:
+    """Windows msvcrt busy locks must surface as BlockingIOError for the retry loop."""
+    mock_msvcrt = MagicMock()
+    mock_msvcrt.LK_NBLCK = 2
+    mock_msvcrt.locking.side_effect = OSError(errno.EACCES, "Permission denied")
+    monkeypatch.setattr(trust_mod, "fcntl", None)
+    monkeypatch.setattr(trust_mod, "msvcrt", mock_msvcrt)
+
+    lock_path = tmp_path / "trust.lock"
+    lock_path.write_text("", encoding="utf-8")
+    with open(lock_path, "a+", encoding="utf-8") as handle:
+        with pytest.raises(BlockingIOError) as exc_info:
+            trust_mod._try_lock_file(handle)
+        position = handle.tell()
+
+    assert exc_info.value.errno == errno.EAGAIN
+    assert "discovery trust state lock busy" in str(exc_info.value)
+    mock_msvcrt.locking.assert_called_once()
+    assert position == 0
+
+
+def test_try_lock_file_msvcrt_does_not_grow_lock_file(trust_mod, tmp_path, monkeypatch) -> None:
+    """msvcrt lock path must seek without appending a marker byte on each attempt."""
+    mock_msvcrt = MagicMock()
+    mock_msvcrt.LK_NBLCK = 2
+    monkeypatch.setattr(trust_mod, "fcntl", None)
+    monkeypatch.setattr(trust_mod, "msvcrt", mock_msvcrt)
+
+    lock_path = tmp_path / "trust.lock"
+    lock_path.write_text("", encoding="utf-8")
+    with open(lock_path, "a+", encoding="utf-8") as handle:
+        fd = handle.fileno()
+        trust_mod._try_lock_file(handle)
+        size_after = lock_path.stat().st_size
+
+    assert size_after == 0
+    mock_msvcrt.locking.assert_called_once_with(fd, mock_msvcrt.LK_NBLCK, 1)
+
+
+def test_state_transaction_retries_msvcrt_busy_then_acquires(trust_mod, tmp_path, monkeypatch) -> None:
+    """_state_transaction must retry when Windows lock contention raises OSError."""
+    mock_msvcrt = MagicMock()
+    mock_msvcrt.LK_NBLCK = 2
+    mock_msvcrt.LK_UNLCK = 0
+    mock_msvcrt.locking.side_effect = [
+        OSError(errno.EACCES, "Permission denied"),
+        None,
+        None,  # unlock
+    ]
+    monkeypatch.setattr(trust_mod, "fcntl", None)
+    monkeypatch.setattr(trust_mod, "msvcrt", mock_msvcrt)
+    monkeypatch.setattr(trust_mod, "_trust_state_lock_path", lambda: tmp_path / "trust.lock")
+
+    with trust_mod._state_transaction(timeout=1.0):
+        pass
+
+    assert mock_msvcrt.locking.call_count == 3

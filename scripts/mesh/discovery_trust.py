@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+import errno
 import hashlib
 import hmac
 import ipaddress
@@ -57,11 +58,13 @@ def _try_lock_file(handle) -> None:
     if fcntl is not None:
         fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
         return
+    # msvcrt.locking can lock a byte past EOF; avoid append-mode marker writes
+    # that grow the lock file. Translate busy OSError so _state_transaction retries.
     handle.seek(0)
-    handle.write("0")
-    handle.flush()
-    handle.seek(0)
-    msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+    try:
+        msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+    except OSError as exc:
+        raise BlockingIOError(errno.EAGAIN, "discovery trust state lock busy") from exc
 
 
 def _unlock_file(handle) -> None:
