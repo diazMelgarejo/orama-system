@@ -71,7 +71,30 @@ recipients. Automatic notification stops without changing those records; an
 operator must supply the full original audience in `all_recipients` when
 reconciling such a record. No bulk queue flush or live topology rewrite is implied.
 
+## Outbox flush: live peer resolution
+
+A queued peer drop stores the peer address it was queued with. If that address
+later changes (DHCP, a moved host), `lan_peer_assign.py flush-outbox` looks the
+peer up again in the live discovery record, but only when all of these hold:
+
+- peer TLS is enabled (`PEER_PORTAL_TLS_ENABLED`), so the new host must present
+  the pinned CA before any bearer token is sent;
+- the stored address no longer accepts a TCP connection;
+- discovery names a different host that does.
+
+The stored target always wins while it answers. Each retarget is per item and
+recorded in that item's history as `from` and `to` with `auto: true`, and the
+flush result carries `retargeted_from`. An automatic hop does not pin the item,
+so the next flush resolves it again; an operator-approved `outbox-resubmit`
+still requires `--only`. Discovery historically records only the LM Studio
+port. A record that also carries `endpoints.<peer>.portal_port` is tried first;
+otherwise `--portal-port` and the stored port are tried in that order.
+
 ## Regression evidence
+
+Run `tests/test_lan_peer_live_resolve.py` for the live-resolution rules: stored
+target wins, TLS gate, same-host and unreachable-host refusal, malformed-host
+refusal, and the auto-hop marker.
 
 Run `tests/test_discovery_migration_boundaries.py` for redirect refusal, strict
 policy, revocation, canonical credential selection, partial-delivery recovery,
