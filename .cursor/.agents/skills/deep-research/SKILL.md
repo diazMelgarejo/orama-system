@@ -1,11 +1,18 @@
 ---
 name: deep-research
-description: Multi-source deep research using firecrawl and exa MCPs. Searches the web, synthesizes findings, and delivers cited reports with source attribution. Use when the user wants thorough research on any topic with evidence and citations.
+description: Multi-source deep research using firecrawl and exa MCPs. Searches the web, synthesizes findings, and delivers cited reports with source attribution. Use when the user wants thorough research on any topic with evidence and citations. Activates when the user says "research", "deep dive", "investigate", or "what's the current state of".
+version: 1.0.0
+compatibility: Claude Code, Cursor, Codex CLI; needs the firecrawl and/or exa MCP server
+allowed-tools: Read, Write, Grep, Bash, firecrawl_search, firecrawl_scrape, web_search_exa
 ---
 
 # Deep Research
 
 Produce thorough, cited research reports from multiple web sources using firecrawl and exa MCP tools.
+
+## Purpose
+
+Turn a research question into a cited, gap-aware report. Canonical home of this skill is `bin/orama-system/skills/deep-research/`; the Cursor copy under `.cursor/.agents/skills/` is a pointer to it.
 
 ## When to Activate
 
@@ -152,3 +159,19 @@ Each agent searches, reads sources, and returns findings. The main session synth
 "What's happening with the US housing market right now?"
 "Investigate the competitive landscape for AI code editors"
 ```
+
+## Boundaries
+
+### Always Do
+
+- Cite every claim with a source link; flag single-source claims as unverified.
+- State the gaps: say so when a sub-question has no good source.
+
+### Ask First
+
+- Before using a paid search tier or a large scrape budget.
+
+### Never Do
+
+- Print, log, or commit API keys or tokens.
+- Present an inference as a sourced fact.
