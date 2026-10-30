@@ -223,6 +223,11 @@ Implementation lives in a PT wrapper script or harness_manager plugin patch appl
 **Search frugality** (orama openclaw-skills universal protocol) still applies:
 gbrain → CRG → Brave → Perplexity → Grok. `.agent/recall.py` runs before web search.
 
+> Update 2026-10-30 (additive; the line above is kept as written): the canonical order is now
+> seven tiers: gbrain → CRG → known local code/docs → Brave → Perplexity → EXA + Firecrawl
+> playbook → Grok (most expensive, last, only when available). See
+> [the search policy](../../bin/orama-system/references/search-and-code-exploration-policy.md).
+
 ---
 
 ## 7. Union-merge rules (runtime, no vendor edits)
