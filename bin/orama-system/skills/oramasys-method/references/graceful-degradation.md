@@ -14,7 +14,7 @@ escalating. Never parallel-fire expensive tiers.
 From `search-frugality.md`:
 
 ```text
-gbrain → CRG → Grep (exact) → Brave → Perplexity → Grok
+gbrain → CRG → Grep (exact) / known local docs → Brave → Perplexity → EXA + Firecrawl playbook → Grok
 ```
 
 | Step | When | On miss / error |

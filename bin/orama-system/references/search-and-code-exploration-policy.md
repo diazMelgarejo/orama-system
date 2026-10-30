@@ -20,14 +20,18 @@ Search in this order — stop at the first satisfying result:
 
 1. `/sync-gbrain` + `gbrain query "<question>"` — local semantic memory, zero cost
 2. `code-review-graph: semantic_search_nodes` — structural code context
-3. Brave Search API — web facts, current state
-4. Perplexity API (inline) — deep web synthesis
-5. Grok API — last resort only
+3. Known local code / docs — Grep for exact strings or regex, and Read of the files tiers 1-2 surfaced,
+   repo docs (`docs/v2/`, ADRs) and PT `.agent` memory; local and zero cost
+4. Brave Search API — web facts, current state
+5. Perplexity API (inline) — deep web synthesis
+6. EXA + Firecrawl playbook — [`skills/deep-research/SKILL.md`](../skills/deep-research/SKILL.md):
+   EXA discovery, then Firecrawl scrape of primary sources; paid credits and many calls, so a capped pass
+7. Grok API — most expensive; last resort, and only when available
 
 **NEVER:** parallel-fire all search tools. Use the cheapest first.
 **ALWAYS:** `AskUserQuestion` for decisions — never auto-select between ambiguous options.
 
-**Extraction, not discovery:** once this chain finds a URL, use
+**Extraction, not discovery:** Firecrawl is the second half of tier 6. Once any tier finds a URL, use
 [`skills/firecrawl/SKILL.md`](../skills/firecrawl/SKILL.md) to scrape,
 interact with, parse, or monitor it — Firecrawl sits downstream of this
 policy, it doesn't replace it.
