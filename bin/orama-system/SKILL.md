@@ -417,7 +417,8 @@ Integration rules (leftover reuse, synthesis, live-code verification, takeover a
 ## Search Policy
 
 **RULE: Never guess when information is scarce.** Cheapest source first, stop at the first satisfying
-result: gbrain → code-review-graph → Brave → Perplexity → Grok (last resort). Never parallel-fire;
+result: gbrain → code-review-graph → known local code/docs → Brave → Perplexity → EXA + Firecrawl playbook
+(`skills/deep-research`) → Grok (most expensive; last resort, only when available). Never parallel-fire;
 `AskUserQuestion` for ambiguous decisions. **Code Exploration Order:** code-review-graph → gbrain
 code-def → gbrain search → Read; never default to Grep. Full chain, RAG wiring and MCP reconnect recipe:
 [`references/search-and-code-exploration-policy.md`](references/search-and-code-exploration-policy.md).

@@ -6,14 +6,21 @@ when the exact integration is unavailable.
 
 ## The chain (stop at the first tier that answers)
 
-```bash
-gbrain  →  code-review-graph (CRG)  →  Brave  →  Perplexity  →  Grok
-(local)    (local graph)              (free)    (paid)         (last resort)
+```text
+1  gbrain                    local semantic memory           zero cost
+2  code-review-graph (CRG)   local structural graph          zero cost
+3  known local code / docs   Grep exact strings, Read the   zero cost
+                             files tiers 1-2 surfaced
+4  Brave                     web facts                       free
+5  Perplexity                deep web synthesis              paid
+6  EXA + Firecrawl playbook  skills/deep-research            paid, many calls
+7  Grok                      last resort, when available     most expensive
 ```
 
 ## gbrain — local semantic memory
 
 Two indexed corpora:
+
 - **This worktree's code** — auto-pinned via `.gbrain-source` (kubectl-style context).
   No `--source` flag needed; routes to code on disk in this worktree.
 - **Curated memory** — `~/.gstack/` as `gstack-brain-<user>` source.
