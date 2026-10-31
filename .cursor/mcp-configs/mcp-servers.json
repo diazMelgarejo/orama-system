@@ -2,7 +2,7 @@
   "mcpServers": {
     "exa": {
       "command": "bash",
-      "args": ["-c", "if [ -f \"$PWD/scripts/exa/exa-mcp-wrapper.sh\" ]; then exec \"$PWD/scripts/exa/exa-mcp-wrapper.sh\"; fi; W=\"$(bash \"$PWD/scripts/exa/resolve-orama-root.sh\" 2>/dev/null)\"; exec \"$W/scripts/exa/exa-mcp-wrapper.sh\""]
+      "args": ["-c", "R=\"${ORAMA_SYSTEM_ROOT:-$(cat \"$HOME/.openclaw/state/orama-root.cache\" 2>/dev/null)}\"; [ -f \"$R/scripts/exa/exa-mcp-wrapper.sh\" ] || { echo \"exa MCP: set ORAMA_SYSTEM_ROOT to your orama-system checkout\" >&2; exit 1; }; exec \"$R/scripts/exa/exa-mcp-wrapper.sh\""]
     },
     "nexus": {
       "command": "nexus",

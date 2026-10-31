@@ -19,7 +19,7 @@ TARGET_SKILL_LINES = 200
 
 
 def allowed_tools(path: Path) -> set[str]:
-    line = next(l for l in path.read_text().splitlines() if l.startswith("allowed-tools:"))
+    line = next(line for line in path.read_text().splitlines() if line.startswith("allowed-tools:"))
     return {name.strip() for name in line.split(":", 1)[1].split(",")}
 
 
@@ -33,7 +33,7 @@ def documented_tools(path: Path) -> set[str]:
 
 def section(text: str, heading: str) -> str:
     start = text.index(heading)
-    following = re.search(r"^#{1,3} ", text[start + len(heading):], re.M)
+    following = re.search(r"^#{1,3} ", text[start + len(heading):], re.MULTILINE)
     return text[start:start + len(heading) + following.start()] if following else text[start:]
 
 
@@ -67,7 +67,7 @@ def test_each_connected_server_case_is_spelled_out_and_unavailable_tools_are_nev
 
 
 def test_firecrawl_only_discovery_is_the_labelled_fallback() -> None:
-    row = next(l for l in DEEP.read_text().splitlines() if l.startswith("| Firecrawl only |"))
+    row = next(line for line in DEEP.read_text().splitlines() if line.startswith("| Firecrawl only |"))
     assert "firecrawl_search" in row and "degraded" in row.lower()
 
 
