@@ -9,9 +9,9 @@ description: |
   usage path after install. Activates when the user asks to scrape a known URL,
   crawl a site section, parse a document, interact with a live page, or monitor
   a page for changes.
-version: 1.0.0
+version: 1.1.0
 compatibility: Claude Code, Cursor, Codex CLI; needs the firecrawl MCP server or CLI
-allowed-tools: Read, Write, Bash, firecrawl_search, firecrawl_scrape
+allowed-tools: Read, Write, Bash, firecrawl_search, firecrawl_scrape, firecrawl_interact, firecrawl_interact_stop, firecrawl_parse, firecrawl_crawl, firecrawl_check_crawl_status, firecrawl_map, firecrawl_extract, firecrawl_monitor_create, firecrawl_monitor_get, firecrawl_monitor_list, firecrawl_monitor_run, firecrawl_monitor_update, firecrawl_monitor_delete, firecrawl_monitor_check, firecrawl_monitor_checks, firecrawl_research_search_papers, firecrawl_research_inspect_paper, firecrawl_research_read_paper, firecrawl_research_related_papers, firecrawl_research_search_github, firecrawl_agent, firecrawl_agent_status, firecrawl_feedback, firecrawl_search_feedback, mcp__firecrawl__authenticate, mcp__firecrawl__complete_authentication
 ---
 
 # Firecrawl
@@ -171,7 +171,7 @@ Via CLI (after install), hand off to the CLI skill:
 
 Default flow for live web work:
 
-1. Discovery first via the [Search Policy](../../SKILL.md#search-policy) chain (gbrain → code-review-graph → local code/docs → Brave → Perplexity → EXA + Firecrawl playbook → Grok), or EXA when the request is broad ("find X in the OSS community") per the established EXA-first convention
+1. Discovery first via the [Search Policy](../../SKILL.md#search-policy) chain (gbrain → code-review-graph → local code/docs → Brave → Perplexity → EXA + Firecrawl playbook → Grok). EXA is tier 6: reach it only after tiers 1 to 5 did not answer, even for a broad request ("find X in the OSS community")
 2. Move to Firecrawl `scrape` once you have a URL
 3. Use `interact` only when the page needs clicks, forms, or login
 4. Use `parse` when the source is a local file instead of a URL
@@ -181,6 +181,10 @@ Default flow for live web work:
 If the task becomes "wire Firecrawl into product code," switch to Path B.
 
 ### EXA-first, Firecrawl-second verification pattern
+
+"EXA-first" orders EXA before Firecrawl inside tier 6 of the search policy. It
+does not put EXA ahead of the chain: use this pattern once tiers 1 to 5 did not
+answer.
 
 The canonical two-step pattern for verifying a specific claim against a
 real source (a CLI's documented flags, an API's exact field names, a
