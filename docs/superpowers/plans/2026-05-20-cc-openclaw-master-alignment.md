@@ -672,6 +672,10 @@ gh pr create \
 - **Sub-A**: Wire `rahulsub-be/cc-openclaw` as git submodule at `bin/orama-system/skills/openclaw-skills/cc-openclaw/`; add idempotent `scripts/install-openclaw-skills.sh` called from `start.sh`; attribute upstream in master SKILL.md (Two-Layer Architecture documented)
 - **Sub-B**: All 11 SKILL.md files now have `name`, `description`, `version`, `layer`, `agent_compatibility`, `upstream` (where applicable), and `## References` cross-links
 - **Sub-C**: Search frugality rule (gbrain → CRG → Brave → Perplexity → Grok) + Windows coder always-utilized policy enshrined in `CLAUDE.md`, `bin/orama-system/SKILL.md`, and `universal-skill-protocol.md`
+  - Update 2026-10-30 (additive; the line above is kept as written): the canonical order is now
+    seven tiers: gbrain → CRG → known local code/docs → Brave → Perplexity → EXA + Firecrawl
+    playbook → Grok (most expensive, last, only when available). See
+    [the search policy](../../../bin/orama-system/references/search-and-code-exploration-policy.md).
 - **Sub-D**: `supervisor._dispatch()` step 2 implemented (Windows coder pool probe + dispatch); `contracts.py` `windows_coder_pool` field; `_try_skill_envelope()` gate with 9-entry SKILL_MAP
 
 ## Test plan

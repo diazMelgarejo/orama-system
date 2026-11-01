@@ -6,7 +6,12 @@ description: |
   and monitoring tools. One install command sets up three skill
   segments: live CLI tools, app-integration build skills, and
   outcome-focused workflow skills. Route the reader to the right
-  usage path after install.
+  usage path after install. Activates when the user asks to scrape a known URL,
+  crawl a site section, parse a document, interact with a live page, or monitor
+  a page for changes.
+version: 1.1.0
+compatibility: Claude Code, Cursor, Codex CLI; needs the firecrawl MCP server or CLI
+allowed-tools: Read, Write, Bash, firecrawl_search, firecrawl_scrape, firecrawl_interact, firecrawl_interact_stop, firecrawl_parse, firecrawl_crawl, firecrawl_check_crawl_status, firecrawl_map, firecrawl_extract, firecrawl_monitor_create, firecrawl_monitor_get, firecrawl_monitor_list, firecrawl_monitor_run, firecrawl_monitor_update, firecrawl_monitor_delete, firecrawl_monitor_check, firecrawl_monitor_checks, firecrawl_research_search_papers, firecrawl_research_inspect_paper, firecrawl_research_read_paper, firecrawl_research_related_papers, firecrawl_research_search_github, firecrawl_agent, firecrawl_agent_status, firecrawl_feedback, firecrawl_search_feedback, mcp__firecrawl__authenticate, mcp__firecrawl__complete_authentication
 ---
 
 # Firecrawl
@@ -18,11 +23,17 @@ local documents into markdown, searches scientific papers and GitHub
 history through the research index, monitors pages for changes, and
 produces finished deliverables from web data.
 
+## Purpose
+
+Extraction half of the EXA + Firecrawl playbook (tier 6 of the search order): read
+the pages that discovery found. The research workflow itself is the
+[`deep-research`](../deep-research/SKILL.md) skill.
+
 ## Fit in orama-system (read first)
 
 Firecrawl is an **extraction** tool, not a discovery tool — it does not
 replace [`../../SKILL.md` § Search Policy](../../SKILL.md) (gbrain →
-code-review-graph → Brave → Perplexity → Grok for facts/decisions/code
+code-review-graph → local code/docs → Brave → Perplexity → EXA + Firecrawl playbook → Grok for facts/decisions/code
 context). Reach for Firecrawl when the Search Policy chain has already
 found a URL (or you already have one) and you need clean, structured
 content *from* it — scraping, interacting with a live page, parsing a
@@ -160,7 +171,7 @@ Via CLI (after install), hand off to the CLI skill:
 
 Default flow for live web work:
 
-1. Discovery first via the [Search Policy](../../SKILL.md#search-policy) chain (gbrain → code-review-graph → Brave → Perplexity → Grok), or EXA when the request is broad ("find X in the OSS community") per the established EXA-first convention
+1. Discovery first via the [Search Policy](../../SKILL.md#search-policy) chain (gbrain → code-review-graph → local code/docs → Brave → Perplexity → EXA + Firecrawl playbook → Grok). EXA is tier 6: reach it only after tiers 1 to 5 did not answer, even for a broad request ("find X in the OSS community")
 2. Move to Firecrawl `scrape` once you have a URL
 3. Use `interact` only when the page needs clicks, forms, or login
 4. Use `parse` when the source is a local file instead of a URL
@@ -170,6 +181,10 @@ Default flow for live web work:
 If the task becomes "wire Firecrawl into product code," switch to Path B.
 
 ### EXA-first, Firecrawl-second verification pattern
+
+"EXA-first" orders EXA before Firecrawl inside tier 6 of the search policy. It
+does not put EXA ahead of the chain: use this pattern once tiers 1 to 5 did not
+answer.
 
 The canonical two-step pattern for verifying a specific claim against a
 real source (a CLI's documented flags, an API's exact field names, a
@@ -301,5 +316,22 @@ code without an SDK, or no API key is available at all.
 
 ## Related skills
 
+- [`../deep-research/SKILL.md`](../deep-research/SKILL.md) — the full EXA + Firecrawl research workflow this skill is the extraction half of
 - [`../../SKILL.md` § Search Policy](../../SKILL.md#search-policy) — the discovery chain Firecrawl extraction sits downstream of
 - [`../clinepass-deepseek-flash/SKILL.md` § EXA And Firecrawl Verification](../clinepass-deepseek-flash/SKILL.md) — the established EXA-first, Firecrawl-second pairing this skill formalizes
+
+## Boundaries
+
+### Always Do
+
+- Use Firecrawl after a URL is known; discovery runs through the Search Policy first.
+- Keep raw output in a local untracked `.firecrawl/` cache.
+
+### Ask First
+
+- Before large crawls or any step that spends a notable number of credits.
+
+### Never Do
+
+- Print, log, or commit an API key or token.
+- Commit scraped payloads that contain personal data.
