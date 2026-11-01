@@ -527,7 +527,7 @@ def test_token_resolver_uses_canonical_lane_contract(tmp_path: Path, monkeypatch
 # --- Acceptance additions from the PT#471 / Orama#459 review handoff (R1, R2) -------------
 
 _WORKER = """
-import importlib.util, sys, time
+import importlib.util, os, sys, time
 from pathlib import Path
 module_path, state_dir, gate, action, ip = sys.argv[1:6]
 spec = importlib.util.spec_from_file_location("mesh.discovery_trust", module_path)
@@ -538,6 +538,7 @@ state = Path(state_dir)
 module.LOCAL = state
 for name in ("KNOWN_PEERS", "ARCHIVE", "OPENCLAW_STATE", "SELF_IDENTITY_FILE", "PENDING_HANDSHAKES"):
     setattr(module, name, state / (name + ".json"))
+Path(gate + "." + str(os.getpid()) + ".ready").write_text("ready", encoding="utf-8")
 while not Path(gate).exists():
     time.sleep(0.005)
 {"remember": module.remember_peer, "forget": module.forget_peer}[action](ip)
@@ -556,7 +557,19 @@ def _run_in_processes(trust: ModuleType, jobs: list[tuple[str, str]]) -> None:
         )
         for action, ip in jobs
     ]
-    time.sleep(0.5)  # let every worker reach the gate before releasing them
+    # Release the gate only once every worker has signalled it is waiting, so the
+    # workers genuinely overlap instead of running one after another.
+    ready = [Path(f"{gate}.{proc.pid}.ready") for proc in procs]
+    deadline = time.monotonic() + 30
+    while not all(path.exists() for path in ready):
+        if time.monotonic() >= deadline:
+            for proc in procs:
+                if proc.poll() is None:
+                    proc.kill()
+            for proc in procs:
+                proc.wait()
+            raise AssertionError("workers did not reach the gate before the timeout")
+        time.sleep(0.01)
     gate.write_text("go", encoding="utf-8")
     failures = []
     for proc in procs:
