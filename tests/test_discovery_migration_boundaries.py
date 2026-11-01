@@ -4,8 +4,10 @@ from __future__ import annotations
 import importlib.util
 import ipaddress
 import json
+import subprocess
 import sys
 import threading
+import time
 import urllib.error
 import urllib.request
 from email.message import Message
@@ -30,6 +32,7 @@ def trust(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ModuleType:
     spec.loader.exec_module(module)
     for name in ("KNOWN_PEERS", "ARCHIVE", "OPENCLAW_STATE", "SELF_IDENTITY_FILE", "PENDING_HANDSHAKES"):
         monkeypatch.setattr(module, name, tmp_path / f"{name}.json")
+    monkeypatch.setattr(module, "LOCAL", tmp_path)  # state lock lives beside the isolated state
     for key in ("WIN_3080_IP", "WIN_5080_IP", "WIN_PEER_IPS", "PEER_IPS", "ORAMA_STRICT_CONFIG_PEERS"):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv("MESH_MIGRATION_SECRET", "synthetic-signing-key")
@@ -519,3 +522,139 @@ def test_token_resolver_uses_canonical_lane_contract(tmp_path: Path, monkeypatch
         expected = "synthetic-pt-file"
     assert module._control_plane_tokens() == auth.outbound_control_plane_tokens()
     assert module._control_plane_tokens()[0] == expected
+
+
+# --- Acceptance additions from the PT#471 / Orama#459 review handoff (R1, R2) -------------
+
+_WORKER = """
+import importlib.util, os, sys, time
+from pathlib import Path
+module_path, state_dir, gate, action, ip = sys.argv[1:6]
+spec = importlib.util.spec_from_file_location("mesh.discovery_trust", module_path)
+module = importlib.util.module_from_spec(spec)
+sys.modules["mesh.discovery_trust"] = module
+spec.loader.exec_module(module)
+state = Path(state_dir)
+module.LOCAL = state
+for name in ("KNOWN_PEERS", "ARCHIVE", "OPENCLAW_STATE", "SELF_IDENTITY_FILE", "PENDING_HANDSHAKES"):
+    setattr(module, name, state / (name + ".json"))
+Path(gate + "." + str(os.getpid()) + ".ready").write_text("ready", encoding="utf-8")
+while not Path(gate).exists():
+    time.sleep(0.005)
+{"remember": module.remember_peer, "forget": module.forget_peer}[action](ip)
+"""
+
+
+def _run_in_processes(trust: ModuleType, jobs: list[tuple[str, str]]) -> None:
+    """Start one interpreter per job, release them together, and require clean exits."""
+    state_dir = trust.LOCAL
+    gate = state_dir / "start.gate"
+    module_path = Path(__file__).resolve().parents[1] / "scripts/mesh/discovery_trust.py"
+    procs = [
+        subprocess.Popen(
+            [sys.executable, "-I", "-c", _WORKER, str(module_path), str(state_dir), str(gate), action, ip],
+            stderr=subprocess.PIPE,
+        )
+        for action, ip in jobs
+    ]
+    # Release the gate only once every worker has signalled it is waiting, so the
+    # workers genuinely overlap instead of running one after another.
+    ready = [Path(f"{gate}.{proc.pid}.ready") for proc in procs]
+    deadline = time.monotonic() + 30
+    while not all(path.exists() for path in ready):
+        if time.monotonic() >= deadline:
+            for proc in procs:
+                if proc.poll() is None:
+                    proc.kill()
+            for proc in procs:
+                proc.wait()
+            raise AssertionError("workers did not reach the gate before the timeout")
+        time.sleep(0.01)
+    gate.write_text("go", encoding="utf-8")
+    failures = []
+    for proc in procs:
+        _, err = proc.communicate(timeout=60)
+        if proc.returncode != 0:
+            failures.append(err.decode(errors="replace")[-400:])
+    assert not failures, failures
+
+
+def test_concurrent_processes_lose_no_admission(trust: ModuleType) -> None:
+    """Separate CLI/portal processes serialize their read-modify-write of trust state."""
+    peers = [str(ipaddress.IPv4Address(0xC0000210 + i)) for i in range(8)]
+    _run_in_processes(trust, [("remember", ip) for ip in peers])
+    assert set(peers) | {OLD} <= trust.load_known_peer_ips()
+
+
+def test_process_revocation_is_not_undone_by_concurrent_admissions(trust: ModuleType) -> None:
+    """Overlapping admissions in other processes cannot restore a revoked peer or each other's loss."""
+    peers = [str(ipaddress.IPv4Address(0xC0000220 + i)) for i in range(6)]
+    _run_in_processes(trust, [("forget", OLD)] + [("remember", ip) for ip in peers])
+    effective = trust.load_known_peer_ips()
+    assert OLD not in effective
+    assert set(peers) <= effective
+    assert OLD in trust._load_known_peer_store()["revoked_ips"]
+
+
+@pytest.mark.parametrize(
+    "identity",
+    [
+        [],
+        {"node_id": 5},
+        {"history": "x"},
+        {"migration_generation": -1},
+        {"migration_generation": True},
+        {"pending_migration": "x"},
+        {"pending_migration": {"new_ip": 7}},
+        {"pending_migration": {"recipients": "x"}},
+        {"pending_migration": {"all_recipients": [A, 3]}},
+    ],
+)
+def test_malformed_self_identity_is_refused_and_preserved(trust: ModuleType, identity: object) -> None:
+    """Wrong types or malformed pending fields stop the operation and keep the original bytes."""
+    original = json.dumps(identity)
+    trust.SELF_IDENTITY_FILE.write_text(original, encoding="utf-8")
+    with pytest.raises(trust.DiscoveryStateError, match="self identity"):
+        trust.load_self_identity()
+    assert trust.SELF_IDENTITY_FILE.read_text(encoding="utf-8") == original
+
+
+@pytest.mark.parametrize("which", ["KNOWN_PEERS", "SELF_IDENTITY_FILE"])
+def test_unreadable_authority_state_is_refused(trust: ModuleType, which: str) -> None:
+    """State that is not a regular file is reported, never treated as absent."""
+    path = getattr(trust, which)
+    path.unlink()
+    path.mkdir()
+    with pytest.raises(trust.DiscoveryStateError, match="regular file"):
+        trust.load_known_peer_ips() if which == "KNOWN_PEERS" else trust.load_self_identity()
+
+
+@pytest.mark.parametrize("store", [{"ips": "x"}, {"approved_ips": [1]}, {"revoked_ips": {"a": 1}}])
+def test_known_peers_with_wrong_field_types_is_refused(trust: ModuleType, store: dict) -> None:
+    """Typed fields of the trust authority are validated before any decision uses them."""
+    trust.KNOWN_PEERS.write_text(json.dumps(store), encoding="utf-8")
+    with pytest.raises(trust.DiscoveryStateError, match="known peers"):
+        trust.load_known_peer_ips()
+
+
+@pytest.mark.parametrize("operation", ["remember", "forget", "approve"])
+def test_corrupt_trust_state_blocks_every_mutation_and_keeps_bytes(trust: ModuleType, operation: str) -> None:
+    """Admission, revocation and approval all refuse to run over a corrupt authority file."""
+    original = "{broken"
+    trust.KNOWN_PEERS.write_text(original, encoding="utf-8")
+    calls = {"remember": trust.remember_peer, "forget": trust.forget_peer, "approve": trust.approve_peer}
+    with pytest.raises(trust.DiscoveryStateError):
+        calls[operation](NEW)
+    assert trust.KNOWN_PEERS.read_text(encoding="utf-8") == original
+
+
+def test_trust_recovers_after_repair_and_keeps_revocation(trust: ModuleType) -> None:
+    """After an operator repairs the file, the revocation is still authoritative over the archive."""
+    trust._save_json(trust.ARCHIVE, {"endpoints": {"win": f"https://{OLD}:8443"}})
+    trust.KNOWN_PEERS.write_text("{broken", encoding="utf-8")
+    with pytest.raises(trust.DiscoveryStateError):
+        trust.load_known_peer_ips()
+    trust.KNOWN_PEERS.write_text(json.dumps({"ips": [], "revoked_ips": [OLD]}), encoding="utf-8")
+    assert OLD not in trust.load_known_peer_ips()
+    trust.remember_peer(NEW)
+    assert NEW in trust.load_known_peer_ips()
