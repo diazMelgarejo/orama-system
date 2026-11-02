@@ -412,18 +412,34 @@ function Test-VenvDeclaredDeps {
     .SYNOPSIS
     Declared-dependency drift probe (F-C1), scoped to the project's own tree:
     'pip check' lines whose first token is -Project (normalised) fail the probe;
-    unrelated broken packages only warn. With -RequireCryptography (Portal TLS
+    only recognized, completed pip conflicts for unrelated packages warn.
+    Missing project metadata or an incomplete check fails closed.
+    With -RequireCryptography (Portal TLS
     on), 'import cryptography' must also succeed. On failure the offending
     lines are left in $script:BootstrapOutput for Bootstrap-ShowOutput.
     #>
+    [OutputType([bool])]
     param([string]$Python, [string]$Project, [switch]$RequireCryptography)
     if (-not (Test-Path $Python)) { return $false }
-    $code = Bootstrap-RunPython $Python @('-m', 'pip', 'check', '--disable-pip-version-check')
-    if ($code -ne 0) {
+    $Project = $Project.ToLower().Replace('_', '-')
+    try {
+        if ((Bootstrap-RunPython $Python @('-I', '-c', 'import importlib.metadata as m, sys; m.version(sys.argv[1])', $Project)) -ne 0) { return $false }
+        $code = Bootstrap-RunPython $Python @('-m', 'pip', 'check', '--disable-pip-version-check')
+    } catch {
+        $script:BootstrapOutput = @("$_")
+        return $false
+    }
+    $lines = @($script:BootstrapOutput | ForEach-Object { "$_".Trim() } | Where-Object { $_ })
+    if ($code -eq 0) {
+        if ($lines.Count -ne 1 -or $lines[0] -ne 'No broken requirements found.') { return $false }
+    } elseif ($code -eq 1 -and $lines.Count -gt 0) {
+        # Exit 1 alone also covers pip/import/metadata failures. Validate every
+        # line before treating any of them as an unrelated-package warning.
+        foreach ($line in $lines) {
+            if ($line -notmatch '^\S+ \S+ (?:requires .+, which is not installed\.|has requirement .+, but you have .+\.)$') { return $false }
+        }
         $own = @()
-        foreach ($line in $script:BootstrapOutput) {
-            $trim = "$line".Trim()
-            if (-not $trim) { continue }
+        foreach ($trim in $lines) {
             $first = ($trim -split '\s+')[0].ToLower().Replace('_', '-')
             if ($first -eq $Project) { $own += $trim } else { _Warn 'bootstrap' "pip check (unrelated to $Project): $trim" }
         }
@@ -431,9 +447,14 @@ function Test-VenvDeclaredDeps {
             $script:BootstrapOutput = $own
             return $false
         }
-    }
+    } else { return $false }
     if ($RequireCryptography) {
-        if ((Bootstrap-RunPython $Python @('-I', '-c', 'import cryptography')) -ne 0) { return $false }
+        try {
+            if ((Bootstrap-RunPython $Python @('-I', '-c', 'import cryptography')) -ne 0) { return $false }
+        } catch {
+            $script:BootstrapOutput = @("$_")
+            return $false
+        }
     }
     return $true
 }
