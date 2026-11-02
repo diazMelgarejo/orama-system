@@ -89,7 +89,7 @@ def _run_ps(body: str, tmp_path: Path) -> subprocess.CompletedProcess[str]:
     script = tmp_path / "probe.ps1"
     script.write_text(body, encoding="utf-8-sig")
     return subprocess.run(
-        [POWERSHELL, "-NoProfile", "-NonInteractive", "-File", str(script)],
+        [POWERSHELL, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", str(script)],
         capture_output=True, text=True, check=False, timeout=120,
     )
 
@@ -220,6 +220,38 @@ def test_completed_check_passes(tmp_path: Path, code: int, line: str) -> None:
     """
     r = _run_probe("orama-system", START_PS1, tmp_path, runner)
     assert "RESULT=True" in r.stdout, r.stdout + r.stderr
+
+
+def test_completed_check_ignores_only_stale_distribution_warning(tmp_path: Path) -> None:
+    """Allow pip's completed stale-distribution warning without masking other diagnostics."""
+    runner = """function Bootstrap-RunPython {
+        param([string]$Python, [string[]]$PyArgs)
+        $script:BootstrapOutput = @(
+            'WARNING: Ignoring invalid distribution -ip (C:\\venv\\Lib\\site-packages)',
+            'No broken requirements found.'
+        )
+        if ($PyArgs -contains 'check') { return 0 }
+        return 0
+    }
+    """
+    r = _run_probe("orama-system", START_PS1, tmp_path, runner)
+    assert "RESULT=True" in r.stdout, r.stdout + r.stderr
+
+
+def test_completed_check_keeps_other_warnings_fail_closed(tmp_path: Path) -> None:
+    """Reject warning output that is not pip's known stale-distribution diagnostic."""
+    runner = """function Bootstrap-RunPython {
+        param([string]$Python, [string[]]$PyArgs)
+        $script:BootstrapOutput = @(
+            'WARNING: Error parsing dependencies of malformed: invalid requirement',
+            'No broken requirements found.'
+        )
+        if ($PyArgs -contains 'check') { return 0 }
+        return 0
+    }
+    """
+    r = _run_probe("orama-system", START_PS1, tmp_path, runner)
+    assert "RESULT=False" in r.stdout, r.stdout + r.stderr
 
 
 def test_crypto_failure_still_blocks(tmp_path: Path, probe_python: Path) -> None:

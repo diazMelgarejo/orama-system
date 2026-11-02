@@ -429,7 +429,12 @@ function Test-VenvDeclaredDeps {
         $script:BootstrapOutput = @("$_")
         return $false
     }
-    $lines = @($script:BootstrapOutput | ForEach-Object { "$_".Trim() } | Where-Object { $_ })
+    # Pip may warn about a stale, invalid distribution while still completing a
+    # healthy check. Keep every other warning fail-closed: they can describe
+    # malformed metadata that makes the result untrustworthy.
+    $lines = @($script:BootstrapOutput | ForEach-Object { "$_".Trim() } | Where-Object {
+        $_ -and $_ -notmatch '^WARNING: Ignoring invalid distribution .+ \(.+\)$'
+    })
     if ($code -eq 0) {
         if ($lines.Count -ne 1 -or $lines[0] -ne 'No broken requirements found.') { return $false }
     } elseif ($code -eq 1 -and $lines.Count -gt 0) {
