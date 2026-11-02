@@ -43,7 +43,7 @@ DONE_MARKER="$STATE_DIR/first-run.done"
 mkdir -p "$STATE_DIR"
 
 NVM_NODE_BIN="${NVM_NODE_BIN:-$HOME/.nvm/versions/node/v22.22.2/bin}"
-OLLAMA_MODELS=(qwen3.5:9b-nvfp4 bge-m3)
+OLLAMA_MODELS=(qwen3.5:9b-mlx bge-m3)
 
 _log()  { echo "[first-run] $*"; }
 _ok()   { echo "[first-run] ✓ $*"; }
@@ -203,7 +203,7 @@ probe_ollama() {
     _json_set_component "ollama" "fail" "missing:$missing"
     return 1
   fi
-  _ok "0.3 ollama: API up; qwen3.5:9b-nvfp4 + bge-m3 present"
+  _ok "0.3 ollama: API up; qwen3.5:9b-mlx + bge-m3 present"
   _json_set_component "ollama" "ok" "models present"
   return 0
 }

@@ -44,7 +44,7 @@ Run components **in order**. The installer is idempotent: satisfied components a
 |----|-----------|----------------|---------------------|
 | 0.1 | Node.js (NVM) | NVM node ≥ v20 active; `node --version` matches expected major | Re-check PATH hint in shell profile only |
 | 0.2 | Python 3.13+ | `python3.13 --version` succeeds | Re-check only |
-| 0.3 | Ollama + models | Ollama API up; `qwen3.5:9b-nvfp4` and `bge-m3` in `/api/tags` | Re-probe only; **does not** re-pull if component `ok` |
+| 0.3 | Ollama + models | Ollama API up; `qwen3.5:9b-mlx` and `bge-m3` in `/api/tags` | Re-probe only; **does not** re-pull if component `ok` |
 | 0.4 | code-review-graph | `uvx code-review-graph --version`; CRG entry in `.mcp.json` | Re-validate MCP env block only |
 | 0.5 | gbrain | `gbrain` on PATH; `~/.gbrain/config.json` has `embedding_model` | Re-validate config keys only |
 | 0.5.1 | Unified embeddings | `setup-embeddings` reports bge-m3 wired | Re-probe only if `ok`; re-run `setup-embeddings` manually to heal |
@@ -55,7 +55,7 @@ Run components **in order**. The installer is idempotent: satisfied components a
 
 Hardware policy (fail closed for orchestration startup) matches [`orama-system/CLAUDE.md`](../../../CLAUDE.md) and [`CLAUDE-instru.md`](../../../../CLAUDE-instru.md) § 5:
 
-- **Mac hard:** Ollama `localhost:11434` with `qwen3.5:9b-nvfp4` + `bge-m3`
+- **Mac hard:** Ollama `localhost:11434` with `qwen3.5:9b-mlx` + `bge-m3`
 - **Windows hard:** LM Studio at `$LM_STUDIO_WIN_ENDPOINTS` (see `scripts/ensure_requirements.ps1`)
 
 ---
@@ -100,10 +100,10 @@ brew install ollama    # if binary missing
 # Prefer the installer (shows pull progress + resume):
 bash "${ORAMA_REPO_ROOT}/bin/orama-system/scripts/first-run-install.sh" run
 # Manual equivalent:
-ollama pull qwen3.5:9b-nvfp4
+ollama pull qwen3.5:9b-mlx
 ollama pull bge-m3
 
-curl -s http://localhost:11434/api/tags | grep -q "qwen3.5:9b-nvfp4" || echo "MISSING: inference model"
+curl -s http://localhost:11434/api/tags | grep -q "qwen3.5:9b-mlx" || echo "MISSING: inference model"
 curl -s http://localhost:11434/api/tags | grep -q "bge-m3"           || echo "MISSING: embedding model"
 ```
 

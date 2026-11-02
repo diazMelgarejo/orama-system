@@ -17,7 +17,7 @@ const ROUTING_PRECEDENCE = [
 ];
 
 const FALLBACK_CHAIN = [
-  { model: "ollama/qwen3.5:9b-nvfp4", device: "mac", status: "primary" },
+  { model: "ollama/qwen3.5:9b-mlx", device: "mac", status: "primary" },
   { model: LMSTUDIO_WIN_ROW_MODEL, device: "win-lan", status: "launchable" },
   { model: "openrouter/nvidia/nemotron-3-super-120b-a12b:free", device: "cloud", status: "fallback-1" },
   { model: "openrouter/minimax/minimax-m2.5:free", device: "cloud", status: "fallback-2" },

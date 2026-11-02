@@ -8,7 +8,7 @@
 //
 // IMPORTANT: This policy DOES NOT override the agents.defaults.model.primary.
 // The primary is set per-host based on CLAUDE.md hard requirements:
-//   - Mac: ollama/qwen3.5:9b-nvfp4 (local-first; CLAUDE.md § 0 hard requirement)
+//   - Mac: ollama/qwen3.5:9b-mlx (local-first; CLAUDE.md § 0 hard requirement)
 //   - Win: lmstudio-win/<distilled> (local-first; CLAUDE.md § 0 hard requirement)
 // This policy ADDS the OpenRouter free models to the fallback chain and the
 // models allowlist. Apply via: scripts/apply-openrouter-free-defaults.sh

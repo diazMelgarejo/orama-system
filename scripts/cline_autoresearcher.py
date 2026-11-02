@@ -47,7 +47,7 @@ LMS_WIN_MODEL = os.getenv(
 )
 LMS_API_KEY = os.getenv("LM_STUDIO_API_TOKEN", "lm-studio")
 OLLAMA_MAC_ENDPOINT = os.getenv("OLLAMA_MAC_ENDPOINT", "http://127.0.0.1:11434")
-OLLAMA_MAC_MODEL = os.getenv("OLLAMA_MAC_MODEL", "qwen3.5:9b-nvfp4")
+OLLAMA_MAC_MODEL = os.getenv("OLLAMA_MAC_MODEL", "qwen3.5:9b-mlx")
 
 WIN_PULSE_LOCK = Path.home() / ".openclaw" / "state" / "lan_peer" / "win_pulse.lock"
 WIN_COORD_PAUSE_FILE = Path.home() / ".openclaw" / "state" / "lan_peer" / "coord_pulse_pause.json"

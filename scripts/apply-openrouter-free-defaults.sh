@@ -128,7 +128,7 @@ merge_policy_into() {
   #   .agents.defaults.model.fallbacks         ← APPEND policy fallbacks_to_merge (dedup)
   #   .agents.defaults.models                  ← MERGE in policy models_to_merge
   #
-  # CLAUDE.md hard requirement: Mac primary is ollama/qwen3.5:9b-nvfp4,
+  # CLAUDE.md hard requirement: Mac primary is ollama/qwen3.5:9b-mlx,
   # Win primary is lmstudio-win/<distilled>. This script preserves whatever
   # the host already chose. To force a specific primary, pass --force-primary
   # (and set the policy's primary explicitly).

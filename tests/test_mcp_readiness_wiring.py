@@ -24,6 +24,16 @@ def test_unix_launcher_delegates_to_requirement_gate() -> None:
     assert 'scripts/ensure_ai_cli_mcp.py' in ensure
 
 
+@pytest.mark.unit
+def test_unix_requirement_gate_requires_the_exact_ollama_model_tag() -> None:
+    """A sibling Ollama tag cannot satisfy readiness for the configured model."""
+    ensure = _executable_shell(_text("scripts/ensure_requirements.sh"))
+    assert 'INFERENCE_MODEL="${OLLAMA_WARM_MODEL:-qwen3.5:9b-mlx}"' in ensure
+    assert "awk 'NR > 1 {print $1}'" in ensure
+    assert 'grep -qxF "${INFERENCE_MODEL}"' in ensure
+    assert "INFERENCE_BASE=" not in ensure
+
+
 def test_windows_launcher_reaches_shared_gate_through_partner_cli_hook() -> None:
     start = _text("platform/windows/start.ps1")
     partner = _text("platform/windows/ensure-partner-cli-paths.ps1")

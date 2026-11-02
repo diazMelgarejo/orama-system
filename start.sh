@@ -1254,7 +1254,7 @@ open_browser() {
 _ollama_ensure_ready() {
   [ "${OLLAMA_AUTO_START:-1}" != "1" ] && return 0
 
-  local model="${OLLAMA_WARM_MODEL:-qwen3.5:9b-nvfp4}"
+  local model="${OLLAMA_WARM_MODEL:-qwen3.5:9b-mlx}"
   local endpoint="${OLLAMA_MAC_ENDPOINT:-http://localhost:11434}"
 
   # 1. Server check / start

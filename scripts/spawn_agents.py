@@ -61,7 +61,7 @@ LMS_WIN_MODEL = os.getenv(
 )
 
 OLLAMA_MAC_ENDPOINT = os.getenv("OLLAMA_MAC_ENDPOINT", "http://127.0.0.1:11434")
-MANAGER_MODEL = os.getenv("MANAGER_MODEL", "qwen3.5:9b-nvfp4")
+MANAGER_MODEL = os.getenv("MANAGER_MODEL", "qwen3.5:9b-mlx")
 
 # Windows GPU lock — one model at a time (CLAUDE.md §4 invariant)
 _WIN_GPU_LOCK = asyncio.Lock()
@@ -366,7 +366,7 @@ async def _dispatch_ollama_mac(task: str) -> Dict[str, Any]:
     try:
         async with _httpx.AsyncClient(timeout=120.0) as client:
             payload = {
-                "model": MANAGER_MODEL or "qwen3.5:9b-nvfp4",
+                "model": MANAGER_MODEL or "qwen3.5:9b-mlx",
                 "prompt": task,
                 "stream": False,
             }
