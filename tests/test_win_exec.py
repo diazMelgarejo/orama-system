@@ -86,6 +86,20 @@ def test_refuses_ps1_and_extensionless(tmp_path, monkeypatch):
             win_exec.resolve_executable(name)
 
 
+@windows_only
+def test_refuses_interpreter_hosted_pathext_entries(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Interpreter-hosted PATHEXT entries cannot become direct process targets."""
+    (tmp_path / "tool.vbs").write_text("WScript.Quit 0", encoding="utf-8")
+    (tmp_path / "tool.exe").write_bytes(b"MZ")
+    monkeypatch.setenv("PATH", str(tmp_path))
+    monkeypatch.setenv("PATHEXT", ".VBS;.JS;.EXE")
+    assert win_exec.resolve_executable("tool").lower().endswith("tool.exe")
+    with pytest.raises(win_exec.WinExecError):
+        win_exec.resolve_executable(str(tmp_path / "tool.vbs"))
+
+
 def test_resolver_never_falls_back_to_bare_name(tmp_path, monkeypatch):
     """A missing command raises instead of returning the bare name."""
     monkeypatch.setenv("PATH", str(tmp_path))
@@ -456,10 +470,14 @@ class _MockPosixProc:
 
 
 def test_posix_plain_popen_group_leader_accident_reports_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A plain Popen on POSIX reports unknown even if it happens to lead its process group."""
+    """An untracked PID is killed directly and never treated as a process group."""
     monkeypatch.setattr(win_exec.sys, "platform", "linux")
-    monkeypatch.setattr(win_exec.os, "getpgid", lambda pid: pid, raising=False)
-    monkeypatch.setattr(win_exec.os, "killpg", lambda pid, sig: None, raising=False)
+    monkeypatch.setattr(
+        win_exec.os, "getpgid", lambda pid: (_ for _ in ()).throw(AssertionError(pid)), raising=False,
+    )
+    monkeypatch.setattr(
+        win_exec.os, "killpg", lambda pid, sig: (_ for _ in ()).throw(AssertionError(pid)), raising=False,
+    )
     proc = _MockPosixProc(1234, running=True)
     assert win_exec.terminate_tree(proc) == "unknown"
     assert not proc._running
