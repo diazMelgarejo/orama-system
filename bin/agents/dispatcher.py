@@ -40,7 +40,7 @@ from typing import Any, Dict, List, Mapping, Optional
 # ── shared Windows-safe executable resolver (src/utils/win_exec.py) ───────────
 _SRC_ROOT = Path(__file__).resolve().parents[2] / "src"
 if _SRC_ROOT.is_dir() and str(_SRC_ROOT) not in sys.path:
-    sys.path.append(str(_SRC_ROOT))
+    sys.path.insert(0, str(_SRC_ROOT))
 from utils.win_exec import WinExecError, resolve_executable  # noqa: E402
 
 

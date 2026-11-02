@@ -243,17 +243,14 @@ def test_unset_path_falls_back_to_the_default_search_path(monkeypatch: pytest.Mo
     assert win_exec._search_path() == os.defpath
 
 
-def test_relative_pathname_resolves_against_current_directory(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A candidate with a separator is a pathname, so the result depends on where it runs."""
+def test_relative_pathname_is_refused(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A relative pathname override is refused so it can never reach the working directory."""
     binary = _executable(tmp_path, "agent")
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("PATH", "")
-    assert Path(dispatcher.resolve_binary_path("codex", f".{os.sep}{binary.name}")).samefile(binary)
-    monkeypatch.chdir(tmp_path.parent)
-    with pytest.raises(ValueError, match="executable"):
+    with pytest.raises(ValueError, match="absolute"):
         dispatcher.resolve_binary_path("codex", f".{os.sep}{binary.name}")
+    assert Path(dispatcher.resolve_binary_path("codex", str(binary))).samefile(binary)
 
 
 def test_home_directory_is_expanded_in_overrides(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

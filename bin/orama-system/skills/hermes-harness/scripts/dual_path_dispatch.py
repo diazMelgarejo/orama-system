@@ -21,9 +21,9 @@ if _SRC_ROOT.is_dir() and str(_SRC_ROOT) not in sys.path:
 from orama_system.lan_peer_files import lan_peer_state_dir  # noqa: E402
 from utils.win_exec import (  # noqa: E402
     WinExecError,
-    popen_tree_kwargs,
     resolve_executable,
     safe_argv,
+    launch_tree,
     terminate_tree,
 )
 
@@ -130,13 +130,12 @@ def run_candidates(candidates: list[Candidate], log_dir: Path, timeout: int) -> 
             handle.close()
             attempts.append({"name": candidate.name, "returncode": "refused", "log": str(log_path), "error": str(exc)})
             continue
-        proc = subprocess.Popen(
+        proc = launch_tree(
             argv,
             stdout=handle,
             stderr=subprocess.STDOUT,
             stdin=subprocess.DEVNULL,
             text=True,
-            **popen_tree_kwargs(),
         )
         running[candidate.name] = (candidate, proc, handle, log_path)
 

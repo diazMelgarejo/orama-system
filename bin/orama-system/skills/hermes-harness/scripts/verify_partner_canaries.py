@@ -37,8 +37,8 @@ if _SRC_ROOT.is_dir() and str(_SRC_ROOT) not in sys.path:
 from utils.win_exec import (  # noqa: E402
     WinExecError,
     resolve_executable,
-    popen_tree_kwargs,
     safe_argv,
+    launch_tree,
     terminate_tree,
 )
 
@@ -107,9 +107,9 @@ def _run(cmd: list[str], timeout: int = 30) -> tuple[int, str, str]:
     except WinExecError as exc:
         return -2, "", f"refused: {exc}"
     try:
-        p = subprocess.Popen(
+        p = launch_tree(
             argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            text=True, **popen_tree_kwargs(),
+            text=True,
         )
     except (FileNotFoundError, PermissionError):
         return -2, "", f"{cmd[0]!r} not found on PATH"

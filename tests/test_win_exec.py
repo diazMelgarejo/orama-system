@@ -28,7 +28,17 @@ CHILD = textwrap.dedent(
 def _pid_alive(pid: int) -> bool:
     """Whether ``pid`` is still a running process."""
     if WIN:
-        return win_exec._win_pid_alive(pid)
+        import ctypes
+
+        k32 = ctypes.windll.kernel32
+        k32.OpenProcess.restype = ctypes.c_void_p
+        handle = k32.OpenProcess(0x1000, False, pid)
+        if not handle:
+            return False
+        code = ctypes.c_ulong()
+        k32.GetExitCodeProcess(ctypes.c_void_p(handle), ctypes.byref(code))
+        k32.CloseHandle(ctypes.c_void_p(handle))
+        return code.value == 259
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
@@ -114,8 +124,7 @@ def test_injection_through_cmd_shim_is_inert(tmp_path):
 
 def _spawn_tree():
     """Start a python child that spawns a sleeping grandchild; return (proc, grandchild_pid)."""
-    proc = subprocess.Popen([sys.executable, "-c", CHILD], stdout=subprocess.PIPE, text=True,
-                            **win_exec.popen_tree_kwargs())
+    proc = win_exec.launch_tree([sys.executable, "-c", CHILD], stdout=subprocess.PIPE, text=True)
     return proc, int(proc.stdout.readline().strip())
 
 
@@ -138,17 +147,159 @@ def test_terminate_tree_kills_grandchild():
 
 
 def test_terminate_tree_on_exited_child_is_not_overclaimed():
-    """On Windows an already-exited child cannot be verified, so the status is unknown."""
+    """A child not started through launch_tree has no authoritative membership: unknown."""
     proc = subprocess.Popen([sys.executable, "-c", "pass"], **win_exec.popen_tree_kwargs())
     proc.wait()
-    status = win_exec.terminate_tree(proc)
-    if WIN:
-        assert status == "unknown"
-    else:
-        assert status in ("unknown", "contained")
+    assert win_exec.terminate_tree(proc) == "unknown"
 
 
 def test_escaped_count():
     """escaped_count parses the escaped:<n> status and is 0 otherwise."""
     assert win_exec.escaped_count("escaped:3") == 3
     assert win_exec.escaped_count("contained") == 0
+
+
+MID = textwrap.dedent(
+    """
+    import subprocess, sys
+    g = subprocess.Popen([sys.executable, "-c", %r])
+    print(g.pid, flush=True)
+    """
+) % GRANDCHILD
+
+
+def test_reparented_orphan_is_killed_and_contained():
+    """root->mid->leaf where mid exits right after spawning leaf: leaf must die, status contained."""
+    root_code = textwrap.dedent(
+        """
+        import subprocess, sys, time
+        m = subprocess.Popen([sys.executable, "-c", %r], stdout=subprocess.PIPE, text=True)
+        print(m.stdout.readline().strip(), flush=True)
+        m.wait()
+        time.sleep(120)
+        """
+    ) % MID
+    proc = win_exec.launch_tree([sys.executable, "-c", root_code], stdout=subprocess.PIPE, text=True)
+    leaf = int(proc.stdout.readline().strip())
+    try:
+        time.sleep(0.5)
+        assert _pid_alive(leaf)
+        assert win_exec.terminate_tree(proc) == "contained"
+        deadline = time.time() + 5
+        while _pid_alive(leaf) and time.time() < deadline:
+            time.sleep(0.1)
+        assert not _pid_alive(leaf)
+    finally:
+        if _pid_alive(leaf):
+            os.kill(leaf, 9)
+        proc.stdout.close()
+
+
+def test_orphan_after_root_exit_is_contained_by_the_job():
+    """The root itself exits first; its orphaned leaf is still in the job and is killed."""
+    root_code = textwrap.dedent(
+        """
+        import subprocess, sys
+        g = subprocess.Popen([sys.executable, "-c", %r])
+        print(g.pid, flush=True)
+        """
+    ) % GRANDCHILD
+    proc = win_exec.launch_tree([sys.executable, "-c", root_code], stdout=subprocess.PIPE, text=True)
+    leaf = int(proc.stdout.readline().strip())
+    proc.wait()
+    try:
+        assert _pid_alive(leaf)
+        assert win_exec.terminate_tree(proc) == "contained"
+        deadline = time.time() + 5
+        while _pid_alive(leaf) and time.time() < deadline:
+            time.sleep(0.1)
+        assert not _pid_alive(leaf)
+    finally:
+        if _pid_alive(leaf):
+            os.kill(leaf, 9)
+        proc.stdout.close()
+
+
+def test_unlaunched_process_reports_unknown_not_contained():
+    """A process started without launch_tree is never reported contained."""
+    proc = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"],
+                            **win_exec.popen_tree_kwargs())
+    assert win_exec.terminate_tree(proc) == "unknown"
+    assert proc.poll() is not None
+
+
+@windows_only
+def test_no_pid_kill_after_the_fact(monkeypatch):
+    """The job path never shells out to taskkill by bare PID (PID reuse safety)."""
+    calls = []
+    monkeypatch.setattr(win_exec, "_taskkill", lambda args: calls.append(args))
+    proc = win_exec.launch_tree([sys.executable, "-c", "import time; time.sleep(60)"])
+    assert win_exec.terminate_tree(proc) == "contained"
+    assert calls == []
+    done = subprocess.Popen([sys.executable, "-c", "pass"], **win_exec.popen_tree_kwargs())
+    done.wait()
+    win_exec.terminate_tree(done)
+    assert calls == []
+
+
+def test_no_cim_or_job_leftovers():
+    """The dead after-the-fact job helper and the CIM descendant query are gone."""
+    assert not hasattr(win_exec, "_job_terminate")
+    assert not hasattr(win_exec, "_win_descendants")
+
+
+BS = chr(92)
+UNC = BS + BS + "srv" + BS + "share" + BS + "bin"
+
+
+@pytest.mark.parametrize("entry", [".", ".." + BS + "x", "bin", UNC])
+def test_relative_and_unc_path_entries_are_dropped(entry, monkeypatch, tmp_path):
+    """Relative and UNC PATH entries never reach lookup."""
+    monkeypatch.setattr(win_exec, "_win", lambda: True)
+    good = os.path.abspath(str(tmp_path))
+    monkeypatch.setenv("PATH", os.pathsep.join([entry, good]))
+    entries = win_exec._search_path_entries()
+    assert entry not in entries
+    if os.path.splitdrive(good)[0]:
+        assert good in entries
+
+
+def test_unc_entry_allowed_only_with_flag(monkeypatch):
+    """A UNC PATH entry is kept only when the caller opts in."""
+    monkeypatch.setattr(win_exec, "_win", lambda: True)
+    monkeypatch.setattr(win_exec.os.path, "isabs", lambda p: True)
+    monkeypatch.setenv("PATH", UNC)
+    assert win_exec._search_path_entries() == ()
+    assert win_exec._search_path_entries(allow_unc=True) == (UNC,)
+
+
+@windows_only
+def test_dot_path_entry_does_not_resolve_into_cwd(tmp_path, monkeypatch):
+    """PATH with '.' must not return a planted cwd binary."""
+    (tmp_path / "zzdot.exe").write_bytes(b"MZ")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("PATH", ".;.." + BS + "x")
+    with pytest.raises(win_exec.WinExecError):
+        win_exec.resolve_executable("zzdot")
+
+
+def test_relative_candidate_path_is_refused(tmp_path, monkeypatch):
+    """A relative path candidate (a relative CODEX_BIN) cannot reach the cwd."""
+    (tmp_path / "codex").write_bytes(b"x")
+    monkeypatch.chdir(tmp_path)
+    for cand in ("./codex", "." + BS + "codex", "sub/codex"):
+        with pytest.raises(win_exec.WinExecError):
+            win_exec.resolve_executable(cand)
+
+
+@pytest.mark.parametrize("name", ["a.cmd.", "a.cmd ", "a.cmd::$DATA", "A.BAT:x"])
+def test_cmd_shim_detection_normalises_names(name):
+    """Trailing dots/spaces and NTFS stream suffixes still count as a cmd shim."""
+    assert win_exec._is_cmd_shim("C:" + BS + "x" + BS + name)
+
+
+@pytest.mark.parametrize("code", [1, 9, 27, 31])
+def test_cmd_shim_refuses_all_control_chars(code):
+    """Every C0 control character is refused for shim arguments."""
+    with pytest.raises(win_exec.CmdArgumentRefused):
+        win_exec.safe_argv("C:" + BS + "x" + BS + "t.cmd", ["a" + chr(code) + "b"])
