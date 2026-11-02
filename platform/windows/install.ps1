@@ -136,6 +136,28 @@ if (Test-Path $rootReqs) {
     _Warn "requirements.txt not found at $rootReqs — skipping core install"
 }
 
+_Step 'Installing orama-system distribution...'
+if (-not (Test-Path (Join-Path $RepoRoot 'pyproject.toml'))) {
+    _Err 'orama-system pyproject.toml not found - cannot install project metadata'
+}
+$prevEap = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+try {
+    $LASTEXITCODE = $null
+    $projectOut = & $VenvPython -m pip install -e $RepoRoot --quiet --disable-pip-version-check 2>&1
+    $projectExit = $LASTEXITCODE
+} catch {
+    $projectOut = @("$_")
+    $projectExit = 127
+} finally {
+    $ErrorActionPreference = $prevEap
+}
+if ($projectExit -ne 0) {
+    $projectOut | Select-Object -Last 25 | ForEach-Object { Write-Host "    $_" }
+    _Err "orama-system editable install failed (pip exit $projectExit) - see output above"
+}
+_OK 'orama-system distribution installed'
+
 _Step 'Installing Windows-specific requirements...'
 $winReqs = Join-Path $ScriptDir 'requirements-windows.txt'
 if (Test-Path $winReqs) {
@@ -155,18 +177,6 @@ if (Test-Path $winReqs) {
 } else {
     _Warn "windows/requirements-windows.txt not found — skipping"
 }
-
-_Step 'Installing orama-system (editable)...'
-$prevEap = $ErrorActionPreference
-$ErrorActionPreference = 'Continue'
-$projOut = & $VenvPip install -e $RepoRoot --quiet --disable-pip-version-check 2>&1
-$projExit = $LASTEXITCODE
-$ErrorActionPreference = $prevEap
-if ($projExit -ne 0) {
-    $projOut | Select-Object -Last 25 | ForEach-Object { Write-Host "    $_" }
-    _Err "orama-system editable install failed (pip exit $projExit) — see output above"
-}
-_OK 'orama-system installed (editable)'
 
 # ── LM Studio port check ──────────────────────────────────────────────────────
 _Step 'Checking LM Studio (localhost:1234)...'
