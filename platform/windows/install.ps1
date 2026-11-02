@@ -156,6 +156,18 @@ if (Test-Path $winReqs) {
     _Warn "windows/requirements-windows.txt not found — skipping"
 }
 
+_Step 'Installing orama-system (editable)...'
+$prevEap = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+$projOut = & $VenvPip install -e $RepoRoot --quiet --disable-pip-version-check 2>&1
+$projExit = $LASTEXITCODE
+$ErrorActionPreference = $prevEap
+if ($projExit -ne 0) {
+    $projOut | Select-Object -Last 25 | ForEach-Object { Write-Host "    $_" }
+    _Err "orama-system editable install failed (pip exit $projExit) — see output above"
+}
+_OK 'orama-system installed (editable)'
+
 # ── LM Studio port check ──────────────────────────────────────────────────────
 _Step 'Checking LM Studio (localhost:1234)...'
 try {

@@ -412,23 +412,39 @@ function Test-VenvDeclaredDeps {
     .SYNOPSIS
     Declared-dependency drift probe (F-C1), scoped to the project's own tree:
     'pip check' lines whose first token is -Project (normalised) fail the probe;
-    unrelated broken packages only warn. With -RequireCryptography (Portal TLS
+    unrelated broken packages only warn. Fails when pip check cannot run or
+    is unusable (missing pip, launch exception, exit code not in {0,1}, or
+    exit 1 with unparseable output). With -RequireCryptography (Portal TLS
     on), 'import cryptography' must also succeed. On failure the offending
     lines are left in $script:BootstrapOutput for Bootstrap-ShowOutput.
     #>
     param([string]$Python, [string]$Project, [switch]$RequireCryptography)
     if (-not (Test-Path $Python)) { return $false }
-    $code = Bootstrap-RunPython $Python @('-m', 'pip', 'check', '--disable-pip-version-check')
-    if ($code -ne 0) {
+    try {
+        $code = Bootstrap-RunPython $Python @('-m', 'pip', 'check', '--disable-pip-version-check')
+    } catch {
+        return $false
+    }
+    if ($code -ne 0 -and $code -ne 1) { return $false }
+    if ($code -eq 1) {
         $own = @()
+        $hasConflict = $false
         foreach ($line in $script:BootstrapOutput) {
             $trim = "$line".Trim()
             if (-not $trim) { continue }
+            if ($trim -like '*No module named pip*') { return $false }
+            $isConflict = ($trim -match '^\S+\s+\S+\s+(has requirement|requires)\b')
+            if (-not $isConflict) { return $false }
+            $hasConflict = $true
             $first = ($trim -split '\s+')[0].ToLower().Replace('_', '-')
-            if ($first -eq $Project) { $own += $trim } else { _Warn 'bootstrap' "pip check (unrelated to $Project): $trim" }
+            if ($first -eq $Project) {
+                $own += $trim
+            } else {
+                _Warn 'bootstrap' "pip check (unrelated to $Project): $trim"
+            }
         }
-        if ($own.Count -gt 0) {
-            $script:BootstrapOutput = $own
+        if ((-not $hasConflict) -or ($own.Count -gt 0)) {
+            if ($own.Count -gt 0) { $script:BootstrapOutput = $own }
             return $false
         }
     }
