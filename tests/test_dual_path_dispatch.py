@@ -76,7 +76,7 @@ def test_run_candidates_closes_stdin_for_every_candidate(tmp_path):
     fake_proc = MagicMock()
     fake_proc.poll.return_value = 0
 
-    with patch.object(dispatch.subprocess, "Popen", return_value=fake_proc) as mock_popen:
+    with patch.object(dispatch, "launch_tree", return_value=fake_proc) as mock_popen:
         dispatch.run_candidates(candidates, tmp_path, timeout=10)
 
     assert mock_popen.call_count == len(candidates)

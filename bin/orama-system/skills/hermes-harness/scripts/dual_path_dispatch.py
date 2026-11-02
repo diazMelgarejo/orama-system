@@ -20,6 +20,7 @@ if _SRC_ROOT.is_dir() and str(_SRC_ROOT) not in sys.path:
 
 from orama_system.lan_peer_files import lan_peer_state_dir  # noqa: E402
 from utils.win_exec import (  # noqa: E402
+    CONTAINMENT_SCOPE_NOTE,
     WinExecError,
     resolve_executable,
     safe_argv,
@@ -147,6 +148,8 @@ def run_candidates(candidates: list[Candidate], log_dir: Path, timeout: int) -> 
                 if rc is None:
                     continue
                 handle.close()
+                # Root exited: kill any orphan it left in the job (bounded lifetime).
+                containment[name] = _terminate(proc)
                 attempts.append(
                     {
                         "name": candidate.name,
@@ -171,7 +174,8 @@ def run_candidates(candidates: list[Candidate], log_dir: Path, timeout: int) -> 
             handle.close()
 
     if winner:
-        return {"status": "ok", "winner": winner, "attempts": attempts, "containment": containment}
+        return {"status": "ok", "winner": winner, "attempts": attempts, "containment": containment,
+                "containment_note": CONTAINMENT_SCOPE_NOTE}
 
     if running:
         attempts.extend(
@@ -183,7 +187,7 @@ def run_candidates(candidates: list[Candidate], log_dir: Path, timeout: int) -> 
             }
             for candidate, _proc, _handle, log_path in running.values()
         )
-        return {"status": "error", "reason": f"dispatch timed out after {timeout}s", "winner": None, "attempts": attempts}
+        return {"status": "error", "reason": f"dispatch timed out after {timeout}s {CONTAINMENT_SCOPE_NOTE}", "winner": None, "attempts": attempts, "containment": containment}
     return {"status": "error", "reason": "all dispatch candidates failed", "winner": None, "attempts": attempts}
 
 

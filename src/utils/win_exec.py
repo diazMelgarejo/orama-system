@@ -16,6 +16,13 @@ Public API:
   * ``terminate_tree``      - kill a launched process and everything in its job/group and
                               report ``contained`` | ``escaped:<n>`` | ``unknown``;
                               ``unknown`` for a process not started through ``launch_tree``.
+
+Containment is job-scoped: it covers descendants created by ordinary process
+creation inside the job, not processes started through out-of-job launchers
+(WMI, DCOM, Task Scheduler, services). Call sites append
+``CONTAINMENT_SCOPE_NOTE`` to what they report. The job handle is closed when
+the Popen is garbage collected; because the job is KILL_ON_JOB_CLOSE that kills
+any surviving member, which is the intended bounded lifetime.
 """
 from __future__ import annotations
 
@@ -25,11 +32,14 @@ import signal
 import subprocess
 import sys
 import time
+import weakref
 from pathlib import Path
 from typing import Optional, Sequence
 
 CONTAINED = "contained"
 UNKNOWN = "unknown"
+# Appended by call sites to every containment report: the status is job-scoped.
+CONTAINMENT_SCOPE_NOTE = "(job-scoped containment; out-of-job launchers not covered)"
 
 # Characters cmd.exe interprets inside a command line, plus line breaks and NUL.
 CMD_METACHARACTERS = frozenset('%!^&|<>"\n\r\x00')
@@ -43,6 +53,10 @@ def _win() -> bool:
 
 class WinExecError(ValueError):
     """Typed failure for resolution or launch-safety refusals."""
+
+
+class LaunchError(WinExecError):
+    """A process could not be started safely (the half-started child was killed)."""
 
 
 class CmdArgumentRefused(WinExecError):
@@ -300,32 +314,66 @@ def _job_terminate_and_count(job: int, grace: float) -> Optional[int]:
         time.sleep(0.05)
 
 
+def _close_job_handle(job: int) -> None:
+    """Close a job handle. KILL_ON_JOB_CLOSE means this also kills any surviving member (intended)."""
+    try:
+        _k32().CloseHandle(job)
+    except Exception:  # noqa: BLE001 - finalizers must never raise
+        pass
+
+
+def _nt_resume_process(handle) -> int:
+    """Call ntdll NtResumeProcess on a process handle; return the NTSTATUS (0 is success)."""
+    import ctypes
+    from ctypes import wintypes
+
+    ntdll = ctypes.WinDLL("ntdll")
+    ntdll.NtResumeProcess.argtypes = [wintypes.HANDLE]
+    ntdll.NtResumeProcess.restype = ctypes.c_long
+    return int(ntdll.NtResumeProcess(handle))
+
+
 def _launch_suspended_in_job(argv: Sequence[str], **kwargs) -> "subprocess.Popen":
     """Windows: start ``argv`` suspended, assign it to a new kill-on-close job, then resume it.
 
     The child therefore runs its first instruction already inside the job, so
-    every descendant (including re-parented ones) is a job member. If the job
-    cannot be created or assigned the child is still resumed and run, but it is
-    left without job membership, so ``terminate_tree`` reports ``unknown``.
+    every descendant started from it (including re-parented ones) is a job
+    member. If only the job is unavailable (create or assign fails) the child
+    is still resumed and runs without membership, so ``terminate_tree`` reports
+    ``unknown``. Any other failure after the suspended start (an exception or a
+    non-zero NTSTATUS from the resume) kills the child and raises
+    ``LaunchError``: a suspended child is never left behind. The job handle is
+    closed by a finalizer when the Popen is collected (see ``launch_tree``).
     """
-    import ctypes
     from ctypes import wintypes
 
     flags = int(kwargs.pop("creationflags", 0)) | subprocess.CREATE_NEW_PROCESS_GROUP  # type: ignore[attr-defined]
     proc = subprocess.Popen(list(argv), creationflags=flags | _CREATE_SUSPENDED, **kwargs)
-    k = _k32()
-    job = _create_kill_on_close_job()
-    handle = wintypes.HANDLE(int(proc._handle))  # type: ignore[attr-defined]
-    assigned = False
-    if job is not None:
-        assigned = bool(k.AssignProcessToJobObject(job, handle))
-        if not assigned:
-            k.CloseHandle(job)
+    job: Optional[int] = None
+    try:
+        k = _k32()
+        handle = wintypes.HANDLE(int(proc._handle))  # type: ignore[attr-defined]
+        job = _create_kill_on_close_job()
+        if job is not None and not k.AssignProcessToJobObject(job, handle):
+            _close_job_handle(job)
             job = None
-    ntdll = ctypes.WinDLL("ntdll")
-    ntdll.NtResumeProcess.argtypes = [wintypes.HANDLE]
-    ntdll.NtResumeProcess(handle)
-    proc._win_exec_job = job if assigned else None  # type: ignore[attr-defined]
+        status = _nt_resume_process(handle)
+        if status != 0:
+            raise LaunchError("NtResumeProcess failed with NTSTATUS 0x%08X" % (status & 0xFFFFFFFF))
+    except BaseException as exc:
+        if job is not None:
+            _close_job_handle(job)
+        try:
+            proc.kill()
+            proc.wait(timeout=5)
+        except Exception:  # noqa: BLE001
+            pass
+        if isinstance(exc, LaunchError):
+            raise
+        raise LaunchError("could not start process inside a job: %s" % (exc,)) from exc
+    proc._win_exec_job = job  # type: ignore[attr-defined]
+    if job is not None:
+        proc._win_exec_close = weakref.finalize(proc, _close_job_handle, job)  # type: ignore[attr-defined]
     return proc
 
 
@@ -371,19 +419,23 @@ def _terminate_tree_windows(proc: "subprocess.Popen", grace: float) -> str:
     no snapshot of parent links is ever trusted and no after-the-fact PID kill is issued.
     """
     job = getattr(proc, "_win_exec_job", None)
-    if job:
+    if isinstance(job, int) and job:
         count = _job_terminate_and_count(job, grace)
         try:
             proc.wait(timeout=grace)
         except subprocess.TimeoutExpired:
             pass
-        _k32().CloseHandle(job)
+        closer = getattr(proc, "_win_exec_close", None)
+        if closer is not None:
+            closer()  # idempotent finalizer: closes the handle exactly once
+        else:
+            _close_job_handle(job)
         proc._win_exec_job = None  # type: ignore[attr-defined]
         proc._win_exec_result = (  # type: ignore[attr-defined]
             UNKNOWN if count is None else CONTAINED if count == 0 else f"escaped:{count}")
         return proc._win_exec_result  # type: ignore[attr-defined]
     cached = getattr(proc, "_win_exec_result", None)
-    if cached:
+    if isinstance(cached, str) and cached:
         return cached
     if proc.poll() is None:
         _taskkill(["/F", "/T", "/PID", str(proc.pid)])  # root alive: handle held, PID is ours
@@ -448,6 +500,12 @@ def _terminate_tree_posix(proc: "subprocess.Popen", grace: float) -> str:
 
 def terminate_tree(proc: "subprocess.Popen", grace: float = 5.0) -> str:
     """Kill ``proc`` and everything in its job/group and return the containment result.
+
+    Containment is job-scoped (CONTAINMENT_SCOPE_NOTE): ``contained`` means the
+    job has no members left. It is NOT a guarantee against launchers outside the
+    job - a process created through WMI (Win32_Process Create), DCOM, the Task
+    Scheduler or a service is parented outside the job and survives while the
+    status still reads ``contained``. Report the note with the status.
 
     ``contained`` only when the job (Windows) or process group (POSIX) is empty
     afterwards; ``escaped:<n>`` with ``n`` survivors; ``unknown`` when

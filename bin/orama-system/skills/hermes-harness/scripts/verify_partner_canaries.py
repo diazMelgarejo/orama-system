@@ -35,6 +35,7 @@ if _SRC_ROOT.is_dir() and str(_SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(_SRC_ROOT))
 
 from utils.win_exec import (  # noqa: E402
+    CONTAINMENT_SCOPE_NOTE,
     WinExecError,
     resolve_executable,
     safe_argv,
@@ -118,7 +119,10 @@ def _run(cmd: list[str], timeout: int = 30) -> tuple[int, str, str]:
     except subprocess.TimeoutExpired:
         containment = terminate_tree(p)
         p.communicate()
-        return -1, "", f"timed out (tree containment: {containment})"
+        return -1, "", f"timed out (tree containment: {containment} {CONTAINMENT_SCOPE_NOTE})"
+    finally:
+        # Root exited (or was killed): kill any orphan it left in the job.
+        terminate_tree(p)
     return p.returncode, out.strip(), err.strip()
 
 

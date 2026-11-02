@@ -303,3 +303,124 @@ def test_cmd_shim_refuses_all_control_chars(code):
     """Every C0 control character is refused for shim arguments."""
     with pytest.raises(win_exec.CmdArgumentRefused):
         win_exec.safe_argv("C:" + BS + "x" + BS + "t.cmd", ["a" + chr(code) + "b"])
+
+
+def test_scope_note_is_documented_and_exported():
+    """The job-scoped caveat is a constant and appears in the docstrings."""
+    assert "job-scoped containment" in win_exec.CONTAINMENT_SCOPE_NOTE
+    assert "out-of-job launchers" in win_exec.CONTAINMENT_SCOPE_NOTE
+    assert "WMI" in win_exec.terminate_tree.__doc__
+    assert "WMI" in win_exec.__doc__
+
+
+@windows_only
+def test_wmi_launched_leaf_survives_while_status_is_contained(tmp_path):
+    """Documented limit: a leaf made through WMI Win32_Process Create is outside the job."""
+    ps = os.path.join(os.environ.get("SystemRoot", "C:" + chr(92) + "Windows"), "System32",
+                      "WindowsPowerShell", "v1.0", "powershell.exe")
+    if not os.path.exists(ps):
+        pytest.skip("powershell.exe not available")
+    pidfile = tmp_path / "leaf.pid"
+    cmd = ("$r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments "
+           "@{CommandLine = '" + sys.executable + " -c \"import time; time.sleep(120)\"'}; "
+           "Set-Content -Path '" + str(pidfile) + "' -Value $r.ProcessId; Start-Sleep -Seconds 60")
+    proc = win_exec.launch_tree([ps, "-NoProfile", "-NonInteractive", "-Command", cmd])
+    leaf = 0
+    try:
+        deadline = time.time() + 20
+        while time.time() < deadline and not (pidfile.exists() and pidfile.read_text().strip()):
+            time.sleep(0.2)
+        if not (pidfile.exists() and pidfile.read_text().strip()):
+            pytest.skip("WMI process creation unavailable")
+        leaf = int(pidfile.read_text().strip())
+        assert win_exec.terminate_tree(proc) == "contained"
+        assert _pid_alive(leaf), "WMI-created leaf is outside the job; the caveat must stay documented"
+    finally:
+        if leaf and _pid_alive(leaf):
+            os.kill(leaf, 9)
+
+
+@windows_only
+def test_job_handle_closed_on_collection_and_kills_leaked_leaf():
+    """wait()+del+gc closes the job handle; closing kills a leaf the finished root leaked."""
+    import ctypes
+    import gc
+
+    root_code = textwrap.dedent(
+        """
+        import subprocess, sys
+        g = subprocess.Popen([sys.executable, "-c", %r])
+        print(g.pid, flush=True)
+        """
+    ) % GRANDCHILD
+    proc = win_exec.launch_tree([sys.executable, "-c", root_code], stdout=subprocess.PIPE, text=True)
+    leaf = int(proc.stdout.readline().strip())
+    proc.wait()
+    proc.stdout.close()
+    job = proc._win_exec_job
+    k32 = ctypes.windll.kernel32
+    k32.GetHandleInformation.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+    flags = ctypes.c_ulong()
+    assert k32.GetHandleInformation(ctypes.c_void_p(job), ctypes.byref(flags))
+    assert _pid_alive(leaf)
+    del proc
+    gc.collect()
+    try:
+        assert not k32.GetHandleInformation(ctypes.c_void_p(job), ctypes.byref(flags))
+        deadline = time.time() + 5
+        while _pid_alive(leaf) and time.time() < deadline:
+            time.sleep(0.1)
+        assert not _pid_alive(leaf)
+    finally:
+        if _pid_alive(leaf):
+            os.kill(leaf, 9)
+
+
+@windows_only
+def test_failed_resume_kills_child_and_raises(monkeypatch):
+    """A non-zero NTSTATUS from NtResumeProcess kills the suspended child and raises LaunchError."""
+    started = []
+    real_popen = subprocess.Popen
+
+    def spy(*a, **kw):
+        p = real_popen(*a, **kw)
+        started.append(p)
+        return p
+
+    monkeypatch.setattr(win_exec.subprocess, "Popen", spy)
+    monkeypatch.setattr(win_exec, "_nt_resume_process", lambda handle: 0xC0000001)
+    with pytest.raises(win_exec.LaunchError):
+        win_exec.launch_tree([sys.executable, "-c", "import time; time.sleep(60)"])
+    assert started and started[0].poll() is not None
+
+
+@windows_only
+def test_exception_after_suspended_start_kills_child_and_raises(monkeypatch):
+    """Any exception between the suspended start and resume kills the child, never leaving it suspended."""
+    started = []
+    real_popen = subprocess.Popen
+
+    def spy(*a, **kw):
+        p = real_popen(*a, **kw)
+        started.append(p)
+        return p
+
+    def boom():
+        raise OSError("job api exploded")
+
+    monkeypatch.setattr(win_exec.subprocess, "Popen", spy)
+    monkeypatch.setattr(win_exec, "_create_kill_on_close_job", boom)
+    with pytest.raises(win_exec.LaunchError):
+        win_exec.launch_tree([sys.executable, "-c", "import time; time.sleep(60)"])
+    assert started and started[0].poll() is not None
+
+
+@windows_only
+def test_job_unavailable_still_runs_and_reports_unknown(monkeypatch):
+    """When only the job cannot be created, the child is resumed and runs; status is unknown."""
+    monkeypatch.setattr(win_exec, "_create_kill_on_close_job", lambda: None)
+    proc = win_exec.launch_tree([sys.executable, "-c", "print('ran')"], stdout=subprocess.PIPE, text=True)
+    assert proc.stdout.readline().strip() == "ran"
+    proc.wait()
+    proc.stdout.close()
+    assert win_exec.terminate_tree(proc) == "unknown"
