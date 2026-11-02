@@ -427,3 +427,109 @@ def test_job_unavailable_still_runs_and_reports_unknown(monkeypatch):
     proc.wait()
     proc.stdout.close()
     assert win_exec.terminate_tree(proc) == "unknown"
+
+
+class _MockPosixProc:
+    """Mock process object for POSIX tree-termination tests."""
+
+    def __init__(self, pid: int = 4242, running: bool = True) -> None:
+        """Initialize mock process with a PID and initial running status."""
+        self.pid = pid
+        self._running = running
+        self._killed = False
+
+    def poll(self) -> Optional[int]:
+        """Return process exit code or None if still running."""
+        return None if self._running else 0
+
+    def kill(self) -> None:
+        """Simulate sending kill signal to process."""
+        self._killed = True
+        self._running = False
+
+    def wait(self, timeout: Optional[float] = None) -> int:
+        """Simulate waiting for process exit."""
+        self._running = False
+        return 0
+
+
+def test_posix_plain_popen_group_leader_accident_reports_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A plain Popen on POSIX reports unknown even if it happens to lead its process group."""
+    monkeypatch.setattr(win_exec.sys, "platform", "linux")
+    monkeypatch.setattr(win_exec.os, "getpgid", lambda pid: pid, raising=False)
+    monkeypatch.setattr(win_exec.os, "killpg", lambda pid, sig: None, raising=False)
+    proc = _MockPosixProc(1234, running=True)
+    assert win_exec.terminate_tree(proc) == "unknown"
+    assert not proc._running
+
+
+def test_posix_launch_tree_reports_contained_when_group_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A process launched via launch_tree on POSIX reports contained when the group is empty."""
+    monkeypatch.setattr(win_exec.sys, "platform", "linux")
+    monkeypatch.setattr(win_exec.os, "getpgid", lambda pid: pid, raising=False)
+
+    def _killpg(pid: int, sig: int) -> None:
+        """Simulate group signal, raising ProcessLookupError when probing dead group."""
+        if sig == 0:
+            raise ProcessLookupError
+
+    monkeypatch.setattr(win_exec.os, "killpg", _killpg, raising=False)
+    proc = _MockPosixProc(2345, running=True)
+    proc._win_exec_group = 2345
+    assert win_exec.terminate_tree(proc) == "contained"
+    assert getattr(proc, "_win_exec_result", None) == "contained"
+
+
+def test_posix_launch_tree_reports_unknown_on_permission_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A launch_tree process on POSIX reports unknown if killpg raises PermissionError."""
+    monkeypatch.setattr(win_exec.sys, "platform", "linux")
+    monkeypatch.setattr(win_exec.os, "getpgid", lambda pid: pid, raising=False)
+
+    def _killpg(pid: int, sig: int) -> None:
+        """Raise PermissionError on killpg to simulate unprivileged signal failure."""
+        raise PermissionError
+
+    monkeypatch.setattr(win_exec.os, "killpg", _killpg, raising=False)
+    proc = _MockPosixProc(3456, running=True)
+    proc._win_exec_group = 3456
+    assert win_exec.terminate_tree(proc) == "unknown"
+
+
+def test_posix_launch_tree_reports_escaped_on_surviving_members(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A launch_tree process on POSIX reports escaped:1 if members survive the grace period."""
+    monkeypatch.setattr(win_exec.sys, "platform", "linux")
+    monkeypatch.setattr(win_exec.os, "getpgid", lambda pid: pid, raising=False)
+    monkeypatch.setattr(win_exec.os, "killpg", lambda pid, sig: None, raising=False)
+    proc = _MockPosixProc(4567, running=True)
+    proc._win_exec_group = 4567
+    assert win_exec.terminate_tree(proc, grace=0.1) == "escaped:1"
+
+
+def test_effective_platform_path_module_selection(monkeypatch: pytest.MonkeyPatch) -> None:
+    """_pathmod returns ntpath for win32 and posixpath for linux/posix platforms."""
+    monkeypatch.setattr(win_exec.sys, "platform", "win32")
+    assert win_exec._pathmod() is win_exec.ntpath
+    monkeypatch.setattr(win_exec.sys, "platform", "linux")
+    assert win_exec._pathmod() is win_exec.posixpath
+
+
+def test_effective_platform_search_path_entries_windows_and_posix(monkeypatch: pytest.MonkeyPatch) -> None:
+    """PATH entries follow effective platform: C:\\bin kept on win32, /bin kept on posix."""
+    monkeypatch.setattr(win_exec.sys, "platform", "win32")
+    monkeypatch.setenv("PATH", r"C:\bin;C:\tools;.;relative\dir;\\srv\share\bin")
+    assert win_exec._search_path_entries() == (r"C:\bin", r"C:\tools")
+    assert win_exec._search_path_entries(allow_unc=True) == (r"C:\bin", r"C:\tools", r"\\srv\share\bin")
+
+    monkeypatch.setattr(win_exec.sys, "platform", "linux")
+    monkeypatch.setenv("PATH", "/usr/bin:/bin:.:relative/dir")
+    assert win_exec._search_path_entries() == ("/usr/bin", "/bin")
+
+
+def test_windows_emulation_drive_less_rooted_entry_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    """On Windows, a drive-less rooted path like \\bin is refused as not truly absolute."""
+    monkeypatch.setattr(win_exec.sys, "platform", "win32")
+    monkeypatch.setenv("PATH", r"\bin;C:\trusted")
+    entries = win_exec._search_path_entries()
+    assert r"\bin" not in entries
+    assert r"C:\trusted" in entries
+
