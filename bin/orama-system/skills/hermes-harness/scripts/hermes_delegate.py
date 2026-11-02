@@ -213,8 +213,13 @@ def _terminate_worker(worker: _Worker) -> None:
         # tree-kill is the documented substitute for reaching grandchildren.
         # Unverified in this environment -- see _worker_popen_kwargs' note.
         try:
+            # Absolute System32 path: a bare "taskkill" would be resolved
+            # through the search path (and possibly the cwd).
+            _taskkill = os.path.join(
+                os.environ.get("SystemRoot") or r"C:\Windows", "System32", "taskkill.exe"
+            )
             subprocess.run(
-                ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                [_taskkill, "/F", "/T", "/PID", str(proc.pid)],
                 capture_output=True,
                 timeout=10,
             )
