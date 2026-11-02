@@ -95,3 +95,10 @@ def test_write_outbox_records_delivery_failure(inbox_root):
     assert meta["peer_ip"] == "10.0.0.50"
     remove_outbox_file("win-task.md")
     assert list_outbox() == []
+
+
+def test_list_outbox_ignores_non_file_entries(inbox_root: Path) -> None:
+    """Incidental directories cannot become queue records or break status inspection."""
+    (inbox_root / "outbox" / ".claude").mkdir(parents=True)
+    write_outbox_file("win-task.md", "# Win task\n")
+    assert [item["filename"] for item in list_outbox()] == ["win-task.md"]

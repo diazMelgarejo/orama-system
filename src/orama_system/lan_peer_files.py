@@ -150,7 +150,7 @@ def _list_files(root: Path) -> list[dict[str, Any]]:
         return []
     items: list[dict[str, Any]] = []
     for path in sorted(root.glob("*")):
-        if path.suffix == ".json" or path.name.endswith(".meta.json"):
+        if not path.is_file() or path.suffix == ".json" or path.name.endswith(".meta.json"):
             continue
         meta_path = _meta_path(path)
         meta: dict[str, Any] = {}
