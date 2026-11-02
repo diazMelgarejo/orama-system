@@ -324,6 +324,7 @@ def _leaf_first_descendants(parent_pid: int, children: dict[int, list[int]]) -> 
     seen: set[int] = set()
 
     def collect(pid: int) -> None:
+        """Depth-first gather of ``pid`` and its descendants into the kill list."""
         if pid in seen:
             return
         seen.add(pid)

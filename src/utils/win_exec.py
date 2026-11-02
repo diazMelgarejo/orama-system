@@ -252,6 +252,7 @@ def _create_kill_on_close_job() -> Optional[int]:
     from ctypes import wintypes
 
     class _Basic(ctypes.Structure):
+        """ctypes layout of JOBOBJECT_BASIC_LIMIT_INFORMATION."""
         _fields_ = [
             ("PerProcessUserTimeLimit", ctypes.c_int64), ("PerJobUserTimeLimit", ctypes.c_int64),
             ("LimitFlags", wintypes.DWORD), ("MinimumWorkingSetSize", ctypes.c_size_t),
@@ -261,10 +262,12 @@ def _create_kill_on_close_job() -> Optional[int]:
         ]
 
     class _Io(ctypes.Structure):
+        """ctypes layout of IO_COUNTERS."""
         _fields_ = [(n, ctypes.c_uint64) for n in (
             "ReadOps", "WriteOps", "OtherOps", "ReadBytes", "WriteBytes", "OtherBytes")]
 
     class _Extended(ctypes.Structure):
+        """ctypes layout of JOBOBJECT_EXTENDED_LIMIT_INFORMATION."""
         _fields_ = [
             ("Basic", _Basic), ("Io", _Io), ("ProcessMemoryLimit", ctypes.c_size_t),
             ("JobMemoryLimit", ctypes.c_size_t), ("PeakProcessMemoryUsed", ctypes.c_size_t),
@@ -289,6 +292,7 @@ def _job_process_count(job: int) -> Optional[int]:
     from ctypes import wintypes
 
     class _IdList(ctypes.Structure):
+        """ctypes layout of JOBOBJECT_BASIC_PROCESS_ID_LIST with room for 16 ids."""
         _fields_ = [
             ("Assigned", wintypes.DWORD), ("InList", wintypes.DWORD),
             ("Ids", ctypes.c_size_t * 16),

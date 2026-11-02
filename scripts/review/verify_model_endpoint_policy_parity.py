@@ -22,11 +22,13 @@ class _LevelRangeFilter(logging.Filter):
     """Route INFO to stdout and WARNING+ to stderr without duplicating lines."""
 
     def __init__(self, min_level: int, max_level: int) -> None:
+        """Store the inclusive level range this filter passes."""
         super().__init__()
         self._min_level = min_level
         self._max_level = max_level
 
     def filter(self, record: logging.LogRecord) -> bool:
+        """Return True when the record's level is inside the configured range."""
         return self._min_level <= record.levelno <= self._max_level
 
 
@@ -34,10 +36,12 @@ class _CurrentStreamHandler(logging.Handler):
     """Write at emit time so pytest/capsys redirects still see the line."""
 
     def __init__(self, stream_attr: str) -> None:
+        """Remember which ``sys`` stream attribute to write to at emit time."""
         super().__init__()
         self._stream_attr = stream_attr
 
     def emit(self, record: logging.LogRecord) -> None:
+        """Format the record and write it to the current stream, reporting errors via the handler."""
         try:
             stream = getattr(sys, self._stream_attr)
             stream.write(self.format(record) + "\n")
@@ -96,6 +100,7 @@ _LOCAL_UTILS_DIR = _REPO_ROOT / "src" / "utils"
 
 
 def _extract_policy_source(path: Path, policy_functions: tuple[str, ...]) -> str:
+    """Return the dumped AST of the named policy functions, ignoring their docstrings."""
     tree = ast.parse(path.read_text(encoding="utf-8"))
     chunks: list[str] = []
     for node in tree.body:
@@ -116,6 +121,7 @@ def _extract_policy_source(path: Path, policy_functions: tuple[str, ...]) -> str
 
 
 def _sibling_utils_dir() -> Path | None:
+    """Locate the Perpetua-Tools ``src/utils`` directory, or None when it is unavailable."""
     env = os.getenv("PERPETUA_TOOLS_ROOT")
     if env:
         return Path(env) / "src" / "utils"
@@ -183,6 +189,7 @@ def _check_one(spec: _FileSpec, local_dir: Path, peer_dir: Path) -> bool:
 
 
 def main() -> int:
+    """Compare the policy functions of both repos and return the process exit status."""
     peer_dir = _sibling_utils_dir()
     if peer_dir is None:
         if os.getenv("PARITY_ALLOW_MISSING_SIBLING") == "1":

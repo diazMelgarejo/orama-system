@@ -146,6 +146,7 @@ class OramaToPTBridge:
         parent_orchestrator_id: str,
         pt_root: Optional[Path] = None,
     ) -> None:
+        """Bind the dispatcher to a session, its parent orchestrator and an optional PT root."""
         self.session_id = session_id
         self.parent_orchestrator_id = parent_orchestrator_id
         self._pt_root = pt_root or _PT_ROOT

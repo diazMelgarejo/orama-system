@@ -45,6 +45,7 @@ from utils.win_exec import (  # noqa: E402
 
 
 class Status(str, Enum):
+    """Outcome of one canary check."""
     PASS = "PASS"
     FAIL = "FAIL"
     UNAVAILABLE = "UNAVAILABLE"
@@ -53,6 +54,7 @@ class Status(str, Enum):
 
 @dataclass
 class Result:
+    """Name, status, detail and required flag of one canary check."""
     name: str
     status: Status
     detail: str = ""
@@ -65,6 +67,7 @@ def lmstudio_server_logs_dir() -> Path:
 
 
 def newest_lmstudio_log_file(logs_dir: Path | None = None) -> Path | None:
+    """Return the newest LM Studio server log file under ``logs_dir``, or None."""
     base = logs_dir if logs_dir is not None else lmstudio_server_logs_dir()
     if not base.is_dir():
         return None
@@ -90,6 +93,7 @@ def tail_lmstudio_logs(lines: int = 30, logs_dir: Path | None = None) -> tuple[s
 
 
 def _lmstudio_fail_detail(detail: str) -> str:
+    """Append a pointer to the LM Studio server logs to a failure detail."""
     logs = lmstudio_server_logs_dir()
     return (
         f"{detail} — check LM Studio server logs at {logs} "
@@ -98,6 +102,7 @@ def _lmstudio_fail_detail(detail: str) -> str:
 
 
 def _trunc(text: str, limit: int = 80) -> str:
+    """Shorten ``text`` to at most ``limit`` characters with an ellipsis."""
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
@@ -127,6 +132,7 @@ def _run(cmd: list[str], timeout: int = 30) -> tuple[int, str, str]:
 
 
 def _run_partner(name: str, args: list[str], timeout: int = 30) -> tuple[int, str, str]:
+    """Resolve a partner CLI by name and run it with ``args``; (-2, '', message) when missing."""
     exe = _resolve_partner_cli(name)
     if not exe:
         return -2, "", f"{name!r} not found on PATH"
@@ -179,6 +185,7 @@ def _lm_completion_timeout(model_id: str, base_timeout: int) -> int:
 
 
 def check_lm_studio(base_url: str, timeout: int) -> Result:
+    """Check that LM Studio serves exactly one loaded chat model."""
     base = base_url.rstrip("/").removesuffix("/v1")
     model_id, count = _loaded_lmstudio_chat_model(base, timeout)
     if not model_id:
@@ -232,6 +239,7 @@ def check_lm_studio(base_url: str, timeout: int) -> Result:
 
 
 def check_hermes(timeout: int) -> Result:
+    """Check that the Hermes CLI is on PATH and answers a canary prompt."""
     if not _resolve_partner_cli("hermes"):
         return Result("Hermes", Status.UNAVAILABLE, "hermes not on PATH", required=True)
     rc, out, err = _run_partner(
@@ -259,6 +267,7 @@ def check_hermes(timeout: int) -> Result:
 
 
 def check_agy(timeout: int) -> Result:
+    """Check that the AGY CLI is on PATH and answers a canary prompt (optional partner)."""
     if not _resolve_partner_cli("agy"):
         return Result("AGY", Status.UNAVAILABLE, "agy not on PATH", required=False)
     rc, out, err = _run_partner("agy", ["--print", "Reply with exactly: AGY_READY"], timeout=max(timeout, 120))
@@ -272,6 +281,7 @@ def check_agy(timeout: int) -> Result:
 
 
 def check_codex(timeout: int) -> Result:
+    """Check that the Codex CLI is on PATH and reports its version (optional partner)."""
     if not _resolve_partner_cli("codex"):
         return Result("Codex", Status.UNAVAILABLE, "codex not on PATH", required=False)
     rc, out, err = _run_partner("codex", ["--version"], timeout=timeout)
@@ -284,6 +294,7 @@ def check_codex(timeout: int) -> Result:
 
 
 def check_cursor_agent(timeout: int) -> Result:
+    """Check that cursor-agent is on PATH and reports its version (optional partner)."""
     if not _resolve_partner_cli("cursor-agent"):
         return Result("cursor-agent", Status.UNAVAILABLE, "cursor-agent not on PATH", required=False)
     rc, out, err = _run_partner("cursor-agent", ["--version"], timeout=timeout)
@@ -296,6 +307,7 @@ def check_cursor_agent(timeout: int) -> Result:
 
 
 def _windows_partner_dirs() -> list[Path]:
+    """Return the Windows directories where partner CLIs are commonly installed."""
     local = os.environ.get("LOCALAPPDATA", "")
     home = Path.home()
     return [

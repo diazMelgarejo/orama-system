@@ -31,15 +31,18 @@ from utils.win_exec import (  # noqa: E402
 
 @dataclass(frozen=True)
 class Candidate:
+    """One dispatch candidate: a name and the argv it runs."""
     name: str
     command: list[str]
 
 
 def dispatch_state_dir() -> Path:
+    """Return the directory holding dispatch state under the LAN peer state dir."""
     return lan_peer_state_dir() / "dispatch"
 
 
 def build_prompt(agent_card: str, role: str, job_id: str) -> str:
+    """Return the prompt that tells a partner which queue job to execute."""
     return (
         f"Follow {agent_card} - execute ONE {role} job ({job_id}) from "
         "mac_job_queue / inbox. PT learn+dream, push main, and drop to Win peer if needed."
@@ -47,6 +50,7 @@ def build_prompt(agent_card: str, role: str, job_id: str) -> str:
 
 
 def openclaw_agent_for_role(role: str) -> str:
+    """Return the OpenClaw agent name configured for the given role."""
     if role == "researcher":
         return os.environ.get("OPENCLAW_MAC_RESEARCHER_AGENT", "mac-researcher")
     return os.environ.get("OPENCLAW_MAC_ORCHESTRATOR_AGENT", "orchestrator")
@@ -192,6 +196,7 @@ def run_candidates(candidates: list[Candidate], log_dir: Path, timeout: int) -> 
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Parse arguments, run the dual-path dispatch and return the process exit status."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--role", required=True, choices=("orchestrator", "researcher"))
     parser.add_argument("--job-id", required=True)

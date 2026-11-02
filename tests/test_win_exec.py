@@ -383,6 +383,7 @@ def test_failed_resume_kills_child_and_raises(monkeypatch):
     real_popen = subprocess.Popen
 
     def spy(*a, **kw):
+        """Popen wrapper that records every started process."""
         p = real_popen(*a, **kw)
         started.append(p)
         return p
@@ -401,11 +402,13 @@ def test_exception_after_suspended_start_kills_child_and_raises(monkeypatch):
     real_popen = subprocess.Popen
 
     def spy(*a, **kw):
+        """Popen wrapper that records every started process."""
         p = real_popen(*a, **kw)
         started.append(p)
         return p
 
     def boom():
+        """Raise to simulate a job API failure."""
         raise OSError("job api exploded")
 
     monkeypatch.setattr(win_exec.subprocess, "Popen", spy)

@@ -13,6 +13,7 @@ SCRIPT = ROOT / "bin" / "orama-system" / "skills" / "hermes-harness" / "scripts"
 
 
 def _load_dispatch():
+    """Import dual_path_dispatch.py as a fresh module for testing."""
     spec = importlib.util.spec_from_file_location("dual_path_dispatch_for_test", SCRIPT)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
@@ -22,6 +23,7 @@ def _load_dispatch():
 
 
 def test_build_prompt_names_queue_job():
+    """The prompt names the queue and the job id."""
     dispatch = _load_dispatch()
 
     prompt = dispatch.build_prompt(".cursor/agents/mac-orchestrator-queue.md", "orchestrator", "mac-job.md")
@@ -32,6 +34,7 @@ def test_build_prompt_names_queue_job():
 
 
 def test_run_candidates_keeps_first_success(tmp_path):
+    """The first candidate to succeed wins and the slower one is stopped."""
     dispatch = _load_dispatch()
     slow = dispatch.Candidate(
         "slow-success",
@@ -47,6 +50,7 @@ def test_run_candidates_keeps_first_success(tmp_path):
 
 
 def test_run_candidates_waits_for_second_when_first_fails(tmp_path):
+    """A failing first candidate does not stop the second from winning."""
     dispatch = _load_dispatch()
     failing = dispatch.Candidate("failing", [sys.executable, "-c", "raise SystemExit(7)"])
     succeeding = dispatch.Candidate(
