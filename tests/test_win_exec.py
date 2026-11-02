@@ -7,6 +7,8 @@ import sys
 import textwrap
 import time
 
+from pathlib import Path
+
 import pytest
 
 from utils import win_exec
@@ -533,3 +535,25 @@ def test_windows_emulation_drive_less_rooted_entry_refused(monkeypatch: pytest.M
     assert r"\bin" not in entries
     assert r"C:\trusted" in entries
 
+
+
+@pytest.mark.parametrize("platform", ["linux", "win32"])
+def test_cmd_shim_refusal_is_host_independent(monkeypatch: pytest.MonkeyPatch, platform: str) -> None:
+    """Shim detection and metacharacter refusal behave the same on every host platform."""
+    monkeypatch.setattr(sys, "platform", platform)
+    for shim in ("C:\\x\\tool.cmd", "/opt/x/TOOL.BAT", "a.cmd.", "a.cmd::$DATA"):
+        with pytest.raises(win_exec.CmdArgumentRefused):
+            win_exec.safe_argv(shim, ["a&b"])
+    assert win_exec.safe_argv("/opt/x/tool.exe", ["a&b"]) == ["/opt/x/tool.exe", "a&b"]
+
+
+def test_emulated_windows_resolve_keeps_host_path_form(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A resolved real file is returned in host form, never rewritten by ntpath."""
+    binary = tmp_path / "tool.CMD"
+    binary.write_text("x", encoding="utf-8")
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setenv("PATHEXT", ".EXE;.CMD")
+    monkeypatch.setattr(win_exec.shutil, "which", lambda candidate, path=None: str(binary))
+    assert win_exec.resolve_executable(str(binary)) == os.path.abspath(str(binary))
