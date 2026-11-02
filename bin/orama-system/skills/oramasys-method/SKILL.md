@@ -75,7 +75,8 @@ See `references/search-frugality.md` for the full decision tree.
 **Frugality chain (stop at first that answers):**
 
 ```text
-gbrain → code-review-graph (CRG) → Brave → Perplexity → Grok
+gbrain → code-review-graph (CRG) → known local code/docs → Brave → Perplexity
+  → EXA + Firecrawl playbook (skills/deep-research) → Grok (last, when available)
 ```
 
 Quick rules when the tool exists:
@@ -88,6 +89,8 @@ Quick rules when the tool exists:
 - Known exact string → Grep is correct
 - Web → prefer the harness-approved browser/search path; in Claude/gstack
   environments, use `/browse` rather than raw browser MCP calls.
+- Broad or primary-source external research → the EXA + Firecrawl playbook
+  (`skills/deep-research`), only after Brave and Perplexity fall short
 
 ## Step 2 — The 5 Stages
 
@@ -176,7 +179,7 @@ Apply `references/file-truncation-check.md` after every whole-file write.
 
 ### Ask First
 
-- Escalating to a paid search tier (Perplexity/Grok)
+- Escalating to a paid search tier (Perplexity, the EXA + Firecrawl playbook, Grok)
 - Spawning the full Mode-3 7-agent network
 - Any destructive action
 

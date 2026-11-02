@@ -98,3 +98,12 @@ def test_websocket_kwargs_selection(monkeypatch, tmp_path):
     monkeypatch.setenv("PEER_CA_FILE", str(fx.write_pem(tmp_path / "ca.pem", fx.make_ca()[1])))
     assert peer_tls.websocket_kwargs(f"ws://{PEER}:8002/x") == {}
     assert isinstance(peer_tls.websocket_kwargs(f"wss://{PEER}:8002/x")["ssl"], ssl.SSLContext)
+
+
+def test_probe_sends_bearer_in_header_only_never_in_url(captured):
+    """The probe puts the bearer in the Authorization header and the URL has no query string."""
+    chk = probe.check_ws_peer(PEER, 8002, ["synthetic-token"], timeout=2)
+    assert chk.status == probe.Status.PASS
+    url, kw = captured[0]
+    assert "?" not in url and "token" not in url
+    assert kw["additional_headers"] == {"Authorization": "Bearer synthetic-token"}

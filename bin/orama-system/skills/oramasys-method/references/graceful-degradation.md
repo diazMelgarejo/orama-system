@@ -14,7 +14,7 @@ escalating. Never parallel-fire expensive tiers.
 From `search-frugality.md`:
 
 ```text
-gbrain → CRG → Grep (exact) → Brave → Perplexity → Grok
+gbrain → CRG → Grep (exact) / known local docs → Brave → Perplexity → EXA + Firecrawl playbook → Grok
 ```
 
 | Step | When | On miss / error |
@@ -23,7 +23,9 @@ gbrain → CRG → Grep (exact) → Brave → Perplexity → Grok
 | CRG | Multi-file blast radius | → gbrain code-def → Grep |
 | Grep | Known exact string / regex | → next tier only if still blocked |
 | Brave | External facts, docs | → Perplexity (ask operator first) |
-| Perplexity / Grok | Paid last resort | Document why local tiers failed |
+| Perplexity | Paid web synthesis | → EXA + Firecrawl; document why earlier tiers failed |
+| EXA + Firecrawl | Capped paid research pass (`deep-research`) | → Grok; document why Perplexity failed |
+| Grok | Most expensive, last resort, when available | Stop and report what is still unknown |
 
 **Heavy reasoning:** `mcp-oramasys` when exposed → else `POST /oramasys` :8001 → else inline
 Mode 1/2 in current harness.

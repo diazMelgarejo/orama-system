@@ -34,9 +34,10 @@ set -euo pipefail
 CACHE_FILE="${HOME}/.openclaw/state/orama-root.cache"
 
 _is_orama_root() {
-  # A real orama-system checkout has this marker script AND a .git dir —
-  # cheap, hard-to-false-positive check.
-  [[ -d "$1/.git" && -f "$1/scripts/exa/exa-mcp-wrapper.sh" ]]
+  # A real orama-system checkout has this marker script AND a .git entry —
+  # a directory, or the file a linked worktree uses — a cheap,
+  # hard-to-false-positive check.
+  [[ -e "$1/.git" && -f "$1/scripts/exa/exa-mcp-wrapper.sh" ]]
 }
 
 _try_cache() {

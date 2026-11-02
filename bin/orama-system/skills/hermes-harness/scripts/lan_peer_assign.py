@@ -124,6 +124,103 @@ def _bracketed_host(peer_ip: str) -> str:
     return f"[{inner}]"
 
 
+def _tcp_reachable(ip: str, port: int, timeout: float) -> bool:
+    """True when a TCP connection to (ip, port) opens within timeout seconds."""
+    try:
+        with socket.create_connection((ip.strip().strip("[]"), int(port)), timeout=timeout):
+            return True
+    except (OSError, ValueError):
+        return False
+
+
+def _discovered_portal_ports(discovery: dict[str, Any], peer_key: str) -> list[int]:
+    """Optional endpoints.<peer>.portal_port from discovery as a one-item list, else empty.
+
+    Discovery historically records only the LM Studio port; a record that also
+    carries the peer portal port lets live resolution find the right listener.
+    """
+    peer = (discovery.get("endpoints") or {}).get(peer_key) or {}
+    raw = peer.get("portal_port")
+    if raw is None or isinstance(raw, bool):
+        return []
+    try:
+        port = int(raw)
+    except (TypeError, ValueError):
+        return []
+    return [port] if 1 <= port <= 65535 else []
+
+
+_RETARGET_PROBE_CEILING = 1.5
+
+
+def _peer_trust_configured() -> bool:
+    """True when peer https has a pinned CA file or pinned fingerprints configured.
+
+    Without either, the TLS client falls back to default trust, which would
+    make "the new host presented the pinned CA" untrue for a retarget.
+    """
+    return any((os.environ.get(var) or "").strip() for var in (peer_tls.PEER_CA_ENV, peer_tls.PEER_PINS_ENV))
+
+
+def _resolve_live_target(
+    stored_ip: str,
+    stored_port: int,
+    fallback_ports: list[int],
+    *,
+    timeout: float,
+    cache: dict[Any, Any],
+) -> tuple[str, int] | None:
+    """Probe the stored target, then the discovered host, and return the first live (ip, port) or None."""
+    probe_timeout = max(1.0, min(float(timeout), _RETARGET_PROBE_CEILING))
+    if _tcp_reachable(stored_ip, stored_port, probe_timeout):
+        return None
+    if "discovery" not in cache:
+        cache["discovery"] = probe.load_discovery()
+    discovery = cache["discovery"]
+    role = probe.local_role()
+    live_ip, _ = probe.peer_from_discovery(discovery, role)
+    live_ip = (live_ip or "").strip()
+    if not live_ip or live_ip == stored_ip.strip():
+        return None
+    try:
+        _bracketed_host(live_ip)
+    except SystemExit:
+        return None
+    peer_key = "win" if role == "mac" else "mac"
+    candidates = [*_discovered_portal_ports(discovery, peer_key), *fallback_ports, stored_port]
+    for port in dict.fromkeys(candidates):
+        if _tcp_reachable(live_ip, port, probe_timeout):
+            return live_ip, port
+    return None
+
+
+def _live_peer_target(
+    stored_ip: str,
+    stored_port: int,
+    fallback_ports: list[int],
+    *,
+    timeout: float,
+    cache: dict[Any, Any] | None = None,
+) -> tuple[str, int] | None:
+    """Re-resolve a queued item's peer from live discovery, or None to keep the stored target.
+
+    The stored target always wins while it still answers. Only when it does not
+    answer, and discovery names a different host that does, is a retarget
+    returned. Peer TLS must be enabled with a pinned CA or pinned fingerprints,
+    so the new host has to prove itself before any bearer token is sent. The
+    result is memoised per (stored_ip, stored_port) in cache for one run.
+    """
+    if not _peer_portal_tls_enabled() or not _peer_trust_configured():
+        return None
+    run_cache = cache if cache is not None else {}
+    key = (stored_ip.strip(), int(stored_port))
+    if key not in run_cache:
+        run_cache[key] = _resolve_live_target(
+            stored_ip, stored_port, fallback_ports, timeout=timeout, cache=run_cache
+        )
+    return run_cache[key]
+
+
 def _peer_base(peer_ip: str, portal_port: int) -> str:
     """Return the peer portal base URL, https when peer TLS is enabled and http otherwise."""
     scheme = "https" if _peer_portal_tls_enabled() else "http"
@@ -585,6 +682,7 @@ def _deliver_item(
     keep: bool,
     listing_cache: dict[tuple[str, int], tuple[Any, bool, str]],
     record_history: bool = False,
+    auto_retarget: bool = False,
 ) -> dict[str, Any]:
     """Send one outbox item to (ip, port) after a duplicate check.
 
@@ -619,6 +717,7 @@ def _deliver_item(
                 "to": {"peer_ip": ip, "portal_port": str(port)},
                 "at": _utc_now_iso(),
                 "result": result[:200],
+                **({"auto": True} if auto_retarget else {}),
             }
         )
         return {"history": rows}
@@ -793,6 +892,23 @@ def cmd_flush_outbox(args: argparse.Namespace) -> int:
     state_filter = list(getattr(args, "state", None) or [])
     strict = bool(getattr(args, "strict", False))
     keep = bool(getattr(args, "keep_delivered", False))
+    retarget_live = bool(getattr(args, "retarget_live", False))
+    retarget_from = {ip.strip() for ip in (getattr(args, "retarget_from", None) or []) if ip.strip()}
+    dry_run = bool(getattr(args, "dry_run", False))
+    if (retarget_from or dry_run) and not retarget_live:
+        raise SystemExit("--retarget-from and --dry-run need --retarget-live")
+    if retarget_live:
+        # Live retargeting is opt-in. The operator names the stale address(es)
+        # that belong to the moved node, so a note queued for a different node
+        # is never redirected just because the moved node answers.
+        if not retarget_from:
+            raise SystemExit("--retarget-live needs --retarget-from <stale-ip> (repeatable)")
+        if not _peer_portal_tls_enabled():
+            raise SystemExit("--retarget-live needs PEER_PORTAL_TLS_ENABLED=1")
+        if not _peer_trust_configured():
+            raise SystemExit("--retarget-live needs PEER_CA_FILE or PEER_PINNED_FINGERPRINTS")
+    resolve_cache: dict[Any, Any] = {}
+    plan: list[dict[str, Any]] = []
     default_peer: tuple[str, int] | None = None
     listing_cache: dict[tuple[str, int], tuple[Any, bool, str]] = {}
     results: list[dict[str, Any]] = []
@@ -806,7 +922,13 @@ def cmd_flush_outbox(args: argparse.Namespace) -> int:
             continue
         hist = meta.get("history")
         last_hop = hist[-1] if isinstance(hist, list) and hist and isinstance(hist[-1], dict) else {}
-        redirected = bool(last_hop.get("to")) and last_hop.get("to") != last_hop.get("from")
+        # An "auto" hop was a live-discovery retarget by this command, not an
+        # operator-approved destination, so it never pins the item.
+        redirected = (
+            bool(last_hop.get("to"))
+            and last_hop.get("to") != last_hop.get("from")
+            and not last_hop.get("auto")
+        )
         if redirected and not only:
             # A resubmit approved another destination (whatever came of it: sent,
             # failed duplicate check, name collision, a timeout that may have
@@ -823,6 +945,8 @@ def cmd_flush_outbox(args: argparse.Namespace) -> int:
             continue
         stored_ip = str(meta.get("peer_ip") or "").strip()
         record_history = False
+        auto_retarget = False
+        retargeted_from = ""
         item_ip, item_port = "", 0
         if redirected:
             # --only: resend to the last operator-approved destination, not the
@@ -839,18 +963,44 @@ def cmd_flush_outbox(args: argparse.Namespace) -> int:
             if stored_ip:
                 item_port_raw = str(meta.get("portal_port") or "").strip()
                 item_ip, item_port = stored_ip, (int(item_port_raw) if item_port_raw else int(args.portal_port))
+                live = (
+                    _live_peer_target(
+                        item_ip, item_port, [int(args.portal_port)], timeout=args.timeout, cache=resolve_cache
+                    )
+                    if retarget_live and item_ip in retarget_from
+                    else None
+                )
+                if live is not None:
+                    retargeted_from = f"{item_ip}:{item_port}"
+                    (item_ip, item_port), record_history, auto_retarget = live, True, True
             else:
                 if default_peer is None:
                     default_peer = _resolve_peer(args)
                 item_ip, item_port = default_peer
+        if dry_run:
+            plan.append(
+                {
+                    "filename": filename,
+                    "from": f"{stored_ip or item_ip}:{meta.get('portal_port') or item_port}",
+                    "to": f"{item_ip}:{item_port}" if retargeted_from else None,
+                }
+            )
+            continue
         entry = _deliver_item(
             item, body, meta, item_ip, item_port,
             timeout=args.timeout, keep=keep or record_history, listing_cache=listing_cache,
-            record_history=record_history,
+            record_history=record_history, auto_retarget=auto_retarget,
         )
+        if retargeted_from:
+            entry["retargeted_from"] = retargeted_from
         results.append(entry)
         detail = f" ({entry['detail'][:120]})" if entry.get("detail") else ""
+        if retargeted_from:
+            detail = f" (live-resolved from {retargeted_from}){detail}"
         print(f"{entry['status']:9s} {filename} -> {item_ip}:{item_port}{detail}", file=sys.stderr)
+    if dry_run:
+        print(json.dumps({"ok": True, "dry_run": True, "plan": plan}, indent=2))
+        return 0
     delivered = [r for r in results if r["status"] == "delivered"]
     remaining = [r for r in results if r["status"] != "delivered"]
     summary = f"delivered {len(delivered)}, still queued {len(remaining)}"
@@ -974,6 +1124,13 @@ def main(argv: list[str] | None = None) -> int:
                        help="Exit non-zero when anything remains queued/sent")
     flush.add_argument("--keep-delivered", action="store_true",
                        help="Keep delivered entries (state=delivered) instead of removing them")
+    flush.add_argument("--retarget-live", action="store_true",
+                       help="Opt in: re-resolve a dead stored peer address from live discovery "
+                            "(needs --retarget-from, PEER_PORTAL_TLS_ENABLED and a pinned CA)")
+    flush.add_argument("--retarget-from", action="append", default=[], metavar="STALE_IP",
+                       help="Only retarget items whose stored address is this stale IP; repeatable")
+    flush.add_argument("--dry-run", action="store_true",
+                       help="With --retarget-live: list the intended from/to hops and send nothing")
     flush.set_defaults(func=cmd_flush_outbox)
 
     stat = sub.add_parser("outbox-status", help="List outbox entries and delivery states (read-only)")
