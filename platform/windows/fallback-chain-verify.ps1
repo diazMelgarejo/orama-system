@@ -124,9 +124,25 @@ $Tier2 = Test-TierAvailable -Tier 2 -Name "LM Studio (Windows GPU)" -CheckCmd {
     # to resolve to the literal string "True" whenever $env:X was unset,
     # producing an invalid URL ("True/v1/models") and reporting LM Studio
     # OFFLINE even when it was actually up and serving models.
-    # Default probes the IPv4 loopback address, not the name localhost (the name
-    # costs ~2 s per attempt on IPv6-first hosts).
-    $LmStudioEndpoint = if ($env:LM_STUDIO_WIN_ENDPOINTS) { $env:LM_STUDIO_WIN_ENDPOINTS } else { 'http://' + [System.Net.IPAddress]::Loopback.IPAddressToString + ':1234' }
+    # LM Studio on Windows binds loopback only by default, while start.ps1 defaults
+    # LM_STUDIO_WIN_ENDPOINTS to this host's LAN address, which that listener never
+    # answers (a false OFFLINE with the server up). Probe the IPv4 loopback address
+    # first (the name localhost costs ~2 s per attempt on IPv6-first hosts), on the
+    # configured port, then every configured endpoint; any answer means the tier is up.
+    $LoopbackHost = [System.Net.IPAddress]::Loopback.IPAddressToString
+    $Configured = @()
+    if ($env:LM_STUDIO_WIN_ENDPOINTS) {
+        $Configured = @($env:LM_STUDIO_WIN_ENDPOINTS -split '[,;\s]+' | Where-Object { $_ })
+    }
+    $LmStudioPort = 1234
+    foreach ($Endpoint in $Configured) {
+        $Parsed = $null
+        if ([System.Uri]::TryCreate($Endpoint, [System.UriKind]::Absolute, [ref]$Parsed) -and $Parsed.Port -gt 0) {
+            $LmStudioPort = $Parsed.Port
+            break
+        }
+    }
+    $Candidates = @("http://${LoopbackHost}:$LmStudioPort") + $Configured
     # -UseBasicParsing: without it, Invoke-WebRequest routes through the IE
     # COM parsing engine, which throws "Windows PowerShell is in
     # NonInteractive mode. Read and Prompt functionality is not available."
@@ -140,7 +156,17 @@ $Tier2 = Test-TierAvailable -Tier 2 -Name "LM Studio (Windows GPU)" -CheckCmd {
     # timed out 3/3 tries while 5s succeeded reliably. Matches the 5s
     # timeout scripts/ensure_requirements.ps1 already uses for this same
     # check.
-    $null = Invoke-WebRequest -Uri "$LmStudioEndpoint/v1/models" -TimeoutSec 5 -UseBasicParsing -ErrorAction Stop
+    $Reached = $false
+    foreach ($Candidate in $Candidates) {
+        try {
+            $null = Invoke-WebRequest -Uri "$($Candidate.TrimEnd('/'))/v1/models" -TimeoutSec 5 -UseBasicParsing -ErrorAction Stop
+            $Reached = $true
+            break
+        } catch {
+            continue
+        }
+    }
+    if (-not $Reached) { throw 'LM Studio did not answer on loopback or any configured endpoint' }
 }
 
 # Tier 3: Ollama (Mac local) — on Windows, could be Mac via LAN or localhost if running
