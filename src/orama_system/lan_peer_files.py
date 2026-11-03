@@ -12,6 +12,7 @@ _SAFE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
 def _home_dir() -> Path:
+    """Home directory for LAN peer state: ``HOME`` when set, else ``Path.home()``."""
     # Path.home() resolves via USERPROFILE on Windows and ignores HOME
     # entirely, which silently defeats test isolation: tests set
     # env["HOME"] = tmp_path expecting outbox/inbox state to land there,
@@ -27,18 +28,22 @@ def _home_dir() -> Path:
 
 
 def lan_peer_state_dir() -> Path:
+    """Root of the LAN peer state tree (inbox, outbox and metadata)."""
     return _home_dir() / ".openclaw" / "state" / "lan_peer"
 
 
 def inbox_dir() -> Path:
+    """Directory holding files received from peers."""
     return lan_peer_state_dir() / "inbox"
 
 
 def outbox_dir() -> Path:
+    """Directory holding files queued for a peer that were not yet delivered."""
     return lan_peer_state_dir() / "outbox"
 
 
 def sanitize_filename(name: str) -> str:
+    """Return ``name`` stripped when it is a safe assignment filename, else raise ValueError."""
     raw = name.strip()
     if not raw or ".." in raw or "/" in raw or "\\" in raw:
         raise ValueError(f"unsafe or invalid filename: {name!r}")
@@ -79,6 +84,7 @@ def _resolve_within(root: Path, name: str) -> Path:
 
 
 def _meta_path(path: Path) -> Path:
+    """Sidecar metadata path (``<name>.meta.json``) for an assignment file."""
     return path.with_suffix(path.suffix + ".meta.json")
 
 
@@ -146,11 +152,12 @@ def write_outbox_file(
 
 
 def _list_files(root: Path) -> list[dict[str, Any]]:
+    """List assignment files under ``root`` with their metadata, skipping JSON sidecars and non-files."""
     if not root.is_dir():
         return []
     items: list[dict[str, Any]] = []
     for path in sorted(root.glob("*")):
-        if path.suffix == ".json" or path.name.endswith(".meta.json"):
+        if not path.is_file() or path.suffix == ".json" or path.name.endswith(".meta.json"):
             continue
         meta_path = _meta_path(path)
         meta: dict[str, Any] = {}
@@ -176,14 +183,17 @@ def _list_files(root: Path) -> list[dict[str, Any]]:
 
 
 def list_inbox() -> list[dict[str, Any]]:
+    """List received assignment files with their metadata."""
     return _list_files(inbox_dir())
 
 
 def list_outbox() -> list[dict[str, Any]]:
+    """List queued (undelivered) assignment files with their metadata."""
     return _list_files(outbox_dir())
 
 
 def _read_file(root: Path, filename: str) -> tuple[str, dict[str, Any]]:
+    """Return the body and metadata of ``filename`` under ``root``; FileNotFoundError when absent."""
     path = _resolve_within(root, filename)
     safe = path.name
     if not path.is_file():
@@ -200,14 +210,17 @@ def _read_file(root: Path, filename: str) -> tuple[str, dict[str, Any]]:
 
 
 def read_inbox_file(filename: str) -> tuple[str, dict[str, Any]]:
+    """Return the body and metadata of a received assignment file."""
     return _read_file(inbox_dir(), filename)
 
 
 def read_outbox_file(filename: str) -> tuple[str, dict[str, Any]]:
+    """Return the body and metadata of a queued assignment file."""
     return _read_file(outbox_dir(), filename)
 
 
 def remove_outbox_file(filename: str) -> None:
+    """Delete a queued assignment file and its metadata sidecar, if present."""
     path = _resolve_within(outbox_dir(), filename)
     meta_path = _meta_path(path)
     if path.is_file():

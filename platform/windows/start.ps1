@@ -1615,6 +1615,9 @@ function Life-Spawn {
     } finally {
         $ErrorActionPreference = $prevEap
     }
+    if ($out -contains 'breakaway=unavailable') {
+        Write-Host '  WARNING: job breakaway refused; this service stays in the launcher job and stops when that job closes if the job kills its processes on close'
+    }
     $n = 0
     if ($code -eq 0 -and $out.Count -gt 0 -and [int]::TryParse($out[$out.Count - 1].Trim(), [ref]$n)) {
         return $n

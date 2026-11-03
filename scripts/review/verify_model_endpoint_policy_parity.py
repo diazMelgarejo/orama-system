@@ -22,11 +22,13 @@ class _LevelRangeFilter(logging.Filter):
     """Route INFO to stdout and WARNING+ to stderr without duplicating lines."""
 
     def __init__(self, min_level: int, max_level: int) -> None:
+        """Store the inclusive level range this filter passes."""
         super().__init__()
         self._min_level = min_level
         self._max_level = max_level
 
     def filter(self, record: logging.LogRecord) -> bool:
+        """Return True when the record's level is inside the configured range."""
         return self._min_level <= record.levelno <= self._max_level
 
 
@@ -34,10 +36,12 @@ class _CurrentStreamHandler(logging.Handler):
     """Write at emit time so pytest/capsys redirects still see the line."""
 
     def __init__(self, stream_attr: str) -> None:
+        """Remember which ``sys`` stream attribute to write to at emit time."""
         super().__init__()
         self._stream_attr = stream_attr
 
     def emit(self, record: logging.LogRecord) -> None:
+        """Format the record and write it to the current stream, reporting errors via the handler."""
         try:
             stream = getattr(sys, self._stream_attr)
             stream.write(self.format(record) + "\n")
@@ -63,9 +67,14 @@ if not _LOG.handlers:
 
 @dataclass(frozen=True)
 class _FileSpec:
+    """One shared module to compare between the two repos, and how strictly."""
+
     filename: str
     policy_functions: tuple[str, ...]
     require_identical_bytes: bool = False
+    # True until Perpetua-Tools carries its copy: a missing peer file is then a
+    # reported skip, not a failure. Once present it is compared byte-for-byte.
+    peer_optional: bool = False
 
 
 FILES_TO_CHECK: tuple[_FileSpec, ...] = (
@@ -78,6 +87,12 @@ FILES_TO_CHECK: tuple[_FileSpec, ...] = (
         "endpoint_policy_core.py",
         ("parse_transport_identity", "build_transport_url"),
     ),
+    _FileSpec(
+        "win_exec.py",
+        ("resolve_executable", "safe_argv", "terminate_tree"),
+        require_identical_bytes=True,
+        peer_optional=True,
+    ),
 )
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -85,6 +100,7 @@ _LOCAL_UTILS_DIR = _REPO_ROOT / "src" / "utils"
 
 
 def _extract_policy_source(path: Path, policy_functions: tuple[str, ...]) -> str:
+    """Return the dumped AST of the named policy functions, ignoring their docstrings."""
     tree = ast.parse(path.read_text(encoding="utf-8"))
     chunks: list[str] = []
     for node in tree.body:
@@ -105,6 +121,7 @@ def _extract_policy_source(path: Path, policy_functions: tuple[str, ...]) -> str
 
 
 def _sibling_utils_dir() -> Path | None:
+    """Locate the Perpetua-Tools ``src/utils`` directory, or None when it is unavailable."""
     env = os.getenv("PERPETUA_TOOLS_ROOT")
     if env:
         return Path(env) / "src" / "utils"
@@ -115,11 +132,15 @@ def _sibling_utils_dir() -> Path | None:
 
 
 def _check_one(spec: _FileSpec, local_dir: Path, peer_dir: Path) -> bool:
+    """Compare one shared module with its peer copy; True when it passes (or an optional peer is absent)."""
     local_path = local_dir / spec.filename
     peer_path = peer_dir / spec.filename
     if not local_path.is_file():
         print(f"model-endpoint-policy-parity: local file missing: {local_path}", file=sys.stderr)
         return False
+    if not peer_path.is_file() and spec.peer_optional:
+        _LOG.info("model-endpoint-policy-parity: SKIP (%s: peer copy not yet present)", spec.filename)
+        return True
     if not peer_path.is_file():
         print(f"model-endpoint-policy-parity: peer file missing: {peer_path}", file=sys.stderr)
         return False
@@ -168,6 +189,7 @@ def _check_one(spec: _FileSpec, local_dir: Path, peer_dir: Path) -> bool:
 
 
 def main() -> int:
+    """Compare the policy functions of both repos and return the process exit status."""
     peer_dir = _sibling_utils_dir()
     if peer_dir is None:
         if os.getenv("PARITY_ALLOW_MISSING_SIBLING") == "1":

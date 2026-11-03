@@ -611,3 +611,22 @@ def test_launch_deadline_checked_between_worker_constructions(
     assert all("did not start" in row["error"] for row in rows[2:])
     for obj in workers:
         obj.cleanup.assert_called_once()
+
+
+def test_windows_tree_kill_unavailable_is_reported(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Without a System32 path the worker is killed alone and the operator is told so."""
+    mod = _load_delegate_module()
+    proc = Mock(pid=777)
+    proc.poll.return_value = None
+    monkeypatch.setattr(mod, "_IS_WINDOWS", True)
+
+    def no_system32(name: str) -> str:
+        """Simulate GetSystemDirectoryW failing with SystemRoot unset."""
+        raise OSError("System32 directory unavailable")
+
+    monkeypatch.setattr(mod, "system32_tool", no_system32)
+    mod._terminate_worker(types.SimpleNamespace(proc=proc))
+    proc.kill.assert_called_once()
+    assert "descendants may survive" in capsys.readouterr().err

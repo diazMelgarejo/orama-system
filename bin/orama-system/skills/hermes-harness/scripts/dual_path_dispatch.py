@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import shutil
 import subprocess
 import sys
 import time
@@ -20,19 +19,32 @@ if _SRC_ROOT.is_dir() and str(_SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(_SRC_ROOT))
 
 from orama_system.lan_peer_files import lan_peer_state_dir  # noqa: E402
+from utils.win_exec import (  # noqa: E402
+    CONTAINMENT_SCOPE_NOTE,
+    LaunchError,
+    WinExecError,
+    exited,
+    resolve_executable,
+    safe_argv,
+    launch_tree,
+    terminate_tree,
+)
 
 
 @dataclass(frozen=True)
 class Candidate:
+    """One dispatch candidate: a name and the argv it runs."""
     name: str
     command: list[str]
 
 
 def dispatch_state_dir() -> Path:
+    """Return the directory holding dispatch state under the LAN peer state dir."""
     return lan_peer_state_dir() / "dispatch"
 
 
 def build_prompt(agent_card: str, role: str, job_id: str) -> str:
+    """Return the prompt that tells a partner which queue job to execute."""
     return (
         f"Follow {agent_card} - execute ONE {role} job ({job_id}) from "
         "mac_job_queue / inbox. PT learn+dream, push main, and drop to Win peer if needed."
@@ -40,14 +52,24 @@ def build_prompt(agent_card: str, role: str, job_id: str) -> str:
 
 
 def openclaw_agent_for_role(role: str) -> str:
+    """Return the OpenClaw agent name configured for the given role."""
     if role == "researcher":
         return os.environ.get("OPENCLAW_MAC_RESEARCHER_AGENT", "mac-researcher")
     return os.environ.get("OPENCLAW_MAC_ORCHESTRATOR_AGENT", "orchestrator")
 
 
+def _resolve_or_none(name: str) -> str | None:
+    """Absolute path of ``name`` via the shared resolver (never cwd, never a bare name), else None."""
+    try:
+        return resolve_executable(name)
+    except WinExecError:
+        return None
+
+
 def build_candidates(prompt: str, role: str) -> list[Candidate]:
+    """Build dispatch candidates from CLIs resolved to absolute paths; unresolvable CLIs are skipped."""
     candidates: list[Candidate] = []
-    cursor = shutil.which(os.environ.get("CURSOR_AGENT_BIN", "cursor-agent"))
+    cursor = _resolve_or_none(os.environ.get("CURSOR_AGENT_BIN", "cursor-agent"))
     if cursor:
         candidates.append(
             Candidate(
@@ -65,7 +87,7 @@ def build_candidates(prompt: str, role: str) -> list[Candidate]:
 
     # openclaw uses: openclaw agent --agent <agent-id> -m <prompt>
     # (not 'openclaw run' which does not exist in OpenClaw 2026.6.x)
-    openclaw = shutil.which(os.environ.get("OPENCLAW_BIN", "openclaw"))
+    openclaw = _resolve_or_none(os.environ.get("OPENCLAW_BIN", "openclaw"))
     if openclaw:
         candidates.append(
             Candidate(
@@ -83,18 +105,13 @@ def build_candidates(prompt: str, role: str) -> list[Candidate]:
     return candidates
 
 
-def _terminate(process: subprocess.Popen[str]) -> None:
-    if process.poll() is not None:
-        return
-    process.terminate()
-    try:
-        process.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        process.kill()
-        process.wait(timeout=5)
+def _terminate(process: subprocess.Popen[str]) -> str:
+    """Kill the candidate's whole process tree and return its containment status."""
+    return terminate_tree(process, grace=5.0)
 
 
 def run_candidates(candidates: list[Candidate], log_dir: Path, timeout: int) -> dict[str, Any]:
+    """Run candidates in parallel, keep the first success and tree-kill the rest, reporting containment."""
     if not candidates:
         return {"status": "error", "reason": "no dispatch candidates available", "winner": None, "attempts": []}
 
@@ -102,6 +119,7 @@ def run_candidates(candidates: list[Candidate], log_dir: Path, timeout: int) -> 
     deadline = time.monotonic() + timeout
     running: dict[str, tuple[Candidate, subprocess.Popen[str], Any, Path]] = {}
     attempts: list[dict[str, Any]] = []
+    containment: dict[str, str] = {}
 
     for candidate in candidates:
         log_path = log_dir / f"{candidate.name}.log"
@@ -112,23 +130,40 @@ def run_candidates(candidates: list[Candidate], log_dir: Path, timeout: int) -> 
         # an inherited-but-unfed stdin can leave a CLI (e.g. Codex) blocked
         # on "Reading additional input..." forever instead of using the
         # prompt already in candidate.command. See dispatch_codex_partner.py.
-        proc = subprocess.Popen(
-            candidate.command,
-            stdout=handle,
-            stderr=subprocess.STDOUT,
-            stdin=subprocess.DEVNULL,
-            text=True,
-        )
+        try:
+            argv = safe_argv(candidate.command[0], candidate.command[1:])
+        except WinExecError as exc:
+            handle.write(f"refused: {exc}" + chr(10))
+            handle.close()
+            attempts.append({"name": candidate.name, "returncode": "refused", "log": str(log_path), "error": str(exc)})
+            continue
+        try:
+            proc = launch_tree(
+                argv,
+                stdout=handle,
+                stderr=subprocess.STDOUT,
+                stdin=subprocess.DEVNULL,
+                text=True,
+            )
+        except (LaunchError, OSError) as exc:
+            # One candidate that cannot start must not abort the others.
+            handle.write(f"launch failed: {exc}" + chr(10))
+            handle.close()
+            attempts.append({"name": candidate.name, "returncode": "launch-failed", "log": str(log_path), "error": str(exc)})
+            continue
         running[candidate.name] = (candidate, proc, handle, log_path)
 
     winner: dict[str, Any] | None = None
     try:
         while running and time.monotonic() < deadline:
             for name, (candidate, proc, handle, log_path) in list(running.items()):
-                rc = proc.poll()
-                if rc is None:
+                if not exited(proc):
                     continue
                 handle.close()
+                # Root exited but is not reaped yet (POSIX), so its group id is still
+                # ours: kill any orphan it left in the job/group, then read its status.
+                containment[name] = _terminate(proc)
+                rc = proc.returncode if proc.returncode is not None else proc.poll()
                 attempts.append(
                     {
                         "name": candidate.name,
@@ -139,8 +174,8 @@ def run_candidates(candidates: list[Candidate], log_dir: Path, timeout: int) -> 
                 del running[name]
                 if rc == 0:
                     winner = attempts[-1]
-                    for _, other_proc, other_handle, _ in running.values():
-                        _terminate(other_proc)
+                    for other_name, (_, other_proc, other_handle, _) in running.items():
+                        containment[other_name] = _terminate(other_proc)
                         other_handle.close()
                     running.clear()
                     break
@@ -148,12 +183,13 @@ def run_candidates(candidates: list[Candidate], log_dir: Path, timeout: int) -> 
                 break
             time.sleep(0.2)
     finally:
-        for _, proc, handle, _ in running.values():
-            _terminate(proc)
+        for name, (_, proc, handle, _) in running.items():
+            containment[name] = _terminate(proc)
             handle.close()
 
     if winner:
-        return {"status": "ok", "winner": winner, "attempts": attempts}
+        return {"status": "ok", "winner": winner, "attempts": attempts, "containment": containment,
+                "containment_note": CONTAINMENT_SCOPE_NOTE}
 
     if running:
         attempts.extend(
@@ -161,14 +197,18 @@ def run_candidates(candidates: list[Candidate], log_dir: Path, timeout: int) -> 
                 "name": candidate.name,
                 "returncode": "timeout",
                 "log": str(log_path),
+                "containment": containment.get(candidate.name, "unknown"),
             }
             for candidate, _proc, _handle, log_path in running.values()
         )
-        return {"status": "error", "reason": f"dispatch timed out after {timeout}s", "winner": None, "attempts": attempts}
-    return {"status": "error", "reason": "all dispatch candidates failed", "winner": None, "attempts": attempts}
+        return {"status": "error", "reason": f"dispatch timed out after {timeout}s {CONTAINMENT_SCOPE_NOTE}", "winner": None, "attempts": attempts, "containment": containment,
+                "containment_note": CONTAINMENT_SCOPE_NOTE}
+    return {"status": "error", "reason": "all dispatch candidates failed", "winner": None, "attempts": attempts,
+            "containment": containment, "containment_note": CONTAINMENT_SCOPE_NOTE}
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Parse arguments, run the dual-path dispatch and return the process exit status."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--role", required=True, choices=("orchestrator", "researcher"))
     parser.add_argument("--job-id", required=True)

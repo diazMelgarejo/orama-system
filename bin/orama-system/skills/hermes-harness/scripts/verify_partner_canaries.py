@@ -18,7 +18,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import shutil
 import subprocess
 import sys
 import urllib.request
@@ -31,8 +30,22 @@ HERMES_CANARY_MODEL = "stepfun/step-3.7-flash:free"
 LM_STUDIO_LOG_HINT = os.path.expanduser("~/.lmstudio/server-logs")
 from pathlib import Path
 
+_SRC_ROOT = Path(__file__).resolve().parents[4] / "src"
+if _SRC_ROOT.is_dir() and str(_SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(_SRC_ROOT))
+
+from utils.win_exec import (  # noqa: E402
+    CONTAINMENT_SCOPE_NOTE,
+    LaunchError,
+    WinExecError,
+    resolve_executable,
+    run_tree,
+    safe_argv,
+)
+
 
 class Status(str, Enum):
+    """Outcome of one canary check."""
     PASS = "PASS"
     FAIL = "FAIL"
     UNAVAILABLE = "UNAVAILABLE"
@@ -41,6 +54,7 @@ class Status(str, Enum):
 
 @dataclass
 class Result:
+    """Name, status, detail and required flag of one canary check."""
     name: str
     status: Status
     detail: str = ""
@@ -53,6 +67,7 @@ def lmstudio_server_logs_dir() -> Path:
 
 
 def newest_lmstudio_log_file(logs_dir: Path | None = None) -> Path | None:
+    """Return the newest LM Studio server log file under ``logs_dir``, or None."""
     base = logs_dir if logs_dir is not None else lmstudio_server_logs_dir()
     if not base.is_dir():
         return None
@@ -78,6 +93,7 @@ def tail_lmstudio_logs(lines: int = 30, logs_dir: Path | None = None) -> tuple[s
 
 
 def _lmstudio_fail_detail(detail: str) -> str:
+    """Append a pointer to the LM Studio server logs to a failure detail."""
     logs = lmstudio_server_logs_dir()
     return (
         f"{detail} — check LM Studio server logs at {logs} "
@@ -86,20 +102,36 @@ def _lmstudio_fail_detail(detail: str) -> str:
 
 
 def _trunc(text: str, limit: int = 80) -> str:
+    """Shorten ``text`` to at most ``limit`` characters with an ellipsis."""
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
 def _run(cmd: list[str], timeout: int = 30) -> tuple[int, str, str]:
+    """Run ``cmd`` (absolute executable first) with every wait bounded; always tree-kill after.
+
+    Returns ``(-2, "", detail)`` when the argv is refused or the launch fails, so
+    one broken partner never aborts the other canaries, and ``(-1, "", detail)``
+    with the containment status when it times out.
+    """
     try:
-        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
-        return p.returncode, p.stdout.strip(), p.stderr.strip()
-    except subprocess.TimeoutExpired:
-        return -1, "", "timed out"
+        argv = safe_argv(cmd[0], cmd[1:])
+    except WinExecError as exc:
+        return -2, "", f"refused: {exc}"
+    try:
+        run = run_tree(argv, timeout)
+    except LaunchError as exc:
+        return -2, "", f"launch failed: {exc}"
     except (FileNotFoundError, PermissionError):
         return -2, "", f"{cmd[0]!r} not found on PATH"
+    except OSError as exc:
+        return -2, "", f"launch failed: {exc}"
+    if run.timed_out:
+        return -1, "", f"timed out (tree containment: {run.containment} {CONTAINMENT_SCOPE_NOTE})"
+    return (-1 if run.returncode is None else run.returncode), run.stdout.strip(), run.stderr.strip()
 
 
 def _run_partner(name: str, args: list[str], timeout: int = 30) -> tuple[int, str, str]:
+    """Resolve a partner CLI by name and run it with ``args``; (-2, '', message) when missing."""
     exe = _resolve_partner_cli(name)
     if not exe:
         return -2, "", f"{name!r} not found on PATH"
@@ -152,6 +184,7 @@ def _lm_completion_timeout(model_id: str, base_timeout: int) -> int:
 
 
 def check_lm_studio(base_url: str, timeout: int) -> Result:
+    """Check that LM Studio serves exactly one loaded chat model."""
     base = base_url.rstrip("/").removesuffix("/v1")
     model_id, count = _loaded_lmstudio_chat_model(base, timeout)
     if not model_id:
@@ -205,6 +238,7 @@ def check_lm_studio(base_url: str, timeout: int) -> Result:
 
 
 def check_hermes(timeout: int) -> Result:
+    """Check that the Hermes CLI is on PATH and answers a canary prompt."""
     if not _resolve_partner_cli("hermes"):
         return Result("Hermes", Status.UNAVAILABLE, "hermes not on PATH", required=True)
     rc, out, err = _run_partner(
@@ -232,6 +266,7 @@ def check_hermes(timeout: int) -> Result:
 
 
 def check_agy(timeout: int) -> Result:
+    """Check that the AGY CLI is on PATH and answers a canary prompt (optional partner)."""
     if not _resolve_partner_cli("agy"):
         return Result("AGY", Status.UNAVAILABLE, "agy not on PATH", required=False)
     rc, out, err = _run_partner("agy", ["--print", "Reply with exactly: AGY_READY"], timeout=max(timeout, 120))
@@ -245,6 +280,7 @@ def check_agy(timeout: int) -> Result:
 
 
 def check_codex(timeout: int) -> Result:
+    """Check that the Codex CLI is on PATH and reports its version (optional partner)."""
     if not _resolve_partner_cli("codex"):
         return Result("Codex", Status.UNAVAILABLE, "codex not on PATH", required=False)
     rc, out, err = _run_partner("codex", ["--version"], timeout=timeout)
@@ -257,6 +293,7 @@ def check_codex(timeout: int) -> Result:
 
 
 def check_cursor_agent(timeout: int) -> Result:
+    """Check that cursor-agent is on PATH and reports its version (optional partner)."""
     if not _resolve_partner_cli("cursor-agent"):
         return Result("cursor-agent", Status.UNAVAILABLE, "cursor-agent not on PATH", required=False)
     rc, out, err = _run_partner("cursor-agent", ["--version"], timeout=timeout)
@@ -269,9 +306,14 @@ def check_cursor_agent(timeout: int) -> Result:
 
 
 def _windows_partner_dirs() -> list[Path]:
+    """Return the absolute Windows directories where partner CLIs are commonly installed.
+
+    An unset or relative ``LOCALAPPDATA`` would turn its entries into paths under
+    the working directory, so only absolute directories are returned.
+    """
     local = os.environ.get("LOCALAPPDATA", "")
     home = Path.home()
-    return [
+    dirs = [
         # WinGet / native OpenAI Codex before LM Studio npm shim (same binary family; native updates cleanly).
         Path(local) / "Programs" / "OpenAI" / "Codex" / "bin",
         home / ".lmstudio" / "bin",
@@ -280,24 +322,23 @@ def _windows_partner_dirs() -> list[Path]:
         Path(local) / "hermes" / "hermes-agent" / "venv" / "Scripts",
         Path(local) / "hermes" / "bin",
     ]
+    return [d for d in dirs if d.is_absolute()]
 
 
 def _partner_cli_in_dir(base: Path, name: str) -> str | None:
-    for ext in (".exe", ".cmd", ".ps1", ".bat"):
+    """Absolute path of ``name`` (.exe/.cmd/.bat only) in ``base``; ``.ps1`` is never launchable."""
+    for ext in (".exe", ".cmd", ".bat"):
         candidate = base / f"{name}{ext}"
         if candidate.is_file():
-            return str(candidate)
+            return os.path.abspath(candidate)
     nested = list(base.glob(f"**/versions/*/{name}.cmd"))
     if nested:
-        return str(nested[0])
-    nested = list(base.glob(f"**/versions/*/{name}.ps1"))
-    if nested:
-        return str(nested[0])
+        return os.path.abspath(nested[0])
     return None
 
 
 def _resolve_partner_cli(name: str) -> str | None:
-    """Resolve partner CLI on PATH; on Windows also find .cmd/.ps1 shims."""
+    """Resolve a partner CLI to an absolute path (known Windows dirs, then PATH only); None if absent."""
     if sys.platform == "win32":
         for base in _windows_partner_dirs():
             if not base.is_dir():
@@ -305,10 +346,10 @@ def _resolve_partner_cli(name: str) -> str | None:
             hit = _partner_cli_in_dir(base, name)
             if hit:
                 return hit
-    found = shutil.which(name)
-    if found:
-        return found
-    return None
+    try:
+        return resolve_executable(name)
+    except WinExecError:
+        return None
 
 
 def _ensure_windows_partner_path() -> None:
