@@ -42,9 +42,9 @@ ensure_pt_root_env() {
 ensure_ollama_warm() {
   command -v launchctl >/dev/null 2>&1 && launchctl setenv OLLAMA_KEEP_ALIVE 30m 2>/dev/null || true
   if curl -s -o /dev/null --max-time 30 \
-       -d '{"model":"qwen3.5:9b-nvfp4","prompt":"","keep_alive":"30m","stream":false}' \
+       -d '{"model":"qwen3.5:9b-mlx","prompt":"","keep_alive":"30m","stream":false}' \
        http://localhost:11434/api/generate 2>/dev/null; then
-    log "ollama qwen3.5:9b-nvfp4 warmed (keep_alive 30m)"
+    log "ollama qwen3.5:9b-mlx warmed (keep_alive 30m)"
   else log "ollama warm skipped (not reachable)"; fi
 }
 
@@ -57,14 +57,14 @@ import json,sys
 p=sys.argv[1]; d=json.load(open(p)); ch=False
 for a in d.get("agents",{}).get("list",[]):
     if not isinstance(a,dict): continue
-    if a.get("id")=="orchestrator" and a.get("model",{}).get("primary")!="ollama/qwen3.5:9b-nvfp4":
-        a["model"]={"primary":"ollama/qwen3.5:9b-nvfp4","fallbacks":["lmstudio-mac/qwen3.5-9b-mlx"]}; ch=True
+    if a.get("id")=="orchestrator" and a.get("model",{}).get("primary")!="ollama/qwen3.5:9b-mlx":
+        a["model"]={"primary":"ollama/qwen3.5:9b-mlx","fallbacks":["lmstudio-mac/qwen3.5-9b-mlx"]}; ch=True
     if a.get("id")=="coder" and "fallbacks" not in a.get("model",{}):
-        a.setdefault("model",{})["fallbacks"]=["ollama/qwen3.5:9b-nvfp4","lmstudio-mac/qwen3.5-9b-mlx"]; ch=True
+        a.setdefault("model",{})["fallbacks"]=["ollama/qwen3.5:9b-mlx","lmstudio-mac/qwen3.5-9b-mlx"]; ch=True
     # autoresearcher runs on the same Win box / coder model (GPU runner)
     _coder="lmstudio-win/qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2"
     if a.get("id")=="autoresearcher" and a.get("model",{}).get("primary")!=_coder:
-        a["model"]={"primary":_coder,"fallbacks":["ollama/qwen3.5:9b-nvfp4","lmstudio-mac/qwen3.5-9b-mlx"]}; ch=True
+        a["model"]={"primary":_coder,"fallbacks":["ollama/qwen3.5:9b-mlx","lmstudio-mac/qwen3.5-9b-mlx"]}; ch=True
 if ch: json.dump(d,open(p,"w"),indent=2); print("[bootstrap-env] gateway routing: orchestrator ollama-primary, coder+autoresearcher routed")
 PY
 }

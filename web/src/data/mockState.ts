@@ -209,7 +209,7 @@ export const mockState: AppState = {
     available: true,
     source: "mock:pt-models",
     data: {
-      mac_primary: "ollama/qwen3.5:9b-nvfp4",
+      mac_primary: "ollama/qwen3.5:9b-mlx",
       win_primary: "lmstudio-win/Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-v2",
       openrouter_primary: "openrouter/nvidia/nemotron-3-super-120b-a12b:free",
     },

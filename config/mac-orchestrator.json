@@ -5,7 +5,7 @@
       "bootstrapTotalMaxChars": 30000,
       "contextInjection": "continuation-skip",
       "model": {
-        "primary": "ollama/qwen3.5:9b-nvfp4"
+        "primary": "ollama/qwen3.5:9b-mlx"
       },
       "models": {
         "google/gemini-2.5-flash-FALL": {},
@@ -430,12 +430,12 @@
               "input": 0,
               "output": 0
             },
-            "id": "qwen3.5:9b-nvfp4",
+            "id": "qwen3.5:9b-mlx",
             "input": [
               "text",
               "image"
             ],
-            "name": "qwen3.5:9b-nvfp4",
+            "name": "qwen3.5:9b-mlx",
             "reasoning": true
           }
         ]

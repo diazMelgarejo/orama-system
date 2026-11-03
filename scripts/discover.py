@@ -347,7 +347,7 @@ def _endpoints_for_hash(endpoints: dict) -> dict:
 
 # ── Windows-host peer identification (F12) ────────────────────────────────────
 
-_MAC_MODEL_DEFAULTS = ("bge-m3", "qwen3.5:9b-nvfp4")
+_MAC_MODEL_DEFAULTS = ("bge-m3", "qwen3.5:9b-mlx")
 _MLX_MARKERS = ("-mlx", "mlx-community/")
 # Embedding-only ids are cross-platform (Windows boxes run bge-m3 too): weak Mac evidence.
 _EMBEDDING_MARKERS = ("bge-", "embed", "nomic", "minilm", "e5-")

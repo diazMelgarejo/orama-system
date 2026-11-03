@@ -12,7 +12,7 @@ curl -s --max-time 3 http://localhost:11434/api/tags \
   | python3 -c "import json,sys; m=json.load(sys.stdin).get('models',[]); print('MODELS:', [x['name'] for x in m])"
 ```
 
-Preferred inference model: `qwen3.5:9b-nvfp4` — required per § 0 hard requirements.
+Preferred inference model: `qwen3.5:9b-mlx` — required per § 0 hard requirements.
 Embeddings model: `bge-m3` — required for gbrain + CRG semantic search.
 
 Use Ollama first: always running locally (Mac hard requirement), zero-cost, works offline.

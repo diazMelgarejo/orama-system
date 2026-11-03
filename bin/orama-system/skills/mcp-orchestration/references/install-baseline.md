@@ -111,6 +111,6 @@ ai-cli models
 ```bash
 curl -fsSL https://ollama.com/install.sh -o /tmp/ollama-install.sh
 bash /tmp/ollama-install.sh
-ollama pull qwen3.5:9b-nvfp4   # Mac default model
+ollama pull qwen3.5:9b-mlx     # Mac default model
 ollama serve                    # listens on localhost:11434
 ```

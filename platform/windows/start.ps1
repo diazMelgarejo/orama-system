@@ -407,6 +407,76 @@ function Bootstrap-ShowOutput {
 $OramaImportProbe = 'import uvicorn, fastapi, httpx'
 $PtImportProbe = "import importlib.metadata as m, sys; m.version('perpetua-tools'); import requests, uvicorn; sys.exit(1 if any(((d.metadata['Name'] or '').lower().replace('_', '-') == 'orama-system') for d in m.distributions()) else 0)"
 
+function Test-VenvDeclaredDeps {
+    <#
+    .SYNOPSIS
+    Declared-dependency drift probe (F-C1), scoped to the project's own tree:
+    'pip check' lines whose first token is -Project (normalised) fail the probe;
+    only recognized, completed pip conflicts for unrelated packages warn.
+    Missing project metadata or an incomplete check fails closed.
+    With -RequireCryptography (Portal TLS
+    on), 'import cryptography' must also succeed. On failure the offending
+    lines are left in $script:BootstrapOutput for Bootstrap-ShowOutput.
+    #>
+    [OutputType([bool])]
+    param([string]$Python, [string]$Project, [switch]$RequireCryptography)
+    if (-not (Test-Path $Python)) { return $false }
+    $Project = $Project.ToLower().Replace('_', '-')
+    try {
+        if ((Bootstrap-RunPython $Python @('-I', '-c', 'import importlib.metadata as m, sys; m.version(sys.argv[1])', $Project)) -ne 0) { return $false }
+        $code = Bootstrap-RunPython $Python @('-m', 'pip', 'check', '--disable-pip-version-check')
+    } catch {
+        $script:BootstrapOutput = @("$_")
+        return $false
+    }
+    # Pip may warn about a stale, invalid distribution while still completing a
+    # healthy check. Keep every other warning fail-closed: they can describe
+    # malformed metadata that makes the result untrustworthy.
+    $lines = @($script:BootstrapOutput | ForEach-Object { "$_".Trim() } | Where-Object {
+        $_ -and $_ -notmatch '^WARNING: Ignoring invalid distribution .+ \(.+\)$'
+    })
+    if ($code -eq 0) {
+        if ($lines.Count -ne 1 -or $lines[0] -ne 'No broken requirements found.') { return $false }
+    } elseif ($code -eq 1 -and $lines.Count -gt 0) {
+        # Exit 1 alone also covers pip/import/metadata failures. Validate every
+        # line before treating any of them as an unrelated-package warning.
+        foreach ($line in $lines) {
+            if ($line -notmatch '^\S+ \S+ (?:requires .+, which is not installed\.|has requirement .+, but you have .+\.)$') { return $false }
+        }
+        $own = @()
+        foreach ($trim in $lines) {
+            $first = ($trim -split '\s+')[0].ToLower().Replace('_', '-')
+            if ($first -eq $Project) { $own += $trim } else { _Warn 'bootstrap' "pip check (unrelated to $Project): $trim" }
+        }
+        if ($own.Count -gt 0) {
+            $script:BootstrapOutput = $own
+            return $false
+        }
+    } else { return $false }
+    if ($RequireCryptography) {
+        try {
+            if ((Bootstrap-RunPython $Python @('-I', '-c', 'import cryptography')) -ne 0) { return $false }
+        } catch {
+            $script:BootstrapOutput = @("$_")
+            return $false
+        }
+    }
+    return $true
+}
+
+function Test-PtVenvHealthy {
+    <#
+    .SYNOPSIS
+    PT venv health: import probe plus declared-dependency drift (pip check, and
+    cryptography when PORTAL_TLS_ENABLED is on).
+    #>
+    param([string]$Python)
+    if (-not (Bootstrap-TestImports $Python $PtImportProbe)) { return $false }
+    $needTls = $false
+    if ($env:PORTAL_TLS_ENABLED) { $needTls = ($env:PORTAL_TLS_ENABLED.Trim().ToLower() -in @('1', 'true', 'yes')) }
+    return (Test-VenvDeclaredDeps $Python -Project 'perpetua-tools' -RequireCryptography:$needTls)
+}
+
 function Heal-PtVenv {
     <#
     .SYNOPSIS
@@ -415,7 +485,7 @@ function Heal-PtVenv {
     param([string]$PtDir)
     $venvDir = Join-Path $PtDir '.venv'
     $venvPy  = Join-Path $venvDir 'Scripts\python.exe'
-    if (Bootstrap-TestImports $venvPy $PtImportProbe) { return }
+    if (Test-PtVenvHealthy $venvPy) { return }
     $hasPyproject = Test-Path (Join-Path $PtDir 'pyproject.toml')
     $hasReqs      = Test-Path (Join-Path $PtDir 'requirements.txt')
     if (-not ($hasPyproject -or $hasReqs)) {
@@ -423,7 +493,7 @@ function Heal-PtVenv {
         return
     }
     if (Test-Path $venvPy) {
-        _Info 'bootstrap' "PT .venv at $venvDir lacks perpetua-tools/requests/uvicorn (or holds a stray orama-system) — repairing ..."
+        _Info 'bootstrap' "PT .venv at $venvDir failed its health probe (import probe, pip check on perpetua-tools, cryptography under Portal TLS, or a stray orama-system) — repairing ..."
     } else {
         _Info 'bootstrap' "PT .venv not found — creating one at $venvDir ..."
         $bootstrapPy = Get-BestPython $RepoRoot
@@ -439,7 +509,7 @@ function Heal-PtVenv {
     $null = Bootstrap-RunPython $venvPy @('-m', 'pip', 'uninstall', '-y', 'orama-system', '--disable-pip-version-check')
     # The stray package alone may have been the only problem: re-probe and skip
     # the (network-dependent) reinstall when the venv is already usable.
-    if (Bootstrap-TestImports $venvPy $PtImportProbe) {
+    if (Test-PtVenvHealthy $venvPy) {
         _Info 'bootstrap' 'PT .venv ready (removed stray orama-system)'
         return
     }
@@ -460,8 +530,9 @@ function Heal-PtVenv {
         _Err 'bootstrap' "PT dependency install failed (pip exit $code) in $PtDir"
         exit 1
     }
-    if (-not (Bootstrap-TestImports $venvPy $PtImportProbe)) {
-        _Err 'bootstrap' "PT .venv still unusable after install (perpetua-tools / requests / uvicorn probe failed) at $venvDir"
+    if (-not (Test-PtVenvHealthy $venvPy)) {
+        Bootstrap-ShowOutput
+        _Err 'bootstrap' "PT .venv still unusable after install (import probe, pip check or cryptography check failed) at $venvDir"
         exit 1
     }
     _Info 'bootstrap' 'PT .venv ready'
@@ -480,7 +551,7 @@ $VenvPythonMarker = Join-Path $RepoRoot '.venv\Scripts\python.exe'
 # run has python.exe but no uvicorn); probe the third-party imports as well.
 # Read-only modes (F23) never install or repair anything.
 if (-not $ReadOnlyMode) {
-    if (-not (Bootstrap-TestImports $VenvPythonMarker $OramaImportProbe)) {
+    if (-not ((Bootstrap-TestImports $VenvPythonMarker $OramaImportProbe) -and (Test-VenvDeclaredDeps $VenvPythonMarker -Project 'orama-system'))) {
         $InstallScript = Join-Path $ScriptDir 'install.ps1'
         if ($env:ORAMA_BOOTSTRAP_ACTIVE -eq '1') {
             # install.ps1 itself launches 'start.ps1 --discover'; never recurse.
@@ -493,8 +564,9 @@ if (-not $ReadOnlyMode) {
             } finally {
                 Remove-Item Env:\ORAMA_BOOTSTRAP_ACTIVE -ErrorAction SilentlyContinue
             }
-            if (-not (Bootstrap-TestImports $VenvPythonMarker $OramaImportProbe)) {
-                _Err 'bootstrap' 'install.ps1 completed but the orama .venv still fails import probe (uvicorn, fastapi, httpx) — see output above'
+            if (-not ((Bootstrap-TestImports $VenvPythonMarker $OramaImportProbe) -and (Test-VenvDeclaredDeps $VenvPythonMarker -Project 'orama-system'))) {
+                Bootstrap-ShowOutput
+                _Err 'bootstrap' 'install.ps1 completed but the orama .venv still fails import probe or pip check (uvicorn, fastapi, httpx, orama-system) — see output above'
                 exit 1
             }
             _Info 'bootstrap' 'install.ps1 complete — continuing start.ps1'

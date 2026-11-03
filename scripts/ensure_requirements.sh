@@ -4,7 +4,7 @@
 #
 # HARD requirements (fail closed — startup aborts if absent and can't be fixed):
 #   Ollama binary + server at localhost:11434  (auto-installed on Linux/macOS/Docker)
-#   qwen3.5:9b-nvfp4  (Mac inference — pulled if missing)
+#   qwen3.5:9b-mlx    (Mac inference — pulled if missing)
 #   bge-m3             (embeddings for gbrain — pulled if missing)
 #   ai-cli-mcp core    (pinned package + runnable CLI; provider auth is separate)
 #
@@ -194,15 +194,14 @@ if [ "$HARD_FAIL" -eq 0 ]; then
 fi
 
 # ──────────────────────────────────────────────────────────────────────────────
-# PHASE 3 — HARD: Inference model (qwen3.5:9b-nvfp4)
+# PHASE 3 — HARD: Inference model (qwen3.5:9b-mlx)
 # ──────────────────────────────────────────────────────────────────────────────
-_info "Phase 3 — Inference model probe (qwen3.5:9b-nvfp4)"
+_info "Phase 3 — Inference model probe (qwen3.5:9b-mlx)"
 
 if [ "$HARD_FAIL" -eq 0 ]; then
-  INFERENCE_MODEL="${OLLAMA_WARM_MODEL:-qwen3.5:9b-nvfp4}"
-  INFERENCE_BASE="${INFERENCE_MODEL%%:*}"
+  INFERENCE_MODEL="${OLLAMA_WARM_MODEL:-qwen3.5:9b-mlx}"
 
-  if echo "$_OLLAMA_LIST" | grep -qF "${INFERENCE_MODEL}" || echo "$_OLLAMA_LIST" | grep -qF "${INFERENCE_BASE}"; then
+  if printf '%s\n' "$_OLLAMA_LIST" | awk 'NR > 1 {print $1}' | grep -qxF "${INFERENCE_MODEL}"; then
     _ok "Model ${INFERENCE_MODEL} present"
   elif [ "$MODE_CHECK" -eq 0 ]; then
     _info "Pulling ${INFERENCE_MODEL} (this may take several minutes)..."

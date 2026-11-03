@@ -149,7 +149,7 @@ if command -v curl >/dev/null 2>&1; then
   ollama_url="${ollama_url%/}"
   if curl -sf --max-time 2 "${ollama_url}/api/tags" >/dev/null 2>&1; then
     _status "Ollama API ($ollama_url)" OK
-    for model in qwen3.5:9b-nvfp4 bge-m3; do
+    for model in qwen3.5:9b-mlx bge-m3; do
       if curl -sf --max-time 2 "${ollama_url}/api/tags" | grep -q "$model"; then
         _status "  model $model" OK
       else

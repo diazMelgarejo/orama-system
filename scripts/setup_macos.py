@@ -103,7 +103,7 @@ def _fetch_ollama_models(base_url: str = "http://127.0.0.1:11434") -> list[dict]
         return []
 
 _DEFAULT_OLLAMA_MAC_MODELS = [
-    {"id": "qwen3.5:9b-nvfp4",         "name": "Mac Ollama — qwen3.5 9B nvfp4",
+    {"id": "qwen3.5:9b-mlx",           "name": "Mac Ollama — qwen3.5 9B MLX",
      "contextWindow": 32768, "maxTokens": 8192, "cost": {"input": 0, "output": 0}},
     {"id": "qwen2.5-coder:7b",        "name": "Mac Ollama — qwen2.5-coder:7b",
      "contextWindow": 32768, "maxTokens": 8192, "cost": {"input": 0, "output": 0}},

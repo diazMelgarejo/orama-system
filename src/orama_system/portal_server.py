@@ -181,7 +181,7 @@ LMS_API_TOKEN = os.getenv("LM_STUDIO_API_TOKEN", "")
 OLLAMA_WIN = os.getenv("OLLAMA_WINDOWS_ENDPOINT", _WIN_OLL_DEFAULT)
 OLLAMA_MAC = os.getenv("OLLAMA_MAC_ENDPOINT", "http://localhost:11434")
 OPENROUTER_FREE_FALLBACKS = [
-    "ollama/qwen3.5:9b-nvfp4",
+    "ollama/qwen3.5:9b-mlx",
     "openrouter/nvidia/nemotron-3-super-120b-a12b:free",
     "openrouter/minimax/minimax-m2.5:free",
     "openrouter/deepseek/deepseek-v4-flash:free",
@@ -1331,7 +1331,7 @@ def _render_html(status: Dict[str, Any], *, browser_token: str = "") -> str:
     ol_mac = svc.get("ollama_mac", {})
     cards.append(_render_card(
         "Ollama — Mac (manager)", ol_mac.get("ok", False), ol_mac.get("url", ""),
-        role="manager: qwen3.5:9b-nvfp4",
+        role="manager: qwen3.5:9b-mlx",
         models=ol_mac.get("models", []),
     ))
 
@@ -3633,7 +3633,7 @@ async def api_status_html():
     ol_mac = svc.get("ollama_mac", {})
     cards.append(_render_card(
         "Ollama — Mac (manager)", ol_mac.get("ok", False), ol_mac.get("url", ""),
-        role="manager: qwen3.5:9b-nvfp4",
+        role="manager: qwen3.5:9b-mlx",
         models=ol_mac.get("models", []),
     ))
 

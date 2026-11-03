@@ -29,7 +29,7 @@
 | V1 private Sites prompt workspace; PT owns contracts/state | [`integrations/sites-mcp/SPECS.md`](integrations/sites-mcp/SPECS.md) · [audit/hand-off](docs/integrations/SITES_MCP_AUDIT_AND_HANDOFF_2026-10-05.md) |
 | Banned terminology (coordinator → orchestrator, etc.) — **has a documented persona carve-out** (relay-cursor) that's been silently reverted once already; read the full scope note, don't skim | [§ 1 / Terminology](docs/2026-05-14--UNIFIED-ABSORPTION-PLAN.md#-1--governing-principles-non-negotiable) |
 | 8 governing principles | [§ 1](docs/2026-05-14--UNIFIED-ABSORPTION-PLAN.md#-1--governing-principles-non-negotiable) |
-| **Hard requirements** (Mac: Ollama + qwen3.5:9b-nvfp4 + bge-m3; Win: LM Studio) | [§ 2 / Hardware](docs/2026-05-14--UNIFIED-ABSORPTION-PLAN.md) · [`../CLAUDE-instru.md § 6`](../CLAUDE-instru.md) |
+| **Hard requirements** (Mac: Ollama + qwen3.5:9b-mlx + bge-m3; Win: LM Studio) | [§ 2 / Hardware](docs/2026-05-14--UNIFIED-ABSORPTION-PLAN.md) · [`../CLAUDE-instru.md § 6`](../CLAUDE-instru.md) |
 | Shared types (all 5 live in PT's `orchestrator/contracts.py`) | [§ 2 / Types](docs/2026-05-14--UNIFIED-ABSORPTION-PLAN.md) |
 | Verifier gate (crystallization blocked without approved result) | [§ 2 / Gates](docs/2026-05-14--UNIFIED-ABSORPTION-PLAN.md) |
 | V1 scope boundary (MAESTRO/HITL deferred) | [§ 2 / V1](docs/2026-05-14--UNIFIED-ABSORPTION-PLAN.md) |
@@ -45,7 +45,7 @@
   named "Coordinator" — e.g. `relay-cursor` — is not banned; see
   [Unified Plan § 1.1 scope note](docs/2026-05-14--UNIFIED-ABSORPTION-PLAN.md#-1--governing-principles-non-negotiable)
 - PT is runtime/state authority; orama is **stateless** methodology
-- **Mac hard requirements:** Ollama running (`localhost:11434`) with `qwen3.5:9b-nvfp4`
+- **Mac hard requirements:** Ollama running (`localhost:11434`) with `qwen3.5:9b-mlx`
   (inference) + `bge-m3` (embeddings) — system does not start without these
 - **Win hard requirement:** LM Studio at `$LM_STUDIO_WIN_ENDPOINTS` — no fallback; fail loudly if unavailable
 - **Everything else optional:** LM Studio Mac, cloud APIs, other local models
