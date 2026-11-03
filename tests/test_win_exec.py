@@ -6,8 +6,8 @@ import subprocess
 import sys
 import textwrap
 import time
-
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -352,6 +352,7 @@ def test_wmi_launched_leaf_survives_while_status_is_contained(tmp_path):
         assert win_exec.terminate_tree(proc) == "contained"
         assert _pid_alive(leaf), "WMI-created leaf is outside the job; the caveat must stay documented"
     finally:
+        win_exec.terminate_tree(proc)  # stop the PowerShell root even when the test skipped early
         if leaf and _pid_alive(leaf):
             os.kill(leaf, 9)
 
@@ -575,3 +576,103 @@ def test_emulated_windows_resolve_keeps_host_path_form(
     monkeypatch.setenv("PATHEXT", ".EXE;.CMD")
     monkeypatch.setattr(win_exec.shutil, "which", lambda candidate, path=None: str(binary))
     assert win_exec.resolve_executable(str(binary)) == os.path.abspath(str(binary))
+
+
+GRANDCHILD_HOLDS_STDOUT = (
+    "import subprocess, sys; "
+    "subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)']); "
+    "print('root-done')"
+)
+
+
+def test_exited_observes_exit_without_reaping(monkeypatch: pytest.MonkeyPatch) -> None:
+    """POSIX exit detection uses waitid(WNOWAIT) and never poll(), so the root stays unreaped."""
+    calls: list[tuple[int, int, int]] = []
+
+    def fake_waitid(idtype: int, pid: int, options: int) -> object:
+        """Record the call and report an exited child."""
+        calls.append((idtype, pid, options))
+        return object()
+
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(win_exec.os, "waitid", fake_waitid, raising=False)
+    for name, value in (("P_PID", 1), ("WEXITED", 4), ("WNOWAIT", 0x1000000), ("WNOHANG", 1)):
+        monkeypatch.setattr(win_exec.os, name, value, raising=False)
+    proc = MagicMock(returncode=None, pid=4321)
+
+    assert win_exec.exited(proc) is True
+    proc.poll.assert_not_called()
+    assert calls and calls[0][1] == 4321 and calls[0][2] & win_exec.os.WNOWAIT
+
+
+@pytest.mark.skipif(WIN, reason="POSIX process-group semantics")
+def test_exited_leaves_posix_root_unreaped_until_terminate() -> None:
+    """The exited root stays a zombie (group id reserved) until terminate_tree reaps it."""
+    proc = win_exec.launch_tree([sys.executable, "-c", "pass"])
+    deadline = time.monotonic() + 10
+    while not win_exec.exited(proc) and time.monotonic() < deadline:
+        time.sleep(0.05)
+    assert win_exec.exited(proc) and proc.returncode is None
+    assert os.waitid(os.P_PID, proc.pid, os.WEXITED | os.WNOWAIT | os.WNOHANG) is not None
+    assert win_exec.terminate_tree(proc) == "contained"
+    assert proc.returncode == 0
+
+
+def test_run_tree_returns_when_a_descendant_keeps_the_pipe_open() -> None:
+    """An exited root whose child still holds stdout cannot hang the caller."""
+    start = time.monotonic()
+    run = win_exec.run_tree([sys.executable, "-c", GRANDCHILD_HOLDS_STDOUT], timeout=20, grace=3)
+    assert time.monotonic() - start < 15
+    assert not run.timed_out and run.returncode == 0
+    assert "root-done" in run.stdout
+    assert run.containment == "contained"
+
+
+def test_run_tree_timeout_is_bounded_and_contained() -> None:
+    """A root that outlives the timeout is tree-killed and reported as timed out."""
+    start = time.monotonic()
+    run = win_exec.run_tree([sys.executable, "-c", "import time; time.sleep(60)"], timeout=1, grace=3)
+    assert run.timed_out and run.returncode is None
+    assert run.containment == "contained"
+    assert time.monotonic() - start < 15
+
+
+def test_resolved_unc_target_refused_unless_allowed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A path that resolves through a link to a UNC share is refused unless UNC is allowed."""
+    binary = tmp_path / "tool.EXE"
+    binary.write_text("x", encoding="utf-8")
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setenv("PATHEXT", ".EXE")
+    monkeypatch.setattr(win_exec.shutil, "which", lambda candidate, path=None: str(binary))
+    unc = BS * 2 + "srv" + BS + "share" + BS + "tool.EXE"
+    monkeypatch.setattr(win_exec.os.path, "realpath", lambda path, *args, **kwargs: unc)
+    with pytest.raises(win_exec.WinExecError, match="UNC"):
+        win_exec.resolve_executable(str(binary))
+    assert win_exec.resolve_executable(str(binary), allow_unc=True) == os.path.abspath(str(binary))
+
+
+def test_path_hit_linking_to_unc_is_skipped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A PATH hit whose target is on a UNC share is skipped unless UNC is allowed."""
+    (tmp_path / "tool.EXE").write_text("x", encoding="utf-8")
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setenv("PATHEXT", ".EXE")
+    monkeypatch.setenv("PATH", str(tmp_path))
+    unc = BS * 2 + "srv" + BS + "share" + BS + "tool.EXE"
+    monkeypatch.setattr(win_exec.os.path, "realpath", lambda path, *args, **kwargs: unc)
+    assert win_exec.find_bare_command("tool") is None
+    assert win_exec.find_bare_command("tool", allow_unc=True) is not None
+
+
+def test_system32_tool_never_guesses_a_drive(monkeypatch: pytest.MonkeyPatch) -> None:
+    """System32 comes from the API, else SystemRoot; with neither it raises instead of assuming C:."""
+    monkeypatch.setattr(win_exec, "_system_directory_from_api", lambda: "")
+    monkeypatch.delenv("SystemRoot", raising=False)
+    monkeypatch.delenv("SYSTEMROOT", raising=False)
+    with pytest.raises(OSError):
+        win_exec.system32_tool("taskkill.exe")
+    root = "D:" + BS + "Win"
+    monkeypatch.setenv("SystemRoot", root)
+    assert win_exec.system32_tool("taskkill.exe") == root + BS + "System32" + BS + "taskkill.exe"
+    api = "E:" + BS + "OS" + BS + "system32"
+    monkeypatch.setattr(win_exec, "_system_directory_from_api", lambda: api)
+    assert win_exec.system32_tool("taskkill.exe") == api + BS + "taskkill.exe"

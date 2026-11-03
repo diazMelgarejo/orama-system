@@ -139,7 +139,7 @@ def _check_one(spec: _FileSpec, local_dir: Path, peer_dir: Path) -> bool:
         print(f"model-endpoint-policy-parity: local file missing: {local_path}", file=sys.stderr)
         return False
     if not peer_path.is_file() and spec.peer_optional:
-        print(f"model-endpoint-policy-parity: SKIP ({spec.filename}: peer copy not yet present)")
+        _LOG.info("model-endpoint-policy-parity: SKIP (%s: peer copy not yet present)", spec.filename)
         return True
     if not peer_path.is_file():
         print(f"model-endpoint-policy-parity: peer file missing: {peer_path}", file=sys.stderr)

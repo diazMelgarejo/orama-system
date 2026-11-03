@@ -12,7 +12,9 @@ keeps running and keeps logging.
 
 Windows job objects: the launcher asks to break away from the caller's job so
 the service outlives the caller. If the job forbids breakaway, the child is
-still started but WILL DIE when the caller's job closes; that degraded case is
+still started inside the caller's job. It then stops when that job closes only
+if the job is configured to kill its processes on close (KILL_ON_JOB_CLOSE);
+either way it stays subject to the job's limits. That degraded case is
 reported (stderr warning plus a ``breakaway=unavailable`` line on stdout before
 the PID line, which stays the last line) and never silent.
 """
@@ -60,7 +62,8 @@ def spawn_with_status(
 
     On Windows the child gets no console and its own process group, and tries to break away from the
     caller's job object. When that is denied it still starts without breakaway, warns on stderr and
-    returns breakaway_ok=False: the child will die with the caller's job. POSIX always returns True.
+    returns breakaway_ok=False: the child stays in the caller's job and stops when that job closes
+    only if the job kills its processes on close. POSIX always returns True.
     """
     env = {**os.environ, **extras, "PYTHONUNBUFFERED": "1"}
     os.makedirs(os.path.dirname(os.path.abspath(log)), exist_ok=True)
@@ -101,7 +104,7 @@ def spawn_with_status(
     if not breakaway_ok:
         print(
             "spawn_detached: WARNING CREATE_BREAKAWAY_FROM_JOB refused; child pid "
-            f"{proc.pid} is NOT detached from the caller's job and will die when that job closes",
+            f"{proc.pid} is NOT detached from the caller's job; it stops when that job closes if the job kills its processes on close",
             file=sys.stderr,
         )
     return proc.pid, breakaway_ok

@@ -84,10 +84,11 @@ BINARY_REGISTRY: Mapping[str, BinaryRegistration] = MappingProxyType({
 def resolve_binary_path(binary_name: str, explicit_path: Optional[str] = None) -> str:
     """Resolve an executable by explicit override, registered environment, then PATH.
 
-    ``~`` is expanded. A candidate containing a path separator is a pathname,
-    resolved as given (relative ones against the current directory); a bare
-    name is looked up on ``PATH`` only. A configured but invalid override fails
-    without falling back. Resolution is
+    ``~`` is expanded. A candidate containing a path separator is a pathname and
+    must then be absolute; a relative pathname is rejected, never resolved against
+    the current directory. A bare name is looked up in absolute ``PATH`` entries
+    only, as ``utils.win_exec.resolve_executable`` documents. A configured but
+    invalid override fails without falling back. Resolution is
     an availability check, not identity verification or permission to execute.
     No subprocess, shell interpolation, installation, or service start occurs.
     """

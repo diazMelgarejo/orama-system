@@ -36,11 +36,11 @@ if _SRC_ROOT.is_dir() and str(_SRC_ROOT) not in sys.path:
 
 from utils.win_exec import (  # noqa: E402
     CONTAINMENT_SCOPE_NOTE,
+    LaunchError,
     WinExecError,
     resolve_executable,
+    run_tree,
     safe_argv,
-    launch_tree,
-    terminate_tree,
 )
 
 
@@ -107,28 +107,27 @@ def _trunc(text: str, limit: int = 80) -> str:
 
 
 def _run(cmd: list[str], timeout: int = 30) -> tuple[int, str, str]:
-    """Run ``cmd`` (absolute executable first); on timeout kill its whole process tree."""
+    """Run ``cmd`` (absolute executable first) with every wait bounded; always tree-kill after.
+
+    Returns ``(-2, "", detail)`` when the argv is refused or the launch fails, so
+    one broken partner never aborts the other canaries, and ``(-1, "", detail)``
+    with the containment status when it times out.
+    """
     try:
         argv = safe_argv(cmd[0], cmd[1:])
     except WinExecError as exc:
         return -2, "", f"refused: {exc}"
     try:
-        p = launch_tree(
-            argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            text=True,
-        )
+        run = run_tree(argv, timeout)
+    except LaunchError as exc:
+        return -2, "", f"launch failed: {exc}"
     except (FileNotFoundError, PermissionError):
         return -2, "", f"{cmd[0]!r} not found on PATH"
-    try:
-        out, err = p.communicate(timeout=timeout)
-    except subprocess.TimeoutExpired:
-        containment = terminate_tree(p)
-        p.communicate()
-        return -1, "", f"timed out (tree containment: {containment} {CONTAINMENT_SCOPE_NOTE})"
-    finally:
-        # Root exited (or was killed): kill any orphan it left in the job.
-        terminate_tree(p)
-    return p.returncode, out.strip(), err.strip()
+    except OSError as exc:
+        return -2, "", f"launch failed: {exc}"
+    if run.timed_out:
+        return -1, "", f"timed out (tree containment: {run.containment} {CONTAINMENT_SCOPE_NOTE})"
+    return (-1 if run.returncode is None else run.returncode), run.stdout.strip(), run.stderr.strip()
 
 
 def _run_partner(name: str, args: list[str], timeout: int = 30) -> tuple[int, str, str]:
@@ -307,10 +306,14 @@ def check_cursor_agent(timeout: int) -> Result:
 
 
 def _windows_partner_dirs() -> list[Path]:
-    """Return the Windows directories where partner CLIs are commonly installed."""
+    """Return the absolute Windows directories where partner CLIs are commonly installed.
+
+    An unset or relative ``LOCALAPPDATA`` would turn its entries into paths under
+    the working directory, so only absolute directories are returned.
+    """
     local = os.environ.get("LOCALAPPDATA", "")
     home = Path.home()
-    return [
+    dirs = [
         # WinGet / native OpenAI Codex before LM Studio npm shim (same binary family; native updates cleanly).
         Path(local) / "Programs" / "OpenAI" / "Codex" / "bin",
         home / ".lmstudio" / "bin",
@@ -319,6 +322,7 @@ def _windows_partner_dirs() -> list[Path]:
         Path(local) / "hermes" / "hermes-agent" / "venv" / "Scripts",
         Path(local) / "hermes" / "bin",
     ]
+    return [d for d in dirs if d.is_absolute()]
 
 
 def _partner_cli_in_dir(base: Path, name: str) -> str | None:

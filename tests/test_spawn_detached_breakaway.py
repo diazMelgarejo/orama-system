@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import importlib.util
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
+from types import ModuleType
 from unittest.mock import MagicMock
 
 import pytest
@@ -11,7 +13,7 @@ import pytest
 SPAWN = Path(__file__).resolve().parents[1] / "scripts" / "lib" / "spawn_detached.py"
 
 
-def _load():
+def _load() -> ModuleType:
     """Import spawn_detached.py as a fresh module."""
     spec = importlib.util.spec_from_file_location("spawn_detached_breakaway", SPAWN)
     mod = importlib.util.module_from_spec(spec)
@@ -19,11 +21,11 @@ def _load():
     return mod
 
 
-def _fake_popen(deny_breakaway):
+def _fake_popen(deny_breakaway: bool) -> tuple[Callable[..., MagicMock], list[int]]:
     """Popen stand-in that raises PermissionError when the breakaway flag is passed."""
-    calls = []
+    calls: list[int] = []
 
-    def popen(cmd, creationflags=0, **kwargs):
+    def popen(cmd: list[str], creationflags: int = 0, **kwargs: object) -> MagicMock:
         """Record the call; refuse breakaway when asked."""
         calls.append(creationflags)
         if deny_breakaway and creationflags & 0x01000000:
@@ -36,7 +38,12 @@ def _fake_popen(deny_breakaway):
 
 
 @pytest.mark.parametrize("denied", [True, False])
-def test_breakaway_status_reported(tmp_path, monkeypatch, capsys, denied):
+def test_breakaway_status_reported(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    denied: bool,
+) -> None:
     """Denied breakaway yields breakaway=unavailable plus a stderr warning; PID stays last."""
     mod = _load()
     popen, calls = _fake_popen(denied)
@@ -50,7 +57,7 @@ def test_breakaway_status_reported(tmp_path, monkeypatch, capsys, denied):
     assert rc == 0 and lines[-1] == "4242"
     if denied:
         assert lines[0] == "breakaway=unavailable"
-        assert "WARNING" in err and "die" in err
+        assert "WARNING" in err and "kills its processes on close" in err
         assert len(calls) == 2
     else:
         assert "breakaway" not in out and err == ""

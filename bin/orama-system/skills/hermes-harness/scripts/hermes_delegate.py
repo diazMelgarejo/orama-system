@@ -11,7 +11,14 @@ import subprocess
 import sys
 import tempfile
 import time
+from pathlib import Path
 from typing import Any, Protocol
+
+_SRC_ROOT = Path(__file__).resolve().parents[4] / "src"
+if _SRC_ROOT.is_dir() and str(_SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(_SRC_ROOT))
+
+from utils.win_exec import system32_tool  # noqa: E402
 
 
 def _canonical_result(
@@ -213,17 +220,20 @@ def _terminate_worker(worker: _Worker) -> None:
         # tree-kill is the documented substitute for reaching grandchildren.
         # Unverified in this environment -- see _worker_popen_kwargs' note.
         try:
-            # Absolute System32 path: a bare "taskkill" would be resolved
-            # through the search path (and possibly the cwd).
-            _taskkill = os.path.join(
-                os.environ.get("SystemRoot") or r"C:\Windows", "System32", "taskkill.exe"
-            )
+            # Absolute System32 path from the Windows API (never a guessed drive):
+            # a bare "taskkill" would be resolved through the search path and cwd.
             subprocess.run(
-                [_taskkill, "/F", "/T", "/PID", str(proc.pid)],
+                [system32_tool("taskkill.exe"), "/F", "/T", "/PID", str(proc.pid)],
                 capture_output=True,
                 timeout=10,
             )
-        except (OSError, subprocess.TimeoutExpired):
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            # The tree kill did not run: only the worker itself is killed below,
+            # so say so instead of implying its descendants were terminated too.
+            sys.stderr.write(
+                f"WARNING: tree kill unavailable for worker PID {proc.pid} ({exc}); "
+                "killing the worker only, its descendants may survive" + chr(10)
+            )
             try:
                 proc.kill()
             except OSError:

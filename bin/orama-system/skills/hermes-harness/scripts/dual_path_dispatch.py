@@ -21,7 +21,9 @@ if _SRC_ROOT.is_dir() and str(_SRC_ROOT) not in sys.path:
 from orama_system.lan_peer_files import lan_peer_state_dir  # noqa: E402
 from utils.win_exec import (  # noqa: E402
     CONTAINMENT_SCOPE_NOTE,
+    LaunchError,
     WinExecError,
+    exited,
     resolve_executable,
     safe_argv,
     launch_tree,
@@ -135,25 +137,33 @@ def run_candidates(candidates: list[Candidate], log_dir: Path, timeout: int) -> 
             handle.close()
             attempts.append({"name": candidate.name, "returncode": "refused", "log": str(log_path), "error": str(exc)})
             continue
-        proc = launch_tree(
-            argv,
-            stdout=handle,
-            stderr=subprocess.STDOUT,
-            stdin=subprocess.DEVNULL,
-            text=True,
-        )
+        try:
+            proc = launch_tree(
+                argv,
+                stdout=handle,
+                stderr=subprocess.STDOUT,
+                stdin=subprocess.DEVNULL,
+                text=True,
+            )
+        except (LaunchError, OSError) as exc:
+            # One candidate that cannot start must not abort the others.
+            handle.write(f"launch failed: {exc}" + chr(10))
+            handle.close()
+            attempts.append({"name": candidate.name, "returncode": "launch-failed", "log": str(log_path), "error": str(exc)})
+            continue
         running[candidate.name] = (candidate, proc, handle, log_path)
 
     winner: dict[str, Any] | None = None
     try:
         while running and time.monotonic() < deadline:
             for name, (candidate, proc, handle, log_path) in list(running.items()):
-                rc = proc.poll()
-                if rc is None:
+                if not exited(proc):
                     continue
                 handle.close()
-                # Root exited: kill any orphan it left in the job (bounded lifetime).
+                # Root exited but is not reaped yet (POSIX), so its group id is still
+                # ours: kill any orphan it left in the job/group, then read its status.
                 containment[name] = _terminate(proc)
+                rc = proc.returncode if proc.returncode is not None else proc.poll()
                 attempts.append(
                     {
                         "name": candidate.name,
@@ -191,8 +201,10 @@ def run_candidates(candidates: list[Candidate], log_dir: Path, timeout: int) -> 
             }
             for candidate, _proc, _handle, log_path in running.values()
         )
-        return {"status": "error", "reason": f"dispatch timed out after {timeout}s {CONTAINMENT_SCOPE_NOTE}", "winner": None, "attempts": attempts, "containment": containment}
-    return {"status": "error", "reason": "all dispatch candidates failed", "winner": None, "attempts": attempts}
+        return {"status": "error", "reason": f"dispatch timed out after {timeout}s {CONTAINMENT_SCOPE_NOTE}", "winner": None, "attempts": attempts, "containment": containment,
+                "containment_note": CONTAINMENT_SCOPE_NOTE}
+    return {"status": "error", "reason": "all dispatch candidates failed", "winner": None, "attempts": attempts,
+            "containment": containment, "containment_note": CONTAINMENT_SCOPE_NOTE}
 
 
 def main(argv: list[str] | None = None) -> int:

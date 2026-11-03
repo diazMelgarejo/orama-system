@@ -296,3 +296,46 @@ def test_check_cursor_agent_passes_on_version(canaries, monkeypatch):
     monkeypatch.setattr(canaries, "_run_partner", lambda *a, **k: (0, "2026.06.24-00-45-58-9f61de7", ""))
     result = canaries.check_cursor_agent(5)
     assert result.status == canaries.Status.PASS
+
+
+def test_run_reports_launch_failure_as_unavailable(canaries, monkeypatch) -> None:
+    """A LaunchError becomes an unavailable result instead of aborting the canary run."""
+    def boom(argv: list[str], timeout: int) -> None:
+        """Simulate a job-assignment failure."""
+        raise canaries.LaunchError("job assignment failed")
+
+    monkeypatch.setattr(canaries, "safe_argv", lambda exe, args: [exe, *args])
+    monkeypatch.setattr(canaries, "run_tree", boom)
+    rc, out, err = canaries._run(["/abs/tool", "--version"])
+    assert rc == -2 and out == "" and "launch failed" in err
+
+
+def test_run_timeout_reports_containment(canaries, monkeypatch) -> None:
+    """A timed-out partner reports -1 with its containment status and scope note."""
+    import types
+
+    monkeypatch.setattr(canaries, "safe_argv", lambda exe, args: [exe, *args])
+    monkeypatch.setattr(canaries, "run_tree", lambda argv, timeout: types.SimpleNamespace(
+        timed_out=True, containment="contained", returncode=None, stdout="", stderr=""))
+    rc, out, err = canaries._run(["/abs/tool"], timeout=1)
+    assert rc == -1 and "contained" in err and canaries.CONTAINMENT_SCOPE_NOTE in err
+
+
+def test_run_is_bounded_when_partner_leaves_a_child_holding_output(canaries) -> None:
+    """A partner whose child keeps stdout open still returns promptly with its output."""
+    import time
+
+    code = ("import subprocess, sys; "
+            "subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)']); "
+            "print('root-done')")
+    start = time.monotonic()
+    rc, out, _ = canaries._run([sys.executable, "-c", code], timeout=20)
+    assert rc == 0 and "root-done" in out
+    assert time.monotonic() - start < 15
+
+
+def test_windows_partner_dirs_are_absolute_without_localappdata(canaries, monkeypatch) -> None:
+    """With LOCALAPPDATA unset no relative (working-directory) partner dir is returned."""
+    monkeypatch.delenv("LOCALAPPDATA", raising=False)
+    dirs = canaries._windows_partner_dirs()
+    assert dirs and all(d.is_absolute() for d in dirs)

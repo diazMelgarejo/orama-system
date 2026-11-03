@@ -47,6 +47,7 @@ def test_run_candidates_keeps_first_success(tmp_path):
     assert result["status"] == "ok"
     assert result["winner"]["name"] == "fast-success"
     assert (tmp_path / "fast-success.log").is_file()
+    assert "slow-success" in result["containment"]  # the loser was tree-killed
 
 
 def test_run_candidates_waits_for_second_when_first_fails(tmp_path):
@@ -86,3 +87,37 @@ def test_run_candidates_closes_stdin_for_every_candidate(tmp_path):
     assert mock_popen.call_count == len(candidates)
     for call in mock_popen.call_args_list:
         assert call.kwargs.get("stdin") == subprocess.DEVNULL
+
+
+def test_run_candidates_contains_launch_failures(tmp_path: Path) -> None:
+    """A candidate whose launch fails is recorded and the next candidate still runs."""
+    dispatch = _load_dispatch()
+    broken = dispatch.Candidate("broken", [sys.executable, "-c", "raise SystemExit(0)"])
+    good = dispatch.Candidate("good", [sys.executable, "-c", "raise SystemExit(0)"])
+    real_launch = dispatch.launch_tree
+
+    def launch(argv: list[str], **kwargs: object) -> subprocess.Popen[str]:
+        """Fail the broken candidate's launch; start the other one for real."""
+        if str(getattr(kwargs["stdout"], "name", "")).endswith("broken.log"):
+            raise dispatch.LaunchError("job assignment failed")
+        return real_launch(argv, **kwargs)
+
+    with patch.object(dispatch, "launch_tree", side_effect=launch):
+        result = dispatch.run_candidates([broken, good], tmp_path, timeout=10)
+
+    assert result["status"] == "ok" and result["winner"]["name"] == "good"
+    failed = [item for item in result["attempts"] if item["name"] == "broken"]
+    assert failed and failed[0]["returncode"] == "launch-failed"
+    assert "launch failed" in (tmp_path / "broken.log").read_text(encoding="utf-8")
+
+
+def test_all_failed_result_reports_containment(tmp_path: Path) -> None:
+    """When every candidate fails the result still carries containment and its scope note."""
+    dispatch = _load_dispatch()
+    bad = dispatch.Candidate("bad", [sys.executable, "-c", "raise SystemExit(3)"])
+
+    result = dispatch.run_candidates([bad], tmp_path, timeout=10)
+
+    assert result["status"] == "error" and result["reason"] == "all dispatch candidates failed"
+    assert "bad" in result["containment"]
+    assert result["containment_note"] == dispatch.CONTAINMENT_SCOPE_NOTE
