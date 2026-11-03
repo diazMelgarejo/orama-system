@@ -676,3 +676,22 @@ def test_system32_tool_never_guesses_a_drive(monkeypatch: pytest.MonkeyPatch) ->
     api = "E:" + BS + "OS" + BS + "system32"
     monkeypatch.setattr(win_exec, "_system_directory_from_api", lambda: api)
     assert win_exec.system32_tool("taskkill.exe") == api + BS + "taskkill.exe"
+
+
+def test_windows_path_lookup_skips_an_earlier_extensionless_file(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    """A later directly launchable executable wins over an earlier extensionless namesake."""
+    early, late = tmp_path / "early", tmp_path / "late"
+    early.mkdir()
+    late.mkdir()
+    (early / "tool").touch()
+    executable = late / "tool.EXE"
+    executable.touch()
+    monkeypatch.setattr(win_exec, "_win", lambda: True)
+    monkeypatch.setattr(
+        win_exec, "_search_path_entries", lambda allow_unc=False: (str(early), str(late)),
+    )
+    monkeypatch.setenv("PATHEXT", ".EXE")
+
+    assert Path(win_exec.resolve_executable("tool")).samefile(executable)
