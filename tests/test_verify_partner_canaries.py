@@ -21,6 +21,7 @@ SCRIPT = (
 
 @pytest.fixture
 def canaries(monkeypatch):
+    """Load verify_partner_canaries.py as a fresh module."""
     spec = importlib.util.spec_from_file_location("verify_partner_canaries", SCRIPT)
     assert spec and spec.loader
     mod = importlib.util.module_from_spec(spec)
@@ -30,6 +31,7 @@ def canaries(monkeypatch):
 
 
 def test_prepare_mode_exits_zero_without_network(canaries, monkeypatch, capsys):
+    """Check prepare mode exits zero without network."""
     monkeypatch.setattr(sys, "argv", ["verify_partner_canaries.py", "--prepare"])
     assert canaries.main() == 0
     out = capsys.readouterr().out
@@ -37,6 +39,7 @@ def test_prepare_mode_exits_zero_without_network(canaries, monkeypatch, capsys):
 
 
 def test_prepare_json_mode(canaries, monkeypatch, capsys):
+    """Check prepare json mode."""
     monkeypatch.setattr(sys, "argv", ["verify_partner_canaries.py", "--prepare", "--json"])
     assert canaries.main() == 0
     data = json.loads(capsys.readouterr().out)
@@ -45,22 +48,29 @@ def test_prepare_json_mode(canaries, monkeypatch, capsys):
 
 
 def test_check_lm_studio_passes_on_models_and_completion(canaries, monkeypatch):
+    """Check check lm studio passes on models and completion."""
     class FakeResp:
+        """Minimal ``urlopen`` response stand-in carrying a canned JSON body."""
         def __init__(self, payload: bytes):
+            """Store the canned response payload."""
             self._payload = payload
 
         def read(self):
+            """Return the canned body as bytes."""
             return self._payload
 
         def __enter__(self):
+            """Return the response itself for the ``with`` statement."""
             return self
 
         def __exit__(self, *args):
+            """Leave the ``with`` block without suppressing exceptions."""
             return False
 
     calls: list[str] = []
 
     def fake_urlopen(req, timeout=30):
+        """Serve canned LM Studio responses keyed by the requested URL."""
         url = req.full_url if hasattr(req, "full_url") else str(req)
         calls.append(url)
         if url.endswith("/api/v0/models"):
@@ -87,20 +97,27 @@ def test_check_lm_studio_passes_on_models_and_completion(canaries, monkeypatch):
 
 
 def test_loaded_lmstudio_chat_model_skips_not_loaded(canaries, monkeypatch):
+    """Check loaded lmstudio chat model skips not loaded."""
     class FakeResp:
+        """Minimal ``urlopen`` response stand-in carrying a canned JSON body."""
         def __init__(self, payload: bytes):
+            """Store the canned response payload."""
             self._payload = payload
 
         def read(self):
+            """Return the canned body as bytes."""
             return self._payload
 
         def __enter__(self):
+            """Return the response itself for the ``with`` statement."""
             return self
 
         def __exit__(self, *args):
+            """Leave the ``with`` block without suppressing exceptions."""
             return False
 
     def fake_urlopen(req, timeout=30):
+        """Serve canned LM Studio responses keyed by the requested URL."""
         url = req.full_url if hasattr(req, "full_url") else str(req)
         if url.endswith("/api/v0/models"):
             return FakeResp(
@@ -122,20 +139,27 @@ def test_loaded_lmstudio_chat_model_skips_not_loaded(canaries, monkeypatch):
 
 
 def test_check_lm_studio_passes_on_reasoning_content(canaries, monkeypatch):
+    """Check check lm studio passes on reasoning content."""
     class FakeResp:
+        """Minimal ``urlopen`` response stand-in carrying a canned JSON body."""
         def __init__(self, payload: bytes):
+            """Store the canned response payload."""
             self._payload = payload
 
         def read(self):
+            """Return the canned body as bytes."""
             return self._payload
 
         def __enter__(self):
+            """Return the response itself for the ``with`` statement."""
             return self
 
         def __exit__(self, *args):
+            """Leave the ``with`` block without suppressing exceptions."""
             return False
 
     def fake_urlopen(req, timeout=30):
+        """Serve canned LM Studio responses keyed by the requested URL."""
         url = req.full_url if hasattr(req, "full_url") else str(req)
         if url.endswith("/api/v0/models"):
             return FakeResp(
@@ -168,20 +192,27 @@ def test_check_lm_studio_passes_on_reasoning_content(canaries, monkeypatch):
 
 
 def test_check_lm_studio_fails_when_completion_missing_marker(canaries, monkeypatch):
+    """Check check lm studio fails when completion missing marker."""
     class FakeResp:
+        """Minimal ``urlopen`` response stand-in carrying a canned JSON body."""
         def __init__(self, payload: bytes):
+            """Store the canned response payload."""
             self._payload = payload
 
         def read(self):
+            """Return the canned body as bytes."""
             return self._payload
 
         def __enter__(self):
+            """Return the response itself for the ``with`` statement."""
             return self
 
         def __exit__(self, *args):
+            """Leave the ``with`` block without suppressing exceptions."""
             return False
 
     def fake_urlopen(req, timeout=30):
+        """Serve canned LM Studio responses keyed by the requested URL."""
         url = req.full_url if hasattr(req, "full_url") else str(req)
         if url.endswith("/api/v0/models"):
             return FakeResp(
@@ -203,20 +234,27 @@ def test_check_lm_studio_fails_when_completion_missing_marker(canaries, monkeypa
 
 
 def test_loaded_lmstudio_chat_model_skips_embeddings(canaries, monkeypatch):
+    """Check loaded lmstudio chat model skips embeddings."""
     class FakeResp:
+        """Minimal ``urlopen`` response stand-in carrying a canned JSON body."""
         def __init__(self, payload: bytes):
+            """Store the canned response payload."""
             self._payload = payload
 
         def read(self):
+            """Return the canned body as bytes."""
             return self._payload
 
         def __enter__(self):
+            """Return the response itself for the ``with`` statement."""
             return self
 
         def __exit__(self, *args):
+            """Leave the ``with`` block without suppressing exceptions."""
             return False
 
     def fake_urlopen(req, timeout=30):
+        """Serve canned LM Studio responses keyed by the requested URL."""
         url = req.full_url if hasattr(req, "full_url") else str(req)
         if url.endswith("/api/v0/models"):
             return FakeResp(
@@ -238,10 +276,12 @@ def test_loaded_lmstudio_chat_model_skips_embeddings(canaries, monkeypatch):
 
 
 def test_lm_completion_timeout_reasoning_model(canaries):
+    """Check lm completion timeout reasoning model."""
     assert canaries._lm_completion_timeout("qwen3.5-27b-reasoning-distilled", 90) == 180
 
 
 def test_check_hermes_accepts_hermes_ready_in_stderr(canaries, monkeypatch):
+    """Check check hermes accepts hermes ready in stderr."""
     monkeypatch.setattr(canaries, "_resolve_partner_cli", lambda _: "/usr/bin/hermes")
     monkeypatch.setattr(canaries, "_run_partner", lambda *a, **k: (0, "", "HERMES_READY"))
     result = canaries.check_hermes(timeout=5)
@@ -249,10 +289,12 @@ def test_check_hermes_accepts_hermes_ready_in_stderr(canaries, monkeypatch):
 
 
 def test_check_hermes_uses_canary_model(canaries, monkeypatch):
+    """Check check hermes uses canary model."""
     monkeypatch.setattr(canaries, "_resolve_partner_cli", lambda _: "/usr/bin/hermes")
     captured: list[list[str]] = []
 
     def fake_run(name, args, timeout=30):
+        """Record the partner invocation and return a canned result."""
         captured.append([name, *args])
         return 0, "HERMES_READY", ""
 
@@ -264,6 +306,7 @@ def test_check_hermes_uses_canary_model(canaries, monkeypatch):
 
 
 def test_check_agy_unavailable_on_timeout(canaries, monkeypatch):
+    """Check check agy unavailable on timeout."""
     monkeypatch.setattr(canaries, "_resolve_partner_cli", lambda _: "/usr/bin/agy")
     monkeypatch.setattr(canaries, "_run_partner", lambda *a, **k: (-1, "", "timed out"))
     result = canaries.check_agy(timeout=5)
@@ -271,18 +314,21 @@ def test_check_agy_unavailable_on_timeout(canaries, monkeypatch):
 
 
 def test_check_agy_unavailable_not_on_path(canaries, monkeypatch):
+    """Check check agy unavailable not on path."""
     monkeypatch.setattr(canaries, "_resolve_partner_cli", lambda _: None)
     result = canaries.check_agy(timeout=5)
     assert result.status == canaries.Status.UNAVAILABLE
 
 
 def test_check_codex_unavailable_not_on_path(canaries, monkeypatch):
+    """Check check codex unavailable not on path."""
     monkeypatch.setattr(canaries, "_resolve_partner_cli", lambda _: None)
     result = canaries.check_codex(timeout=5)
     assert result.status == canaries.Status.UNAVAILABLE
 
 
 def test_check_codex_unavailable_on_timeout(canaries, monkeypatch):
+    """Check check codex unavailable on timeout."""
     monkeypatch.setattr(canaries, "_resolve_partner_cli", lambda _: "/usr/bin/codex")
     monkeypatch.setattr(canaries, "_run_partner", lambda *a, **k: (-1, "", "timed out"))
     result = canaries.check_codex(timeout=5)
@@ -290,6 +336,7 @@ def test_check_codex_unavailable_on_timeout(canaries, monkeypatch):
 
 
 def test_check_cursor_agent_passes_on_version(canaries, monkeypatch):
+    """Check check cursor agent passes on version."""
     monkeypatch.setattr(
         canaries, "_resolve_partner_cli", lambda name: "/bin/cursor-agent" if name == "cursor-agent" else None
     )

@@ -22,12 +22,14 @@ from orama_system.lan_peer_files import (
 
 @pytest.fixture
 def inbox_root(monkeypatch, tmp_path):
+    """Point HOME at a temporary directory so LAN peer state stays isolated."""
     root = tmp_path / "lan_peer"
     monkeypatch.setattr("orama_system.lan_peer_files.lan_peer_state_dir", lambda: root)
     return root
 
 
 def test_sanitize_rejects_path_traversal():
+    """Check sanitize rejects path traversal."""
     with pytest.raises(ValueError):
         sanitize_filename("../evil.md")
 
@@ -36,6 +38,7 @@ def test_sanitize_rejects_path_traversal():
 def test_resolve_within_rejects_traversal_independent_of_sanitize_filename(
     tmp_path: Path,
 ) -> None:
+    """Check resolve within rejects traversal independent of sanitize filename."""
     root = tmp_path / "root"
     root.mkdir()
     with pytest.raises(ValueError):
@@ -44,6 +47,7 @@ def test_resolve_within_rejects_traversal_independent_of_sanitize_filename(
 
 @pytest.mark.unit
 def test_resolve_within_keeps_valid_name_inside_root(tmp_path: Path) -> None:
+    """Check resolve within keeps valid name inside root."""
     root = tmp_path / "root"
     root.mkdir()
     resolved = _resolve_within(root, "note.md")
@@ -52,6 +56,7 @@ def test_resolve_within_keeps_valid_name_inside_root(tmp_path: Path) -> None:
 
 
 def test_write_list_read_roundtrip(inbox_root):
+    """Check write list read roundtrip."""
     record = write_inbox_file(
         "2026-06-28-mac-hypothesis.md",
         "# Hypothesis\n\nMac reviews literature.\n",
@@ -71,6 +76,7 @@ def test_write_list_read_roundtrip(inbox_root):
 
 
 def test_write_outbox_records_delivery_failure(inbox_root):
+    """Check write outbox records delivery failure."""
     record = write_outbox_file(
         "win-task.md",
         "# Win task\n",
