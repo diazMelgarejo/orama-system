@@ -37,7 +37,7 @@ const TOOLS = [
         cwd: { type: "string", description: "Working directory" },
         thinking: { type: "string", enum: ["none","low","medium","high","xhigh"], description: "Reasoning effort (default: medium)" },
         provider: { type: "string", description: "Cline provider id (default: cline-pass)" },
-        model: { type: "string", description: "Cline model id (default: cline-pass/glm-5.3-flash)" },
+        model: { type: "string", description: "Cline model id (default for cline-pass: cline-pass/glm-5.3-flash; otherwise provider default)" },
         timeout: { type: "string", description: "Timeout in seconds (default: 600)" },
         retries: { type: "string", description: "Max mistakes before exit (default: 3)" },
       },
@@ -75,9 +75,12 @@ async function handleToolCall(name, args) {
   const a = args || {};
   switch (name) {
     case "cline_exec": {
+      const provider = a.provider || "cline-pass";
+      const model = a.model || (provider === "cline-pass" ? "cline-pass/glm-5.3-flash" : null);
       const cliArgs = [a.prompt, "--json", "--auto-approve", "true", "--thinking", a.thinking || "medium",
-        "-P", a.provider || "cline-pass", "-m", a.model || "cline-pass/glm-5.3-flash",
-        "--timeout", a.timeout || DEFAULT_TIMEOUT_S, "--retries", a.retries || "3"];
+        "-P", provider];
+      if (model) cliArgs.push("-m", model);
+      cliArgs.push("--timeout", a.timeout || DEFAULT_TIMEOUT_S, "--retries", a.retries || "3");
       if (a.cwd) cliArgs.push("-c", a.cwd);
       const r = await runCline(cliArgs, a.timeout || DEFAULT_TIMEOUT_S);
       return { content: [{ type: "text", text: JSON.stringify(r, null, 2) }], isError: !r.ok };

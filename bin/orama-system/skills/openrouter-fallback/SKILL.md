@@ -2,7 +2,7 @@
 name: openrouter-fallback
 description: >-
   OpenRouter cloud fallback for when local models are unavailable.
-  Ultimate failover (5 of 5) when ClinePass, LM Studio, Ollama, and GLM-5.2 are all down.
+  Ultimate failover (5 of 5) when ClinePass, LM Studio, Ollama, and glm-5.3-flash are all down.
 version: 1.0.0
 license: Apache 2.0
 compatibility: openrouter, claude-code, openai, gpt-4o
@@ -11,7 +11,7 @@ agent_compatibility:
   - OpenClaw
   - Claude
   - Subagents
-layer: "Fallback 5 of 5 — Cloud (OpenRouter GPT-4o, after Ollama/LM Studio/GLM-5.2)"
+layer: "Fallback 5 of 5 — Cloud (OpenRouter GPT-4o, after Ollama/LM Studio/glm-5.3-flash)"
 upstream: https://openrouter.ai
 upstream_path: $OPENROUTER_ENDPOINT
 origin: OpenClaw ultimate fallback chain
@@ -31,7 +31,7 @@ OpenRouter is the **5th and final fallback** in the OpenClaw model chain:
 1. ClinePass (local Claude)
 2. LM Studio (Windows GPU)
 3. Ollama (Mac local)
-4. GLM-5.2 (BigModel)
+4. glm-5.3-flash (BigModel)
 5. **OpenRouter (this)** ← cloud fallback, always available
 
 When all local/regional models fail, agents queue tasks for OpenRouter (GPT-4o, Gemini, Claude via OpenRouter) as the ultimate safety net.
@@ -135,7 +135,7 @@ After startup, all fallback tiers are printed:
   1. ClinePass (local Claude) ............ [status]
   2. LM Studio (Win GPU) ................ [status]
   3. Ollama (Mac local) ................. [status]
-  4. GLM-5.2 (BigModel) ................. [status]
+  4. glm-5.3-flash (BigModel) ................. [status]
   5. OpenRouter (cloud GPT-4o) .......... [status]
 ```
 
@@ -191,12 +191,32 @@ bash $ORAMA_ROOT/bin/orama-system/skills/openrouter-fallback/setup-openrouter.sh
 | `curl: (28) Operation timeout` | Request took >120s. Reduce max_tokens or increase OPENROUTER_TIMEOUT. |
 | `env vars not loading` | Shell profile not sourced. Run `source ~/.zshrc` manually; then verify `echo $OPENROUTER_API_KEY`. |
 
+## Boundaries
+
+### Always Do
+
+- Read the key at runtime from `~/.openclaw/secrets/openrouter-api-key` (mode 600);
+  keep tracked files free of secrets.
+- Use OpenRouter only after the local and regional models (ClinePass, LM Studio,
+  Ollama, glm-5.3-flash) have failed.
+- Rotate the key through `setup-openrouter.sh`.
+
+### Ask First
+
+- Moving a task to a paid OpenRouter model when a free or local route could serve it.
+
+### Never Do
+
+- Do not commit the API key or hardcode it in skills, scripts, or docs.
+- Do not make OpenRouter the first choice ahead of local models.
+- Do not print the credential value in logs or output.
+
 ## References
 
 - **OpenRouter Dashboard:** https://openrouter.ai
 - **API Docs:** https://openrouter.ai/docs
 - **Fallback chain:** See start.sh § Model Fallback Status
-- **GLM-5.2 pattern:** `bin/orama-system/skills/glm52-fallback/SKILL.md` (same security model)
+- **glm-5.3-flash pattern:** `bin/orama-system/skills/glm52-fallback/SKILL.md` (same security model)
 
 ---
 

@@ -15,6 +15,7 @@ Run: pytest tests/test_glm52_fallback_skill.py -v
 from __future__ import annotations
 
 import os
+import json
 import re
 import shutil
 import stat
@@ -430,6 +431,15 @@ class TestCredentialNeverPrinted:
 
 class TestSetupCompletion:
     """Completion output: the script reports success and tells the operator how to activate the env file."""
+    def test_probe_request_allows_reasoning_and_requests_short_answer(self, tmp_path):
+        """The bounded health request leaves room for reasoning and a visible answer."""
+        result = _run_setup(tmp_path, env={"GLM52_API_KEY": "test-key"})
+        request = result.curl_sentinel.read_text(encoding="utf-8")
+        payload = json.loads(request.split(" -d ", 1)[1])
+        assert payload["model"] == "glm-5.3-flash"
+        assert payload["max_tokens"] == 512
+        assert payload["messages"] == [{"role": "user", "content": "Reply with only OK."}]
+
     def test_prints_setup_complete_message(self, tmp_path):
         """A successful run prints the 'Setup complete.' message."""
         result = _run_setup(tmp_path, env={"GLM52_API_KEY": "k"})

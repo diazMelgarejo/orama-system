@@ -1,9 +1,20 @@
 ---
 name: cline-wandb
 description: Run Cline CLI as a non-interactive fan-out worker using DeepSeek-V4-Flash via wanDB.ai (Weave/W&B inference), high reasoning. Use when the user asks for wanDB-routed Cline bot fan-out, headless Cline review via wanDB, EXA plus Firecrawl verification for Cline usage on this route, or a parallel Cline route that does not replace ClinePass DeepSeek Flash or the GLM ClinePass skill. Includes a mandatory harmonized TDD reference card extending docs/TDD.md, and a mandatory generalized self-review discipline.
+version: 1.0.0
+compatibility: cline-cli, wandb-inference
+allowed-tools: bash, file-operations
+triggers:
+  - cline wandb
+  - wandb cline fan-out
+  - headless cline review
+  - deepseek flash wandb
+  - cline bot fan-out
 ---
 
 # Cline wanDB (DeepSeek-V4-Flash)
+
+## Purpose
 
 Use this skill to dispatch Cline as a headless worker on the
 wanDB.ai-routed DeepSeek-V4-Flash model. This is a parallel route to
@@ -121,7 +132,7 @@ confirmed identically across raw HTTP smoke tests, the official Python
    hosted routing) regardless of what's configured under
    `openai-compatible`. Confirmed by running a bare `cline` invocation
    right after activating the wandb profile: it silently routed through
-   `openrouter`/`z-ai/glm-5.2` instead. This is the exact "CLI accepts
+   `openrouter`/`z-ai/glm-5.3-flash` instead. This is the exact "CLI accepts
    the shape but routes through the wrong provider" failure mode the
    sibling ClinePass skill already documented — now confirmed to apply
    here too. `-P openai-compatible` alone isn't enough either: it also
@@ -359,16 +370,32 @@ task prompts or secrets.
 
 ## Boundaries
 
+### Always Do
+
+- Run the mandatory security gate before any cloud or repository work.
+- Follow the implementation preflight, the TDD reference card for any
+  code-writing dispatch, and the generalized self-review before reporting done.
+- Authenticate only through the `DEEPSEEK_V4_FLASH_WANDB` environment variable,
+  and use `$HOME/.gstack/cline-wandb` as the workspace for read-only or
+  sensitive fan-out.
+
+### Ask First
+
+- Installing a new provider.
+- Calling wanDB.ai's API directly, bypassing the `cline` CLI.
+
+### Never Do
+
 - Do not replace ClinePass DeepSeek Flash or the GLM ClinePass skill.
-- Do not install new providers or call wanDB.ai's API directly
-  (bypassing the `cline` CLI) unless explicitly asked.
-- Do not pass unredacted repository secrets, local-only config, or
-  private literals to a cloud worker.
-- Do not force-push, merge, or close PRs from this route. The main
-  session owns repository state changes.
-- Do not report a task complete without having followed the
-  self-review discipline above — a fast answer that skipped review is
-  not a complete answer.
+- Do not silently fall back to ClinePass, GLM, Pro, Kimi, OpenRouter, or any
+  other provider key path.
+- Do not request or print the key's value, and never pass it on command arguments.
+- Do not pass unredacted repository secrets, local-only config, or private
+  literals to a cloud worker.
+- Do not force-push, merge, or close PRs from this route. The main session
+  owns repository state changes.
+- Do not report a task complete without having followed the self-review
+  discipline above — a fast answer that skipped review is not a complete answer.
 
 ## References
 
