@@ -8,8 +8,8 @@ object), `model`, `timeout`, and `reasoning`.
 
 | Provider id | Default model | Auth type | Billing | Endpoint |
 | --- | --- | --- | --- | --- |
-| `cline` | `zai/glm-5.2` | WorkOS OAuth | Cline Credits | `api.cline.bot` |
-| `cline-pass` | `cline-pass/glm-5.2` | WorkOS OAuth | Cline Credits | `api.cline.bot` |
+| `cline` | `zai/glm-5.3-flash` | WorkOS OAuth | Cline Credits | `api.cline.bot` |
+| `cline-pass` | `cline-pass/glm-5.3-flash` | WorkOS OAuth | Cline Credits | `api.cline.bot` |
 | `anthropic` | `claude-fable-5` | API key (`sk-ant-...`) | Anthropic | `api.anthropic.com` |
 | `openrouter` | `minimax/minimax-m2.5:free` | API key (`sk-or-v1-...`) | OpenRouter | `openrouter.ai` |
 | `openai-compatible` | `google/gemini-3.1-pro-preview` | API key | Google AI | `generativelanguage.googleapis.com` |
@@ -23,12 +23,13 @@ Both carry the **identical** WorkOS OAuth token (`accessToken`, `refreshToken`,
 `expiresAt`, `accountId` all match). They hit the same backend
 (`https://api.cline.bot/api/v1/chat/completions`). The difference is naming:
 `cline-pass` uses the `cline-pass/` model prefix (stripped upstream to
-`zai/glm-5.2`), while `cline` uses the bare `zai/glm-5.2`. `cline-pass` is the
+`zai/glm-5.3-flash`), while `cline` uses the bare `zai/glm-5.3-flash`. `cline-pass` is the
 `lastUsedProvider` in the current config.
 
 ## WorkOS Token Lifecycle
 
 The `auth.accessToken` is a `workos:eyJ...` JWT with:
+
 - `expiresAt`: ~12 minutes from issuance
 - `refreshToken`: used by the Cline CLI to rotate the access token
 - Only the Cline CLI's auth loop knows how to refresh it
@@ -53,14 +54,16 @@ cline auth anthropic      # set Anthropic API key
 Cline Credits balance: `https://app.cline.bot/credits`
 
 When credits are exhausted, `cline`/`cline-pass` calls return:
+
 ```json
 {"error":{"code":"insufficient_credits","message":"Insufficient balance..."}}
 ```
+
 (HTTP 402). Top up at the URL above.
 
 ## OpenClaw-side auth (for the `cline-agent` model)
 
-The `cline-agent` uses `openrouter/z-ai/glm-5.2` in OpenClaw, which authenticates
+The `cline-agent` uses `openrouter/z-ai/glm-5.3-flash` in OpenClaw, which authenticates
 via the `OPENROUTER_API_KEY` environment variable. Verify with:
 
 ```bash

@@ -17,7 +17,7 @@
         "google/gemini-3.1-flash-lite-preview-FALL": {},
         "google/gemini-3.1-pro-preview": {},
         "google/gemini-3.1-pro-preview-FALL": {},
-        "bigmodel/glm-5.2": {}
+        "bigmodel/glm-5.3-flash": {}
       },
       "thinkingDefault": "off",
       "workspace": "${HOME}/.openclaw/agents/default"
@@ -310,8 +310,8 @@
         "baseUrl": "https://open.bigmodel.cn/api/paas/v4",
         "models": [
           {
-            "id": "glm-5.2",
-            "name": "GLM-5.2 (BigModel, thinking)",
+            "id": "glm-5.3-flash",
+            "name": "glm-5.3-flash (BigModel, thinking)",
             "contextWindow": 131072,
             "maxTokens": 65536,
             "reasoning": true,

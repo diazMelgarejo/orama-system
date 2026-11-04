@@ -19,14 +19,14 @@ equivalent:
   endpoint.
 - `cline --acp` speaks **ACP** (Agent Client Protocol), not OpenAI completions.
 - The real upstream API is `https://api.cline.bot/api/v1/chat/completions`
-  (OpenAI-compatible, model `zai/glm-5.2`), but it is fronted by a **WorkOS
+  (OpenAI-compatible, model `zai/glm-5.3-flash`), but it is fronted by a **WorkOS
   OAuth token** (`workos:eyJ...`) with `expiresAt` ~12 minutes out and a
   `refreshToken` that only the Cline CLI's auth loop knows how to rotate.
   OpenClaw has no WorkOS refresh loop, so a hardcoded token would die within
   minutes and OpenClaw would start getting `401`s.
 
 Therefore the binding is **agent-level**, not provider-level. The `cline-agent`
-uses an OpenClaw-routable model that mirrors Cline's GLM-5.2 and delegates
+uses an OpenClaw-routable model that mirrors Cline's glm-5.3-flash and delegates
 agentic execution to the `cline` CLI via exec / ACP / MCP.
 
 ## Managed Surface
@@ -62,18 +62,19 @@ Preserve every other existing allowlisted agent (e.g. `codex-agent`). Do not use
 
 The `cline-agent` uses `openrouter/free` (free auto-router) as its lightweight
 agent model — **not** the primary coding path. The **default coding execution**
-is the `cline` CLI via `cline-pass/glm-5.2` (Cline Credits through
+is the `cline` CLI via `cline-pass/glm-5.3-flash` (Cline Credits through
 `api.cline.bot`).
 
 **ClinePass is the better default for coding** because:
 
 1. **No rate limits** — OpenRouter free is limited to 50 req/day, 20 RPM; ClinePass
    has no such restriction
-2. **1M context** — full GLM-5.2 capability with reasoning + tool loops
+2. **1M context** — full glm-5.3-flash capability with reasoning + tool loops
 3. **Dedicated billing** — Cline Credits are separate from OpenRouter credits
 4. **Auto-refreshing auth** — the Cline CLI refreshes its WorkOS token automatically
 
 The OpenRouter free auto-router (`openrouter/free`) is used only for:
+
 - Lightweight routing/triage (deciding whether to delegate to cline)
 - Quick questions that don't need tool loops
 - Fallback when Cline Credits are exhausted

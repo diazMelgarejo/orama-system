@@ -12,7 +12,7 @@ cline "refactor lib/server/openclaw-thinking.js to add a cache" \
   --auto-approve true \
     -c $HOME/code/OpenClaw \
   --thinking medium \
-  -P cline-pass -m cline-pass/glm-5.2 \
+  -P cline-pass -m cline-pass/glm-5.3-flash \
   --timeout 600 --retries 3
 ```
 
@@ -22,7 +22,7 @@ cline "refactor lib/server/openclaw-thinking.js to add a cache" \
 | `--auto-approve true` | No approval prompts (required for non-TTY) |
 | `-c <dir>` | Pin the working directory (don't rely on cwd) |
 | `--thinking medium` | Match the OpenClaw agent's `thinkingDefault` |
-| `-P cline-pass -m cline-pass/glm-5.2` | Use the Cline GLM-5.2 provider |
+| `-P cline-pass -m cline-pass/glm-5.3-flash` | Use the Cline glm-5.3-flash provider |
 | `--timeout 600` | Bound long tasks (10 min) |
 | `--retries 3` | Limit consecutive mistakes before exit |
 
@@ -118,5 +118,5 @@ that handles provider selection, JSON parsing, timeout, and error reporting.
 `cline-pass` calls bill against **Cline Credits**
 (`https://app.cline.bot/credits`). `cline` (base) also bills Cline Credits.
 `openrouter`/`anthropic`/`gemini` providers bill their own accounts. Check
-balance before long runs. The OpenClaw agent's own model (`openrouter/z-ai/glm-5.2`)
+balance before long runs. The OpenClaw agent's own model (`openrouter/z-ai/glm-5.3-flash`)
 bills OpenRouter, not Cline Credits.

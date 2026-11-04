@@ -12,7 +12,7 @@
 #                             compatible shim (note the required /openai
 #                             path segment on the base URL). Corrected
 #                             2026-08-05: the config this replaced had
-#                             model="bigmodel/glm-5.2" pointed at this
+#                             model="bigmodel/glm-5.3-flash" pointed at this
 #                             same Google endpoint — a mislabeled
 #                             leftover, not a real BigModel route. This
 #                             key's Gemini project currently has 0 free-
@@ -22,7 +22,7 @@
 #                             has quota/billing configured.
 #   wandb-deepseek-v4-flash — DeepSeek-V4-Flash via wanDB.ai (Weave
 #                             tracing), per the cline-wandb skill.
-#   bigmodel-glm52          — the REAL BigModel GLM-5.2 endpoint, per
+#   bigmodel-glm52          — the REAL BigModel glm-5.3-flash endpoint, per
 #                             the glm52-fallback skill.
 #
 # Secret values never live in this script or in providers.json in

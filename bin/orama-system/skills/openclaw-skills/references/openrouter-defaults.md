@@ -7,11 +7,11 @@
 ## ClinePass as the preferred coding path
 
 **For coding tasks (refactoring, file editing, agentic tool loops), prefer the
-`cline` CLI via `cline-pass/glm-5.2` (Cline Credits) over the OpenRouter free
+`cline` CLI via `cline-pass/glm-5.3-flash` (Cline Credits) over the OpenRouter free
 stack.** ClinePass is the better default because:
 
 - **No rate limits** — OpenRouter free is limited to 50 req/day, 20 RPM
-- **1M context** — full GLM-5.2 with reasoning + structured output + tool loops
+- **1M context** — full glm-5.3-flash with reasoning + structured output + tool loops
 - **Dedicated billing** — Cline Credits (`app.cline.bot/credits`) are separate
 - **Auto-refreshing auth** — the Cline CLI handles WorkOS token refresh
 
@@ -37,6 +37,7 @@ When a caller does NOT specify an agent, the openclaw-skills MUST route to OpenR
 ## Local-first preference
 
 When the workload does NOT need network egress, prefer in this order:
+
 1. `ollama qwen3.5:9b-nvfp4` (Mac, `localhost:11434`) — small/medium tasks
 2. `qwen3-coder:480b-cloud` (Mac, when loaded) — heavy code tasks
 3. OpenRouter chain (above)
@@ -44,6 +45,7 @@ When the workload does NOT need network egress, prefer in this order:
 ## Gemini routing — specialized only
 
 Gemini is NOT in the default fallback. Reserved for:
+
 - Visual diff / screenshot comparison
 - Whole-repo architecture mapping (>5000-line diffs)
 - Multi-file stale-doc detection
@@ -88,6 +90,7 @@ Gemini is NOT in the default fallback. Reserved for:
 ## Smart-merge rules
 
 When patching `openclaw.json` for an existing OpenClaw instance:
+
 - **PRESERVE** the user's `agents.defaults.model.primary` (which on Mac MUST stay `ollama/qwen3.5:9b-nvfp4` per hard requirement) unless `--force-primary` is passed
 - **REMOVE** Gemini from the front of any existing fallbacks list before appending the OpenRouter chain
 - **PUSH** Gemini to the end of fallbacks (3rd-choice fallback for analyzer use-cases only)

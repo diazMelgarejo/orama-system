@@ -73,14 +73,14 @@ Graft registry: [`references/openclaw-pattern-graft-registry.md`](references/ope
 Paths: [`references/openclaw-workspace-path-doctrine.md`](references/openclaw-workspace-path-doctrine.md)
 — never `$OPENCLAW_ROOT` in committed prose.
 
-## 🔧 Setup (GLM-5.2 Fallback)
+## 🔧 Setup (glm-5.3-flash Fallback)
 
 ```bash
-source ~/.openclaw/openclaw-glm52-env 2>/dev/null && echo "✅ GLM-5.2 Fallback Activated" || true
+source ~/.openclaw/openclaw-glm52-env 2>/dev/null && echo "✅ glm-5.3-flash Fallback Activated" || true
 ```
 
 When LM Studio, Ollama, or other Hermes-accessible models are unavailable, this
-task queue can execute via GLM-5.2. **No additional setup required**—the
+task queue can execute via glm-5.3-flash. **No additional setup required**—the
 environment variables are already sourced by start.ps1.
 
 ---

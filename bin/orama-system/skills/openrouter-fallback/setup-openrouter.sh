@@ -112,7 +112,7 @@ export OPENROUTER_TITLE="${OPENROUTER_TITLE:-OpenClaw}"
 # 1. ClinePass (local Claude)
 # 2. LM Studio (Win GPU)
 # 3. Ollama (Mac local)
-# 4. GLM-5.2 (BigModel fallback)
+# 4. glm-5.3-flash (BigModel fallback)
 # 5. OpenRouter (cloud fallback — THIS)
 ENVEOF
 chmod 600 "$ENV_FILE.tmp"
@@ -153,7 +153,7 @@ log "Testing OpenRouter connectivity..."
 if ! command -v curl >/dev/null 2>&1; then
   log "WARNING: curl not found; skipping connection test"
 else
-  # Use curl with timeout and retry logic (same as GLM-5.2)
+  # Use curl with timeout and retry logic (same as glm-5.3-flash)
   RESPONSE=$(timeout 10 curl -s -X POST \
     -H "Authorization: Bearer $API_KEY" \
     -H "Content-Type: application/json" \
@@ -177,7 +177,7 @@ log ""
 log "Summary:"
 log "  • API key: $SECRETS_DIR/openrouter-api-key (mode 600, not tracked)"
 log "  • Environment: $ENV_FILE (auto-sourced by shells)"
-log "  • Fallback position: 5 of 5 (last resort, after Ollama/LM Studio/GLM-5.2)"
+log "  • Fallback position: 5 of 5 (last resort, after Ollama/LM Studio/glm-5.3-flash)"
 log "  • To use: source ~/.openclaw/.env.openrouter"
 log ""
 log "Health check:"
