@@ -1,3 +1,4 @@
+"""Tests for the thin Hermes wrapper installer: install and refresh, managed detection, text, verify."""
 from __future__ import annotations
 
 import importlib.util
@@ -43,10 +44,12 @@ def installer(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> types.ModuleTy
 
 
 def _target(installer, slug: str) -> Path:
+    """Return the path where the installer writes the wrapper for *slug*."""
     return installer.HERMES_SKILLS / installer.hermes_local_dir(slug) / "SKILL.md"
 
 
 def test_install_preserves_unmanaged_wrapper(installer, capsys):
+    """A user-owned wrapper without the managed marker is left untouched."""
     target = _target(installer, "council")
     target.parent.mkdir(parents=True)
     original = "---\nname: personal-council\n---\n\n# Personal Council\n"
@@ -61,6 +64,7 @@ def test_install_preserves_unmanaged_wrapper(installer, capsys):
 
 
 def test_install_refreshes_managed_wrapper(installer):
+    """A stale managed wrapper is rewritten with the generated text."""
     target = _target(installer, "review")
     target.parent.mkdir(parents=True)
     target.write_text("---\ncreated_by: agent\n---\n\nstale\n", encoding="utf-8")
@@ -74,6 +78,7 @@ def test_install_refreshes_managed_wrapper(installer):
 
 
 def test_dry_run_reports_unmanaged_wrapper_without_writing(installer, capsys):
+    """A dry run names the unmanaged wrapper it would skip."""
     target = _target(installer, "delegate")
     target.parent.mkdir(parents=True)
     target.write_text("# User-owned delegate\n", encoding="utf-8")
@@ -88,10 +93,12 @@ def test_dry_run_reports_unmanaged_wrapper_without_writing(installer, capsys):
 # ── is_managed_wrapper ────────────────────────────────────────────────────────
 
 def test_is_managed_wrapper_nonexistent_file(installer, tmp_path):
+    """A missing file is not a managed wrapper."""
     assert installer.is_managed_wrapper(tmp_path / "no-such-file.md") is False
 
 
 def test_is_managed_wrapper_no_frontmatter(installer, tmp_path):
+    """The marker outside YAML frontmatter does not make a managed wrapper."""
     f = tmp_path / "plain.md"
     f.write_text("# Just a heading\ncreated_by: agent\n", encoding="utf-8")
     assert installer.is_managed_wrapper(f) is False
@@ -105,12 +112,14 @@ def test_is_managed_wrapper_marker_after_closing_fence(installer, tmp_path):
 
 
 def test_is_managed_wrapper_valid(installer, tmp_path):
+    """A file with the marker inside its frontmatter is a managed wrapper."""
     f = tmp_path / "managed.md"
     f.write_text("---\nname: council\ncreated_by: agent\n---\n\n# body\n", encoding="utf-8")
     assert installer.is_managed_wrapper(f) is True
 
 
 def test_is_managed_wrapper_empty_file(installer, tmp_path):
+    """An empty file is not a managed wrapper."""
     f = tmp_path / "empty.md"
     f.write_text("", encoding="utf-8")
     assert installer.is_managed_wrapper(f) is False
@@ -119,6 +128,7 @@ def test_is_managed_wrapper_empty_file(installer, tmp_path):
 # ── wrapper_text ──────────────────────────────────────────────────────────────
 
 def test_wrapper_text_contains_slug_and_canonical(installer):
+    """Generated text carries the slug, canonical path and purpose."""
     spec = installer.WRAPPERS[0]  # pt-orama-council
     text = installer.wrapper_text(spec)
     assert f"name: {spec.slug}" in text
@@ -127,6 +137,7 @@ def test_wrapper_text_contains_slug_and_canonical(installer):
 
 
 def test_wrapper_text_contains_required_readiness_strings(installer):
+    """Every core wrapper carries the readiness canaries and marker."""
     for spec in installer.WRAPPERS:
         text = installer.wrapper_text(spec)
         assert "HERMES_READY" in text
@@ -136,6 +147,7 @@ def test_wrapper_text_contains_required_readiness_strings(installer):
 
 
 def test_wrapper_text_all_core_wrappers(installer):
+    """The core and optional wrapper sets are exactly the expected slugs."""
     slugs = {spec.slug for spec in installer.WRAPPERS}
     assert slugs == {
         "pt-hardware-policy",
@@ -186,16 +198,19 @@ def test_install_gives_an_older_managed_wrapper_the_new_sections(installer):
 # ── install ───────────────────────────────────────────────────────────────────
 
 def test_optional_wrapper_not_installed_by_default(installer):
+    """The optional lesson-mining wrapper is not installed by default."""
     installer.install()
     assert not (installer.HERMES_SKILLS / "lesson-mining" / "SKILL.md").is_file()
 
 
 def test_optional_wrapper_installed_with_flag(installer):
+    """include_optional installs the optional wrapper."""
     installer.install(include_optional=True)
     assert (installer.HERMES_SKILLS / "lesson-mining" / "SKILL.md").is_file()
 
 
 def test_install_fresh_creates_all_wrappers(installer):
+    """A fresh install writes every core wrapper plus the harness redirect."""
     written = installer.install()
     assert len(written) == len(installer.WRAPPERS) + 1  # +1 for harness redirect (install_harness_redirect)
     for spec in installer.WRAPPERS:
@@ -207,6 +222,7 @@ def test_install_fresh_creates_all_wrappers(installer):
 
 
 def test_install_creates_description_md(installer):
+    """A fresh install writes DESCRIPTION.md naming PT-orama and orama-system."""
     installer.install()
     desc = installer.HERMES_SKILLS / "DESCRIPTION.md"
     assert desc.is_file()
@@ -216,6 +232,7 @@ def test_install_creates_description_md(installer):
 
 
 def test_install_dry_run_prints_targets_without_creating_files(installer, capsys):
+    """A dry run lists every target and creates no files."""
     result = installer.install(dry_run=True)
     assert result == []
     assert not installer.HERMES_SKILLS.exists()
@@ -235,6 +252,7 @@ def test_install_dry_run_skips_no_files_for_fresh_install(installer, capsys):
 # ── verify ────────────────────────────────────────────────────────────────────
 
 def test_verify_all_missing(installer):
+    """With nothing installed, verify reports every wrapper and the harness redirect as missing."""
     errors = installer.verify()
     assert len(errors) == len(installer.WRAPPERS) + 1  # +1 for harness redirect (install_harness_redirect)
     assert sum(1 for e in errors if "missing harness redirect:" in e) == 1
@@ -242,6 +260,7 @@ def test_verify_all_missing(installer):
 
 
 def test_verify_passes_after_clean_install(installer):
+    """verify returns no errors straight after a clean install."""
     installer.install()
     assert installer.verify() == []
 
@@ -259,6 +278,7 @@ def test_verify_detects_missing_required_string(installer, tmp_path):
 
 
 def test_verify_unmanaged_wrapper_reported_as_preserved(installer, tmp_path):
+    """verify reports a replaced user-owned wrapper as preserved."""
     installer.install()
     delegate_target = _target(installer, "delegate")
     # Replace managed wrapper with user-owned content.
@@ -270,6 +290,7 @@ def test_verify_unmanaged_wrapper_reported_as_preserved(installer, tmp_path):
 def test_verify_no_openclaw_root_flags_violating_results(
     installer: types.ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """A results note that cites the OpenClaw root path is flagged."""
     results_dir = tmp_path / "bin/orama-system/skills/hermes-harness/references/results"
     results_dir.mkdir(parents=True)
     violating = results_dir / "some-fleet-report.md"
@@ -283,6 +304,7 @@ def test_verify_no_openclaw_root_flags_violating_results(
 def test_verify_no_openclaw_root_allows_clean_results(
     installer: types.ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """A results note without that citation passes."""
     results_dir = tmp_path / "bin/orama-system/skills/hermes-harness/references/results"
     results_dir.mkdir(parents=True)
     clean = results_dir / "some-fleet-report.md"
