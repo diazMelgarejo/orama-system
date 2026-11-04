@@ -108,6 +108,31 @@ python3 bin/orama-system/skills/hermes-harness/scripts/hermes_portable_brain.py 
   --overwrite
 ```
 
+## Size expectations
+
+`hermes backup` snapshots the whole Hermes home: `state.db`, emergency `.bak` files,
+`state-snapshots/`, caches and runtime assets. In one Windows recovery it exceeded 500 MB
+compressed, so treat it as a safety snapshot before a risky change, not as a transfer artifact.
+
+For a new machine, use `hermes_portable_brain.py export` with its safe defaults (no sessions, no
+secrets). Leave out `state.db`, `sessions/`, `state-snapshots/`, caches, logs, runtime binaries and
+ECC-managed artifacts unless full history is explicitly requested.
+
+## Orama and Perpetua local state
+
+The archive tool covers the Hermes home only. The Orama and Perpetua local state a new machine
+also needs (`.env.local`, `.local/` with mesh secrets and known peers, `.state/`) is not in it.
+Move that state separately, and only through the encrypted channel described next. Never read or
+print its values while packaging it.
+
+## Delivery rule for private archives
+
+A private archive is anything made with `--include-secrets` or containing `.env`, `auth.json`,
+`auth/`, `.env.local` or mesh secrets. It must never be attached to an agent inbox card, a
+GossipBus log, email, chat or Git. Broadcast only the guide and an availability notice, store the
+archive encrypted, and move it through a dedicated encrypted out-of-band transfer under operator
+control.
+
 ## Relation to Hermes-native commands
 
 Use the right layer:
