@@ -21,12 +21,14 @@ from __future__ import annotations
 
 import asyncio
 import html as _html
+import ipaddress
 import json
 import logging
 import mimetypes
 import os
 import secrets
 import signal
+import socket
 import subprocess
 import sys
 import threading
@@ -3556,7 +3558,7 @@ async def api_stop(request: Request):
 
 @app.post("/api/restart/{service}")
 async def api_restart(service: str, request: Request):
-    """Kill and restart a named service (pt | orama | portal).
+    """Kill and restart a named service (pt | orama | portal); see _restart_plan for how.
     The service is restarted as a detached background process with the same working
     directory and inherited environment variables.
     """
@@ -3565,46 +3567,88 @@ async def api_restart(service: str, request: Request):
         return {"ok": False, "message": f"Unknown service '{service}' — use: pt, orama, portal"}
     port = _SERVICE_PORTS[service]
 
-    # Kill current process
-    pid = _pid_on_port(port)
-    if pid:
-        try:
-            os.kill(pid, signal.SIGTERM)
-            await asyncio.sleep(1.2)
-        except Exception:
-            pass
-
-    # Determine working dir + python
-    if service == "pt":
-        cwd = str(PERPETUA_TOOLS_ROOT)
-        py = sys.executable
-        # src/ layout: the package lives under src/; keep repo root on the path
-        # too for the top-level orchestrator/ package.
-        env = {**os.environ, "PYTHONPATH": f"{cwd}/src{os.pathsep}{cwd}"}
-        bind_host = _SERVICE_BIND_HOSTS["pt"]
-        cmd = [py, "-m", "uvicorn", "orchestrator.fastapi_app:app",
-               "--host", bind_host, "--port", str(port)]
-    else:
-        cwd = str(REPO_ROOT)
-        py = sys.executable
-        env = {**os.environ, "PYTHONPATH": f"{cwd}/src{os.pathsep}{cwd}"}
-        module = ("orama_system.api_server:app" if service == "orama"
-                  else "orama_system.portal_server:app")
-        bind_host = _SERVICE_BIND_HOSTS[service]
-        cmd = [py, "-m", "uvicorn", module, "--host", bind_host, "--port", str(port)]
-
+    plan = _restart_plan(service, windows=os.name == "nt")
     log_path = (REPO_ROOT / ".logs" / _SERVICE_LOG_FILES[service]).resolve()
     log_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if not plan["delegated"]:
+        # Kill current process; the delegated launcher stops services itself.
+        pid = _pid_on_port(port)
+        if pid:
+            try:
+                os.kill(pid, signal.SIGTERM)
+                await asyncio.sleep(1.2)
+            except Exception:
+                pass
+
     try:
         with log_path.open("ab") as lf:
             subprocess.Popen(
-                cmd, cwd=cwd, env=env,
-                stdout=lf, stderr=lf,
-                start_new_session=True,
+                plan["cmd"], cwd=plan["cwd"], env=plan["env"],
+                stdin=subprocess.DEVNULL, stdout=lf, stderr=lf,
+                **plan["popen_kwargs"],
             )
         return {"ok": True, "message": f"Restarting {service} on :{port} — check {log_path.name}"}
     except Exception as exc:
         return {"ok": False, "message": _client_safe_error(exc, fallback="Restart failed")}
+
+
+def _restart_bind_host(host: str) -> str:
+    """Return the host a restarted service binds, with ``localhost`` pinned to IPv4 loopback.
+
+    uvicorn binds the first address ``localhost`` resolves to, which on Windows is
+    the IPv6 loopback only; IPv4-loopback clients such as the Portal TLS front end
+    then cannot reach the service.
+    """
+    if host.strip().lower() == "localhost":
+        return str(ipaddress.IPv4Address(socket.INADDR_LOOPBACK))
+    return host
+
+
+def _restart_plan(service: str, *, windows: bool) -> Dict[str, Any]:
+    """Describe how ``/api/restart/<service>`` relaunches *service*, without launching it.
+
+    On Windows a Portal restart is delegated to ``start.ps1 --restart-portal``,
+    which stops and restarts the Portal together with its TLS front end, escapes a
+    breakaway-denying job object and binds the configured loopback host. Other
+    restarts run uvicorn directly, detached for the platform.
+    """
+    port = _SERVICE_PORTS[service]
+    if windows:
+        # CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW (literal so the plan is testable off Windows)
+        popen_kwargs: Dict[str, Any] = {"creationflags": 0x00000200 | 0x08000000}
+    else:
+        popen_kwargs = {"start_new_session": True}
+
+    if windows and service == "portal":
+        script = REPO_ROOT / "platform" / "windows" / "start.ps1"
+        return {
+            "delegated": True,
+            "cmd": ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                    "-File", str(script), "--restart-portal"],
+            "cwd": str(REPO_ROOT),
+            "env": dict(os.environ),
+            "popen_kwargs": popen_kwargs,
+        }
+
+    if service == "pt":
+        cwd = str(PERPETUA_TOOLS_ROOT)
+        module = "orchestrator.fastapi_app:app"
+    else:
+        cwd = str(REPO_ROOT)
+        module = ("orama_system.api_server:app" if service == "orama"
+                  else "orama_system.portal_server:app")
+    # src/ layout: the package lives under src/; keep repo root on the path
+    # too for the top-level orchestrator/ package.
+    env = {**os.environ, "PYTHONPATH": f"{cwd}/src{os.pathsep}{cwd}"}
+    bind_host = _restart_bind_host(_SERVICE_BIND_HOSTS[service])
+    return {
+        "delegated": False,
+        "cmd": [sys.executable, "-m", "uvicorn", module, "--host", bind_host, "--port", str(port)],
+        "cwd": cwd,
+        "env": env,
+        "popen_kwargs": popen_kwargs,
+    }
 
 
 @app.post("/api/rediscover")
