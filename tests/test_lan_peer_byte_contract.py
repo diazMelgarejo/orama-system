@@ -114,3 +114,55 @@ def test_drop_preserves_source_crlf_bytes(
         "--file", str(path),
     ]) == 0
     assert captured["body"].encode("utf-8") == raw
+
+
+@pytest.mark.unit
+def test_inbox_extra_cannot_override_integrity_fields(peer_state: Path) -> None:
+    """Caller-supplied ``extra`` never replaces the byte count or SHA-256 computed from the payload."""
+    body = "integrity\r\nfirst\n"
+    payload = body.encode("utf-8")
+    record = files.write_inbox_file(
+        "canary.md", body, extra={"bytes": 1, "sha256": "0" * 64, "note": "kept"}
+    )
+    expected = {"bytes": len(payload), "sha256": hashlib.sha256(payload).hexdigest()}
+    assert {k: record[k] for k in expected} == expected
+    assert record["note"] == "kept"
+    sidecar = json.loads((peer_state / "inbox" / "canary.md.meta.json").read_bytes())
+    assert {k: sidecar[k] for k in expected} == expected
+
+
+@pytest.mark.unit
+def test_drop_preserves_source_bom_bytes(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The CLI keeps a leading UTF-8 BOM in the sent body instead of stripping it."""
+    path = tmp_path / "source.md"
+    raw = b"\xef\xbb\xbffirst\r\nsecond\n"
+    path.write_bytes(raw)
+    captured: dict[str, Any] = {}
+
+    def capture_request(
+        method: str, url: str, payload: dict[str, Any] | None = None, timeout: int = 30
+    ) -> dict[str, bool]:
+        """Capture the transport body without accessing any real peer or token."""
+        assert payload is not None
+        captured.update(payload)
+        return {"ok": True}
+
+    monkeypatch.setattr(assign, "_http_json", capture_request)
+    assert assign.main([
+        "drop", "--peer", "--peer-ip", "192.0.2.1", "--portal-port", "8443",
+        "--file", str(path),
+    ]) == 0
+    assert captured["body"].encode("utf-8") == raw
+
+
+@pytest.mark.unit
+def test_duplicate_check_accepts_exact_size_of_mixed_line_endings() -> None:
+    """A byte-exact copy of a mixed-ending body is a size candidate, alongside the LF and CRLF sizes."""
+    body = "a\r\nb\nc\r\n"
+    exact = len(body.encode("utf-8"))
+    lf = len(body.replace("\r\n", "\n").encode("utf-8"))
+    crlf = len(body.replace("\r\n", "\n").replace("\n", "\r\n").encode("utf-8"))
+    assert exact not in (lf, crlf)
+    assert assign._listed_size_candidates(body) == (exact, lf, crlf)

@@ -648,6 +648,20 @@ def _sha256_text(text: str) -> str:
     return hashlib.sha256(lf.encode("utf-8")).hexdigest()
 
 
+def _listed_size_candidates(body: str) -> tuple[int, int, int]:
+    """Byte sizes a peer listing may report for *body*: exact, all-LF and all-CRLF.
+
+    Byte-preserving receivers store the exact UTF-8 bytes (which may mix line
+    endings); legacy receivers stored LF or translated LF to CRLF.
+    """
+    lf_body = body.replace("\r\n", "\n")
+    return (
+        len(body.encode("utf-8")),
+        len(lf_body.encode("utf-8")),
+        len(lf_body.replace("\n", "\r\n").encode("utf-8")),
+    )
+
+
 def _remote_content_verdict(
     ip: str, port: int, filename: str, lf_body: str, timeout: int
 ) -> tuple[str, str]:
@@ -733,12 +747,11 @@ def _deliver_item(
     found = _listed_entry(data, filename)
     if found is not None:
         size = found.get("bytes", found.get("size", ""))
-        # Legacy receivers may have translated LF to CRLF. Either size is a
-        # candidate match; authenticated content verification is still required.
+        # Candidate sizes only; authenticated content verification is still required.
         lf_body = body.replace("\r\n", "\n")
         local_size = len(lf_body.encode("utf-8"))
         crlf_size = len(lf_body.replace("\n", "\r\n").encode("utf-8"))
-        size_ok = str(size) in (str(local_size), str(crlf_size))
+        size_ok = str(size) in {str(n) for n in _listed_size_candidates(body)}
         if list_authed:
             # Name and size alone are not proof of delivery: a regenerated file
             # often keeps its length. Fetch the remote body over the same
