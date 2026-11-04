@@ -32,6 +32,7 @@ import sys
 import threading
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
@@ -2994,6 +2995,8 @@ def _cli_version(bin_path: str) -> Optional[tuple[int, str]]:
             )
             result = (r.returncode, (r.stdout + r.stderr).decode("utf-8", errors="replace"))
         except Exception:
+            # Still cached: a broken CLI must not cost its timeout on every poll.
+            log.warning("CLI --version failed for %s", bin_path, exc_info=True)
             result = None
         _cli_version_cache[bin_path] = (time.monotonic(), result)
         return result
@@ -3005,6 +3008,10 @@ def _clear_cli_version_cache() -> None:
         _cli_version_cache.clear()
 
 
+# Lookups that outlive their budget keep running here instead of blocking the caller.
+_port_check_resolver = ThreadPoolExecutor(max_workers=2, thread_name_prefix="portal-port-check-dns")
+
+
 def _tcp_port_open(host: str, port: int, budget_seconds: float) -> bool:
     """Return True if a TCP connection to *host*:*port* succeeds within one shared budget.
 
@@ -3013,14 +3020,17 @@ def _tcp_port_open(host: str, port: int, budget_seconds: float) -> bool:
     ``localhost`` (IPv6 then IPv4) cost twice the timeout. Here every address
     shares *budget_seconds*, split evenly over the addresses not yet tried so a
     dead first address cannot starve a live second one (a local connect that
-    succeeds takes milliseconds).
+    succeeds takes milliseconds). Name resolution has no timeout of its own, so
+    it runs on a small resolver pool and counts against the same budget.
     """
     import socket as _sock
+    from concurrent.futures import TimeoutError as _ResolveTimeout
 
     deadline = time.monotonic() + budget_seconds
+    lookup = _port_check_resolver.submit(_sock.getaddrinfo, host, port, type=_sock.SOCK_STREAM)
     try:
-        infos = _sock.getaddrinfo(host, port, type=_sock.SOCK_STREAM)
-    except OSError:
+        infos = lookup.result(timeout=budget_seconds)
+    except (_ResolveTimeout, OSError):
         return False
     for index, (family, socktype, proto, _canon, addr) in enumerate(infos):
         remaining = deadline - time.monotonic()
