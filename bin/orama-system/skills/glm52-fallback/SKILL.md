@@ -143,9 +143,10 @@ Report only setup status (e.g. "✓ glm-5.3-flash healthy" / "✗ glm-5.3-flash 
   `$OPENCLAW_MODELS_PROVIDERS_BIGMODEL_APIKEY` env var only.
 - The key file at `~/.openclaw/secrets/glm52-api-key` is mode 600 and
   git-ignored (`secrets/` in `.gitignore`).
-- Runtime values (key, endpoint) live only in local-only files under
-  `~/.openclaw/` — never in tracked files, logs, docs, PR text, screenshots,
-  or tests.
+- The key, and any private endpoint you override `GLM52_ENDPOINT` with (a proxy or internal
+  host), live only in local-only files under `~/.openclaw/` — never in tracked files, logs,
+  docs, PR text, screenshots, or tests. The public BigModel URL used in this skill and in
+  its setup script is not secret.
 - See `SECURITY.md` for the full credential hygiene policy.
 
 ## Boundaries
@@ -155,7 +156,7 @@ Report only setup status (e.g. "✓ glm-5.3-flash healthy" / "✗ glm-5.3-flash 
 - Read the key only from `$GLM52_API_KEY` or `$OPENCLAW_MODELS_PROVIDERS_BIGMODEL_APIKEY`.
 - Report only setup status; confirm the runtime contract without ever printing
   the credential value.
-- Keep runtime values (key, endpoint) in local-only files under `~/.openclaw/`
+- Keep the key and any private endpoint override in local-only files under `~/.openclaw/`
   (key file mode 600 and git-ignored).
 - Apply the timeout and retry policy, and fall through to the next fallback on
   exit codes `7`, `28` and `52`.
@@ -168,8 +169,8 @@ Report only setup status (e.g. "✓ glm-5.3-flash healthy" / "✗ glm-5.3-flash 
 ### Never Do
 
 - Do not commit the API key or hardcode it anywhere.
-- Do not put the key, endpoint or other runtime values in tracked files, logs,
-  docs, PR text, screenshots, or tests.
+- Do not put the key or a private endpoint override in tracked files, logs, docs,
+  PR text, screenshots, or tests. The public BigModel URL documented here is not secret.
 - Do not use BigModel ahead of ClinePass while Cline Credits remain; this skill
   is the fallback, not the default route.
 
