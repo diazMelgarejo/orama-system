@@ -20,6 +20,7 @@ MODEL = "openrouter/z-ai/glm-5.3-flash"
 
 
 def parse_args() -> argparse.Namespace:
+    """Parse the command line: workspace path, thinking effort and a dry-run flag."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--workspace", type=Path, default=CANONICAL_WORKSPACE)
     parser.add_argument("--effort", choices=("medium", "high", "xhigh"), default="medium")
@@ -28,6 +29,11 @@ def parse_args() -> argparse.Namespace:
 
 
 def merge_generated_region(existing: str, heading: str, generated: str) -> str:
+    """Return *existing* with the marker-owned generated block replaced, or appended when absent.
+
+    Text outside the markers is preserved. An empty file starts with ``# <heading>``.
+    Raises ``ValueError`` for an incomplete or duplicated marker pair.
+    """
     block = f"{START}\n{generated.rstrip()}\n{END}\n"
     has_start = START in existing
     has_end = END in existing
@@ -46,6 +52,10 @@ def merge_generated_region(existing: str, heading: str, generated: str) -> str:
 
 
 def atomic_write_if_changed(path: Path, content: str, dry_run: bool) -> bool:
+    """Write *content* to *path* atomically when it differs from the current text.
+
+    Returns whether the file changed (or, in a dry run, would change); a dry run writes nothing.
+    """
     current = path.read_text(encoding="utf-8") if path.exists() else ""
     if current == content:
         return False
@@ -60,12 +70,14 @@ def atomic_write_if_changed(path: Path, content: str, dry_run: bool) -> bool:
 
 
 def ensure_scaffold(path: Path, content: str, dry_run: bool) -> bool:
+    """Create *path* with *content* only when it does not exist yet; return whether it was written."""
     if path.exists():
         return False
     return atomic_write_if_changed(path, content, dry_run)
 
 
 def main() -> None:
+    """Render the managed cline-agent workspace files and print a JSON status summary."""
     args = parse_args()
     workspace = args.workspace.expanduser().resolve()
     agent_dir = workspace / "agent"
