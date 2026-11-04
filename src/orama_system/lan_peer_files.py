@@ -79,7 +79,10 @@ def _resolve_within(root: Path, name: str) -> Path:
         raise ValueError("use .md or .txt for assignment bodies; .json is metadata only")
     base = os.path.normpath(str(root))
     full_path = os.path.normpath(os.path.join(base, raw))
-    if not (full_path == base or full_path.startswith(base + os.sep)):
+    # A single startswith guard, exactly CodeQL's recognized idiom: an
+    # ``or full_path == base`` alternative hid the guard from py/path-injection,
+    # and a name that resolves to the root itself is not a file anyway.
+    if not full_path.startswith(base + os.sep):
         raise ValueError(f"unsafe path escapes root: {name!r}")
     return Path(full_path)
 
