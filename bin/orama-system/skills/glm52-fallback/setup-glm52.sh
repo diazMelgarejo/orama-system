@@ -52,7 +52,7 @@ curl -s -f -X POST "$GLM52_ENDPOINT" \
   -H "Authorization: Bearer $GLM52_API_KEY" \
   --connect-timeout 5 --max-time 30 \
   -d '{"model":"glm-5.3-flash","messages":[{"role":"user","content":"ok"}],"max_tokens":10}' \
-  | jq -e '.choices[0].message.content' 2>/dev/null && printf '%s\n' "✓ glm-5.3-flash healthy" || printf '%s\n' "✗ glm-5.3-flash unreachable (check credits at https://open.bigmodel.cn)"
+  | jq -e '.choices[0].message.content | select(type == "string" and test("\\S"))' 2>/dev/null && printf '%s\n' "✓ glm-5.3-flash healthy" || printf '%s\n' "✗ glm-5.3-flash unreachable (check credits at https://open.bigmodel.cn)"
 
 printf '\n%s\n' "Setup complete. glm-5.3-flash will be available to all agents on next startup."
 printf '%s\n' "To activate now: source ~/.openclaw/.env.glm52"
