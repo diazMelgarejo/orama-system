@@ -1,9 +1,21 @@
 ---
 name: cline-openclaw-agent
 description: Create or reconcile the dedicated OpenClaw Cline sub-agent at `~/.openclaw/agents/cline-agent` and wire the Cline CLI (v3.x) as an agentic coding backend via exec, ACP, and MCP bridges. Use when installing, repairing, delegating to, or validating the explicit `cline-agent` without changing the Main Agent, global default routing, or the existing `codex-agent`/`coder` agents. Covers all Cline CLI modes — act, plan, TUI, zen/hub, ACP, JSON one-shot, worktree, kanban, hooks, schedule, history, plugin, skill, connect, doctor, auth, config.
+version: 1.0.0
+compatibility: openclaw, cline-cli
+allowed-tools: bash, file-operations
+triggers:
+  - cline agent
+  - cline-agent
+  - cline openclaw
+  - bind cline backend
+  - cline cli backend
+  - cline acp bridge
 ---
 
 # Cline OpenClaw Agent
+
+## Purpose
 
 Maintain one explicit Cline-backed coding sub-agent. It is never the default
 route. The Main Agent (or any allowlisted parent) delegates coding tasks to it;
@@ -23,17 +35,17 @@ fronted by a short-lived WorkOS OAuth token that only the Cline CLI can refresh.
 Therefore `cline-agent` is **not** a model-provider binding. It is an OpenClaw
 agent that uses the **ClinePass path as the better default** for coding tasks:
 
-1. **Default coding execution: `cline` CLI via `cline-pass/glm-5.2`** (Cline
+1. **Default coding execution: `cline` CLI via `cline-pass/glm-5.3-flash`** (Cline
    Credits through `api.cline.bot`). This is the preferred path because:
    - **No rate limits** — OpenRouter free tier is limited to 50 req/day, 20 RPM
-   - **1M context window** — full GLM-5.2 capability with reasoning + tool loops
+   - **1M context window** — full glm-5.3-flash capability with reasoning + tool loops
    - **Dedicated billing** — Cline Credits are separate from OpenRouter credits
    - **Auto-refreshing auth** — the Cline CLI refreshes its WorkOS token automatically
-2. **GLM-5.2 Ultimate Fallback**: When ClinePass is unavailable, agents fall back to
+2. **glm-5.3-flash Ultimate Fallback**: When ClinePass is unavailable, agents fall back to
    `bin/orama-system/skills/glm52-fallback/` which provides:
-   - Direct GLM-5.2 API access via BigModel GLMs
+   - Direct glm-5.3-flash API access via BigModel GLMs
    - Environment vars: `GLM52_API_KEY` and `GLM52_ENDPOINT`
-   - See [GLM-5.2 fallback setup](../../../../skills/glm52-fallback/setup-glm52.sh) in the canonical root skill
+   - See [glm-5.3-flash fallback setup](../../../../skills/glm52-fallback/setup-glm52.sh) in the canonical root skill
 3. **Lightweight agent model: `openrouter/free`** (free auto-router) — used only
    for routing/triage/quick replies that don't need tool loops. This is the
    limited/restricted fallback, not the primary coding path.
@@ -53,13 +65,13 @@ for the full contract and the reasoning behind each decision.
 | Workspace | `~/.openclaw/agents/cline-agent` |
 | Agent state directory | `~/.openclaw/agents/cline-agent/agent` |
 | Agent model (lightweight) | `openrouter/free` (free auto-router — routing/triage only) |
-| Default coding execution | `cline` CLI via `cline-pass/glm-5.2` (Cline Credits — **preferred**) |
+| Default coding execution | `cline` CLI via `cline-pass/glm-5.3-flash` (Cline Credits — **preferred**) |
 | Thinking | `medium` by default; `high`/`xhigh` only when requested |
 | Tool profile | `coding` |
 | Delegation allowlist | `agents.defaults.subagents.allowAgents` contains `cline-agent` |
 | Channel routing | None; invoke explicitly or delegate through the allowlist |
 | Cline CLI | `cline` v3.x on PATH (resolved via `command -v cline`) |
-| Cline provider | `cline-pass` with model `cline-pass/glm-5.2` (Cline Credits, `api.cline.bot`) |
+| Cline provider | `cline-pass` with model `cline-pass/glm-5.3-flash` (Cline Credits, `api.cline.bot`) |
 
 Use the current OpenClaw shape, not legacy fields:
 
@@ -136,7 +148,7 @@ cline "refactor lib/foo.js to add a cache" \
   --json --auto-approve true \
   -c /path/to/repo \
   --thinking medium \
-  -P cline-pass -m cline-pass/glm-5.2 \
+  -P cline-pass -m cline-pass/glm-5.3-flash \
   --timeout 600 --retries 3
 ```
 
@@ -165,6 +177,27 @@ openclaw mcp serve        # expose OpenClaw channels over MCP stdio
 See [references/mcp-bridge.md](references/mcp-bridge.md).
 
 ## Boundaries
+
+### Always Do
+
+- Preview with `--dry-run` when state is unknown; a rerun must make no
+  configuration or workspace write when state already matches.
+- Verify the `cline` CLI is installed (`command -v cline`) and report
+  `needs_cline` without modifying config if it is absent.
+- Reconcile only `model`, `thinkingDefault`, `tools.profile`, `agentDir`, and
+  the preserved delegation allowlist; touch only OramaClaw marker regions in
+  workspace files.
+- Validate the configuration after a change and restart the gateway only after
+  agent configuration actually changed.
+
+### Ask First
+
+- Changing an existing `cline-agent` whose workspace differs from the
+  canonical path (the binder refuses it).
+- Enabling `acp.enabled` globally, even once an ACP runtime backend plugin is
+  registered.
+
+### Never Do
 
 - Do not modify `agents.defaults.model`, the Main Agent, `codex-agent`, `coder`,
   or gateway/LaunchAgent settings.
@@ -201,7 +234,7 @@ the OpenRouter provider is authenticated (for the lightweight agent model).
 - [Exec one-shot](references/exec-one-shot.md)
 - [Hub daemon](references/hub-daemon.md)
 - [Provider auth](references/provider-auth.md)
-- [GLM-5.2 Ultimate Fallback](../../../../skills/glm52-fallback/)
+- [glm-5.3-flash Ultimate Fallback](../../../../skills/glm52-fallback/)
 - [Codex OpenClaw Agent (sibling skill)](../codex-openclaw-agent/SKILL.md)
 - [OpenClaw new-agent skill](../openclaw-new-agent/SKILL.md)
 

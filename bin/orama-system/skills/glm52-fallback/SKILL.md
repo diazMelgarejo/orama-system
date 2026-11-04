@@ -1,17 +1,27 @@
 ---
 name: glm52-fallback
-description: Sets up BigModel GLM-5.2 as the system-wide fallback when ClinePass (Cline Credits) is unavailable. Uses the BigModel API at open.bigmodel.cn with env-var-only auth. Never hardcodes API keys.
+description: Sets up BigModel glm-5.3-flash as the system-wide fallback when ClinePass (Cline Credits) is unavailable. Uses the BigModel API at open.bigmodel.cn with env-var-only auth. Never hardcodes API keys.
 trigger: "bash setup-glm52.sh"
-when_to_use: Activates for GLM-5.2 fallback setup, provider failover guidance, or verifying BigModel fallback configuration.
+version: 1.0.0
+compatibility: openclaw, cline-cli, bigmodel-api
+allowed-tools: bash, curl, file-operations
+triggers:
+  - glm fallback
+  - bigmodel fallback
+  - setup-glm52
+  - provider failover
+when_to_use: Activates for glm-5.3-flash fallback setup, provider failover guidance, or verifying BigModel fallback configuration.
 disable-model-invocation: true
 effort: medium
 paths:
   - "bin/orama-system/skills/glm52-fallback/**"
 ---
 
-# GLM-5.2 BigModel Fallback Skill
+# glm-5.3-flash BigModel Fallback Skill
 
-Create a system-wide fallback for all agents to use GLM-5.2 via BigModel
+## Purpose
+
+Create a system-wide fallback for all agents to use glm-5.3-flash via BigModel
 (`https://open.bigmodel.cn`) when ClinePass is unavailable or Cline Credits
 are exhausted.
 
@@ -24,8 +34,8 @@ bin/orama-system/skills/glm52-fallback/
 ## Fallback Chain (system-wide)
 
 ```text
-1. ClinePass (cline-pass/glm-5.2 via api.cline.bot)     ← DEFAULT (Cline Credits)
-2. BigModel GLM-5.2 (open.bigmodel.cn)                   ← FALLBACK (this skill)
+1. ClinePass (cline-pass/glm-5.3-flash via api.cline.bot)     ← DEFAULT (Cline Credits)
+2. BigModel glm-5.3-flash (open.bigmodel.cn)                   ← FALLBACK (this skill)
 3. OpenRouter free (openrouter/free auto-router)          ← LAST RESORT
 4. Ollama local (qwen3.5 on Mac, localhost:11434)         ← OFFLINE
 ```
@@ -66,7 +76,7 @@ The script creates the secrets file and operator-local env bundle (mode 600), wi
 
 - **Endpoint**: `https://open.bigmodel.cn/api/paas/v4/chat/completions`
 - **API Key**: `$GLM52_API_KEY` environment variable (never hardcode)
-- **Model**: `glm-5.2`
+- **Model**: `glm-5.3-flash`
 - **Thinking**: Enabled (reasoning_content in response)
 - **Max tokens**: 65536
 - **Temperature**: 1.0
@@ -79,7 +89,7 @@ curl -X POST "$GLM52_ENDPOINT" \
   -H "Authorization: Bearer $GLM52_API_KEY" \
   --connect-timeout 10 --max-time 120 --retry 3 --retry-delay 2 \
   -d '{
-    "model": "glm-5.2",
+    "model": "glm-5.3-flash",
     "messages": [{"role": "user", "content": "<USER_PROMPT>"}],
     "thinking": {"type": "enabled"},
     "max_tokens": 65536,
@@ -96,8 +106,8 @@ curl -X POST "$GLM52_ENDPOINT" \
     "apiKey": "${env:OPENCLAW_MODELS_PROVIDERS_BIGMODEL_APIKEY}",
     "baseUrl": "https://open.bigmodel.cn/api/paas/v4",
     "models": [{
-      "id": "glm-5.2",
-      "name": "GLM-5.2 (BigModel, thinking)",
+      "id": "glm-5.3-flash",
+      "name": "glm-5.3-flash (BigModel, thinking)",
       "contextWindow": 131072,
       "maxTokens": 65536,
       "reasoning": true
@@ -125,7 +135,7 @@ fi
 bash bin/orama-system/skills/glm52-fallback/setup-glm52.sh
 ```
 
-Report only setup status (e.g. "✓ GLM-5.2 healthy" / "✗ GLM-5.2 unreachable"). Do not print the credential value.
+Report only setup status (e.g. "✓ glm-5.3-flash healthy" / "✗ glm-5.3-flash unreachable"). Do not print the credential value.
 
 ## Security
 
@@ -137,6 +147,31 @@ Report only setup status (e.g. "✓ GLM-5.2 healthy" / "✗ GLM-5.2 unreachable"
   `~/.openclaw/` — never in tracked files, logs, docs, PR text, screenshots,
   or tests.
 - See `SECURITY.md` for the full credential hygiene policy.
+
+## Boundaries
+
+### Always Do
+
+- Read the key only from `$GLM52_API_KEY` or `$OPENCLAW_MODELS_PROVIDERS_BIGMODEL_APIKEY`.
+- Report only setup status; confirm the runtime contract without ever printing
+  the credential value.
+- Keep runtime values (key, endpoint) in local-only files under `~/.openclaw/`
+  (key file mode 600 and git-ignored).
+- Apply the timeout and retry policy, and fall through to the next fallback on
+  exit codes `7`, `28` and `52`.
+
+### Ask First
+
+- Changing the order of the system-wide fallback chain.
+- Editing the `mac-orchestrator.json` provider block.
+
+### Never Do
+
+- Do not commit the API key or hardcode it anywhere.
+- Do not put the key, endpoint or other runtime values in tracked files, logs,
+  docs, PR text, screenshots, or tests.
+- Do not use BigModel ahead of ClinePass while Cline Credits remain; this skill
+  is the fallback, not the default route.
 
 ## Optional: Interactive Provider Setup
 

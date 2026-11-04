@@ -49,7 +49,7 @@ Use the right tool for the right layer. Use the cheapest agent that can succeed.
 | Layer | Tool | Job |
 | --- | --- | --- |
 | Main reasoning + judgment | Claude Sonnet 5.5 medium + prompt caching | Decide, edit, review, synthesize, content insertion |
-| **Default coding agent** | **`cline` CLI via `cline-pass/glm-5.2` (Cline Credits)** | **Agentic coding, refactoring, tool loops — 1M ctx, no rate limits** |
+| **Default coding agent** | **`cline` CLI via `cline-pass/glm-5.3-flash` (Cline Credits)** | **Agentic coding, refactoring, tool loops — 1M ctx, no rate limits** |
 | Lightweight routing/triage | OpenRouter free-model stack (`openrouter/free` auto-router) | Quick replies, routing decisions, summarization — free but rate-limited (50 req/day) |
 | Large-context reading, when explicitly requested | `gemini-mcp-tool` | Gemini-Analyzer use-cases only, architecture mapping, visual diff, screenshot comparison, multi-file audit |
 | Parallel workers | `ai-cli-mcp` | Run background CLI agents (Codex, Gemini, ollama) with PID tracking |
@@ -61,7 +61,7 @@ Here, **Default coding agent** applies only to Cline-bot-driven execution paths.
 On Claude Code or other Anthropic platforms, follow the platform's model policy;
 do not switch execution to Cline without an explicit user request, override instruction, or a direct user-approved Haiku-driven dispatch workflow.
 
-> **ClinePass default for coding:** `cline-pass/glm-5.2` (1M ctx, tool loops). OpenRouter free only for lightweight triage (max=50). See [cline-openclaw-agent/SKILL.md](../cline-openclaw-agent/SKILL.md).
+> **ClinePass default for coding:** `cline-pass/glm-5.3-flash` (1M ctx, tool loops). OpenRouter free only for lightweight triage (max=50). See [cline-openclaw-agent/SKILL.md](../cline-openclaw-agent/SKILL.md).
 
 **Two routing rules below override the legacy "Gemini = default reader" pattern.** See §2.
 
@@ -115,21 +115,21 @@ Claude Code verification: `/mcp` inside Claude Code, or `claude mcp list` from t
 ### Rule 0 — Default coding: ClinePass (Cline Credits)
 
 For coding tasks (refactoring, file editing, agentic tool loops) via `cline`
-CLI, use the `cline-pass/glm-5.2` (Cline Credits) as the default frugality path
+CLI, use the `cline-pass/glm-5.3-flash` (Cline Credits) as the default frugality path
 for cline-bot selected execution. This is the preferred path over OpenRouter free because:
 
 - **No rate limits** — OpenRouter free is limited to 50 req/day, 20 RPM
-- **1M context** — full GLM-5.2 capability with reasoning + structured output
+- **1M context** — full glm-5.3-flash capability with reasoning + structured output
 - **Dedicated billing** — Cline Credits are separate from OpenRouter credits
 - **Full tool loops** — the `cline` CLI runs agentic coding with auto-approve
 
 ```bash
 cline "<task>" --json --auto-approve true -c <dir> \
-  --thinking medium -P cline-pass -m cline-pass/glm-5.2 \
+  --thinking medium -P cline-pass -m cline-pass/glm-5.3-flash \
   --timeout 600 --retries 3
 ```
 
-From Claude: use the `cline_exec` MCP tool (defaults to `cline-pass/glm-5.2`) after
+From Claude: use the `cline_exec` MCP tool (defaults to `cline-pass/glm-5.3-flash`) after
 an explicit user request, frugality override, or Haiku-driven dispatch workflow.
 See [cline-openclaw-agent/SKILL.md](../cline-openclaw-agent/SKILL.md).
 
@@ -357,8 +357,6 @@ ENABLE_TOOL_SEARCH=auto:5 claude
 | < 10 tools | default usually fine |
 | Many tools | `ENABLE_TOOL_SEARCH=auto` |
 | Proxy / custom backend | configure explicitly if supported |
-
----
 
 ## 11. learnings.md Pattern
 
