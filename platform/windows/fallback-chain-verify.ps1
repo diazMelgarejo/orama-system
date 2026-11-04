@@ -174,8 +174,8 @@ $Tier3 = Test-TierAvailable -Tier 3 -Name "Ollama (Mac local)" -CheckCmd {
     $null = Invoke-WebRequest -Uri "http://localhost:11434/api/tags" -TimeoutSec 5 -UseBasicParsing -ErrorAction Stop
 }
 
-# Tier 4: GLM-5.2 (BigModel fallback)
-$Tier4 = Test-TierConfigured -Tier 4 -Name "GLM-5.2 (BigModel fallback)" -FilePath (Join-Path $SecretsDir 'glm52-api-key')
+# Tier 4: glm-5.3-flash (BigModel fallback)
+$Tier4 = Test-TierConfigured -Tier 4 -Name "glm-5.3-flash (BigModel fallback)" -FilePath (Join-Path $SecretsDir 'glm52-api-key')
 
 # Tier 5: OpenRouter (cloud fallback)
 $Tier5 = Test-TierConfigured -Tier 5 -Name "OpenRouter (cloud fallback)" -FilePath (Join-Path $SecretsDir 'openrouter-api-key')
@@ -202,7 +202,7 @@ if ($AvailableCount -eq 0) {
     Write-Host "  • Tier 1 (ClinePass): Get-Command cline"
     Write-Host "  • Tier 2 (LM Studio): Invoke-WebRequest http://localhost:1234/v1/models"
     Write-Host "  • Tier 3 (Ollama): Invoke-WebRequest http://localhost:11434/api/tags"
-    Write-Host "  • Tier 4 (GLM-5.2): Test-Path ~/.openclaw/secrets/glm52-api-key"
+    Write-Host "  • Tier 4 (glm-5.3-flash): Test-Path ~/.openclaw/secrets/glm52-api-key"
     Write-Host "  • Tier 5 (OpenRouter): Test-Path ~/.openclaw/secrets/openrouter-api-key"
 }
 

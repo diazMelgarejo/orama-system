@@ -80,8 +80,8 @@ TIER2=$?
 check_tier 3 "Ollama (Mac local)" "curl -s --max-time 2 http://localhost:11434/api/tags >/dev/null 2>&1"
 TIER3=$?
 
-# Tier 4: GLM-5.2 (BigModel fallback)
-check_tier_configured 4 "GLM-5.2 (BigModel fallback)" "$SECRETS_DIR/glm52-api-key"
+# Tier 4: glm-5.3-flash (BigModel fallback)
+check_tier_configured 4 "glm-5.3-flash (BigModel fallback)" "$SECRETS_DIR/glm52-api-key"
 TIER4=$?
 
 # Tier 5: OpenRouter (cloud fallback)
@@ -109,7 +109,7 @@ if [ $AVAILABLE_COUNT -eq 0 ]; then
   warn "  • Tier 1 (ClinePass): cline --version"
   warn "  • Tier 2 (LM Studio): curl http://$WIN_IP/v1/models"
   warn "  • Tier 3 (Ollama): ollama list"
-  warn "  • Tier 4 (GLM-5.2): ls -l ~/.openclaw/secrets/glm52-api-key"
+  warn "  • Tier 4 (glm-5.3-flash): ls -l ~/.openclaw/secrets/glm52-api-key"
   warn "  • Tier 5 (OpenRouter): setup-openrouter.sh"
 fi
 

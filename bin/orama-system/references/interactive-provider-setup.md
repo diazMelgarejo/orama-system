@@ -31,7 +31,7 @@ trigger a prompt, and only in interactive mode.
 | Codex (OpenAI) | `OPENAI_API_KEY` | `CODEX_API_KEY` | `~/.openclaw/secrets/openai-api-key` |
 | Antigravity / Gemini (Google) | `GEMINI_API_KEY` | `GOOGLE_API_KEY` | `~/.openclaw/secrets/gemini-api-key` |
 | Cline (ClinePass) | `CLINE_API_KEY` | `CLINEPASS_TOKEN` | `~/.openclaw/secrets/cline-api-key` |
-| BigModel (GLM-5.2) | `GLM52_API_KEY` | `OPENCLAW_MODELS_PROVIDERS_BIGMODEL_APIKEY` | `~/.openclaw/secrets/glm52-api-key` |
+| BigModel (glm-5.3-flash) | `GLM52_API_KEY` | `OPENCLAW_MODELS_PROVIDERS_BIGMODEL_APIKEY` | `~/.openclaw/secrets/glm52-api-key` |
 | Perplexity API | `PERPLEXITY_API_KEY` | — | `~/.openclaw/secrets/perplexity-api-key` |
 
 A provider is **configured** when its primary or any alt env var is

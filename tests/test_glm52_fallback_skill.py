@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import stat
 import subprocess
 import sys
@@ -35,27 +36,40 @@ REPLAY_RECORD = ROOT / "docs" / "security" / "glm52-clean-replay-record.md"
 # Shared helpers
 # ---------------------------------------------------------------------------
 
-def _make_fake_bin(tmp_path: Path, curl_sentinel: Path) -> Path:
-    """Create a fake curl/jq on PATH so tests never touch the network.
+def _make_fake_bin(tmp_path: Path, curl_sentinel: Path, curl_body: str | None = None) -> Path:
+    """Create a fake curl and expose jq on PATH without network access.
 
     The fake curl records its full argv (including headers) to
     *curl_sentinel* -- purely for test assertions -- then exits 1 to
     simulate an unreachable endpoint, exercising the script's graceful
     "unreachable" fallback path deterministically and without network I/O.
+
+    When *curl_body* is given the fake curl instead prints it and exits 0 (a 2xx
+    reply). When available, jq is real so health tests exercise its selector and semantics.
     """
     fakebin = tmp_path / "fakebin"
     fakebin.mkdir(exist_ok=True)
     curl = fakebin / "curl"
+    if curl_body is None:
+        curl_tail = "exit 1\n"
+    else:
+        body_file = tmp_path / "curl_body.json"
+        body_file.write_text(curl_body, encoding="utf-8")
+        curl_tail = f'cat "{body_file}"\nexit 0\n'
     curl.write_text(
         "#!/bin/sh\n"
         f'printf \'%s\\n\' "$*" >> "{curl_sentinel}"\n'
-        "exit 1\n",
+        + curl_tail,
         encoding="utf-8",
     )
     jq = fakebin / "jq"
-    jq.write_text("#!/bin/sh\ncat >/dev/null\nexit 0\n", encoding="utf-8")
-    for exe in (curl, jq):
-        exe.chmod(exe.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+    jq_path = shutil.which("jq")
+    if jq_path is None:
+        jq.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+        jq.chmod(jq.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+    elif not jq.exists():
+        jq.symlink_to(jq_path)
+    curl.chmod(curl.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
     return fakebin
 
 
@@ -64,9 +78,9 @@ def _run_setup(
     env: dict,
     make_profiles: bool = False,
     home: Path | None = None,
+    curl_body: str | None = None,
 ) -> subprocess.CompletedProcess:
-    """Run the real setup-glm52.sh with an isolated $HOME and a stubbed
-    curl/jq on PATH so no real network call is made."""
+    """Run the setup script with an isolated home and a stubbed network call."""
     if home is None:
         home = tmp_path / "home"
     home.mkdir(exist_ok=True)
@@ -77,11 +91,12 @@ def _run_setup(
             (home / ".bashrc").write_text("# existing bashrc\n", encoding="utf-8")
 
     curl_sentinel = tmp_path / "curl_calls.txt"
-    fakebin = _make_fake_bin(tmp_path, curl_sentinel)
+    fakebin = _make_fake_bin(tmp_path, curl_sentinel, curl_body)
 
     full_env = os.environ.copy()
     full_env.pop("GLM52_API_KEY", None)
     full_env.pop("OPENCLAW_MODELS_PROVIDERS_BIGMODEL_APIKEY", None)
+    full_env.pop("GLM52_PERSIST_SHELL_PROFILE", None)
     full_env.update(env)
     full_env["HOME"] = str(home)
     full_env["PATH"] = f"{fakebin}:{full_env.get('PATH', '')}"
@@ -173,7 +188,9 @@ class TestApiKeyRequirement:
         """Regression: the script must not contain the old interactive read."""
         text = SETUP_SCRIPT.read_text(encoding="utf-8")
         assert "read -r GLM52_KEY_INPUT" not in text
+        assert "GLM52_KEY_INPUT" not in text
         assert "Enter your BigModel GLM-5.2 API key" not in text
+        assert "Enter your BigModel glm-5.3-flash API key" not in text
 
 
 # ===========================================================================
@@ -331,7 +348,7 @@ class TestShellProfileHandling:
             make_profiles=True,
         )
         assert result.returncode == 0, result.stdout + result.stderr
-        assert "Added GLM-5.2 fallback source line to" in result.stdout
+        assert "Added glm-5.3-flash fallback source line to" in result.stdout
         assert ".zshrc" in result.stdout
         assert ".bashrc" in result.stdout
 
@@ -350,15 +367,17 @@ class TestShellProfileHandling:
         """No 'added' message is printed when no profile exists."""
         result = _run_setup(tmp_path, env={"GLM52_API_KEY": "k"}, make_profiles=False)
         assert result.returncode == 0, result.stdout + result.stderr
-        assert "Added GLM-5.2 fallback source line to" not in result.stdout
+        assert "Added glm-5.3-flash fallback source line to" not in result.stdout
 
     def test_no_added_message_on_second_run_already_sourced(self, tmp_path):
         """A second run, where the profile already sources the env file, does not repeat the 'added' message."""
         home = tmp_path / "home"
-        _run_setup(tmp_path, env={"GLM52_API_KEY": "k"}, make_profiles=True, home=home)
-        result2 = _run_setup(tmp_path, env={"GLM52_API_KEY": "k"}, make_profiles=True, home=home)
+        env = {"GLM52_API_KEY": "k", "GLM52_PERSIST_SHELL_PROFILE": "1"}
+        first = _run_setup(tmp_path, env=env, make_profiles=True, home=home)
+        assert "Added glm-5.3-flash fallback source line to" in first.stdout
+        result2 = _run_setup(tmp_path, env=env, make_profiles=True, home=home)
         assert result2.returncode == 0, result2.stdout + result2.stderr
-        assert "Added GLM-5.2 fallback source line to" not in result2.stdout
+        assert "Added glm-5.3-flash fallback source line to" not in result2.stdout
 
 
 # ===========================================================================
@@ -429,6 +448,39 @@ class TestSetupCompletion:
         result = _run_setup(tmp_path, env={"GLM52_API_KEY": "k"})
         assert result.returncode == 0, result.stdout + result.stderr
         assert "unreachable" in result.stdout or "healthy" in result.stdout
+
+    @pytest.mark.skipif(shutil.which("jq") is None, reason="health validation requires jq")
+    def test_null_completion_is_reported_unreachable_not_healthy(self, tmp_path):
+        """A 2xx reply whose completion is null fails the health check (``jq -e``)."""
+        body = '{"choices":[{"message":{"content":null}}]}'
+        result = _run_setup(tmp_path, env={"GLM52_API_KEY": "k"}, curl_body=body)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert "unreachable" in result.stdout
+        assert "healthy" not in result.stdout
+
+    @pytest.mark.skipif(shutil.which("jq") is None, reason="health validation requires jq")
+    @pytest.mark.parametrize("body", [
+        '{"choices":[]}',
+        '{"choices":[{"message":{"content":""}}]}',
+        '{"choices":[{"message":{"content":" \\t\\n"}}]}',
+        '{"choices":[{"message":{"content":42}}]}',
+        '{"choices":[{"message":{"content":true}}]}',
+        '{"choices":[{"message":{"content":{}}}]}',
+    ])
+    def test_unusable_completion_is_reported_unreachable(self, tmp_path, body):
+        """Missing, blank and non-string completions cannot report a healthy provider."""
+        result = _run_setup(tmp_path, env={"GLM52_API_KEY": "k"}, curl_body=body)
+        assert "unreachable" in result.stdout
+        assert "healthy" not in result.stdout
+
+    @pytest.mark.skipif(shutil.which("jq") is None, reason="health validation requires jq")
+    def test_real_completion_is_reported_healthy(self, tmp_path):
+        """A 2xx reply carrying a completion still prints the healthy line."""
+        body = '{"choices":[{"message":{"content":"ok"}}]}'
+        result = _run_setup(tmp_path, env={"GLM52_API_KEY": "k"}, curl_body=body)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert "glm-5.3-flash healthy" in result.stdout
+        assert "unreachable" not in result.stdout
 
 
 # ===========================================================================

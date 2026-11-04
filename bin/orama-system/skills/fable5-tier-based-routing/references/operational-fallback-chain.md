@@ -17,7 +17,7 @@ Tier 1: Local (Ollama qwen3.5:9b-nvfp4, localhost:11434)
 Tier 2: Windows GPU (LM Studio)
         Endpoint from discovery (last_discovery.json → endpoints.win),
         NEVER hardcoded. SKIP entirely if offline — don't burn the timeout.
-Tier 3: Regional (GLM-5.2 BigModel, open.bigmodel.cn) — cost-gated.
+Tier 3: Regional (glm-5.3-flash BigModel, open.bigmodel.cn) — cost-gated.
 Tier 4: Cloud (Sonnet 5 Medium) — last resort ONLY. No further fallback:
         when Tier 4 fails, surface the outage; do not retry-storm.
 ```

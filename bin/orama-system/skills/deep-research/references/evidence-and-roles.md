@@ -33,9 +33,9 @@ What Perpetua-Tools memory does and does not record about earlier runs:
   model id (`cline-pass/deepseek-v4-flash`) are different things (lesson
   `290a2efb284b`; `docs/LESSONS.md`). Rule: verify provider auth, not only the
   model slug, before trusting a Cline fan-out route (lesson `58ec2dc24e62`).
-- **GLM.** ClinePass with `cline-pass/glm-5.2` is the default coding route, and
-  GLM-5.2 is the last stop of the fallback chain (ClinePass, LM Studio, Ollama,
-  OpenAI, then GLM-5.2). See [`glm52-fallback`](../../glm52-fallback/SKILL.md).
+- **GLM.** ClinePass with `cline-pass/glm-5.3-flash` is the default coding route, and
+  glm-5.3-flash is the last stop of the fallback chain (ClinePass, LM Studio, Ollama,
+  OpenAI, then glm-5.3-flash). See [`glm52-fallback`](../../glm52-fallback/SKILL.md).
 - **DeepSeek.** The DeepSeek V4 Flash route is its own skill, parallel to the
   GLM one: [`clinepass-deepseek-flash`](../../clinepass-deepseek-flash/SKILL.md).
 - **Using them for research.** Those skills describe non-interactive fan-out

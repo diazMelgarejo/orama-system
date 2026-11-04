@@ -5,7 +5,7 @@ against `cline --help` on 2026-06-30.
 
 ## Binary
 
-```
+```text
 ~/.nvm/versions/node/v22.22.2/bin/cline  (symlink -> ../lib/node_modules/cline/bin/cline)
 npm package: cline@3.0.34
 ```
@@ -15,7 +15,7 @@ Resolve with `command -v cline`. If absent, install with
 
 ## Top-Level Usage
 
-```
+```text
 cline [options] [command] [prompt]
 ```
 
@@ -55,31 +55,39 @@ cline [options] [command] [prompt]
 ## Commands
 
 ### `auth [options] [provider]`
+
 Authenticate a provider and configure which model is used. Interactive —
 requires a TTY. Example: `cline auth cline-pass`.
 
 ### `config [options]`
+
 Show current configuration. Interactive mode requires a TTY; use
 `cline config --json` if supported for non-interactive output.
 
 ### `plugin`
+
 Manage Cline Plugins.
 
 ### `skill [args...]`
+
 Manage Cline Skills via the open skills CLI (`npx skills`).
 
 ### `connect [options] [channel]`
+
 Connect to an external channel (e.g. telegram, discord).
 
 ### `mcp`
+
 Manage MCP servers. Subcommands `install` and `add` accept a server name plus
 target args — use the interactive wizard to prefill fields. Cline is an MCP
 **client**, not a server.
 
 ### `doctor`
+
 Diagnose and fix configuration issues.
 
 ### `history | h [options] [command]`
+
 List session history or manage saved sessions.
 
 | Flag | Default | Description |
@@ -93,33 +101,40 @@ Subcommands: `delete`, `update`, `export <sessionId>` (export as standalone
 HTML).
 
 ### `hook`
+
 Handle a hook payload from stdin.
 
 ### `schedule`
+
 Manage scheduled tasks.
 
 ### `hub`
+
 Manage the local hub daemon (`ws://127.0.0.1:25463/hub`). Started by
 `cline --zen` or `cline hub`.
 
 ### `dashboard [options]`
+
 Start the Cline Hub dashboard and open it in a browser.
 
 ### `update [options]`
+
 Check for updates and install if available.
 
 ### `version`
+
 Show Cline CLI version number.
 
 ### `kanban`
+
 Run the kanban app.
 
 ## Providers (from `~/.cline/data/settings/providers.json`)
 
 | Provider id | Default model | Auth | Notes |
 | --- | --- | --- | --- |
-| `cline` | `zai/glm-5.2` | WorkOS OAuth | Cline Credits billing |
-| `cline-pass` | `cline-pass/glm-5.2` | WorkOS OAuth | Same token as `cline`; `lastUsedProvider` |
+| `cline` | `zai/glm-5.3-flash` | WorkOS OAuth | Cline Credits billing |
+| `cline-pass` | `cline-pass/glm-5.3-flash` | WorkOS OAuth | Same token as `cline`; `lastUsedProvider` |
 | `anthropic` | `claude-fable-5` | API key | — |
 | `openrouter` | `minimax/minimax-m2.5:free` | API key | — |
 | `openai-compatible` | `google/gemini-3.1-pro-preview` | API key | Custom baseUrl |
@@ -133,7 +148,7 @@ All Cline-managed providers (`cline`, `cline-pass`) call:
 `https://api.cline.bot/api/v1/chat/completions`
 
 The `cline-pass/` prefix on a model id is **stripped** before the request is
-sent; the upstream model id is `zai/glm-5.2`. Billed against Cline Credits
+sent; the upstream model id is `zai/glm-5.3-flash`. Billed against Cline Credits
 (`https://app.cline.bot/credits`).
 
 ## Non-Interactive Patterns
@@ -141,7 +156,7 @@ sent; the upstream model id is `zai/glm-5.2`. Billed against Cline Credits
 ```bash
 # One-shot, JSON, auto-approve (agent-friendly)
 cline "task" --json --auto-approve true -c /repo --thinking medium \
-  -P cline-pass -m cline-pass/glm-5.2 --timeout 600 --retries 3
+  -P cline-pass -m cline-pass/glm-5.3-flash --timeout 600 --retries 3
 
 # Plan mode (no mutations)
 cline "propose a refactor" --plan --json -c /repo

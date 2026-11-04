@@ -7,11 +7,11 @@
       "manager": "oramaclaw",
       "policy": "cooperative",
       "spec": {
-        "model": "openrouter/z-ai/glm-5.2",
+        "model": "openrouter/z-ai/glm-5.3-flash",
         "thinkingDefault": "auto",
         "clineCli": "command -v cline",
         "clineProvider": "cline-pass",
-        "clineModel": "cline-pass/glm-5.2",
+        "clineModel": "cline-pass/glm-5.3-flash",
         "bridges": ["exec", "acp", "mcp"]
       },
       "managed_paths": [
