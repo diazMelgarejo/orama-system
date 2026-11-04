@@ -269,6 +269,288 @@ $RepoRoot   = (Resolve-Path (Join-Path $ScriptDir '..\..')).Path
 $LogDir     = Join-Path $RepoRoot '.logs'
 $PathsFile  = Join-Path $RepoRoot '.paths.ps1'
 
+# ── Latest main + job-object escape (service-start modes on Windows) ─────────
+# An agent or desktop-app shell can sit inside a Windows job object that denies
+# breakaway. spawn_detached then launches every service inside that job, and the
+# whole stack (PT, orama, Portal, TLS front end) dies when that app restarts.
+# Before anything is installed or started, this launcher:
+#   1. moves clean, detached run checkouts that trail origin/main to origin/main
+#      (branch checkouts and local or PR commits are left alone), and
+#   2. relaunches itself outside the job through WMI Win32_Process.Create, which
+#      creates the process outside the caller's job, relaying its output and exit
+#      code. It also relaunches after step 1 so the updated script is what runs.
+# Opt out per run with ORAMA_START_UPDATE=0 or ORAMA_JOB_ESCAPE=0.
+$LauncherArgs = @($args)
+
+function Update-RunCheckout {
+    <#
+    .SYNOPSIS
+    Move a clean, detached run checkout to origin/main when it trails it.
+    .PARAMETER Dir
+    Git working tree to update.
+    .PARAMETER Label
+    Name used in the progress line (orama or PT).
+    .OUTPUTS
+    True when HEAD moved; false when it was already current, is on a branch, has
+    uncommitted changes, is not behind origin/main, or the fetch failed.
+    #>
+    param([string]$Dir, [string]$Label)
+    if (-not (Get-Command git -ErrorAction SilentlyContinue)) { return $false }
+    $prevEap = $ErrorActionPreference
+    $prevPrompt = $env:GIT_TERMINAL_PROMPT
+    $ErrorActionPreference = 'Continue'
+    $env:GIT_TERMINAL_PROMPT = '0'
+    try {
+        $inside = & git -C $Dir rev-parse --is-inside-work-tree 2>$null
+        if ($inside -ne 'true') { return $false }
+        & git -C $Dir symbolic-ref -q HEAD *> $null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "  [update] $Label is on a branch; leaving it as is"
+            return $false
+        }
+        $dirty = & git -C $Dir status --porcelain --untracked-files=no 2>$null
+        if ($dirty) {
+            Write-Host "  [update] $Label has uncommitted changes; not updating"
+            return $false
+        }
+        & git -C $Dir fetch -q origin main *> $null
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "  [update] $Label fetch of origin/main failed; starting the current checkout"
+            return $false
+        }
+        $head = (& git -C $Dir rev-parse HEAD 2>$null | Out-String).Trim()
+        $target = (& git -C $Dir rev-parse --verify -q 'refs/remotes/origin/main^{commit}' 2>$null | Out-String).Trim()
+        if (-not $target -or $head -eq $target) { return $false }
+        & git -C $Dir merge-base --is-ancestor $head $target *> $null
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "  [update] $Label HEAD is not an ancestor of origin/main; leaving it as is"
+            return $false
+        }
+        & git -C $Dir checkout -q --detach $target *> $null
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "  [update] $Label checkout of origin/main failed; starting the current checkout"
+            return $false
+        }
+        Write-Host ("  [update] {0} moved {1} -> {2} (origin/main)" -f $Label, $head.Substring(0, 8), $target.Substring(0, 8))
+        return $true
+    } finally {
+        $ErrorActionPreference = $prevEap
+        $env:GIT_TERMINAL_PROMPT = $prevPrompt
+    }
+}
+
+function Get-LauncherJobState {
+    <#
+    .SYNOPSIS
+    Report whether this process runs inside a job object that would hold the services.
+    .DESCRIPTION
+    Reading the innermost job's limit flags is not enough: with nested jobs every
+    level must allow breakaway. So when this process is in a job, the probe starts a
+    suspended cmd.exe with CREATE_BREAKAWAY_FROM_JOB, exactly as spawn_detached
+    does, checks whether that child ended up outside every job, and terminates it.
+    .OUTPUTS
+    NotInJob, InJobBreakawayOk (children can leave the job), InJobNoBreakaway, or Unknown.
+    #>
+    if (-not ('OramaLauncherJobProbe' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.IO;
+using System.Runtime.InteropServices;
+using System.Text;
+public static class OramaLauncherJobProbe {
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    struct STARTUPINFO {
+        public int cb; public string lpReserved; public string lpDesktop; public string lpTitle;
+        public int dwX; public int dwY; public int dwXSize; public int dwYSize;
+        public int dwXCountChars; public int dwYCountChars; public int dwFillAttribute; public int dwFlags;
+        public short wShowWindow; public short cbReserved2; public IntPtr lpReserved2;
+        public IntPtr hStdInput; public IntPtr hStdOutput; public IntPtr hStdError;
+    }
+    [StructLayout(LayoutKind.Sequential)]
+    struct PROCESS_INFORMATION { public IntPtr hProcess; public IntPtr hThread; public int dwProcessId; public int dwThreadId; }
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool IsProcessInJob(IntPtr process, IntPtr job, out bool result);
+    [DllImport("kernel32.dll")]
+    static extern IntPtr GetCurrentProcess();
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    static extern bool CreateProcess(string app, StringBuilder cmd, IntPtr pa, IntPtr ta, bool inherit,
+        uint flags, IntPtr env, string cwd, ref STARTUPINFO si, out PROCESS_INFORMATION pi);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool TerminateProcess(IntPtr process, uint code);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool CloseHandle(IntPtr handle);
+    public static string State() {
+        bool inJob;
+        if (!IsProcessInJob(GetCurrentProcess(), IntPtr.Zero, out inJob)) return "Unknown";
+        if (!inJob) return "NotInJob";
+        string exe = Path.Combine(Environment.SystemDirectory, "cmd.exe");
+        STARTUPINFO si = new STARTUPINFO();
+        si.cb = Marshal.SizeOf(typeof(STARTUPINFO));
+        PROCESS_INFORMATION pi;
+        // CREATE_SUSPENDED | CREATE_BREAKAWAY_FROM_JOB | CREATE_NO_WINDOW
+        const uint flags = 0x00000004 | 0x01000000 | 0x08000000;
+        if (!CreateProcess(exe, new StringBuilder("\"" + exe + "\" /d /c exit 0"), IntPtr.Zero, IntPtr.Zero,
+                false, flags, IntPtr.Zero, null, ref si, out pi)) {
+            return "InJobNoBreakaway";
+        }
+        try {
+            bool childInJob;
+            if (!IsProcessInJob(pi.hProcess, IntPtr.Zero, out childInJob)) return "Unknown";
+            return childInJob ? "InJobNoBreakaway" : "InJobBreakawayOk";
+        } finally {
+            TerminateProcess(pi.hProcess, 0);
+            CloseHandle(pi.hThread);
+            CloseHandle(pi.hProcess);
+        }
+    }
+}
+'@
+    }
+    try { return [OramaLauncherJobProbe]::State() } catch { return 'Unknown' }
+}
+
+function ConvertTo-LauncherLiteral {
+    <#
+    .SYNOPSIS
+    Quote a string as a single-quoted PowerShell literal.
+    #>
+    param([string]$Value)
+    return "'" + ($Value -replace "'", "''") + "'"
+}
+
+function Invoke-LauncherRelaunch {
+    <#
+    .SYNOPSIS
+    Run this launcher again with the same arguments and return the child's exit code.
+    .PARAMETER ScriptPath
+    The launcher script to run (pass $PSCommandPath from script scope; inside a
+    function it names the file that defines the function, not the running script).
+    .PARAMETER Arguments
+    The original launcher arguments.
+    .PARAMETER OutsideJob
+    Create the child through WMI so it is outside the caller's job object; its
+    output goes to .logs\launcher.log and is relayed here while it runs.
+    .PARAMETER LogDir
+    Directory for launcher.log and launcher.rc.
+    .OUTPUTS
+    The child's exit code, or null when the WMI launch failed and the caller should continue in place.
+    #>
+    param([string]$ScriptPath, [string[]]$Arguments, [bool]$OutsideJob, [string]$LogDir)
+    $hostExe = (Get-Process -Id $PID).Path
+    if (-not $OutsideJob) {
+        $env:ORAMA_START_RELAUNCHED = '1'
+        & $hostExe -NoProfile -ExecutionPolicy Bypass -File $ScriptPath @Arguments
+        return $LASTEXITCODE
+    }
+
+    $null = New-Item -ItemType Directory -Force -Path $LogDir
+    $log = Join-Path $LogDir 'launcher.log'
+    $rcFile = Join-Path $LogDir 'launcher.rc'
+    Remove-Item -LiteralPath $log, $rcFile -ErrorAction SilentlyContinue
+    $argText = ($Arguments | ForEach-Object { ConvertTo-LauncherLiteral $_ }) -join ' '
+    $logLit = ConvertTo-LauncherLiteral $log
+    $childScript = @"
+`$ErrorActionPreference = 'Continue'
+`$global:LASTEXITCODE = 0
+`$rc = 1
+try {
+    & $(ConvertTo-LauncherLiteral $ScriptPath) $argText *> $logLit
+    `$rc = `$LASTEXITCODE
+} catch {
+    `$_ | Out-String | Out-File -LiteralPath $logLit -Append
+    `$rc = 1
+}
+Set-Content -LiteralPath $(ConvertTo-LauncherLiteral $rcFile) -Value `$rc -Encoding ascii
+exit `$rc
+"@
+    $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($childScript))
+    $commandLine = '"{0}" -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand {1}' -f $hostExe, $encoded
+
+    # The child gets this process's environment (secrets stay off the command line).
+    $envList = [System.Collections.Generic.List[string]]::new()
+    foreach ($entry in [Environment]::GetEnvironmentVariables('Process').GetEnumerator()) {
+        if (-not "$($entry.Key)".StartsWith('=')) { $envList.Add("$($entry.Key)=$($entry.Value)") }
+    }
+    $envList.Add('ORAMA_START_RELAUNCHED=1')
+
+    try {
+        $startup = New-CimInstance -ClassName Win32_ProcessStartup -Namespace root/cimv2 -ClientOnly -Property @{
+            ShowWindow           = [uint16]0
+            EnvironmentVariables = [string[]]$envList.ToArray()
+        }
+        $created = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{
+            CommandLine               = $commandLine
+            CurrentDirectory          = (Get-Location).Path
+            ProcessStartupInformation = $startup
+        }
+    } catch {
+        Write-Host "  [job] WMI relaunch failed: $($_.Exception.Message)"
+        return $null
+    }
+    if ($created.ReturnValue -ne 0) {
+        Write-Host "  [job] WMI relaunch returned $($created.ReturnValue)"
+        return $null
+    }
+
+    $child = $null
+    try { $child = [System.Diagnostics.Process]::GetProcessById([int]$created.ProcessId); $null = $child.Handle } catch { $child = $null }
+    Write-Host "  [job] relaunched outside the job object (PID $($created.ProcessId)); output follows, full log: $log"
+    $reader = $null
+    try {
+        while ($true) {
+            if (-not $reader -and (Test-Path -LiteralPath $log) -and (Get-Item -LiteralPath $log).Length -ge 2) {
+                $stream = [System.IO.File]::Open($log, 'Open', 'Read', 'ReadWrite, Delete')
+                $reader = New-Object System.IO.StreamReader($stream, [System.Text.Encoding]::UTF8, $true)
+            }
+            if ($reader) {
+                $chunk = $reader.ReadToEnd()
+                if ($chunk) { [Console]::Out.Write($chunk) }
+            }
+            if (-not $child -or $child.HasExited) {
+                if ($reader) {
+                    $chunk = $reader.ReadToEnd()
+                    if ($chunk) { [Console]::Out.Write($chunk) }
+                }
+                break
+            }
+            Start-Sleep -Milliseconds 250
+        }
+    } finally {
+        if ($reader) { $reader.Dispose() }
+    }
+    if (Test-Path -LiteralPath $rcFile) {
+        $rcText = (Get-Content -LiteralPath $rcFile -Raw).Trim()
+        if ($rcText -match '^-?\d+$') { return [int]$rcText }
+    }
+    if ($child) { return $child.ExitCode }
+    return 1
+}
+
+$StartsServices = -not ($ReadOnlyMode -or $Discover)
+if ($StartsServices -and $env:OS -eq 'Windows_NT' -and $env:ORAMA_START_RELAUNCHED -ne '1') {
+    $codeUpdated = $false
+    if ($env:ORAMA_START_UPDATE -ne '0' -and -not $RestartPortal) {
+        $codeUpdated = Update-RunCheckout -Dir $RepoRoot -Label 'orama'
+        $ptForUpdate = (Get-ListConfigValue -PathsFile $PathsFile -PathsVariable 'PtDir' -EnvironmentNames @('PERPETUA_TOOLS_PATH', 'PT_HOME', 'PERPETUA_TOOLS_ROOT', 'PERPETUATOOLSROOT') -DefaultValue '').Value
+        if ($ptForUpdate -and (Test-Path -LiteralPath $ptForUpdate)) {
+            $null = Update-RunCheckout -Dir $ptForUpdate -Label 'PT'
+        }
+    }
+    $escapeJob = $false
+    if ($env:ORAMA_JOB_ESCAPE -ne '0') {
+        $jobState = Get-LauncherJobState
+        if ($jobState -eq 'InJobNoBreakaway') {
+            Write-Host '  [job] this shell is inside a job object that denies breakaway; services started from it would stop when its owner exits'
+            $escapeJob = $true
+        }
+    }
+    if ($escapeJob -or $codeUpdated) {
+        $relaunchExit = Invoke-LauncherRelaunch -ScriptPath $PSCommandPath -Arguments $LauncherArgs -OutsideJob $escapeJob -LogDir $LogDir
+        if ($null -ne $relaunchExit) { exit $relaunchExit }
+        Write-Host '  [job] continuing in this process; services will stay inside the job object'
+    }
+}
+
 # Gitignored env (.env → .env.local) before bind/token reads
 $LoadLocalPs1 = Join-Path $RepoRoot 'scripts\env\load-local.ps1'
 if (Test-Path $LoadLocalPs1) {
@@ -1976,3 +2258,6 @@ if ($LanPeer) {
 if (-not $NoOpen) {
     Open-Browser $PortalUrl
 }
+
+# Explicit success: a relaunching parent relays this exit code (see Invoke-LauncherRelaunch).
+exit 0
