@@ -204,6 +204,43 @@ MSYS/Git Bash quoting often fails silently. Prefer a script file or a direct com
 
 ---
 
+## Git Workflow Patterns
+
+### Sync a dirty checkout onto the latest `main`
+
+Use this when asked to preserve local edits, sync the repositories and reapply the edits on the
+latest `main`. It follows the merge-only rule (never rebase) and protects the stash stack, which
+every worktree and session on the machine shares.
+
+1. Prefer a WIP commit on the current branch. If you must stash, tag it with
+   `git stash push -u -m "<unique-tag>"` and record its SHA from
+   `git stash list --format='%H %gs'`.
+2. `git fetch origin main`, then branch from the remote ref:
+   `git switch -c <descriptive-branch> origin/main`. Avoid `git pull` (it rebases when
+   `pull.rebase` is set) and avoid checking out `main` itself (another worktree may hold it).
+3. Reapply with `git stash apply <sha>`, not `pop`. Resolve conflicts against current upstream,
+   then drop the entry by re-finding its tag.
+4. For a submodule with dirty local changes, repeat inside the submodule first (tagged stash,
+   fetch, branch from `origin/main`, apply, resolve, commit), then record the new submodule
+   pointer in the parent deliberately.
+
+Switching branches on a dirty checkout still needs the operator's explicit request.
+
+### ECC submodule merge conflicts
+
+When merging upstream `vendor/ecc-tools` (the ECC submodule tracked in Perpetua-Tools) into a
+branch that carries local `HERMES_HOME` adapter edits, conflicts are expected in
+`.hermes/README.md`, `scripts/doctor.js`, `scripts/install-apply.js` and the lockfiles.
+
+- Keep both sides when they add complementary behavior (for example, upstream adds a target line
+  and the local side adds `HERMES_HOME` resolution).
+- Lockfiles: take upstream's `package-lock.json` or `yarn.lock` when upstream changed them
+  materially and the local side made no dependency edits. If both sides changed `package.json`,
+  regenerate the lockfile instead of choosing one side.
+- Run a syntax check on every resolved script before committing (`node --check <file>`).
+
+---
+
 ## Pitfalls
 
 | Pitfall | Fix |
@@ -227,6 +264,7 @@ Distinguish "not wired yet" from "already wired correctly".
 
 - [`windows-onboarding-config.md`](windows-onboarding-config.md) — env vars + partner CLI table
 - [`hermes-windows-partner-readiness.md`](hermes-windows-partner-readiness.md) — canary matrix
+- [`hermes-portable-brain-archive.md`](hermes-portable-brain-archive.md) — archive sizing and delivery rule
 - [`win-localhost-runtime-checklist.md`](win-localhost-runtime-checklist.md)
 - [`../commands/windows-hermes-setup/SKILL.md`](../commands/windows-hermes-setup/SKILL.md) — Hermes command card
 - AlphaClaw wiki `11-windows-dev.md` — node/npm/git anchor policy

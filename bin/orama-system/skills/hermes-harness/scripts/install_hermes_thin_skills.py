@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""Install, verify and self-test the thin local Hermes wrappers that point at the canonical cards."""
 from __future__ import annotations
 
 import argparse
@@ -51,6 +52,7 @@ MANAGED_MARKER = "created_by: agent"
 
 @dataclass(frozen=True)
 class HermesWrapper:
+    """One thin wrapper: its slug, description, canonical card path and one-line purpose."""
     slug: str
     description: str
     canonical: str
@@ -108,6 +110,7 @@ OPTIONAL_WRAPPERS = [
 
 
 def all_wrappers(include_optional: bool = False) -> list[HermesWrapper]:
+    """Return the core wrappers, plus the optional ones when *include_optional* is true."""
     specs = list(WRAPPERS)
     if include_optional:
         specs.extend(OPTIONAL_WRAPPERS)
@@ -120,6 +123,7 @@ def hermes_local_dir(slug: str) -> str:
     return slug
 
 def harness_redirect_text() -> str:
+    """Return the text of the hermes-harness redirect skill that points at the canonical harness."""
     provenance = install_provenance()
     return f"""---
 name: hermes-harness
@@ -203,6 +207,7 @@ def install_harness_redirect(dry_run: bool = False) -> Path | None:
 
 
 def verify_harness_redirect() -> list[str]:
+    """Return errors for a missing or incomplete harness redirect and any orphaned local references."""
     errors: list[str] = []
     target = HERMES_HARNESS_ROOT / "SKILL.md"
     if not target.is_file():
@@ -220,6 +225,7 @@ def verify_harness_redirect() -> list[str]:
 
 
 def wrapper_text(spec: HermesWrapper) -> str:
+    """Return the managed thin-wrapper SKILL.md text for *spec*, stamped with the install provenance."""
     provenance = install_provenance()
     return f"""---
 name: {spec.slug}
@@ -255,6 +261,11 @@ Canonical source of truth:
    memory into tracked files.
 5. Do not commit, delete, deploy, force-push, or change account/provider
    settings unless the user explicitly instructs that exact action.
+6. Never run `git clean -fd` or `git clean -fdx` without confirming the user's
+   explicit approval and a backup/stash of the working tree first.
+7. Do not switch branches on a repo that has uncommitted working-tree changes
+   unless the user explicitly requests branch work. Stay on the current branch
+   and continue there by default.
 
 ## Windows Readiness
 
@@ -273,6 +284,14 @@ TESTS / VERIFICATION:
 RISKS:
 HANDOFF NOTES:
 ```
+
+## Refresh rule
+
+`install_hermes_thin_skills.py --install --verify` rewrites managed wrappers.
+Workflow patterns, archive rules, and conflict-resolution steps added by a
+self-improve patch are **not durable here**. The canonical card and its
+references carry the authoritative versions. If this wrapper lags behind the
+canonical source, refresh it rather than patching it.
 """
 
 
@@ -401,6 +420,7 @@ def verify(include_optional: bool = False) -> list[str]:
 
 
 def run_tests() -> int:
+    """Self-test: install into a temporary skills directory and check the result; return an exit code."""
     import tempfile
 
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -448,6 +468,7 @@ def run_tests() -> int:
 
 
 def main() -> int:
+    """Parse the command line and run install, verify or the self-test; return the exit code."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--install", action="store_true")
     parser.add_argument("--verify", action="store_true")
