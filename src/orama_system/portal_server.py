@@ -29,6 +29,7 @@ import secrets
 import signal
 import subprocess
 import sys
+import threading
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -2964,9 +2965,73 @@ def _parse_env_file(path: "Path") -> Dict[str, str]:
     return result
 
 
+# CLI `--version` results change only when a CLI is installed or upgraded, but
+# launching one costs about a second on Windows (npm .cmd shims start node) and
+# up to its 4 s timeout when broken. Cache per binary path so status polls don't
+# pay that on every request.
+_CLI_VERSION_TTL_SECONDS = 300.0
+_CLI_VERSION_TIMEOUT_SECONDS = 4
+_cli_version_cache: Dict[str, tuple[float, Optional[tuple[int, str]]]] = {}
+_cli_version_lock = threading.Lock()
+
+
+def _cli_version(bin_path: str) -> Optional[tuple[int, str]]:
+    """Return ``(returncode, stdout+stderr text)`` of ``<bin_path> --version``.
+
+    Results, including a failure to run (``None``), are cached per path for
+    ``_CLI_VERSION_TTL_SECONDS``. The lock is held while the CLI runs, so
+    concurrent status requests launch it once rather than once each.
+    """
+    with _cli_version_lock:
+        cached = _cli_version_cache.get(bin_path)
+        if cached is not None and time.monotonic() - cached[0] < _CLI_VERSION_TTL_SECONDS:
+            return cached[1]
+        result: Optional[tuple[int, str]]
+        try:
+            r = subprocess.run(
+                [bin_path, "--version"], capture_output=True, timeout=_CLI_VERSION_TIMEOUT_SECONDS
+            )
+            result = (r.returncode, (r.stdout + r.stderr).decode("utf-8", errors="replace"))
+        except Exception:
+            result = None
+        _cli_version_cache[bin_path] = (time.monotonic(), result)
+        return result
+
+
+def _tcp_port_open(host: str, port: int, budget_seconds: float) -> bool:
+    """Return True if a TCP connection to *host*:*port* succeeds within one shared budget.
+
+    ``socket.create_connection`` applies its timeout to each resolved address,
+    and Windows retries a refused SYN until that timeout, so a closed port on
+    ``localhost`` (IPv6 then IPv4) cost twice the timeout. Here every address
+    shares *budget_seconds*, split evenly over the addresses not yet tried so a
+    dead first address cannot starve a live second one (a local connect that
+    succeeds takes milliseconds).
+    """
+    import socket as _sock
+
+    deadline = time.monotonic() + budget_seconds
+    try:
+        infos = _sock.getaddrinfo(host, port, type=_sock.SOCK_STREAM)
+    except OSError:
+        return False
+    for index, (family, socktype, proto, _canon, addr) in enumerate(infos):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return False
+        try:
+            with _sock.socket(family, socktype, proto) as s:
+                s.settimeout(remaining / (len(infos) - index))
+                s.connect(addr)
+                return True
+        except OSError:
+            continue
+    return False
+
+
 def _probe_tools_sync() -> Dict[str, Any]:
     """Probe all tools/APIs synchronously (called from thread pool). Returns availability dict."""
-    import shutil, subprocess, socket as _sock
+    import shutil
 
     tools: Dict[str, Any] = {}
 
@@ -3013,37 +3078,27 @@ def _probe_tools_sync() -> Dict[str, Any]:
     codex_bin = shutil.which("codex") or "/opt/homebrew/bin/codex"
     codex_ok, codex_ver = False, ""
     if os.path.exists(codex_bin):
-        try:
-            r = subprocess.run([codex_bin, "--version"], capture_output=True, timeout=4)
-            codex_ok = r.returncode == 0
-            codex_ver = (r.stdout + r.stderr).decode("utf-8", errors="replace").strip().split("\n")[0]
-        except Exception:
-            pass
+        codex_run = _cli_version(codex_bin)
+        if codex_run is not None:
+            codex_ok = codex_run[0] == 0
+            codex_ver = codex_run[1].strip().split("\n")[0]
     tools["codex-cli"] = {"ok": codex_ok, "group": "cli", "detail": codex_ver if codex_ok else "not found — run scripts/setup_codex.sh"}
 
     # ── Gemini CLI ─────────────────────────────────────────────────────────────
     gemini_bin = shutil.which("gemini") or shutil.which("gemini-cli")
     gemini_ok, gemini_ver = False, ""
-    if gemini_bin:
-        try:
-            r = subprocess.run([gemini_bin, "--version"], capture_output=True, timeout=4)
-            raw = (r.stdout + r.stderr).decode("utf-8", errors="replace").strip()
-            first_line = raw.split("\n")[0]
-            has_error = any(x in raw for x in ("SyntaxError", "UnhandledPromise", "Error:", "TypeError"))
-            gemini_ok = r.returncode == 0 and not has_error
-            gemini_ver = first_line if gemini_ok else f"found but broken — {first_line[:60]}"
-        except Exception:
-            pass
+    gemini_run = _cli_version(gemini_bin) if gemini_bin else None
+    if gemini_run is not None:
+        raw = gemini_run[1].strip()
+        first_line = raw.split("\n")[0]
+        has_error = any(x in raw for x in ("SyntaxError", "UnhandledPromise", "Error:", "TypeError"))
+        gemini_ok = gemini_run[0] == 0 and not has_error
+        gemini_ver = first_line if gemini_ok else f"found but broken — {first_line[:60]}"
     tools["gemini-cli"] = {"ok": gemini_ok, "group": "cli", "detail": gemini_ver if gemini_ver else "not found — npm i -g @google/gemini-cli"}
 
     # ── AlphaClaw Gateway ──────────────────────────────────────────────────────
     ac_port = int(os.getenv("ALPHACLAW_PORT", "18789"))
-    ac_ok = False
-    try:
-        with _sock.create_connection(("localhost", ac_port), timeout=1.5):
-            ac_ok = True
-    except Exception:
-        pass
+    ac_ok = _tcp_port_open("localhost", ac_port, budget_seconds=1.5)
     tools["alphaclaw-gateway"] = {
         "ok": ac_ok,
         "group": "gateway",
@@ -3066,11 +3121,8 @@ def _probe_cli_available(bin_name: str) -> bool:
         p = known.get(bin_name, "")
     if not p or not os.path.exists(p):
         return False
-    try:
-        r = subprocess.run([p, "--version"], capture_output=True, timeout=4)
-        return r.returncode == 0
-    except Exception:
-        return False
+    run = _cli_version(p)
+    return run is not None and run[0] == 0
 
 
 async def _build_portal_status_payload() -> Dict[str, Any]:
@@ -3091,6 +3143,11 @@ async def _build_portal_status_payload() -> Dict[str, Any]:
         _dyn_win_lms  = LMS_WIN_ENDPOINTS
         _dyn_ollama_win = OLLAMA_WIN
 
+    # Tools + CLI availability are synchronous checks; start them in the thread
+    # pool now so they overlap the network probes instead of adding to them.
+    loop = asyncio.get_running_loop()
+    tools_future = loop.run_in_executor(None, _probe_tools_sync)
+
     async with _portal_trusted_http_client() as trusted_client, _portal_untrusted_http_client() as probe_client:
         (
             (pt_ok, pt_ver),
@@ -3098,6 +3155,7 @@ async def _build_portal_status_payload() -> Dict[str, Any]:
             (lm_mac_ok, lm_mac_models),
             ol_win_result,
             ol_mac_result,
+            ol_mac_busy,
             activity_events,
             agents,
             routing,
@@ -3110,6 +3168,10 @@ async def _build_portal_status_payload() -> Dict[str, Any]:
             _probe_lms_models(probe_client, LMS_MAC_ENDPOINT, LMS_API_TOKEN),
             _probe_ollama_models(probe_client, _dyn_ollama_win),
             _probe_ollama_models(probe_client, OLLAMA_MAC),
+            # Bounded by PROBE_TIMEOUT inside the probe: Mac Ollama is
+            # localhost-only by design, so from Windows this can wait the full
+            # timeout. Running it here keeps that wait off the critical path.
+            _probe_ollama_ps(probe_client, OLLAMA_MAC),
             _probe_activity(trusted_client),
             _probe_agents(trusted_client),
             _probe_routing(trusted_client),
@@ -3131,15 +3193,6 @@ async def _build_portal_status_payload() -> Dict[str, Any]:
             except Exception as _gossip_exc:
                 log.warning("ip gossip write failed: %s", _gossip_exc)
 
-    # Bare httpx.AsyncClient() (no timeout) previously left this unbounded,
-    # unlike every other probe above -- on a Windows host reaching OLLAMA_MAC
-    # over the LAN, Mac Ollama being localhost-only by design (see hardware
-    # policy doctrine) meant this could hang well past PROBE_TIMEOUT, dragging
-    # the whole /api/app/state response down with it. Verified live: curl to
-    # this endpoint hung 5s+ with zero bytes back before this fix.
-    async with _portal_untrusted_http_client(timeout=PROBE_TIMEOUT) as _ps_client:
-        ol_mac_busy = await _probe_ollama_ps(_ps_client, OLLAMA_MAC)
-
     services: Dict[str, Any] = {
         "perplexity_tools": {"ok": pt_ok, "version": pt_ver, "url": PT_URL},
         "ultrathink": {"ok": us_ok, "version": us_ver, "url": US_URL},
@@ -3157,9 +3210,7 @@ async def _build_portal_status_payload() -> Dict[str, Any]:
 
     hardware_policy = _hardware_policy_status(services)
 
-    # Tools + CLI availability (sync checks in thread pool — no extra HTTP calls)
-    loop = asyncio.get_event_loop()
-    tools = await loop.run_in_executor(None, _probe_tools_sync)
+    tools = await tools_future
 
     payload = {
         "portal_version": VERSION,
