@@ -2967,9 +2967,10 @@ def _parse_env_file(path: "Path") -> Dict[str, str]:
 
 # CLI `--version` results change only when a CLI is installed or upgraded, but
 # launching one costs about a second on Windows (npm .cmd shims start node) and
-# up to its 4 s timeout when broken. Cache per binary path so status polls don't
-# pay that on every request.
-_CLI_VERSION_TTL_SECONDS = 300.0
+# up to its 4 s timeout when broken. Policy: status and tools requests launch
+# each CLI (codex, gemini, ...) at most once per hour per portal process. Only
+# a portal restart or an explicit POST /api/tools/refresh launches it sooner.
+_CLI_VERSION_TTL_SECONDS = 3600.0
 _CLI_VERSION_TIMEOUT_SECONDS = 4
 _cli_version_cache: Dict[str, tuple[float, Optional[tuple[int, str]]]] = {}
 _cli_version_lock = threading.Lock()
@@ -2996,6 +2997,12 @@ def _cli_version(bin_path: str) -> Optional[tuple[int, str]]:
             result = None
         _cli_version_cache[bin_path] = (time.monotonic(), result)
         return result
+
+
+def _clear_cli_version_cache() -> None:
+    """Forget cached CLI ``--version`` results so the next probe relaunches each CLI once."""
+    with _cli_version_lock:
+        _cli_version_cache.clear()
 
 
 def _tcp_port_open(host: str, port: int, budget_seconds: float) -> bool:
@@ -3255,6 +3262,18 @@ async def api_hardware_policy():
 async def api_tools():
     """Return availability of all configured tools and APIs."""
     loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _probe_tools_sync)
+
+
+@app.post("/api/tools/refresh")
+async def api_tools_refresh():
+    """Manually re-probe tools, relaunching each CLI's ``--version`` once now.
+
+    The only request path that bypasses the hourly CLI launch limit; it is a
+    POST so polling dashboards cannot trigger it.
+    """
+    _clear_cli_version_cache()
+    loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, _probe_tools_sync)
 
 

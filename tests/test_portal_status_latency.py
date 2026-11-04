@@ -187,3 +187,54 @@ def test_tcp_port_open_reaches_a_live_second_address_after_a_dead_first(monkeypa
     monkeypatch.setattr(socket, "socket", FirstDeadSocket)
 
     assert portal_server._tcp_port_open("example.test", 9, budget_seconds=0.4) is True
+
+
+def test_cli_launch_limit_is_one_hour():
+    """Policy: request paths launch each CLI at most once per hour."""
+    assert portal_server._CLI_VERSION_TTL_SECONDS == 3600.0
+
+
+def _fake_cli_env(monkeypatch, calls):
+    """Make codex and gemini resolvable and record every --version launch."""
+    import shutil
+
+    def fake_run(argv, **kwargs):
+        """Record the launch and report a healthy CLI."""
+        calls.append(argv[0])
+        return SimpleNamespace(returncode=0, stdout=b"cli 1.0\n", stderr=b"")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(shutil, "which", lambda name: f"/fake/bin/{name}")
+    monkeypatch.setattr(portal_server.os.path, "exists", lambda p: str(p).startswith("/fake/bin/"))
+    monkeypatch.setattr(portal_server, "_tcp_port_open", lambda *a, **k: False)
+
+
+def test_repeated_tool_probes_launch_each_cli_once(monkeypatch):
+    """Many status/tools polls inside the hour launch codex and gemini once each."""
+    calls: list[str] = []
+    _fake_cli_env(monkeypatch, calls)
+
+    for _ in range(5):
+        tools = portal_server._probe_tools_sync()
+
+    assert tools["codex-cli"]["ok"] is True
+    assert tools["gemini-cli"]["ok"] is True
+    assert sorted(calls) == ["/fake/bin/codex", "/fake/bin/gemini"]
+
+
+def test_manual_refresh_relaunches_each_cli_once(monkeypatch):
+    """POST /api/tools/refresh is the explicit way to relaunch CLIs inside the hour."""
+    calls: list[str] = []
+    _fake_cli_env(monkeypatch, calls)
+
+    portal_server._probe_tools_sync()
+    asyncio.run(portal_server.api_tools_refresh())
+
+    assert sorted(calls) == ["/fake/bin/codex", "/fake/bin/codex", "/fake/bin/gemini", "/fake/bin/gemini"]
+
+
+def test_manual_refresh_requires_control_plane_auth():
+    """The refresh route is not public: it needs mesh credentials like other /api routes."""
+    from utils.control_plane_auth import portal_requires_auth
+
+    assert portal_requires_auth("/api/tools/refresh", "POST") is True
