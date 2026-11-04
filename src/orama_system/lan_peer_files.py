@@ -1,6 +1,7 @@
 """LAN peer file inbox — markdown/plain-text handoff (no streaming required)."""
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -98,11 +99,12 @@ def write_inbox_file(
     fanout_id: str = "",
     extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Persist a peer assignment file + sidecar metadata."""
+    """Persist the exact UTF-8 body bytes and their sidecar metadata."""
     dest = _resolve_within(inbox_dir(), filename)
     safe = dest.name
     dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_text(body, encoding="utf-8")
+    payload = body.encode("utf-8")
+    dest.write_bytes(payload)
     record = {
         "filename": safe,
         "assignee": assignee.strip(),
@@ -110,11 +112,12 @@ def write_inbox_file(
         "source": source.strip(),
         "fanout_id": fanout_id.strip(),
         "received_at": int(time.time()),
-        "bytes": len(body.encode("utf-8")),
     }
     if extra:
         record.update(extra)
-    _meta_path(dest).write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+    record["bytes"] = len(payload)
+    record["sha256"] = hashlib.sha256(payload).hexdigest()
+    _meta_path(dest).write_bytes((json.dumps(record, indent=2) + "\n").encode("utf-8"))
     return record
 
 
@@ -130,11 +133,12 @@ def write_outbox_file(
     portal_port: int | str = "",
     error: str = "",
 ) -> dict[str, Any]:
-    """Persist a peer assignment that could not yet be delivered."""
+    """Queue exact UTF-8 body bytes without platform newline translation."""
     dest = _resolve_within(outbox_dir(), filename)
     safe = dest.name
     dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_text(body, encoding="utf-8")
+    payload = body.encode("utf-8")
+    dest.write_bytes(payload)
     record = {
         "filename": safe,
         "assignee": assignee.strip(),
@@ -145,9 +149,10 @@ def write_outbox_file(
         "portal_port": str(portal_port).strip(),
         "last_error": error.strip(),
         "queued_at": int(time.time()),
-        "bytes": len(body.encode("utf-8")),
+        "bytes": len(payload),
+        "sha256": hashlib.sha256(payload).hexdigest(),
     }
-    _meta_path(dest).write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+    _meta_path(dest).write_bytes((json.dumps(record, indent=2) + "\n").encode("utf-8"))
     return record
 
 
@@ -193,12 +198,12 @@ def list_outbox() -> list[dict[str, Any]]:
 
 
 def _read_file(root: Path, filename: str) -> tuple[str, dict[str, Any]]:
-    """Return the body and metadata of ``filename`` under ``root``; FileNotFoundError when absent."""
+    """Read UTF-8 without newline translation; raise FileNotFoundError when absent."""
     path = _resolve_within(root, filename)
     safe = path.name
     if not path.is_file():
         raise FileNotFoundError(safe)
-    body = path.read_text(encoding="utf-8")
+    body = path.read_bytes().decode("utf-8")
     meta: dict[str, Any] = {}
     meta_path = _meta_path(path)
     if meta_path.is_file():

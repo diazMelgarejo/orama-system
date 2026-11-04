@@ -314,7 +314,7 @@ def _resolve_peer(args: argparse.Namespace) -> tuple[str, int]:
 
 def cmd_drop(args: argparse.Namespace) -> int:
     """Drop a file to the peer portal (or the local inbox) and queue it in the local outbox when the peer drop fails; returns 0, or 2 when queued."""
-    body = Path(args.file).read_text(encoding="utf-8")
+    body = Path(args.file).read_bytes().decode("utf-8")
     filename = args.filename or Path(args.file).name
     payload = {
         "filename": filename,
@@ -490,7 +490,7 @@ def _set_state(filename: str, state: str, **fields: Any) -> None:
     meta["state"] = state
     meta["state_at"] = int(time.time())
     meta.update(fields)
-    path.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
+    path.write_bytes((json.dumps(meta, indent=2) + "\n").encode("utf-8"))
 
 
 def _select_items(items: list[dict[str, Any]], only: list[str]) -> list[dict[str, Any]]:
@@ -733,9 +733,8 @@ def _deliver_item(
     found = _listed_entry(data, filename)
     if found is not None:
         size = found.get("bytes", found.get("size", ""))
-        # The receiver may be Windows (write_text turns LF into CRLF), so a
-        # listed size equal to either the LF or the CRLF encoding of the body
-        # counts as the same content.
+        # Legacy receivers may have translated LF to CRLF. Either size is a
+        # candidate match; authenticated content verification is still required.
         lf_body = body.replace("\r\n", "\n")
         local_size = len(lf_body.encode("utf-8"))
         crlf_size = len(lf_body.replace("\n", "\r\n").encode("utf-8"))
