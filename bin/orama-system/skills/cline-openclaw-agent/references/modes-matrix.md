@@ -32,7 +32,7 @@ Every Cline CLI mode, when to use it, and how it maps to OpenClaw delegation.
 | high | `--thinking high` | Deep reasoning |
 | xhigh | `--thinking xhigh` | Maximum reasoning |
 
-Omit `--thinking` to leave the provider default. OpenRouter GLM-5.2 supports
+Omit `--thinking` to leave the provider default. OpenRouter glm-5.3-flash supports
 `xhigh`/`high` (default `high`); `medium` may be clamped to `high` upstream.
 
 ## Compaction Modes

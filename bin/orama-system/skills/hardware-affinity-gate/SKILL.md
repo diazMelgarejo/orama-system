@@ -106,7 +106,7 @@ curl -s http://<host>:11434/api/tags | jq -r '.models[].name'
 | ID | Backend | Notes |
 |---|---|---|
 | `Qwen3.5-9B-MLX-4bit` | LM Studio (Metal) | Primary orchestrator / verifier |
-| `glm-5.1:cloud` | Ollama (local client) | Thin orchestrator fallback when probe succeeds |
+| `glm-5.3-flash:cloud` | Ollama (local client) | Thin orchestrator fallback when probe succeeds |
 
 ### Windows tier (RTX 3080 / CUDA)
 

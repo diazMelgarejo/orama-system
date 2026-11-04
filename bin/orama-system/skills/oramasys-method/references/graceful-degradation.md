@@ -41,7 +41,7 @@ Mode 1/2 in current harness.
 
 | Host | Primary | Validated fallbacks (same host) |
 |------|---------|----------------------------------|
-| Mac | Ollama warm / MLX 9B | glm-5.1:cloud probe → MLX 9B |
+| Mac | Ollama warm / MLX 9B | glm-5.3-flash:cloud probe → MLX 9B |
 | Win | LM Studio 27B `:1234` | qwen3-coder:14b → gemma-4-26b → Ollama critic |
 
 **Never** cross-list MLX on Win or 27B CUDA paths on Mac.

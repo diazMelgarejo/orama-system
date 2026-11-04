@@ -945,12 +945,12 @@ def test_code_review_reconciliation_drops_glm_fallback(mod, tmp_path: Path) -> N
     root = tmp_path / "gemini"
     skill = root / "code-review" / "SKILL.md"
     skill.parent.mkdir(parents=True)
-    skill.write_text("GLM-5.2 Fallback content", encoding="utf-8")
+    skill.write_text("glm-5.3-flash Fallback content", encoding="utf-8")
     canonical = tmp_path / "canonical" / "SKILL.md"
     canonical.parent.mkdir(parents=True)
     canonical.write_text("Canonical content", encoding="utf-8")
     changed = mod.reconcile_gemini(root, tmp_path / "archive", {"code-review"}, _link_ownership("code-review", str(canonical)))
-    assert all("GLM-5.2 Fallback" not in p.read_text(encoding="utf-8") for p in changed if p.is_file())
+    assert all("glm-5.3-flash Fallback" not in p.read_text(encoding="utf-8") for p in changed if p.is_file())
     # Positive assertion, not just absence: the symlinked entry must
     # actually resolve to and read as the canonical file's real content.
     live = root / "code-review"

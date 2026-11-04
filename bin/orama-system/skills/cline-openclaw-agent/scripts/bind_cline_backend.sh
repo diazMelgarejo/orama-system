@@ -61,7 +61,7 @@ if [[ -x "$ENSURE_CLI" ]]; then
   "$ENSURE_CLI" || true
 fi
 if ! command -v cline >/dev/null 2>&1; then
-  printf '%s\n' '{"status":"needs_cline","agent_id":"cline-agent","backend":"openrouter/z-ai/glm-5.2","follow_up":"install cline CLI: npm install -g cline"}'
+  printf '%s\n' '{"status":"needs_cline","agent_id":"cline-agent","backend":"openrouter/z-ai/glm-5.3-flash","follow_up":"install cline CLI: npm install -g cline"}'
   exit 0
 fi
 
@@ -148,7 +148,7 @@ fi
 python3 "$GENERATOR" "${generator_args[@]}" >/dev/null
 
 if [[ "$DRY_RUN" == true ]]; then
-  printf '%s\n' '{"status":"dry-run","agent_id":"cline-agent","backend":"openrouter/z-ai/glm-5.2","binding_path":"agent-level"}'
+  printf '%s\n' '{"status":"dry-run","agent_id":"cline-agent","backend":"openrouter/z-ai/glm-5.3-flash","binding_path":"agent-level"}'
   exit 0
 fi
 
@@ -165,8 +165,8 @@ fi
 
 status="$(oc models status --agent cline-agent --json 2>/dev/null || echo '{}')"
 if jq -e '.auth.missingProvidersInUse | index("openrouter") != null' <<<"$status" >/dev/null 2>&1; then
-  printf '%s\n' '{"status":"needs_auth","agent_id":"cline-agent","backend":"openrouter/z-ai/glm-5.2","binding_path":"agent-level","follow_up":"set OPENROUTER_API_KEY env and restart gateway"}'
+  printf '%s\n' '{"status":"needs_auth","agent_id":"cline-agent","backend":"openrouter/z-ai/glm-5.3-flash","binding_path":"agent-level","follow_up":"set OPENROUTER_API_KEY env and restart gateway"}'
   exit 0
 fi
 
-printf '%s\n' '{"status":"ok","agent_id":"cline-agent","backend":"openrouter/z-ai/glm-5.2","binding_path":"agent-level","cline_cli":"'"$(command -v cline)"'"}'
+printf '%s\n' '{"status":"ok","agent_id":"cline-agent","backend":"openrouter/z-ai/glm-5.3-flash","binding_path":"agent-level","cline_cli":"'"$(command -v cline)"'"}'

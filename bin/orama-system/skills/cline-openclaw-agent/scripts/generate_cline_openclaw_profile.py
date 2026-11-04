@@ -16,7 +16,7 @@ import tempfile
 START = "<!-- oramaclaw:generated:start -->"
 END = "<!-- oramaclaw:generated:end -->"
 CANONICAL_WORKSPACE = Path.home() / ".openclaw" / "agents" / "cline-agent"
-MODEL = "openrouter/z-ai/glm-5.2"
+MODEL = "openrouter/z-ai/glm-5.3-flash"
 
 
 def parse_args() -> argparse.Namespace:
@@ -90,7 +90,7 @@ def main() -> None:
                     "delegation_path: agents.defaults.subagents.allowAgents",
                     "cline_cli: command -v cline",
                     "cline_provider: cline-pass",
-                    "cline_model: cline-pass/glm-5.2",
+                    "cline_model: cline-pass/glm-5.3-flash",
                     "bridges: exec, acp, mcp",
                 )
             ),
@@ -102,7 +102,7 @@ def main() -> None:
                     "## Cline Identity",
                     "- Name: Cline Agent",
                     "- Role: dedicated Cline CLI execution sub-agent",
-                    f"- Model: `{MODEL}` (mirrors Cline's `cline-pass/glm-5.2`)",
+                    f"- Model: `{MODEL}` (mirrors Cline's `cline-pass/glm-5.3-flash`)",
                     f"- Thinking: `{args.effort}`",
                 )
             ),
@@ -126,7 +126,7 @@ def main() -> None:
                 (
                     "## Cline Execution",
                     "- Use OpenClaw's `coding` tool profile.",
-                    '- Exec: `cline "task" --json --auto-approve true -c <dir> -P cline-pass -m cline-pass/glm-5.2`',
+                    '- Exec: `cline "task" --json --auto-approve true -c <dir> -P cline-pass -m cline-pass/glm-5.3-flash`',
                     "- ACP: `openclaw acp client --server cline --server-args --acp --cwd <dir>`",
                     "- MCP: `openclaw mcp serve` then `cline mcp install openclaw -- npx -y openclaw mcp serve`",
                     "- Treat remote writes, deployments, and public communication as approval-required operations.",

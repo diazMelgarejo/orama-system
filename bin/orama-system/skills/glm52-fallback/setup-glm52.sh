@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-printf '%s\n' "Configuring GLM-5.2 BigModel fallback for OpenClaw agents..."
+printf '%s\n' "Configuring glm-5.3-flash BigModel fallback for OpenClaw agents..."
 
 # 1. Require the API key from env — fail fast instead of prompting
 #    interactively (safe for unattended/CI use). NEVER hardcode it.
@@ -28,15 +28,15 @@ chmod 600 "$HOME/.openclaw/.env.glm52"
 # 3. Shell profile persistence is OPT-IN (GLM52_PERSIST_SHELL_PROFILE=1).
 #    start.sh already sources ~/.openclaw/.env.glm52 at runtime, so profile
 #    persistence is not required for the fallback to work — only add it
-#    when the caller explicitly wants GLM-5.2 available outside orama runs.
+#    when the caller explicitly wants glm-5.3-flash available outside orama runs.
 if [ "${GLM52_PERSIST_SHELL_PROFILE:-0}" = "1" ]; then
   for profile in "$HOME/.zshrc" "$HOME/.bashrc"; do
     if [ -e "$profile" ] && ! grep -q "source ~/.openclaw/.env.glm52" "$profile" 2>/dev/null; then
       {
-        printf '\n%s\n' "# GLM-5.2 BigModel fallback (added by glm52-fallback skill)"
+        printf '\n%s\n' "# glm-5.3-flash BigModel fallback (added by glm52-fallback skill)"
         printf '%s\n' "source ~/.openclaw/.env.glm52 2>/dev/null || true"
       } >> "$profile"
-      printf '%s\n' "Added GLM-5.2 fallback source line to $profile"
+      printf '%s\n' "Added glm-5.3-flash fallback source line to $profile"
     fi
   done
 else
@@ -44,15 +44,15 @@ else
 fi
 
 # 4. Test connection
-printf '\n%s\n' "Testing GLM-5.2 connection..."
+printf '\n%s\n' "Testing glm-5.3-flash connection..."
 # shellcheck source=/dev/null
 source "$HOME/.openclaw/.env.glm52"
 curl -s -f -X POST "$GLM52_ENDPOINT" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $GLM52_API_KEY" \
   --connect-timeout 5 --max-time 30 \
-  -d '{"model":"glm-5.2","messages":[{"role":"user","content":"ok"}],"max_tokens":10}' \
-  | jq .choices[0].message.content 2>/dev/null && printf '%s\n' "✓ GLM-5.2 healthy" || printf '%s\n' "✗ GLM-5.2 unreachable (check credits at https://open.bigmodel.cn)"
+  -d '{"model":"glm-5.3-flash","messages":[{"role":"user","content":"ok"}],"max_tokens":10}' \
+  | jq .choices[0].message.content 2>/dev/null && printf '%s\n' "✓ glm-5.3-flash healthy" || printf '%s\n' "✗ glm-5.3-flash unreachable (check credits at https://open.bigmodel.cn)"
 
-printf '\n%s\n' "Setup complete. GLM-5.2 will be available to all agents on next startup."
+printf '\n%s\n' "Setup complete. glm-5.3-flash will be available to all agents on next startup."
 printf '%s\n' "To activate now: source ~/.openclaw/.env.glm52"

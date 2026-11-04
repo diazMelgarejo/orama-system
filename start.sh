@@ -278,7 +278,7 @@ if [ -f "$SCRIPT_DIR/scripts/env/load-local.sh" ]; then
   source "$SCRIPT_DIR/scripts/env/load-local.sh"
 fi
 
-# GLM-5.2 Ultimate Fallback — available when all other pathways are blocked
+# glm-5.3-flash Ultimate Fallback — available when all other pathways are blocked
 if [ -f "$HOME/.openclaw/.env.glm52" ]; then
   # shellcheck source=/dev/null
   source "$HOME/.openclaw/.env.glm52" 2>/dev/null || true
@@ -1744,16 +1744,16 @@ if [ "$NO_OPEN" != "1" ]; then
   open_browser "$PORTAL_URL"
 fi
 
-# ── GLM-5.2 Ultimate Fallback Status ──────────────────────────────────────────
+# ── glm-5.3-flash Ultimate Fallback Status ──────────────────────────────────────────
 # When all other pathways (ClinePass, LM Studio, Ollama) are blocked, agents can
-# queue tasks for GLM-5.2 execution. This is the last-resort pathway that always works.
+# queue tasks for glm-5.3-flash execution. This is the last-resort pathway that always works.
 echo ""
 if [ "$GLM52_AVAILABLE" = "true" ] && [ -n "${GLM52_API_KEY:-}" ]; then
-  _info "fallback" "✅ GLM-5.2 Ultimate Fallback ACTIVE (all pathways blocked → GLM-5.2)"
+  _info "fallback" "✅ glm-5.3-flash Ultimate Fallback ACTIVE (all pathways blocked → glm-5.3-flash)"
   _info "fallback" "   Queue any task when ClinePass/LM Studio/Ollama unavailable"
   _info "fallback" "   Endpoint: $GLM52_ENDPOINT"
 else
-  _warn "fallback" "⚠️  GLM-5.2 Ultimate Fallback NOT AVAILABLE"
+  _warn "fallback" "⚠️  glm-5.3-flash Ultimate Fallback NOT AVAILABLE"
     _warn "fallback" "   Run: bash bin/orama-system/skills/glm52-fallback/setup-glm52.sh"
 fi
 echo ""

@@ -173,7 +173,7 @@ class TestApiKeyRequirement:
         """Regression: the script must not contain the old interactive read."""
         text = SETUP_SCRIPT.read_text(encoding="utf-8")
         assert "read -r GLM52_KEY_INPUT" not in text
-        assert "Enter your BigModel GLM-5.2 API key" not in text
+        assert "Enter your BigModel glm-5.3-flash API key" not in text
 
 
 # ===========================================================================
@@ -331,7 +331,7 @@ class TestShellProfileHandling:
             make_profiles=True,
         )
         assert result.returncode == 0, result.stdout + result.stderr
-        assert "Added GLM-5.2 fallback source line to" in result.stdout
+        assert "Added glm-5.3-flash fallback source line to" in result.stdout
         assert ".zshrc" in result.stdout
         assert ".bashrc" in result.stdout
 
@@ -350,7 +350,7 @@ class TestShellProfileHandling:
         """No 'added' message is printed when no profile exists."""
         result = _run_setup(tmp_path, env={"GLM52_API_KEY": "k"}, make_profiles=False)
         assert result.returncode == 0, result.stdout + result.stderr
-        assert "Added GLM-5.2 fallback source line to" not in result.stdout
+        assert "Added glm-5.3-flash fallback source line to" not in result.stdout
 
     def test_no_added_message_on_second_run_already_sourced(self, tmp_path):
         """A second run, where the profile already sources the env file, does not repeat the 'added' message."""
@@ -358,7 +358,7 @@ class TestShellProfileHandling:
         _run_setup(tmp_path, env={"GLM52_API_KEY": "k"}, make_profiles=True, home=home)
         result2 = _run_setup(tmp_path, env={"GLM52_API_KEY": "k"}, make_profiles=True, home=home)
         assert result2.returncode == 0, result2.stdout + result2.stderr
-        assert "Added GLM-5.2 fallback source line to" not in result2.stdout
+        assert "Added glm-5.3-flash fallback source line to" not in result2.stdout
 
 
 # ===========================================================================

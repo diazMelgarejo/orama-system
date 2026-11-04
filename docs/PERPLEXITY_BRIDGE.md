@@ -49,7 +49,7 @@ Perplexity-Tools owns hardware-aware routing before tasks reach ultrathink.
 - `mac-studio` and `win-rtx3080` profiles stay on the PT side.
 - PT resolves LM Studio endpoints from `$LM_STUDIO_MAC_ENDPOINT` (Mac) and
   `$LM_STUDIO_WIN_ENDPOINTS` (Win); operator addresses stay in the local runtime overlay.
-- PT prefers `glm-5.1:cloud` for the thin Mac orchestrator lane when the live probe succeeds,
+- PT prefers `glm-5.3-flash:cloud` for the thin Mac orchestrator lane when the live probe succeeds,
   then falls back to Mac LM Studio.
 - PT prefers `Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-v2` for Windows heavy coding and
   autoresearch, with `qwen3-coder:14b` and `qwen3.5:35b-a3b-q4_K_M` retained as fallbacks.
