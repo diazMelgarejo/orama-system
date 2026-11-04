@@ -3010,6 +3010,17 @@ def _clear_cli_version_cache() -> None:
 
 # Lookups that outlive their budget keep running here instead of blocking the caller.
 _port_check_resolver = ThreadPoolExecutor(max_workers=2, thread_name_prefix="portal-port-check-dns")
+# Lookups submitted but not yet finished or cancelled; bounded so a stalled resolver cannot queue unbounded work.
+_PORT_CHECK_MAX_PENDING = 4
+_port_check_pending = 0
+_port_check_pending_lock = threading.Lock()
+
+
+def _port_check_lookup_done(_lookup: Any) -> None:
+    """Release one pending-lookup slot once a lookup finished or was cancelled."""
+    global _port_check_pending
+    with _port_check_pending_lock:
+        _port_check_pending -= 1
 
 
 def _tcp_port_open(host: str, port: int, budget_seconds: float) -> bool:
@@ -3021,16 +3032,32 @@ def _tcp_port_open(host: str, port: int, budget_seconds: float) -> bool:
     shares *budget_seconds*, split evenly over the addresses not yet tried so a
     dead first address cannot starve a live second one (a local connect that
     succeeds takes milliseconds). Name resolution has no timeout of its own, so
-    it runs on a small resolver pool and counts against the same budget.
+    it runs on a small resolver pool and counts against the same budget. A
+    lookup that misses the budget is cancelled so a queued one never runs, and
+    at most ``_PORT_CHECK_MAX_PENDING`` lookups may be outstanding; beyond that
+    the port is treated as not open without submitting.
     """
     import socket as _sock
     from concurrent.futures import TimeoutError as _ResolveTimeout
 
+    global _port_check_pending
     deadline = time.monotonic() + budget_seconds
-    lookup = _port_check_resolver.submit(_sock.getaddrinfo, host, port, type=_sock.SOCK_STREAM)
+    with _port_check_pending_lock:
+        if _port_check_pending >= _PORT_CHECK_MAX_PENDING:
+            return False
+        _port_check_pending += 1
+    try:
+        lookup = _port_check_resolver.submit(_sock.getaddrinfo, host, port, type=_sock.SOCK_STREAM)
+    except BaseException:
+        _port_check_lookup_done(None)
+        raise
+    lookup.add_done_callback(_port_check_lookup_done)
     try:
         infos = lookup.result(timeout=budget_seconds)
-    except (_ResolveTimeout, OSError):
+    except _ResolveTimeout:
+        lookup.cancel()
+        return False
+    except OSError:
         return False
     for index, (family, socktype, proto, _canon, addr) in enumerate(infos):
         remaining = deadline - time.monotonic()
@@ -3275,16 +3302,30 @@ async def api_tools():
     return await loop.run_in_executor(None, _probe_tools_sync)
 
 
+_TOOLS_REFRESH_MAX_CALLS = 2
+
+
+def _refresh_tools_sync() -> Dict[str, Any]:
+    """Clear the CLI version cache, then re-probe tools (called from thread pool)."""
+    _clear_cli_version_cache()
+    return _probe_tools_sync()
+
+
 @app.post("/api/tools/refresh")
 async def api_tools_refresh():
     """Manually re-probe tools, relaunching each CLI's ``--version`` once now.
 
     The only request path that bypasses the hourly CLI launch limit; it is a
-    POST so polling dashboards cannot trigger it.
+    POST so polling dashboards cannot trigger it. Rate-limited because each
+    refresh relaunches every CLI.
     """
-    _clear_cli_version_cache()
+    if not _check_rate_limit("tools-refresh", _TOOLS_REFRESH_MAX_CALLS):
+        raise HTTPException(
+            status_code=429,
+            detail=f"Rate limit exceeded — max {_TOOLS_REFRESH_MAX_CALLS} refreshes/min",
+        )
     loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, _probe_tools_sync)
+    return await loop.run_in_executor(None, _refresh_tools_sync)
 
 
 class ConfigureToolRequest(BaseModel):
@@ -3300,12 +3341,15 @@ _CONFIGURE_MAX_CALLS = 5
 _CONFIGURE_WINDOW_SEC = 60
 
 
-def _check_rate_limit(key: str) -> bool:
-    """Return True if request is allowed, False if rate limit exceeded."""
+def _check_rate_limit(key: str, max_calls: int = _CONFIGURE_MAX_CALLS) -> bool:
+    """Return True if request is allowed, False if rate limit exceeded.
+
+    *max_calls* overrides the default per-window cap for a dedicated key.
+    """
     now = time.time()
     window_start = now - _CONFIGURE_WINDOW_SEC
     calls = [t for t in _CONFIGURE_RATE.get(key, []) if t > window_start]
-    if len(calls) >= _CONFIGURE_MAX_CALLS:
+    if len(calls) >= max_calls:
         return False
     calls.append(now)
     _CONFIGURE_RATE[key] = calls

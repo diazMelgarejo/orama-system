@@ -255,3 +255,97 @@ def test_tcp_port_open_bounds_slow_address_resolution(monkeypatch: pytest.Monkey
     started = time.perf_counter()
     assert portal_server._tcp_port_open("example.test", 9, budget_seconds=0.2) is False
     assert time.perf_counter() - started < 0.6
+
+
+def test_cli_version_expires_on_the_clock_at_one_hour(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The real one-hour TTL is honoured: no relaunch at 3599 s, exactly one at 3601 s."""
+    launches: list[str] = []
+    now = {"t": 1000.0}
+
+    def fake_monotonic() -> float:
+        """Return the controllable fake clock."""
+        return now["t"]
+
+    def fake_run(argv: list[str], **kwargs: Any) -> SimpleNamespace:
+        """Record the launch and report a healthy CLI."""
+        launches.append(argv[0])
+        return SimpleNamespace(returncode=0, stdout=b"tool 1.0\n", stderr=b"")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(portal_server.time, "monotonic", fake_monotonic)
+    assert portal_server._CLI_VERSION_TTL_SECONDS == 3600.0
+
+    t0 = now["t"]
+    portal_server._cli_version("/fake/bin/tool")
+    assert len(launches) == 1
+
+    now["t"] = t0 + 3599
+    portal_server._cli_version("/fake/bin/tool")
+    assert len(launches) == 1
+
+    now["t"] = t0 + 3601
+    portal_server._cli_version("/fake/bin/tool")
+    assert len(launches) == 2
+
+    # The relaunch re-stamped the cache at t0 + 3601, so the next poll is cached again.
+    portal_server._cli_version("/fake/bin/tool")
+    assert len(launches) == 2
+
+
+def test_tcp_port_open_recovers_after_the_resolver_pool_saturates(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Hung lookups fill both resolver workers; callers still fail fast, then work once released."""
+    import socket
+    import threading
+
+    real_getaddrinfo = socket.getaddrinfo
+    release = threading.Event()
+    started = {"blocked-a.test": threading.Event(), "blocked-b.test": threading.Event()}
+
+    def fake_getaddrinfo(host: str, *args: Any, **kwargs: Any) -> list[Any]:
+        """Block the two named hosts until released; resolve nothing for the queued host."""
+        if host in started:
+            started[host].set()
+            release.wait(timeout=10.0)
+            return []
+        if host == "queued.test":
+            return []
+        return real_getaddrinfo(host, *args, **kwargs)
+
+    results: dict[str, bool] = {}
+
+    # Earlier tests can leave a slow lookup in the shared pool; wait until both workers are idle.
+    idle = threading.Barrier(2, timeout=10.0)
+
+    def rendezvous() -> None:
+        """Return only once both resolver workers are free at the same moment."""
+        idle.wait()
+
+    for drain in [portal_server._port_check_resolver.submit(rendezvous) for _ in range(2)]:
+        drain.result(timeout=15.0)
+
+    def blocked_call(host: str) -> None:
+        """Run a port check whose lookup hangs; it gives up after its own budget."""
+        results[host] = portal_server._tcp_port_open(host, 9, budget_seconds=1.0)
+
+    threads = [threading.Thread(target=blocked_call, args=(host,), daemon=True) for host in started]
+    monkeypatch.setattr(socket, "getaddrinfo", fake_getaddrinfo)
+    try:
+        for thread in threads:
+            thread.start()
+        for event in started.values():
+            assert event.wait(timeout=5.0), "a resolver worker never picked up its blocking lookup"
+
+        begun = time.perf_counter()
+        assert portal_server._tcp_port_open("queued.test", 9, budget_seconds=0.3) is False
+        assert time.perf_counter() - begun < 0.8
+    finally:
+        release.set()
+        for thread in threads:
+            thread.join(timeout=5.0)
+
+    assert results == {"blocked-a.test": False, "blocked-b.test": False}
+
+    monkeypatch.setattr(socket, "getaddrinfo", real_getaddrinfo)
+    with socket.create_server(("localhost", 0)) as server:
+        port = server.getsockname()[1]
+        assert portal_server._tcp_port_open("localhost", port, budget_seconds=2.0) is True
