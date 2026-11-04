@@ -31,6 +31,83 @@ https with a token, is recorded as `sent`, never `delivered`.
 - A bearer token is only ever sent over verified https. Over http the token
   is withheld and the call proceeds unauthenticated (`SECURITY_STOP`).
 
+## Cross-platform body bytes and receipts (2026-11-04)
+
+Operator-directed convention for Mac and Windows. Implementation and review
+evidence belongs in the coordination record; do not claim every agent agreed
+until each active lane has acknowledged it. This section adds a storage
+guarantee without changing the peer-file JSON schema or TLS/auth policy.
+
+### Body representation
+
+- The peer-file API carries Unicode text in the JSON `body` field, not an
+  arbitrary binary attachment. The exact body bytes are `body.encode("utf-8")`.
+  Hash the decoded field's UTF-8 bytes, not the enclosing JSON serialization.
+- Inbox and outbox body persistence MUST use binary writes. Reads used for
+  delivery or redelivery MUST decode binary reads as strict UTF-8. Neither
+  boundary translates LF/CRLF, strips whitespace, adds a final newline, or
+  inserts/removes a BOM. Preserve an explicitly supplied U+FEFF too.
+- New agent-authored text SHOULD use UTF-8 without BOM and LF. This authoring
+  convention does not authorize silently rewriting an existing file.
+- The CLI's source-file read has the same preservation rule. Shell command
+  substitution and text-mode reads must not silently trim trailing newlines
+  or normalize a source before dispatch.
+- Metadata `bytes` counts encoded body bytes, not characters or JSON envelope
+  bytes. For a successful new write it MUST equal the stored file size.
+  Receipt `bytes` comes from the actual stored file. Do not rewrite legacy
+  metadata merely to make those two counts agree.
+- New sidecars record `bytes` and `sha256` of the stored body, and are written
+  as UTF-8 JSON with LF and no BOM, including subsequent delivery-state updates.
+  Integrity fields are derived by the writer, not supplied through caller extras.
+  Receipts still recompute hashes from actual bytes: cached metadata is a
+  write-time observation, not proof that a later file edit did not occur.
+
+### Two separately labelled hashes
+
+| Receipt field | Definition | Meaning |
+| --- | --- | --- |
+| `sha256` | SHA-256 of exact stored bytes | Exact byte identity |
+| `sha256_lf` | Decode UTF-8, replace CRLF with LF only, encode UTF-8, SHA-256 | Legacy text equivalence across newline translation |
+
+LF normalization does not remove a BOM, trim trailing newlines, or convert a
+lone CR. New UTF-8 body writes should have equal sender/receiver raw hashes.
+The existing receipt command's replacement decoding of malformed UTF-8 is
+not lossless; `sha256_lf` is compatibility evidence only for valid UTF-8.
+Always retain `sha256` as the exact-byte evidence.
+
+For historical records, unequal raw hashes and equal LF-normalized hashes
+support a newline-only difference. Label this `legacy newline-equivalent`,
+not `byte-identical`. A mismatched normalized hash or unexplained byte delta
+remains a collision or integrity investigation; never resolve it by overwriting.
+Keep the original records and append the reconciliation evidence.
+
+### Incident and verification
+
+The operator's Windows receipt analysis for the Mac canary reported 905
+received bytes and 916 stored bytes, eleven LF-to-CRLF expansions, and no BOM.
+That explains the eleven-byte delta without making raw hashes equal. JSON can
+preserve LF; the implicit Windows text-mode write was the translation boundary.
+Agreement of the LF-normalized hashes must still be checked against the actual
+receipt before recording equivalent content.
+
+Windows' `win-coord-utf8-bytes-20261104.md` subsequently reported the raw
+digest and LF-normalized digest for that legacy canary, confirmed the newline
+translation boundary, and agreed to this convention. This is one Windows
+response, not unanimous acknowledgement by every agent. Native Windows
+qualification and a fresh receipt from the patched receiver remain gates.
+
+Local receipt command (no credential or network access):
+
+```text
+lan_peer_assign.py receipt mac-canary-20261104T015511Z.md --json
+```
+
+Portable regression coverage: `tests/test_lan_peer_byte_contract.py` emulates
+Windows text-mode writes and tests both stores, CRLF readback/redelivery,
+trailing newlines, multibyte UTF-8, empty bodies, and BOM preservation. Native
+Windows qualification remains a separate evidence item, not a claim inferred
+from passing macOS tests. Existing legacy receipt and duplicate checks stay.
+
 ## Outbox states
 
 | State | Meaning |
