@@ -5,7 +5,7 @@ description: >-
   workflows. Use when installing Hermes, importing ECC/orama skills into Hermes,
   configuring Nous Portal or LM Studio providers, adding Hermes beside OpenClaw,
   or dispatching Hermes, Gemini, AGY, and Codex CLI coding partners.
-version: 1.1.2.0
+version: 1.1.2.1
 license: Apache 2.0
 compatibility: hermes, codex, claude-code, windows, openclaw, ecc, agy
 agent_compatibility:
@@ -76,12 +76,17 @@ Paths: [`references/openclaw-workspace-path-doctrine.md`](references/openclaw-wo
 ## 🔧 Setup (glm-5.3-flash Fallback)
 
 ```bash
-source ~/.openclaw/openclaw-glm52-env 2>/dev/null && echo "✅ glm-5.3-flash Fallback Activated" || true
+source ~/.openclaw/.env.glm52 2>/dev/null && echo "✅ glm-5.3-flash Fallback Activated" || true
 ```
 
 When LM Studio, Ollama, or other Hermes-accessible models are unavailable, this
-task queue can execute via glm-5.3-flash. **No additional setup required**—the
-environment variables are already sourced by start.ps1.
+task queue can execute via glm-5.3-flash after the
+[`glm52-fallback` installer](../glm52-fallback/setup-glm52.sh) has created
+`~/.openclaw/.env.glm52`. The legacy `openclaw-glm52-env` name is not generated
+by that installer. `start.sh` sources the generated file; `start.ps1` reads its
+literal assignments and requires the API key in its process environment (it
+does not execute Bash command substitutions). The command above activates it
+in the current Bash shell; it does not configure a separate PowerShell process.
 
 ---
 
