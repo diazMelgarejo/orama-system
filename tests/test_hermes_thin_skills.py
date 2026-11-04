@@ -149,6 +149,40 @@ def test_wrapper_text_all_core_wrappers(installer):
     assert optional == {"pt-orama-lesson-mining"}
 
 
+def test_wrapper_text_carries_the_git_safety_rules(installer):
+    """Every generated wrapper forbids unprompted git clean and branch switching on a dirty tree."""
+    for spec in installer.WRAPPERS:
+        text = installer.wrapper_text(spec)
+        assert "git clean -fd" in text
+        assert "git clean -fdx" in text
+        assert "uncommitted working-tree changes" in text
+        assert "Stay on the current branch" in text
+
+
+def test_wrapper_text_carries_the_refresh_rule(installer):
+    """Every generated wrapper says a refresh rewrites it, so patched-in workflow content is not durable."""
+    for spec in installer.WRAPPERS:
+        text = installer.wrapper_text(spec)
+        assert "## Refresh rule" in text
+        assert "rewrites managed wrappers" in text
+        assert "not durable here" in text
+        assert text.index("## Response Shape") < text.index("## Refresh rule")
+
+
+def test_install_gives_an_older_managed_wrapper_the_new_sections(installer):
+    """A managed wrapper written before these rules existed gains them on the next install."""
+    target = _target(installer, "windows-hermes-setup")
+    target.parent.mkdir(parents=True)
+    target.write_text("---\nname: windows-hermes-setup\ncreated_by: agent\n---\n\nold body\n", encoding="utf-8")
+
+    installer.install()
+
+    text = target.read_text(encoding="utf-8")
+    assert "old body" not in text
+    assert "## Refresh rule" in text
+    assert "git clean -fdx" in text
+
+
 # ── install ───────────────────────────────────────────────────────────────────
 
 def test_optional_wrapper_not_installed_by_default(installer):

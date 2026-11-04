@@ -255,6 +255,11 @@ Canonical source of truth:
    memory into tracked files.
 5. Do not commit, delete, deploy, force-push, or change account/provider
    settings unless the user explicitly instructs that exact action.
+6. Never run `git clean -fd` or `git clean -fdx` without confirming the user's
+   explicit approval and a backup/stash of the working tree first.
+7. Do not switch branches on a repo that has uncommitted working-tree changes
+   unless the user explicitly requests branch work. Stay on the current branch
+   and continue there by default.
 
 ## Windows Readiness
 
@@ -273,6 +278,14 @@ TESTS / VERIFICATION:
 RISKS:
 HANDOFF NOTES:
 ```
+
+## Refresh rule
+
+`install_hermes_thin_skills.py --install --verify` rewrites managed wrappers.
+Workflow patterns, archive rules, and conflict-resolution steps added by a
+self-improve patch are **not durable here**. The canonical card and its
+references carry the authoritative versions. If this wrapper lags behind the
+canonical source, refresh it rather than patching it.
 """
 
 
