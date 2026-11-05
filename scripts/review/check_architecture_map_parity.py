@@ -17,14 +17,50 @@ GRAPHS = frozenset({"Execution", "Coordination", "Knowledge", "Evidence", "Audit
 
 
 def cells(line: str) -> list[str]:
-    """Read a simple Markdown table row, normalizing presentation whitespace."""
-    return [" ".join(cell.split()) for cell in line.strip().strip("|").split("|")]
+    """Split unescaped pipes, retaining escaped content and normalized whitespace."""
+    parts = [""]
+    escaped = False
+    for character in line.strip():
+        if character == "|" and not escaped:
+            parts.append("")
+        else:
+            parts[-1] += character
+        escaped = not escaped if character == "\\" else False
+    if not parts[0]:
+        parts.pop(0)
+    if parts and not parts[-1]:
+        parts.pop()
+    return [" ".join(cell.split()) for cell in parts]
+
+
+def visible_lines(text: str) -> list[str]:
+    """Blank fenced code without joining table fragments across a hidden block.
+
+    Fences use matching backticks or tildes, at least three markers, and at most
+    three leading spaces. A closer must be at least as long as its opener and
+    contain no trailing content. An unclosed fence hides the rest of the file.
+    """
+    result: list[str] = []
+    fence: str | None = None
+    for line in text.splitlines():
+        marker = re.fullmatch(r" {0,3}(`{3,}|~{3,})(.*)", line)
+        if fence is not None:
+            if (marker and marker[1][0] == fence[0]
+                    and len(marker[1]) >= len(fence) and not marker[2].strip()):
+                fence = None
+            result.append("")
+        elif marker and (marker[1][0] != "`" or "`" not in marker[2]):
+            fence = marker[1]
+            result.append("")
+        else:
+            result.append(line)
+    return result
 
 
 def meanings(path: Path) -> dict[str, str]:
     """Read exactly one shared-meaning table and reject incomplete definitions."""
     try:
-        lines = path.read_text(encoding="utf-8").splitlines()
+        lines = visible_lines(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError) as error:
         raise ValueError(f"cannot read {path}: {type(error).__name__}") from error
     headers = [index for index, line in enumerate(lines)

@@ -103,6 +103,74 @@ class ArchitectureMapParityTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("table", result.stderr)
 
+    def test_allows_escaped_pipe_in_audience_detail(self) -> None:
+        """An escaped pipe is content, not an additional audience column."""
+        right = document(ROWS).replace("Local record", r"local foo \| bar")
+        result = self.check_maps(document(ROWS), right)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_preserves_escaped_pipe_in_shared_meaning(self) -> None:
+        """Shared cells containing escaped pipes still compare their full content."""
+        rows = {**ROWS, "Evidence": r"Sources \| tests support bounded claims."}
+        result = self.check_maps(document(rows), document(rows))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        changed = document(rows).replace("Sources", "Unsupported")
+        result = self.check_maps(document(rows), changed)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("Evidence", result.stderr)
+
+    def test_rejects_taxonomy_only_inside_a_fence(self) -> None:
+        """Backtick and tilde examples do not supply the map's actual taxonomy."""
+        for marker in ("```", "~~~"):
+            with self.subTest(marker=marker):
+                fenced = f"{marker}markdown\n{document(ROWS)}\n{marker}\n"
+                result = self.check_maps(document(ROWS), fenced)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("table", result.stderr)
+
+    def test_ignores_fenced_example_beside_real_taxonomy(self) -> None:
+        """Examples before or after the real table do not create duplicate headers."""
+        for marker in ("```", "~~~"):
+            for before in (True, False):
+                with self.subTest(marker=marker, before=before):
+                    example = f"{marker}markdown\n{document(ROWS)}\n{marker}\n"
+                    real = document(ROWS)
+                    right = example + real if before else real + "\n" + example
+                    result = self.check_maps(document(ROWS), right)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_fence_requires_matching_marker_and_sufficient_length(self) -> None:
+        """Shorter or different fence markers cannot expose an enclosed taxonomy."""
+        for interior in ("```", "~~~~"):
+            with self.subTest(interior=interior):
+                right = f"````markdown\n{interior}\n{document(ROWS)}\n````\n"
+                result = self.check_maps(document(ROWS), right)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("table", result.stderr)
+
+    def test_unclosed_fence_keeps_taxonomy_hidden(self) -> None:
+        """A missing closing fence does not turn its example into a real table."""
+        result = self.check_maps(document(ROWS), "```markdown\n" + document(ROWS))
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("table", result.stderr)
+
+    def test_rejects_invalid_separator(self) -> None:
+        """An otherwise matching table still needs a valid Markdown separator."""
+        right = document(ROWS).replace("| --- | --- | --- |", "| --- | not-a-rule | --- |")
+        result = self.check_maps(document(ROWS), right)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("invalid table separator", result.stderr)
+
+    def test_rejects_missing_audience_column(self) -> None:
+        """A taxonomy row missing its audience-specific field is malformed."""
+        right = document(ROWS).replace(
+            "| Evidence | Support for bounded claims. | Local record |",
+            "| Evidence | Support for bounded claims. |",
+        )
+        result = self.check_maps(document(ROWS), right)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("malformed shared-meaning table row", result.stderr)
+
     def test_rejects_missing_file(self) -> None:
         """A missing peer is an error, not successful parity or a skip."""
         result = subprocess.run(
