@@ -56,3 +56,29 @@ test, evidence, and limitation instead of becoming a parallel runtime design.
 Configured retrieval, model adapters, durable recovery, satellite wiring,
 provider serving, promotion, and qualification require separate owner
 contracts, tests, receipts, and review.
+
+## Cross-map parity
+
+The shared five-graph taxonomy is maintained in each root map's **Shared meaning**
+column. The canonical standard-library checker lives in this repository; v2 CI
+uses it from an immutable v1 checkout, rather than maintaining a second parser.
+Questions, grounding requirements, record shapes and other prose remain local.
+
+Run with explicit candidate checkouts (no network calls or runtime imports):
+
+```bash
+python scripts/review/check_architecture_map_parity.py ARCHITECTURE.md /path/to/oramasys/ARCHITECTURE.md
+python -m unittest discover -s tests -p test_architecture_map_parity.py -v
+```
+
+The `Architecture map parity` workflow in each repository pins its peer checkout
+by full commit SHA. To change a shared meaning, prepare both map changes, run the
+checker against both candidate files, then update each workflow's peer `ref` to
+the reviewed counterpart commit. A check proves that exact pair agrees, not that
+a later moving `main` remains synchronized. Review both PRs together and recheck
+the merged pair; no runtime dependency or automatic cross-repository write is added.
+
+2026-11-05 synthesis: retain the existing router/treasure-trail map, correct the
+planned-controller boundary, add only shared definitions and automated evidence.
+The accessible v1 landing reference is squash merge `832b4945` (#409); a historical
+pre-squash identifier is not proof of a currently reachable commit.

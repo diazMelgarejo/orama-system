@@ -49,7 +49,7 @@ content-insertion authority after the execution shape is selected.
 | Audience, intent, and ambiguity | [AFRP](bin/orama-system/afrp/SKILL.md) | Route only after the task contract is clear. |
 | Method, planning, and verification | [Orama system](bin/orama-system/SKILL.md) | Guides work; it does not confer authorization. |
 | Content insertion | [CIDF](bin/orama-system/cidf/SKILL.md) | Preserve rank selection, automation gate, and readback. |
-| Working coordination and operational memory | Perpetua-Tools | Treat records as scoped evidence, not universal authority. In v2, the Orchestrator Controller owns claims, handoffs, and leases; the Oramasys map has the owner row. |
+| Working coordination and operational memory | Perpetua-Tools | Treat records as scoped evidence, not universal authority. The v2 Orchestrator Controller is planned to own claims, handoffs, and leases, but has no runtime implementation yet; the Oramasys map links its design invariants. |
 | v2 structural graph primitives | `oramasys/perpetua-core` | Do not add a parallel v1 node or edge schema. |
 | Endpoint, security, and hardware decisions | Telos, Phylax, and Agate | Keep their authority outside this method layer. |
 
@@ -75,16 +75,22 @@ only when its links make these questions answerable:
 
 Do not collapse distinct records into a single mutable “common ground.”
 
-| Graph | Question | Grounding requirement |
-| --- | --- | --- |
-| Execution | What runs, and in what order? | States, transitions, checkpoints, and stop conditions. |
-| Coordination | Who claims, hands off, or acknowledges work? | Author, actor, current state, and durable event identity. |
-| Knowledge | What concepts or sources are related? | Source, time, confidence, and derived-state labeling. |
-| Evidence | Why is a bounded claim supported? | Immutable references, tests, artifacts, or human decisions. |
-| Audit | Who checked what and what remains unresolved? | Independent scope, authority, and limitations. |
+| Graph | Shared meaning | Question | Grounding requirement |
+| --- | --- | --- | --- |
+| Execution | State transitions and bounded execution. | What runs, and in what order? | States, transitions, checkpoints, and stop conditions. |
+| Coordination | Claims, handoffs, leases, and acknowledgements. | Who claims, hands off, or acknowledges work? | Author, actor, current state, and durable event identity. |
+| Knowledge | Source relationships and derived knowledge. | What concepts or sources are related? | Source, time, confidence, and derived-state labeling. |
+| Evidence | Support for bounded claims. | Why is a bounded claim supported? | Immutable references, tests, artifacts, or human decisions. |
+| Audit | Independent review scope and unresolved limits. | Who checked what and what remains unresolved? | Independent scope, authority, and limitations. |
 
 The Oramasys architecture map mirrors this taxonomy and adds the v2 record
 shapes; change both documents together.
+
+CI compares only graph names and the **Shared meaning** column against an immutable
+peer revision; audience-specific questions, grounding and prose may differ. The
+[architecture plan](docs/plans/2026-10-17-architecture-router-map.md#cross-map-parity)
+documents the local command and paired-update procedure. This is documentation
+validation, not a runtime dependency on v2.
 
 Indexes, summaries, caches, and model consensus are derived views unless a
 contract explicitly makes them authoritative. A passing check supports only its
