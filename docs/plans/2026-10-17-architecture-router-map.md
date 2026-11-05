@@ -9,7 +9,10 @@ test, evidence, and limitation instead of becoming a parallel runtime design.
 ## Current Starting Point
 
 - The local workspace proof produces an extractive CSV plus a verifiable
-  receipt entirely in request memory.
+  receipt entirely in request memory
+  ([plan](2026-10-16-local-workspace.md),
+  [code](../../src/orama_system/workspace.py),
+  [tests](../../tests/test_local_workspace.py)).
 
 - The portal exposes Simple and Research modes while keeping operator-console
   navigation available.

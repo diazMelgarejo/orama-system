@@ -4,8 +4,8 @@ This map explains how the legacy orama-system v1 organizes work. It is
 a routing guide: from a request to the owning contract, skill,
 execution shape, evidence, and explicit completion state. It is a map
 of the treasure trail—not a replacement runtime, a second graph schema, or an
-authority grant. The system will always remain independent of v2 services
-as its contracts are reviewed and migrated.
+authority grant. v1 takes no runtime dependency on v2 services while its
+contracts are reviewed and migrated.
 
 ## Start Here
 
@@ -95,7 +95,6 @@ stated conclusion; it is not merge, deployment, or operator approval.
 1. State the role, outcome, constraints, and authority boundary.
 2. Use AFRP when the request is non-trivial, audience-dependent, or ambiguous.
 3. Select a skill, chain, loop, graph, or constellation using the escalation card.
-   These are alternatives, not stages.
 4. Declare the state owner, effect owner, idempotency/recovery rule, and stop
    condition before an external or irreversible action.
 5. Separate maker, evaluator, and approver where the effect matters.
@@ -136,7 +135,9 @@ They do not supersede the contracts above:
 
 ## Readiness Boundary
 
-This document improves navigation and design review. The local-workspace proof
+This document improves navigation and design review. The
+[local-workspace proof](docs/plans/2026-10-16-local-workspace.md)
+([code](src/orama_system/workspace.py), [tests](tests/test_local_workspace.py))
 now implements an offline, deterministic CSV + receipt slice; it does not
 implement retrieval/model adapters, satellite wiring, serving, promotion, or
 qualification. Those changes require a separately reviewed owner contract,
