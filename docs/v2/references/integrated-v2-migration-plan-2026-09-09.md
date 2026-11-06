@@ -1,5 +1,9 @@
 # Integrated v2 migration implementation and execution plan
 
+> **2026-11-06:** Preserve this dated plan as historical context. Its
+> conflicting GraphSpec ownership and merge/pin status are superseded in part by
+> D-LG-1/5/6; see [reconciliation](../architecture-status-2026-11-06.md).
+
 **Date:** 2026-09-09  
 **Status:** current executable planning baseline for PR #351.
 

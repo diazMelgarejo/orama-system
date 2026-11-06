@@ -1,6 +1,10 @@
 <!-- lint-ignore LINT-013 -->
 # 57 — MiniGraph Final Reconciliation
 
+> **2026-11-06 status:** Historical merge and pin statements below predate
+> Core `6d75cfe`. Structural GraphSpec ownership follows D-LG-1/5; consult
+> [reconciliation](architecture-status-2026-11-06.md) for current evidence.
+
 **Status:** canonical architecture record — 2026-08-27  
 **Date basis:** Asia/Manila (UTC+08:00)  
 **Core repo:** `oramasys/perpetua-core`  

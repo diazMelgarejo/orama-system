@@ -1,5 +1,9 @@
 # Loop/graph compatibility — revision 4 execution index
 
+> **2026-11-06:** The open-PR status below is historical. The
+> [PT retrospective](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/.agent/memory/working/LOOP_GRAPH_SAGA_RETROSPECTIVE_2026-10-10.md)
+> records the merged outcome; see [current reconciliation](../../architecture-status-2026-11-06.md).
+
 **Date:** 2026-10-09 (UTC primary). **Current status:** reviewed changes in four
 open coordinated PRs. The [latest verified follow-up handoff](FOLLOWUP-VERIFICATION-AND-HANDOFF.md)
 records subsequent patches and CI. Read [revision 4 execution](EXECUTION-REVISION-4.md) first.

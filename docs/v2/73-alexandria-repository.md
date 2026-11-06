@@ -1,5 +1,9 @@
 # ADR 73: Alexandria Repository — Centralized Documentation Hub
 
+> **2026-11-06:** Approval of this ADR is distinct from completing its
+> migration phases. The repository exists; do not infer that the unchecked
+> content migration, cross-reference updates or sync policy have been completed.
+
 <!-- markdownlint-disable MD013 -->
 
 > **Renumbered to `73-`.** Drafted and approved as ADR 41 on 2026-07-10, but committed to `oramasys/oramasys` by mistake; documentation lives in `orama-system`, and this repository's `41-` is [`41-agentic-stack-gstack-gbrain-memory-blend.md`](41-agentic-stack-gstack-gbrain-memory-blend.md). A reference to "ADR 41" for the Alexandria repository means this document. Content below is unchanged from the original.

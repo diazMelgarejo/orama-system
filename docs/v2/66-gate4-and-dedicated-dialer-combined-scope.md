@@ -1,5 +1,8 @@
 # Gate 4 + Dedicated Model-Server Dialer — Combined Scope for the Next PR
 
+> **2026-11-06:** This is a historical scoped proposal; its earlier Telos
+> boundary is superseded in part by [ADR 62](62-telos-phylax-authority-gate0-adr.md).
+
 **Status:** Half A complete (`oramasys/oramasys` PR #3 merged 2026-09-07);
 Half B implementation under review in [PT PR #382][pt-pr382], following PT
 PR #380's 2026-09-07 merge

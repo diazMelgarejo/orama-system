@@ -49,9 +49,11 @@ content-insertion authority after the execution shape is selected.
 | Audience, intent, and ambiguity | [AFRP](bin/orama-system/afrp/SKILL.md) | Route only after the task contract is clear. |
 | Method, planning, and verification | [Orama system](bin/orama-system/SKILL.md) | Guides work; it does not confer authorization. |
 | Content insertion | [CIDF](bin/orama-system/cidf/SKILL.md) | Preserve rank selection, automation gate, and readback. |
-| Working coordination and operational memory | Perpetua-Tools | Treat records as scoped evidence, not universal authority. The v2 Orchestrator Controller is planned to own claims, handoffs, and leases, but has no runtime implementation yet; the Oramasys map links its design invariants. |
+| v1 orchestration, coordination, telemetry and memory | Perpetua-Tools | Treat records as scoped evidence, not universal authority. The planned v2 controller owns job claims and job-claim leases; existing v2 execution run leases are a separate mechanism. |
 | v2 structural graph primitives | `oramasys/perpetua-core` | Do not add a parallel v1 node or edge schema. |
-| Endpoint, security, and hardware decisions | Telos, Phylax, and Agate | Keep their authority outside this method layer. |
+| v1 endpoint/security and hardware policy | Perpetua-Tools | PT owns the v1 endpoint policy and hardware policy; Orama mirrors the endpoint contract. See [ADR 62](docs/v2/62-telos-phylax-authority-gate0-adr.md) and [hardware enforcement](docs/v2/17-hardware-policy-enforcement.md). |
+| v2 endpoint, principal and hardware decisions | Telos, Phylax, and Agate | These v2 owners do not replace the operational v1 policy. |
+| Normative design decisions and ownership registry | Orama `docs/v2` | Design and CI inputs are not runtime dependencies. |
 
 The owner table names boundaries, not import relationships. In particular,
 Orama v1 must not acquire a runtime dependency on successor services merely to
@@ -120,24 +122,34 @@ The normative graph reconciliation work lives in the v2 specification corpus:
 - [State-mutation and observer finalization](docs/v2/59-minigraph-state-mutation-observer-finalization.md)
 - [Structural graph and separately bound policy: D-LG-1](docs/v2/references/loop-graph-compatibility-2026-10-09/ADR-D-LG-1-POLICY-OWNERSHIP.md)
 - [Runtime memory migration boundary](docs/v2/56-anamnesis-runtime-memory-migration.md)
-- [Oramasys mastery standard](docs/v2/references/ORAMASYS-MASTERY-v3.md)
+- [Oramasys mastery methodology](docs/v2/references/ORAMASYS-MASTERY-v3.md)
+  (review draft; not a normative graph contract)
+- [R3 reducer and join decision](docs/v2/references/loop-graph-compatibility-2026-10-09/ADR-D-LG-6-R3-REDUCERS-JOINS-FANOUT.md)
+- [R4 safety and compatibility decision](docs/v2/references/r4-safety-compatibility-platform-2026-10-10/ADR-D-LG-7-R4-SAFETY-COMPATIBILITY-PLATFORM.md)
+- [Job-claim controller design](docs/v2/68-orchestrator-controller-satellite.md) and [agent envelopes](docs/v2/69-agent-envelope-standard.md)
+- [Operator provisioning ADR](docs/v2/71-operator-provisioning-and-autonomous-tier-adr.md),
+  [plan](docs/v2/72-task6-operator-provisioning-and-autonomous-tier-plan.md),
+  and [lost-run design](docs/v2/74-lost-run-takeover-entrypoint-design.md)
+- [Compatibility refusal/HITL contract](docs/v2/references/2026-10-09-compatibility-refusal-hitl-contract.md)
+  and [M1 generation-2 receipt](docs/v2/references/m1-gen2-qualification-evidence-receipt-2026-10-18.md)
+- [Architecture status and gate naming](docs/v2/architecture-status-2026-11-06.md)
 
 D-LG-1 originated in [the approved decision commit](https://github.com/diazMelgarejo/orama-system/commit/5d3fa7ab0030917858d7123a8466559f868dd91a).
 Its current version preserves the original decision and the subsequent D-LG-5
 amendment: reducer/join declarations belong to Core's structural identity;
 application policy may restrict them.
 
-Two useful but secondary matches provide the current qualification and
-ownership split, plus the inspectable document-graph semantics for files,
-concepts, decisions, implementation, evidence, handoffs, and security policy.
+Two useful but secondary matches provide the historical ownership split and
+the July 2026 STM/mesh-security document-graph semantics.
 They do not supersede the contracts above:
 
 - [PT loop/graph closure record](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/.agent/memory/working/LOOP_GRAPH_REVISION4_CLOSURE_2026-10-09.md):
-  qualification, ownership split, evidence rules, and open limits.
+  historical ownership split, evidence rules, and then-open limits. The later
+  [saga retrospective](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/.agent/memory/working/LOOP_GRAPH_SAGA_RETROSPECTIVE_2026-10-10.md)
+  records the merged outcome.
 - [Phase 0 LLM Wiki graph](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/wiki/README.md)
   and [typed edge semantics](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/wiki/edges.md):
-  inspectable files, concepts, decisions, implementation, evidence, handoffs,
-  and security-policy links.
+  historical STM/mesh-security specification relationships, not a universal decision graph.
 
 ## Readiness Boundary
 

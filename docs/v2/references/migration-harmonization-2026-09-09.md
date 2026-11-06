@@ -1,5 +1,9 @@
 # Approved migration planning: reconciled reading guide
 
+> **2026-11-06:** This dated guide is superseded in part by later D-LG-1/5/6
+> decisions and ADR 62. See [reconciliation](../architecture-status-2026-11-06.md)
+> before using its ownership or execution order as current guidance.
+
 **Status:** current reconciliation authority for PR #351 — 2026-09-09.
 
 This document reconciles the provenance-pinned Claude inputs, the two audit

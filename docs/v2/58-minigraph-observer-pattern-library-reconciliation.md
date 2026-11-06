@@ -1,5 +1,9 @@
 # 58 — MiniGraph Observer + Pattern-Library Reconciliation
 
+> **2026-11-06 status:** Section 7 and merge/pin statements predate D-LG-1/5
+> and Core `6d75cfe`; structural GraphSpec and lint belong to Core. See
+> [reconciliation](architecture-status-2026-11-06.md).
+
 **Status:** canonical addendum — 2026-08-27  
 **Date basis:** Asia/Manila (UTC+08:00)  
 **Parent authority:** [57 — MiniGraph Final Reconciliation](57-minigraph-final-reconciliation.md)  

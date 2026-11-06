@@ -1,5 +1,10 @@
 # D-LG-6 — R3 mechanics: fan-out regions, reducers and joins
 
+> **2026-11-06:** Implementation/pin references below are historical. Core
+> `6d75cfe` is the current Oramasys production pin; see
+> [reconciliation](../../architecture-status-2026-11-06.md). Graph R3 and
+> Release 1–2 R3 are different gates.
+
 **Status:** approved by the operator on 2026-10-10. Implementation evidence: Perpetua Core
 PR #9 (merged as `4d217f6`) and Oramasys PR #25 (merged as `f4dbf33`). Production
 Oramasys remains pinned to pre-R3 Core until P0 requalification; approval of these mechanics
