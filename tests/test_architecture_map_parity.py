@@ -171,6 +171,30 @@ class ArchitectureMapParityTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("malformed shared-meaning table row", result.stderr)
 
+    def test_rejects_indented_example_only(self) -> None:
+        """A four-space or tab-indented code example cannot supply the taxonomy."""
+        for indent in ("    ", "\t"):
+            with self.subTest(indent=indent):
+                example = "\n".join(indent + line for line in document(ROWS).splitlines())
+                result = self.check_maps(document(ROWS), example)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("table", result.stderr)
+
+    def test_ignores_indented_example_beside_table(self) -> None:
+        """An indented code block beside the rendered taxonomy is not a duplicate."""
+        example = "\n".join("    " + line for line in document(ROWS).splitlines())
+        for right in (example + "\n\n" + document(ROWS), document(ROWS) + "\n\n" + example):
+            result = self.check_maps(document(ROWS), right)
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_keeps_indented_table_body(self) -> None:
+        """Indentation inside an already open table does not start a code block."""
+        right = document(ROWS)
+        for name, meaning in ROWS.items():
+            right = right.replace(f"| {name} | {meaning}", f"    | {name} | {meaning}")
+        result = self.check_maps(document(ROWS), right)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_rejects_missing_file(self) -> None:
         """A missing peer is an error, not successful parity or a skip."""
         result = subprocess.run(

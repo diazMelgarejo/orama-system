@@ -34,7 +34,7 @@ def cells(line: str) -> list[str]:
 
 
 def visible_lines(text: str) -> list[str]:
-    """Blank fenced code without joining table fragments across a hidden block.
+    """Blank code blocks without joining table fragments across a hidden block.
 
     Fences use matching backticks or tildes, at least three markers, and at most
     three leading spaces. A closer must be at least as long as its opener and
@@ -42,18 +42,37 @@ def visible_lines(text: str) -> list[str]:
     """
     result: list[str] = []
     fence: str | None = None
+    indented_code = False
+    paragraph = False
+    table = False
     for line in text.splitlines():
+        expanded = line.expandtabs(4)
+        if fence is None:
+            if not line.strip():
+                paragraph = table = False
+                result.append("")
+                continue
+            indented = expanded.startswith("    ")
+            if indented and (indented_code or not (paragraph or table)):
+                indented_code = True
+                result.append("")
+                continue
+            indented_code = False
         marker = re.fullmatch(r" {0,3}(`{3,}|~{3,})(.*)", line)
         if fence is not None:
             if (marker and marker[1][0] == fence[0]
                     and len(marker[1]) >= len(fence) and not marker[2].strip()):
                 fence = None
             result.append("")
+            paragraph = table = False
         elif marker and (marker[1][0] != "`" or "`" not in marker[2]):
             fence = marker[1]
             result.append("")
+            paragraph = table = False
         else:
             result.append(line)
+            table = line.strip().startswith("|")
+            paragraph = not table and not bool(re.match(r" {0,3}(?:#{1,6}\s|[-*_]{3,}\s*$)", line))
     return result
 
 
