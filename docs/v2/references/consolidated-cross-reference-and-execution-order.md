@@ -1,5 +1,10 @@
 # v2 Migration Planning — Consolidated Cross-Reference and Execution Order
 
+> **2026-11-06:** Superseded in part. GraphSpec placement and the ownership
+> diagram predate D-LG-1/5; graph R3 is approved and merged per D-LG-6. See
+> [errata](errata-corrections-to-preserved-documents.md) E12 and
+> [reconciliation](../architecture-status-2026-11-06.md).
+
 **Status:** reconciled cross-reference for PR #351.  
 **Current authority:**
 [the harmonization guide](migration-harmonization-2026-09-09.md) and

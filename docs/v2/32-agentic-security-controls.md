@@ -1,5 +1,10 @@
 # Agentic Security Controls
 
+> **2026-11-06:** The HITL accountability reference cited below is
+> historical, principles-only material. Current refusal and HITL effect rules are
+> the [refusal/HITL contract](references/2026-10-09-compatibility-refusal-hitl-contract.md)
+> and [CONTRACT-DURABLE-HITL-EFFECTS](references/r4-safety-compatibility-platform-2026-10-10/CONTRACT-DURABLE-HITL-EFFECTS.md).
+>
 > **Repository standard:** everything executable lives under `/src`; no root-level
 > `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay
 > `.gitignore`d, never committed with secrets, personal paths, or SecOps material.

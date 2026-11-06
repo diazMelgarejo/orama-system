@@ -1,5 +1,10 @@
 # OramaSys v2 — Formal Security RFC Publication Set (v1)
 
+> **2026-11-06:** Superseded. The shared endpoint-policy package model
+> was rejected by [ADR 62](../62-telos-phylax-authority-gate0-adr.md): Telos owns
+> v2 endpoint security, Phylax owns principal/capability admission, and PT keeps
+> its v1 policy with no imports in either direction.
+
 ## 📌 Status
 
 This document is an **addendum to the OramaSys v2 security roadmap**:

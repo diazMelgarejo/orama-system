@@ -1,5 +1,10 @@
 # Instruction Audit & v2 Migration Plan — Part 2: Execution Program
 
+> **2026-11-06:** Historical. The section 6 ownership and the "open" graph
+> R3 status predate D-LG-1/5/6; see
+> [errata](errata-corrections-to-preserved-documents.md) E12 and
+> [reconciliation](../architecture-status-2026-11-06.md).
+
 **Status:** reconciled execution companion to
 [Part 1](instruction-audit-and-migration-plan-part-1-findings-and-edits.md).
 The historical audit evidence remains useful; current execution status is

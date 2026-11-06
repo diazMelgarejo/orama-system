@@ -203,6 +203,12 @@ migrated and verified. At this point:
   implicitly considered Telos-enforced merely because this ADR/errata assigns
   steady-state ownership to Telos.
 
+> **2026-11-06 update to E10:** the Oramasys Gateway dedicated dialer has since
+> been converted. The [post-PR-351 addendum](2026-09-09-gateway-telos-absorption-post351-addendum.md)
+> records its absorption into Telos, and Oramasys `fe4049e`
+> `src/orama/gateway/dialer.py` imports `telos`. Other direct outbound paths
+> remain migration targets until each is converted and verified.
+
 The Telos clean-room parity work is tested against:
 
 - `diazMelgarejo/Perpetua-Tools@a551da4fa97e5fbc6f908ad077c7b6d8030a3220`;
@@ -256,6 +262,30 @@ Required handling:
 - field ownership is checked against
   [`ownership-registry.json`](loop-graph-compatibility-2026-10-09/ownership-registry.json);
 - the preserved documents are not edited.
+
+**2026-11-06 scope extension.** The same handling applies to every document that
+assigns structural GraphSpec, lint or reducer/join placement to orama-system or
+to Oramasys policy instead of Core:
+
+- [integrated v2 migration plan](integrated-v2-migration-plan-2026-09-09.md)
+  (GraphSpec placement and graph R3 status);
+- [consolidated cross-reference](consolidated-cross-reference-and-execution-order.md)
+  (ownership diagram and R3 status);
+- [migration harmonization guide](migration-harmonization-2026-09-09.md);
+- [instruction-audit part 1](instruction-audit-and-migration-plan-part-1-findings-and-edits.md)
+  (edit A1) and [part 2](instruction-audit-and-migration-plan-part-2-execution-program.md)
+  (section 6);
+- docs [58](../58-minigraph-observer-pattern-library-reconciliation.md) section 7 and
+  [59](../59-minigraph-state-mutation-observer-finalization.md), and the
+  [README index](../README.md).
+
+Graph R3 is approved and merged per
+[D-LG-6](loop-graph-compatibility-2026-10-09/ADR-D-LG-6-R3-REDUCERS-JOINS-FANOUT.md);
+"R3 open" in those documents is historical.
+
+The provenance-pinned inputs named in the harmonization guide stay byte-for-byte
+unchanged. Their "approved … pending" status lines are dated history, not current
+execution status.
 
 ## E13 — R4 draft scope labels and task numbering
 

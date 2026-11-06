@@ -1,5 +1,12 @@
 # 70 — Portal knowledge HITL development ladder
 
+> **2026-11-06:** "v2.1 portal slice" below means this repository's
+> `src/orama_system/knowledge_gateway.py`, not Oramasys. Oramasys separately ships
+> read-only docs search in `src/orama/knowledge/`. The HITL accountability
+> reference is historical, principles-only material; current rules are the
+> [refusal/HITL contract](references/2026-10-09-compatibility-refusal-hitl-contract.md)
+> and [CONTRACT-DURABLE-HITL-EFFECTS](references/r4-safety-compatibility-platform-2026-10-10/CONTRACT-DURABLE-HITL-EFFECTS.md).
+>
 > **Repository standard:** additive — see [`46-repository-standard.md`](46-repository-standard.md).
 > **Status:** Design intent + as-built note for draft PR #368 (v2.1 portal slice).
 > Forward milestones (v2.2–v2.5) are **aspirational and non-binding**. They do not

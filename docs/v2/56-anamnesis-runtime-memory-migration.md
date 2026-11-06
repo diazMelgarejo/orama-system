@@ -1,5 +1,9 @@
 # 56 — Anamnesis Runtime Memory Migration and v1 Controller Contract
 
+> **2026-11-06:** `oramasys/anamnesis` now exists as a scaffold
+> (README and `pyproject.toml` at `99bc106`). It is not a provisioned runtime
+> backend, so the v2 deferral below still applies.
+>
 > **Status:** v1 controller implementation approved; v2 runtime backend deferred until
 > [`oramasys/anamnesis`](https://github.com/oramasys/anamnesis) exists and is explicitly
 > provisioned. This is a migration contract, not an Anamnesis implementation.

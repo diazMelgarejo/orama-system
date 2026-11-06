@@ -1,6 +1,10 @@
 <!-- lint-ignore LINT-013 -->
 # MiniGraph Final Reconciliation — Execution Plan
 
+> **2026-11-06:** Historical execution plan; "in execution" is not a
+> current status. Structural GraphSpec ownership follows D-LG-1/5. See
+> [reconciliation](../architecture-status-2026-11-06.md).
+
 **Date:** 2026-08-27  
 **Date basis:** Asia/Manila (UTC+08:00)  
 **Status:** in execution  

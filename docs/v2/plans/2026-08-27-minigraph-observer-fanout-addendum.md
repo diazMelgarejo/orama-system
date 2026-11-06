@@ -1,5 +1,8 @@
 # MiniGraph Observer Fan-Out — Execution Addendum
 
+> **2026-11-06:** Historical execution addendum; "in execution" is not a
+> current status. See [reconciliation](../architecture-status-2026-11-06.md).
+
 **Date:** 2026-08-27  
 **Date basis:** Asia/Manila (UTC+08:00)  
 **Status:** in execution  

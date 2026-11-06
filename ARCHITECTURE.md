@@ -151,6 +151,27 @@ They do not supersede the contracts above:
   and [typed edge semantics](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/wiki/edges.md):
   historical STM/mesh-security specification relationships, not a universal decision graph.
 
+Further sources for review, not graph contracts:
+
+- Orama: [v2 spec index](docs/v2/README.md), security gates
+  [23](docs/v2/23-security-preconditions.md) and [24](docs/v2/24-security-first-platform.md),
+  [security plan](docs/v2/31-security-harness-excellence-plan.md),
+  [PT coordination identity](docs/v2/61-pt-coordination-principal-identity-design.md),
+  [store separation](docs/v2/67-lancedb-duckdb-dense-info-layer-shape.md),
+  [D-LG-5](docs/v2/references/loop-graph-compatibility-2026-10-09/ADR-D-LG-5-REDUCER-JOIN-DECLARATIONS.md),
+  [R4 index](docs/v2/references/r4-safety-compatibility-platform-2026-10-10/README.md),
+  [ownership registry](docs/v2/references/loop-graph-compatibility-2026-10-09/ownership-registry.json),
+  [activation plan](docs/v2/references/ACTIVATION-SERVING-T3-T5-REMOTE-AUTONOMY-PLAN-2026-10-25.md),
+  [readiness baseline](docs/v2/references/activation-readiness-baseline-2026-10-26.md),
+  [R0–R2 freeze](docs/v2/references/r0-r2-contract-freeze-2026-10-26.md) and the
+  [closure register](docs/v2/MASTER-CLOSURE-AND-IMPLEMENTATION-PLAN-2026-11-06.md).
+- Perpetua-Tools (v1 scope):
+  [v1 endpoint policy rules](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/AGENTS.md),
+  [minigraph compatibility evidence plan](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/plans/2026-10-09-minigraph-compatibility-evidence-plan.md),
+  [coordination README](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/coordination/README.md),
+  [lessons](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/.agent/memory/semantic/LESSONS.md)
+  and [operator decisions and blockers](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/.agent/memory/working/LOCKSTEP_OPERATOR_DECISIONS_AND_BLOCKERS_2026-10-22.md).
+
 ## Readiness Boundary
 
 This document improves navigation and design review. The

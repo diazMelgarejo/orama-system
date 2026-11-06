@@ -1,5 +1,9 @@
 # Instruction Audit & v2 Migration Plan — Part 1: Findings, Coverage, and Proposed Edits
 
+> **2026-11-06:** Historical. Edit A1 and the GraphSpec placement predate
+> D-LG-1/5; see [errata](errata-corrections-to-preserved-documents.md) E12 and
+> [reconciliation](../architecture-status-2026-11-06.md).
+>
 > **Status:** planning reference, not yet implemented. Filed in this legacy
 > repository's `docs/v2/references/` at explicit user direction, alongside
 > this repo's existing v2 planning docs (60–67) — the established location

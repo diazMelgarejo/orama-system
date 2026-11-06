@@ -1,5 +1,11 @@
 # Task 6 Operator Provisioning and Autonomous Tier Implementation Plan
 
+> **2026-11-06:** [Phylax #11](https://github.com/oramasys/phylax/pull/11)
+> merged as `e41f1e8`, as section 8 records. Earlier "pending" and "open"
+> statements about #11 in Task 0 and section 7 are historical. Section 1's
+> statement that the composition script calls `open_grant_authority` is
+> superseded: since Oramasys `15eae8d` it calls `open_grant_verifier`.
+
 <!-- markdownlint-disable MD013 -->
 
 > For agentic workers: use `superpowers:subagent-driven-development` for independent implementation and review, or `superpowers:executing-plans` for a single-worker execution. This document is a planning artifact; implementation starts after its written review.

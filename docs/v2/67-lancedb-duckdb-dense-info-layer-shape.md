@@ -1,5 +1,11 @@
 # 67 — LanceDB/DuckDB Dense Info Layer: Shape for oramasys/* (v2.1), Deferrals to v2.5
 
+> **2026-11-06:** For v2 job claims, the coordination/event log below is
+> not a claim authority. Under [doc 68](68-orchestrator-controller-satellite.md)
+> IC-5 and section 6, gossip carries redacted post-commit controller events; a
+> replayed, reordered or forged event cannot create, renew, complete, release or
+> bypass a claim.
+
 **Status:** Accepted (landmark decision), 2026-09-07
 **Authority:** builds on the storage roadmap decided in `CLAUDE.md § 8`
 (2026-05-15, reaffirmed 2026-07-12), [Doc 43 — GossipBus mesh transport](43-gossipbus-mesh-transport.md),

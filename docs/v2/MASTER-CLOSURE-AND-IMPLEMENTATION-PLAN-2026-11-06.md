@@ -141,6 +141,9 @@ older PT coordination plans, preserved September migration inputs and their erra
 the R1–R8 status chain, and stale ownership/pin claims. Use narrow status notes
 or a current errata route for preserved historical sources. Existing formatting
 debt remains explicit; do not silently exempt new content or call it verified.
+Orama-scope C1 dispositions are in the
+[C1 ledger](closure/c1-orama-dispositions-2026-11-06.md), which also records
+where the C2 artifacts will live once published (pending publication, not done).
 
 C4 covers stored data as well as new events. Inventory existing gossip records
 and derived episodic views without printing private paths. Restrict or quarantine

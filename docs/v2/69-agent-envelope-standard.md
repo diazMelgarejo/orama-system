@@ -1,5 +1,8 @@
 # 69 — Agent Envelope Standard (identity card, kinds, tiers)
 
+> **2026-11-06:** Core `6d75cfe` contains no envelope schema or validator
+> code yet. The Core ownership below is the planned v2 home, not shipped code.
+>
 > **Status:** published v2 standard (promoted by the human operator, 2026-09-27);
 > no runtime contract is changed by this document
 > **Document owner:** `orama-system` (this specification)

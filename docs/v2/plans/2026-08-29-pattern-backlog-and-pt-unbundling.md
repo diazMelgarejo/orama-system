@@ -1,5 +1,11 @@
 # Pattern Backlog + Perpetua-Tools Unbundling Roadmap
 
+> **2026-11-06:** Historical in part. Its orama-system GraphSpec authority
+> predates D-LG-1/5, which place structural GraphSpec in Core. Its unnamed
+> "security/policy satellite" is Telos (endpoints) and Phylax (principal and
+> capability) under [ADR 62](../62-telos-phylax-authority-gate0-adr.md). See
+> [reconciliation](../architecture-status-2026-11-06.md).
+
 **Date:** 2026-08-29  
 **Date basis:** Asia/Manila (UTC+08:00)  
 **Status:** canonical follow-on plan for the MiniGraph reconciliation  
