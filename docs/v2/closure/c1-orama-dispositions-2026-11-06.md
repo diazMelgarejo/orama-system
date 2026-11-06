@@ -78,7 +78,7 @@ Preserved provenance-pinned inputs were not edited.
 | 4.4-d | 14 §8 builds the v2 queue in PT | **fixed (routed)**, 13 lint errors | status routes |
 | 4.5-a | 63, 66 narrower Telos scope | **already-fixed** | `1d92fb7f` |
 | 4.5-b | security-v2 plans | RFC **fixed** in-file; roadmap (82 errors), part 2 (28 errors) and JSON manifest **fixed (routed)**. Supersession is limited to the shared endpoint-policy package model under ADR 62; other security/rendering requirements remain subject to current owner sources and SECURITY.md | note; status routes |
-| 4.5-c | 30 v2 router in PT | **fixed (routed)**: scoped to v1 PT. An in-file note is **blocked** until a paired regeneration of PT's ADR-002 pointer, which pins doc 30's hash | status routes; `scripts/git/sync-docs-v2-pointers.sh` |
+| 4.5-c | 30 v2 router in PT | **fixed**: the operator-approved dated in-file scope note is paired with regenerated PT ADR-002; the previous pointer-regeneration block is resolved in this lockstep batch | doc 30; `scripts/git/sync-docs-v2-pointers.sh` |
 | 4.5-d | `plugin-api-public.md` auth "none" | **fixed** in-file: prior routed correction now reaches direct readers; links D16, docs 23/24, SECURITY.md and ADR 62. The two baseline lint errors were narrowly corrected | module Authentication; status routes |
 | 4.5-e | PT phase-0 master plan :117 | **out of scope** | PT lane |
 | 4.6-a | doc 20 placement and "# 18" title | **fixed**: dated note. The heading was not renumbered, to preserve the text | note in 20 |
@@ -115,7 +115,7 @@ Preserved provenance-pinned inputs were not edited.
 | `08` | **fixed**: historical note | note in 08 |
 | `14`, `18`, `29` | **fixed (routed)** | status routes |
 | `20` | **fixed** | note in 20 |
-| `30` | **fixed (routed)**; in-file note **blocked** on paired PT pointer regeneration | status routes |
+| `30` | **fixed**: dated in-file scope note and paired PT pointer regeneration | doc 30; pointer sync |
 | `36`, `37` | **fixed**: 00 note states their "Proposed" status governs | note in 00 |
 | `02-modules/README.md` | **fixed (routed)**, 1 error: path is `perpetua_core.graph.plugins.subgraphs` (Core `6d75cfe`) | status routes |
 | `02-modules/plugin-api-public.md` | **fixed** in-file: authentication correction; the original 2 lint errors (long prose and an unlabeled fence) were corrected | module Authentication; 4.5-d |
@@ -176,7 +176,8 @@ doc 68. C2a and C3 stay blocked on that.
 
 ## Open items
 
-- Doc 30 in-file note: blocked on a coordinated PT ADR-002 pointer regeneration.
+- Doc 30's earlier pointer block is resolved by this paired batch; both PRs must
+  land together before downstream pointer checks use their new canonical source.
 - Files with lint debt could take in-file notes after a separate formatting
   cleanup. This ledger does not exempt or hide that debt.
 - Oramasys and PT findings are tracked by their owner lanes.
