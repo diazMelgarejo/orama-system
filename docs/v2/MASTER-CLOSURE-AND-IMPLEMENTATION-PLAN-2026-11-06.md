@@ -105,11 +105,14 @@ for the following scope. D1-D3 above retain their original meanings.
 | CL-6 | Paired doc 30/PT pointers; no Doc 69 retrofit of legacy Core modules; strict D1 separation | Canonical generation and downstream parity checks; PT remains manual |
 
 Implemented integration heads accepted by the operator: Orama `9ecdf955`,
-PT `ec88e63c`, and Oramasys `c2f4a14`. New follow-up commits are local only:
-the operator explicitly reinstated the push hold. No agent may infer merge,
-deployment, serving activation or completed host qualification from ratification.
-C3d still requires the accepted review and operational evidence specified below;
-the six decisions do not independently establish that evidence.
+PT `ec88e63c`, and Oramasys `c2f4a14`. A subsequent operator instruction permits
+K1-K3 remediation, local rehearsal and one final push per affected repository.
+No agent may infer merge, deployment, serving activation or completed host
+qualification from ratification. C3d uses operator-only human review under the
+[exact-head procedure](closure/c3d-operator-review-procedure-2026-11-06.md);
+a second human is not required. Fresh interactive GitHub authentication is
+performed by the operator, not an agent, and does not by itself prove review.
+All K1-K3 fixes precede final CI and exact-head acceptance; C6 runs last.
 
 Cross-repository CI pairs differently named review branches through
 `config/docs-pointer-peers.json`: PR number to immutable PT commit. An explicit
@@ -196,8 +199,10 @@ through gossip-to-memory derivation and export, ensuring names and private paths
 are absent from portable views. Block export of unclassified legacy rows rather
 than assuming a new producer identifier repairs historical data.
 
-For C6, use the ratified CL-3 workload and the full owner specification; obtain
-target-filesystem measurements before claiming availability. For C7/C8, require
+For C6, use the ratified CL-3 workload and the full owner specification; the
+operator selected the Mac APFS data volume, with Windows qualification separate.
+Obtain target-filesystem measurements after final CI and operator C3d acceptance
+before claiming availability. For C7/C8, require
 actual deployment inputs rather than guessing a
 host, service manager or configuration loader. C12 is a program of bounded
 follow-on slices; it is not authorization for an unreviewable kernel rewrite.

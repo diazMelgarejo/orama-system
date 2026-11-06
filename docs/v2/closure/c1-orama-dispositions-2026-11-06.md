@@ -176,6 +176,11 @@ doc 68. C2a and C3 stay blocked on that.
 
 ## Open items
 
+- C3d now uses operator-only human review with fresh operator-performed GitHub
+  authentication and explicit exact-head acceptance; no second human is required.
+  Follow the [review procedure](c3d-operator-review-procedure-2026-11-06.md).
+  Future backlog: configurable independent-reviewer requirement, initially
+  operator-only. This closure does not alter Doc 68 or implement a runtime flag.
 - Doc 30's earlier pointer block is resolved by this paired batch; both PRs must
   land together before downstream pointer checks use their new canonical source.
 - Files with lint debt could take in-file notes after a separate formatting
