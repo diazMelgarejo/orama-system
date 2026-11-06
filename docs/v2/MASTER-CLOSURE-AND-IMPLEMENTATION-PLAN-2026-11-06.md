@@ -3,6 +3,9 @@
 Status: scope decisions D1–D3 ratified by the user on 2026-11-06 UTC.
 Local preparation and commits are authorized. Publication
 is held until the user confirms the existing PRs have merged.
+**2026-11-06 update:** the user confirmed the merges and released the push
+hold for one PR per affected repository; see the
+[C0 record](closure/c0-merge-reconciliation-2026-11-06.md).
 
 ## Outcome and source authority
 
@@ -41,14 +44,21 @@ Prepared on existing PR tips: Orama #475 `6f5112b9`, Oramasys #93 `b952dc69`,
 PT #480 `256f97bc`. Full identities are recorded by the local Git parents.
 These are candidate tips, not assumptions about the eventual merge SHAs.
 
-- [ ] User confirms which PRs merged.
-- [ ] Fetch actual merged mains and compare the changed paths against candidate
+- [x] User confirms which PRs merged. User confirmed 2026-11-06: Orama #475,
+  Oramasys #93 and #94, PT #480.
+- [x] Fetch actual merged mains and compare the changed paths against candidate
   trees; account explicitly for squash merges, concurrent edits and omitted content.
-- [ ] Reapply only a verified missing delta from these local plan commits onto
-  isolated branches based on merged main; preserve old local tips.
+  All were merge commits whose trees equal their PR heads; see the
+  [C0 record](closure/c0-merge-reconciliation-2026-11-06.md).
+- [x] Reapply only a verified missing delta from these local plan commits onto
+  isolated branches based on merged main; preserve old local tips. No missing
+  delta was found, so nothing was reapplied.
 - [ ] Recheck open PR inventory: reuse one appropriate PR or open at most one
   per affected repository. Refresh descriptions for the final scope.
-- [ ] Publish only after the user releases the current push hold.
+  Inventory rechecked 2026-11-06 (C0 record); opening the PR and refreshing its
+  description remain with the integrator.
+- [x] Publish only after the user releases the current push hold. Push hold
+  released by the user 2026-11-06 for one PR per repository.
 
 Do not judge rewritten legacy branches from ahead/behind counts. Use the
 repository's content/tree comparison protocol. Do not amend or force-push the
