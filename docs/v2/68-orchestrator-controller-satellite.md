@@ -5,6 +5,9 @@
 > exists yet
 > **Spin-off:** a standalone `oramasys/orchestrator-controller` repository is a
 > later and unlikely option, reachable only through the admission gate in §9
+> **Ownership-table correction (2026-11-06):** any older row below naming the
+> standalone repository as the proposed home is superseded by the internal-module
+> decision above; existing execution run leases are not controller job-claim leases.
 > **Envelope standard:** the card this spec uses is published as
 > [`69-agent-envelope-standard.md`](69-agent-envelope-standard.md)
 > **Parent:** [`01-kernel-spec.md`](01-kernel-spec.md),
@@ -48,7 +51,7 @@ independent until a separately approved migration provides parity evidence.
 | --- | --- | --- |
 | Generic execution primitives and event contracts | `oramasys/perpetua-core` | Supplies dependency-minimal execution/event interfaces; does not import controller code. |
 | Application composition, workflow policy, UI/API integration, budgets/effects | `oramasys/oramasys` | Submits declared jobs and renders controller state; does not reimplement claim semantics. |
-| Atomic claims, leases, idempotency, recovery, and event outbox | `oramasys/orchestrator-controller` (proposed) | Single executable authority for job lifecycle. |
+| Atomic claims, leases, idempotency, recovery, and event outbox | Planned `oramasys/oramasys` internal controller module | Single intended executable authority for job lifecycle; no controller runtime implementation yet. |
 | Endpoint/network-safe transport | `oramasys/telos` | Provides endpoint authorization and secure transport; controller does not create an independent HTTP/TLS/SSRF stack. |
 | Principal admission, capability verification, provenance/redaction, audit packs | `oramasys/phylax` | Verifies caller capability and applies generic admission/audit policy; controller consumes decisions. |
 | Hardware placement evidence | `oramasys/agate` | Optional placement input only; cannot authorize or claim a job. |

@@ -1,5 +1,11 @@
 # Errata — Corrections to Preserved Historical Documents
 
+> **2026-11-06 extension to E10/E12:** Apply D-LG-1/5/6 structural ownership
+> and ADR 62's endpoint/principal split to the September 9 migration plans,
+> cross-reference and instruction-audit documents as well as the earlier
+> documents already listed below. The original source bytes remain preserved.
+> See [reconciliation](../architecture-status-2026-11-06.md).
+
 **Status:** corrections only. The provenance-pinned source documents remain
 byte-for-byte unchanged. Apply these corrections through the current integrated
 plan and successor implementation, not by rewriting the historical inputs.

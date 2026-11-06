@@ -1,6 +1,13 @@
 <!-- lint-ignore LINT-013 -->
 # 01 — Kernel Spec (perpetua-core, v2.0 blocking)
 
+> **2026-11-06:** Historical policy-placement proposals in sections 3 and 6b
+> are superseded in part by [ADR 62](62-telos-phylax-authority-gate0-adr.md)
+> and [Agate ownership](42-agate-hardware-policy-orbit.md). Existing Core
+> policy, LLM and gossip modules still exist; migration is not implied complete.
+
+---
+
 > **Repository standard:** everything executable lives under `/src`; no root-level
 > `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay
 > `.gitignore`d, never committed with secrets, personal paths, or SecOps material.

@@ -1,7 +1,15 @@
 # oramasys v2 — Master Spec Index
 
+> **2026-11-06 reconciliation:** This index preserves its original planning
+> snapshot. Later decisions D-LG-1/5/6/7 and ADR 62 supersede conflicting
+> ownership and migration claims below. Core owns structural GraphSpec and
+> lint; PT remains the v1 owner; Telos, Phylax and Agate own their respective
+> v2 policy boundaries. Core `6d75cfe` is the current production pin, not proof
+> of serving qualification. The graph R3/R4 and Release 1–2 R3/R4 are distinct
+> gate series. See [architecture reconciliation](architecture-status-2026-11-06.md).
+
 **Date opened:** 2026-04-30
-**Status:** Tentative — spec tree under brainstorming review
+**Status:** Mixed: dated specifications and later decisions; see the reconciliation above.
 **Source of truth (raw):**
 `OpenClaw/v2/{1-Perplexity-Lang-Lang.md, 2-GPT-5.5-Thinking.md, 3-Gemini-3.1-PRO.md, 4-Grok.md}`
 
@@ -257,7 +265,7 @@ orama-system/docs/v2/
 ├── 51-security-sentinel-orbit-passkey-mcp.md  ← v2.1 security-sentinel satellite: passkey + MCP human authorization; orbits perpetua-core; MVP HMAC bridge in docs/plans/2026-08-02-pr-body-grant-security-remediation.md
 ├── 52-tier5-frugality-storage-consumer-mapping.md  ← maps PT's Tier-5/frugality budget ledger onto the already-canonical SQLite-write-authority / DuckDB-read-only-analytics / LanceDB-optional-redacted-recall split from doc 20; docs-only, no new architecture decision, no code
 ├── 56-anamnesis-runtime-memory-migration.md  ← D26: v1 PT-agent controller contract; deferred private v2 runtime-memory backend and weekly HITL promotion policy
-├── 57-minigraph-final-reconciliation.md  ← canonical MiniGraph architecture record: supersedes prior line-count/freeze/async-only clauses; ownership (perpetua-core executes, orama-system owns GraphSpec/lint/evaluation/policy); the CompiledGraph/asteps()/GraphEvent scheduler seam; §17 explicit LangGraph (Python, legacy+current) and LangGraph.js (oramaclaw, bundled with AlphaClaw/OpenClaw runtime controllers) drop-in-compatibility decision. Plan: docs/v2/plans/2026-08-27-minigraph-final-reconciliation.md
+├── 57-minigraph-final-reconciliation.md  ← historical architecture record; Core owns structural GraphSpec/lint under D-LG-1/5, application policy remains separate; §17 compatibility decision. See architecture-status-2026-11-06.md.
 ├── 58-minigraph-observer-pattern-library-reconciliation.md  ← observer/pattern-library addendum: reconciles the mined pattern catalogue against the final MiniGraph architecture
 ├── 59-minigraph-state-mutation-observer-finalization.md  ← final state/mutation/observer correction; exact-head oramasys/perpetua-core PR #1 review closure evidence
 ├── 60-phylax-monitorability-design-spec.md  ← canonical Phylax monitorability architecture; governs evidence, epistemic inference classes, safety authority, privacy, liveness, and migration; its three references are subordinate implementation modules
@@ -276,7 +284,7 @@ orama-system/docs/v2/
 └── 73-alexandria-repository.md  ← APPROVED 2026-07-10 as ADR 41 (moved here from `oramasys/oramasys`, renumbered because `41-` is taken): `oramasys/alexandria` documentation-only repository policy; see the Alexandria mentions in `references/` for the migration plans that assume it
 ```
 
-> **Next free slot: `74-`**
+> **Numbering (2026-11-06):** `74-` is occupied. Check the current tree before choosing the next slot.
 > Before adding a new doc here, run `ls docs/v2/ | grep '^[0-9]' | sort -V | tail -1` to confirm the
 > highest existing number, claim `highest + 1`, and update this line. Each PR that adds a doc
 > MUST update this line — git conflict on it is the coordination signal for parallel agents.
@@ -304,7 +312,7 @@ orama-system/docs/v2/
 
 ---
 
-## Open questions (live)
+## Historical open questions (reconcile against later decisions)
 
 The [PR event reporter production design](references/2026-09-14-pr-event-reporter-v2-production-plan.md)
 completes the reporting redesign with storage enforcement, durable uncertainty,

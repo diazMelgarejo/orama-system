@@ -1,5 +1,8 @@
 # Gate 1 Endpoint Observation And Conformance Evidence
 
+> **2026-11-06:** Historical scope descriptions below are subordinate to
+> [ADR 62](62-telos-phylax-authority-gate0-adr.md) for current Telos/Phylax ownership.
+
 **Status:** v2 evidence baseline, 2026-09-06
 **Authority:** [ADR 62](62-telos-phylax-authority-gate0-adr.md)
 **Implementation home:** `oramasys/telos` behavior vectors and tests

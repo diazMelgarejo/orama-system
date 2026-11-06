@@ -1,5 +1,10 @@
 # 59 — MiniGraph State, Mutation, and Observer Finalization
 
+> **2026-11-06 status:** The older GraphSpec ownership and unmerged-R3 claims
+> are superseded by D-LG-1/5/6 and Core `6d75cfe`; see
+> [reconciliation](architecture-status-2026-11-06.md). Release qualification
+> remains a separate question.
+
 **Status:** canonical correction addendum — 2026-08-28  
 **Date basis:** Asia/Manila (UTC+08:00)  
 **Parent authorities:**
