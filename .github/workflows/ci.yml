@@ -292,8 +292,25 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Resolve immutable pointer partner
+        id: pt-pointer-partner
+        env:
+          POINTER_PULL_NUMBER: ${{ github.event.pull_request.number }}
+        run: python3 scripts/review/docs_pointer_peer.py
+
+      - name: Checkout explicit Perpetua-Tools partner
+        if: steps.pt-pointer-partner.outputs.ref != ''
+        uses: actions/checkout@v5
+        with:
+          repository: diazMelgarejo/Perpetua-Tools
+          ref: ${{ steps.pt-pointer-partner.outputs.ref }}
+          path: perpetua-tools-sibling
+          fetch-depth: 1
+          persist-credentials: false
+          submodules: false
+
       - name: Checkout Perpetua-Tools (PR branch for stacked cross-repo parity)
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && steps.pt-pointer-partner.outputs.ref == ''
         id: checkout-pt-pr
         uses: actions/checkout@v5
         with:
@@ -306,11 +323,11 @@ jobs:
         continue-on-error: true
 
       - name: Clear perpetua-tools-sibling before main fallback
-        if: github.event_name != 'pull_request' || steps.checkout-pt-pr.outcome != 'success'
+        if: steps.pt-pointer-partner.outputs.ref == '' && (github.event_name != 'pull_request' || steps.checkout-pt-pr.outcome != 'success')
         run: rm -rf perpetua-tools-sibling
 
       - name: Checkout Perpetua-Tools (main fallback)
-        if: github.event_name != 'pull_request' || steps.checkout-pt-pr.outcome != 'success'
+        if: steps.pt-pointer-partner.outputs.ref == '' && (github.event_name != 'pull_request' || steps.checkout-pt-pr.outcome != 'success')
         uses: actions/checkout@v5
         with:
           repository: diazMelgarejo/Perpetua-Tools
