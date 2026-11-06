@@ -195,6 +195,25 @@ class ArchitectureMapParityTests(unittest.TestCase):
         result = self.check_maps(document(ROWS), right)
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_excludes_code_after_setext_heading(self) -> None:
+        """A Setext heading ends the paragraph before an indented code example."""
+        example = "\n".join("    " + line for line in document(ROWS).splitlines()[4:])
+        for underline in ("====", "-", "--"):
+            with self.subTest(underline=underline):
+                right = f"Example\n{underline}\n{example}\n"
+                result = self.check_maps(document(ROWS), right)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("table", result.stderr)
+
+    def test_setext_example_beside_real_table(self) -> None:
+        """A heading's indented example does not duplicate a real taxonomy."""
+        example = "\n".join("    " + line for line in document(ROWS).splitlines()[4:])
+        for underline in ("====", "-", "--"):
+            with self.subTest(underline=underline):
+                right = f"Example\n{underline}\n{example}\n\n" + document(ROWS)
+                result = self.check_maps(document(ROWS), right)
+                self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_rejects_missing_file(self) -> None:
         """A missing peer is an error, not successful parity or a skip."""
         result = subprocess.run(

@@ -71,8 +71,9 @@ def visible_lines(text: str) -> list[str]:
             paragraph = table = False
         else:
             result.append(line)
+            setext = paragraph and bool(re.fullmatch(r" {0,3}(?:=+|-+)[ \t]*", line))
             table = line.strip().startswith("|")
-            paragraph = not table and not bool(re.match(r" {0,3}(?:#{1,6}\s|[-*_]{3,}\s*$)", line))
+            paragraph = not setext and not table and not bool(re.match(r" {0,3}(?:#{1,6}\s|[-*_]{3,}\s*$)", line))
     return result
 
 
