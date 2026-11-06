@@ -110,8 +110,13 @@ implemented, verified, reviewed, qualified and activated separately where applic
 | C0 | Merge-content and source reconciliation — integrator | User merge notice | Exact main revisions, path comparisons, PR inventory, no unexplained omission |
 | C1 | Complete remaining documentation findings — Orama/PT/Oramasys owners | C0 | Every review finding has a code/source-backed fixed, superseded, historical, rejected or blocked disposition |
 | C2 | Manual v1 compatibility characterization and v2 claim contract — PT/Oramasys | D1, D2, C0 | Existing PT cleanup and callers documented; v2 expiry, fencing, refusal and recovery rules specified against doc 68 |
-| C3 | Automatic expiry/release worker — Oramasys v2 Controller | C2 | Atomic expiry/claim-version checks; fencing rejects old workers; bounded sweep; late renewal/partition safety; clean restart; uncertain effects retained |
-| C4 | Portable identity and topology hygiene — PT | C2 | Random IDs; protected mapping; no names/paths in outbound events; restart and collision tests |
+| C2a | Controller SQLite state and claim/idempotency implementation — Oramasys | C2 protocol freeze and Telos/Phylax contract review | Reviewed migrations; atomic claim, completion/release/failure transitions; same-key replay and changed-key rejection; persisted version/authority checks |
+| C3 | Automatic expiry/release worker — Oramasys v2 Controller | C2a | Atomic expiry/claim-version checks; fencing rejects old workers; bounded sweep; late renewal/partition safety; clean restart; uncertain effects retained; controller closure also requires C3a–C3d |
+| C3a | Controller Telos/Phylax adapters — Oramasys | C3 | Unauthorized, expired and revoked callers refuse; no gossip or topology authorization; deny-path integration tests |
+| C3b | Transactional controller outbox — Oramasys | C3a | State/outbox atomicity; restart durability; duplicate/reordered delivery cannot mutate claim authority |
+| C3c | Controller invariant and isolated-worker conformance — Oramasys | C3b | Doc 68 sections 10/10.1 covered, including IC-1–IC-29; source mismatch, completion, timeout, retry, revocation, restart and redaction evidence |
+| C3d | Controller delivery closure — maintainer/reviewer | C3c | Accepted security review, legacy-job disposition, rollback and operational runbook under doc 68 section 9 |
+| C4 | Portable identity and topology hygiene — PT | C2 | Random IDs and protected mapping; disposition of historical gossip/private-path records; sanitized episodic/portable projections; restart, collision and export scans |
 | C5 | Concurrency and replication coverage — PT | C2 | One committed race winner; bounded lock handling; duplicate/reordered events; no dropped or falsely acknowledged events |
 | C6 | Revocation availability — Oramasys | C0 | Trust-and-byte-aware snapshot validation; retirement/tamper/restart regressions; complete-send plus refresh benchmark on target filesystem |
 | C7 | Loaded configuration binding — Oramasys | D3, C0 | Actual loader and consumed policy/artifact/process binding; secret exclusion; replacement/reload/refusal tests; reviewed collection contract |
@@ -126,6 +131,16 @@ older PT coordination plans, preserved September migration inputs and their erra
 the R1–R8 status chain, and stale ownership/pin claims. Use narrow status notes
 or a current errata route for preserved historical sources. Existing formatting
 debt remains explicit; do not silently exempt new content or call it verified.
+
+C4 covers stored data as well as new events. Inventory existing gossip records
+and derived episodic views without printing private paths. Restrict or quarantine
+raw legacy stores under the approved local retention/access policy; sanitize
+derived portable/export views before release. Preserve tracked append-only source
+bytes and use additive corrections; any sensitive-history removal requires a
+separately approved incident procedure. Test synthetic legacy worktree labels
+through gossip-to-memory derivation and export, ensuring names and private paths
+are absent from portable views. Block export of unclassified legacy rows rather
+than assuming a new producer identifier repairs historical data.
 
 For C6, choose an expected workload and latency/error budget before claiming
 availability. For C7/C8, require actual deployment inputs rather than guessing a
@@ -144,6 +159,10 @@ follow-on slices; it is not authorization for an unreviewable kernel rewrite.
    Test renewal racing expiry, stale workers, partitions, duplicate sweeps and
    restart. Unknown external effects remain held for reconciliation. PT C4/C5
    cover privacy and tests of manual behavior without adding a maintenance daemon.
+   Implement C2a before expiry work, then adapters (C3a), transactional outbox
+   (C3b), isolated-worker/invariant conformance (C3c), and reviewed delivery
+   closure (C3d), following doc 68 section 9. The controller cannot be declared
+   complete from expiry-worker tests alone.
 4. C6 can proceed independently after its contract/workload is established.
    C7–C11 proceed in dependency order with actual host evidence and owner decisions.
 

@@ -53,7 +53,7 @@ def visible_lines(text: str) -> list[str]:
                 result.append("")
                 continue
             indented = expanded.startswith("    ")
-            if indented and (indented_code or not (paragraph or table)):
+            if indented and (indented_code or table or not paragraph):
                 indented_code = True
                 result.append("")
                 continue

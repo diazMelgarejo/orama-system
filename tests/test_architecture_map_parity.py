@@ -187,13 +187,14 @@ class ArchitectureMapParityTests(unittest.TestCase):
             result = self.check_maps(document(ROWS), right)
             self.assertEqual(result.returncode, 0, result.stderr)
 
-    def test_keeps_indented_table_body(self) -> None:
-        """Indentation inside an already open table does not start a code block."""
+    def test_rejects_indented_table_definitions(self) -> None:
+        """GFM renders four-space-indented definitions as code, not table rows."""
         right = document(ROWS)
         for name, meaning in ROWS.items():
             right = right.replace(f"| {name} | {meaning}", f"    | {name} | {meaning}")
         result = self.check_maps(document(ROWS), right)
-        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("invalid graphs", result.stderr)
 
     def test_excludes_code_after_setext_heading(self) -> None:
         """A Setext heading ends the paragraph before an indented code example."""
