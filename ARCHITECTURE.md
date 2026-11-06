@@ -53,7 +53,7 @@ content-insertion authority after the execution shape is selected.
 | v2 structural graph primitives | `oramasys/perpetua-core` | Do not add a parallel v1 node or edge schema. |
 | v1 endpoint/security and hardware policy | Perpetua-Tools | PT owns the v1 endpoint policy and hardware policy; Orama mirrors the endpoint contract. See [ADR 62](docs/v2/62-telos-phylax-authority-gate0-adr.md) and [hardware enforcement](docs/v2/17-hardware-policy-enforcement.md). |
 | v2 endpoint, principal and hardware decisions | Telos, Phylax, and Agate | These v2 owners do not replace the operational v1 policy. |
-| Normative design decisions and ownership registry | Orama `docs/v2` | Design and CI inputs are not runtime dependencies. |
+| Design decisions, ownership registry and capability schema | Orama `docs/v2` and `docs/schemas` | Design and CI inputs are not runtime dependencies. |
 
 The owner table names boundaries, not import relationships. In particular,
 Orama v1 must not acquire a runtime dependency on successor services merely to

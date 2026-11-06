@@ -28,9 +28,11 @@ historical evidence.
   only through its section 9 admission gate. Existing execution run-lease
   fencing is distinct. Earlier PT consolidation plans are v1 implementation
   history, not authority to port their job queue into the v2 controller.
-- Orama `docs/v2` owns the cited design decisions and ownership-registry and
-  capability-schema sources. This is a documentation and verification boundary,
-  not a runtime dependency on legacy Orama services.
+- Orama `docs/v2` owns the cited design decisions and the
+  [ownership registry](references/loop-graph-compatibility-2026-10-09/ownership-registry.json);
+  the [capability schema](../schemas/capability-record.schema.json) lives in
+  `docs/schemas`. These are documentation and verification boundaries, not
+  runtime dependencies on legacy Orama services.
 
 ## Gate names and evidence
 
