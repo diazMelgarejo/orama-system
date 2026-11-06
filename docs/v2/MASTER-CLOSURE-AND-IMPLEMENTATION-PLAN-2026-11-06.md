@@ -87,6 +87,39 @@ and merge barrier remain in effect.
 
 ## Part 3 review and revised scope
 
+### Additional closure decisions confirmed on 2026-11-06
+
+The operator directly confirmed the six J1 recommendations after the
+GossipBus announcement in rows 6308 and 6309, topic
+`OPERATOR_RATIFICATION_ALL_SIX_DECISIONS_AND_CLOSURE_APPROVAL_20261106`.
+This direct confirmation, not the agent announcement alone, is the authority
+for the following scope. D1-D3 above retain their original meanings.
+
+| J1 ID | Ratified scope | Evidence still required |
+| --- | --- | --- |
+| CL-1 | Fresh capability-time check after verification and deadline enforcement under the SQLite write lock | Preserve expiry/refusal regressions; approval is not deployment evidence |
+| CL-2 | Detected absent or changing signing-key trust refuses the current operation, including prewarm, warm lookup and refresh | No retry into allow in the same operation; preserve real-signature regressions |
+| CL-3 | C6 expected workload: up to 256 events, separate refresh every 15 seconds, eight senders at five sends/second; send p95 at most 50 ms; zero fail-open | Physical target-filesystem and dual-host qualification remain open; the full owner specification retains its additional metrics |
+| CL-4 | Export sanitized derived views only; raw coordination history remains node-local | Source-database protection, topology scans and item-level delivery evidence |
+| CL-5 | macOS primary POSIX host and Windows 11 secondary peer; serving remains off, grant-serving flag unset and library default `governed=False` | Actual host/runtime receipts and separate activation gates |
+| CL-6 | Paired doc 30/PT pointers; no Doc 69 retrofit of legacy Core modules; strict D1 separation | Canonical generation and downstream parity checks; PT remains manual |
+
+Implemented integration heads accepted by the operator: Orama `9ecdf955`,
+PT `ec88e63c`, and Oramasys `c2f4a14`. New follow-up commits are local only:
+the operator explicitly reinstated the push hold. No agent may infer merge,
+deployment, serving activation or completed host qualification from ratification.
+C3d still requires the accepted review and operational evidence specified below;
+the six decisions do not independently establish that evidence.
+
+Cross-repository CI pairs differently named review branches through
+`config/docs-pointer-peers.json`: PR number to immutable PT commit. An explicit
+partner checkout must fail closed, never fall back to main on failure. Other
+PRs retain the existing same-branch/main lookup, and main always checks PT main.
+After PT lands, rerun the main parity gate; a paired-PR pass does not establish
+that the downstream main already contains the pointer updates. Preserve the
+ratified review/landing order Orama #477, PT #481, then Oramasys #95, with no
+deployment between the paired documentation merges.
+
 The August draft is superseded in the following implementation details:
 
 1. `orchestrator/coordination/heartbeat.py` does not exist in the inspected PT
@@ -150,7 +183,8 @@ or a current errata route for preserved historical sources. Existing formatting
 debt remains explicit; do not silently exempt new content or call it verified.
 Orama-scope C1 dispositions are in the
 [C1 ledger](closure/c1-orama-dispositions-2026-11-06.md), which also records
-where the C2 artifacts will live once published (pending publication, not done).
+where the C2 artifacts live. PR publication and implementation evidence do not
+by themselves close review, host qualification or activation.
 
 C4 covers stored data as well as new events. Inventory existing gossip records
 and derived episodic views without printing private paths. Restrict or quarantine
@@ -162,8 +196,9 @@ through gossip-to-memory derivation and export, ensuring names and private paths
 are absent from portable views. Block export of unclassified legacy rows rather
 than assuming a new producer identifier repairs historical data.
 
-For C6, choose an expected workload and latency/error budget before claiming
-availability. For C7/C8, require actual deployment inputs rather than guessing a
+For C6, use the ratified CL-3 workload and the full owner specification; obtain
+target-filesystem measurements before claiming availability. For C7/C8, require
+actual deployment inputs rather than guessing a
 host, service manager or configuration loader. C12 is a program of bounded
 follow-on slices; it is not authorization for an unreviewable kernel rewrite.
 
