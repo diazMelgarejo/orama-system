@@ -1,7 +1,7 @@
 # Master closure, implementation and handoff plan
 
-Status: consolidated execution proposal, 2026-11-06 UTC. Decisions D1–D3 await
-the user's answers. Local preparation and commits are authorized. Publication
+Status: scope decisions D1–D3 ratified by the user on 2026-11-06 UTC.
+Local preparation and commits are authorized. Publication
 is held until the user confirms the existing PRs have merged.
 
 ## Outcome and source authority
@@ -54,17 +54,19 @@ Do not judge rewritten legacy branches from ahead/behind counts. Use the
 repository's content/tree comparison protocol. Do not amend or force-push the
 existing signed/session commits to alter verification badges.
 
-## Decisions requiring user ratification
+## Ratified scope decisions
 
-| ID | Decision | Recommended resolution | Current state |
+| ID | Decision | Ratified resolution | Current state |
 | --- | --- | --- | --- |
-| D1 | Part 3 daemon authority | PT v1 maintenance initially observes and reports; release only through reviewed existing owner semantics. Ambiguous claims remain held. | Pending user answer |
-| D2 | Legacy caller compatibility | Retain forwarding shims until known callers migrate; removal requires its own later decision. | Pending user answer |
-| D3 | Deployment evidence target | Linux/POSIX first, with native Windows qualification separately tracked. | Pending user answer |
+| D1 | Part 3 automation authority | Automatic stale-claim release belongs to the v2 Controller only, under explicit expiry and fencing rules. PT remains manual. | Ratified 2026-11-06 |
+| D2 | Legacy caller compatibility | Retain compatibility shims; decide removal separately after caller migration. | Ratified 2026-11-06 |
+| D3 | Deployment evidence target | Require both POSIX and native Windows qualification before any promotion. Work can run in parallel; neither substitutes for the other. | Ratified 2026-11-06 |
 
-These recommendations are proposals. Passing time, a local commit, or an empty
-PR queue does not ratify them. The choice is recorded here before dependent
-implementation begins; independent audit and consolidation can proceed.
+Decision provenance: the user selected automatic release with expiry/fencing
+for v2 only and PT manual, retained shims, and both platforms before promotion.
+This ratifies implementation scope. Actual release qualification, generation
+approval and activation retain their separately evidenced gates. The push hold
+and merge barrier remain in effect.
 
 ## Part 3 review and revised scope
 
@@ -73,14 +75,16 @@ The August draft is superseded in the following implementation details:
 1. `orchestrator/coordination/heartbeat.py` does not exist in the inspected PT
    tree. `_heartbeat_cleanup` is in `liveness.py`; it delegates to
    `cleanup_stale_claims` and releases claims. Inspect that owner's atomic checks
-   and failure behavior before scheduling it. Do not implement the draft's
+   and failure behavior when characterizing compatibility. PT remains manual;
+   do not schedule this cleanup or implement the draft's
    `heartbeat_cleanup(bus, stale_threshold_sec=...)` call as an assumed API.
 2. Staleness alone is insufficient evidence that work can safely be reassigned.
    Test late heartbeats, partitioned workers, owner changes and uncertain effects.
-   The selected D1 policy must state which condition permits a release.
-3. The daemon must be opt-in, have one owner per intended database scope, bounded
+   D1 requires v2 expiry and fencing checks in the authoritative claim transaction.
+3. The v2 maintenance worker must be opt-in, have one owner per intended database scope, bounded
    work per sweep, explicit start/status/stop behavior, graceful cancellation and
-   no import-time or install-time autostart. Use the existing canonical DB resolver.
+   no import-time or install-time autostart. Its state comes from the Controller;
+   a PT database resolver is not the v2 authority.
 4. Replace the proposed path/name/hash identifier with a random opaque identifier
    and a protected local mapping if one is needed. Neither branch/worktree names
    nor a public bare hash of a predictable path provides the intended privacy.
@@ -105,15 +109,15 @@ implemented, verified, reviewed, qualified and activated separately where applic
 | --- | --- | --- | --- |
 | C0 | Merge-content and source reconciliation — integrator | User merge notice | Exact main revisions, path comparisons, PR inventory, no unexplained omission |
 | C1 | Complete remaining documentation findings — Orama/PT/Oramasys owners | C0 | Every review finding has a code/source-backed fixed, superseded, historical, rejected or blocked disposition |
-| C2 | Part 3 contract and CLI characterization — PT | D1, D2, C0 | Existing cleanup and caller behavior documented; race, refusal and compatibility tests fail before any repair |
-| C3 | Opt-in v1 maintenance daemon — PT | C2 | Bounded sweep; single ownership; late heartbeat and claim-change safety; clean stop/restart; no uncertain-effect replay |
+| C2 | Manual v1 compatibility characterization and v2 claim contract — PT/Oramasys | D1, D2, C0 | Existing PT cleanup and callers documented; v2 expiry, fencing, refusal and recovery rules specified against doc 68 |
+| C3 | Automatic expiry/release worker — Oramasys v2 Controller | C2 | Atomic expiry/claim-version checks; fencing rejects old workers; bounded sweep; late renewal/partition safety; clean restart; uncertain effects retained |
 | C4 | Portable identity and topology hygiene — PT | C2 | Random IDs; protected mapping; no names/paths in outbound events; restart and collision tests |
 | C5 | Concurrency and replication coverage — PT | C2 | One committed race winner; bounded lock handling; duplicate/reordered events; no dropped or falsely acknowledged events |
 | C6 | Revocation availability — Oramasys | C0 | Trust-and-byte-aware snapshot validation; retirement/tamper/restart regressions; complete-send plus refresh benchmark on target filesystem |
 | C7 | Loaded configuration binding — Oramasys | D3, C0 | Actual loader and consumed policy/artifact/process binding; secret exclusion; replacement/reload/refusal tests; reviewed collection contract |
-| C8 | Deployment R4/R5 evidence — operator with tooling owner | C7 | Real service identity denials; installed-set and configuration evidence outside checkout; actual filesystem/platform limits |
+| C8 | Deployment R4/R5 evidence on POSIX and native Windows — operator with tooling owner | C7, D3 | Both platform receipts: real service identity denials, installed-set and configuration evidence outside checkout, actual filesystem/platform limits |
 | C9 | Independent R6 — independent reviewer | C8 | Review binds exact producer, consumer and configuration revisions and host evidence |
-| C10 | R7 generation/pin decision — approved operator | C9 | New immutable generation with paired reviewed pins and recorded approval |
+| C10 | R7 generation/pin decision — approved operator | C9, C8 on both platforms | New immutable generation with paired reviewed pins and recorded approval; no promotion with one platform unqualified |
 | C11 | Separate R8 activation — operator | C10 | Scope, expiry, canary, monitoring, rollback and applicable activation approval record |
 | C12 | Product parity and broader constellation roadmap — application/kernel owners | C0 | Capability inventory first; offline artifact/verifier parity; separately reviewed retrieval/provider, continuation and distributed-runtime increments |
 
@@ -132,11 +136,14 @@ follow-on slices; it is not authorization for an unreviewable kernel rewrite.
 
 1. Close C0 and produce the source/disposition ledger for C1. Do not reopen
    already merged fixes merely because a historical checkbox is empty.
-2. Record D1–D3 answers. Complete C2's caller and cleanup characterization using
-   current `liveness.py`, `claims.py`, `task_queue.py`, `paths.py` and `cli.py`.
-3. Implement C3–C5 in small reviewable PT batches after the policy is ratified.
-   Tests must distinguish stale observation from actual release authority and
-   exercise the real owner transaction rather than a mock that always succeeds.
+2. Apply ratified D1–D3. Characterize PT's manual callers and cleanup using
+   current `liveness.py`, `claims.py`, `task_queue.py`, `paths.py` and `cli.py`;
+   specify the separate v2 claim contract under doc 68 before implementing C3.
+3. Implement C3 in Oramasys. A release must atomically verify lease expiry and
+   current claim identity/version; fence the previous worker before reassignment.
+   Test renewal racing expiry, stale workers, partitions, duplicate sweeps and
+   restart. Unknown external effects remain held for reconciliation. PT C4/C5
+   cover privacy and tests of manual behavior without adding a maintenance daemon.
 4. C6 can proceed independently after its contract/workload is established.
    C7–C11 proceed in dependency order with actual host evidence and owner decisions.
 
