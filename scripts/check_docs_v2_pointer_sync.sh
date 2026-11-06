@@ -8,7 +8,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 for cand in "${PERPETUA_TOOLS_ROOT:-}" \
             "$ROOT/../perplexity-api/Perpetua-Tools"; do
-  [[ -n "$cand" && -d "$cand/.git" ]] || continue
+  [[ -n "$cand" && -e "$cand/.git" ]] || continue
+  (unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR; git -C "$cand" rev-parse --git-dir >/dev/null 2>&1) || continue
   exec bash "$ROOT/scripts/git/sync-docs-v2-pointers.sh" --check "$cand"
 done
 echo "skip: Perpetua-Tools not found as sibling (set PERPETUA_TOOLS_ROOT to enable docs/v2 pointer sync check)" >&2

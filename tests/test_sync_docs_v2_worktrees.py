@@ -9,6 +9,7 @@ import unittest
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts/git/sync-docs-v2-pointers.sh"
+WRAPPER = Path(__file__).resolve().parents[1] / "scripts/check_docs_v2_pointer_sync.sh"
 
 
 class PointerWorktreeTests(unittest.TestCase):
@@ -41,11 +42,24 @@ class PointerWorktreeTests(unittest.TestCase):
                 ["bash", str(SCRIPT), "--check", str(linked)], env=env, capture_output=True, text=True,
             )
             self.assertEqual(checked.returncode, 0, checked.stderr)
+            wrapper_env = {**env, "PERPETUA_TOOLS_ROOT": str(linked),
+                           "GIT_DIR": str(root / "missing-git-dir"),
+                           "GIT_WORK_TREE": str(root / "missing-worktree")}
+            wrapper_check = subprocess.run(
+                ["bash", str(WRAPPER)], env=wrapper_env, capture_output=True, text=True,
+            )
+            self.assertEqual(wrapper_check.returncode, 0, wrapper_check.stderr)
+            self.assertIn("in sync", wrapper_check.stdout)
             pointer.write_text("stale pointer\n", encoding="utf-8")
             drift = subprocess.run(
                 ["bash", str(SCRIPT), "--check", str(linked)], env=env, capture_output=True, text=True,
             )
             self.assertNotEqual(drift.returncode, 0)
+            wrapper_drift = subprocess.run(
+                ["bash", str(WRAPPER)], env=wrapper_env, capture_output=True, text=True,
+            )
+            self.assertNotEqual(wrapper_drift.returncode, 0, wrapper_drift.stderr)
+            self.assertIn("DRIFT:", wrapper_drift.stderr)
 
 
 if __name__ == "__main__":
