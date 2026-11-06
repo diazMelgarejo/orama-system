@@ -1,9 +1,14 @@
 # OramaSys v2 — Formal Security RFC Publication Set (v1)
 
-> **2026-11-06:** Superseded. The shared endpoint-policy package model
-> was rejected by [ADR 62](../62-telos-phylax-authority-gate0-adr.md): Telos owns
+> **2026-11-06:** Only the shared endpoint-policy package model is superseded
+> by [ADR 62](../62-telos-phylax-authority-gate0-adr.md): Telos owns
 > v2 endpoint security, Phylax owns principal/capability admission, and PT keeps
 > its v1 policy with no imports in either direction.
+> This does not waive other security or rendering requirements. In particular,
+> remote model and status strings must still be HTML escaped or rendered through
+> safe text nodes under [SECURITY.md](../../../SECURITY.md). Check current owner
+> sources and that policy for the applicable controls; the historical shared
+> validator and cross-repository enforcement claims below do not override ADR 62.
 
 ## 📌 Status
 

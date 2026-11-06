@@ -77,9 +77,9 @@ Preserved provenance-pinned inputs were not edited.
 | 4.4-c | 67 lacks IC-5 qualifier | **fixed**: dated note citing IC-5 and §6 | note in 67 |
 | 4.4-d | 14 §8 builds the v2 queue in PT | **fixed (routed)**, 13 lint errors | status routes |
 | 4.5-a | 63, 66 narrower Telos scope | **already-fixed** | `1d92fb7f` |
-| 4.5-b | security-v2 plans | RFC **fixed** in-file; roadmap (82 errors), part 2 (28 errors) and JSON manifest **fixed (routed)** | note; status routes |
+| 4.5-b | security-v2 plans | RFC **fixed** in-file; roadmap (82 errors), part 2 (28 errors) and JSON manifest **fixed (routed)**. Supersession is limited to the shared endpoint-policy package model under ADR 62; other security/rendering requirements remain subject to current owner sources and SECURITY.md | note; status routes |
 | 4.5-c | 30 v2 router in PT | **fixed (routed)**: scoped to v1 PT. An in-file note is **blocked** until a paired regeneration of PT's ADR-002 pointer, which pins doc 30's hash | status routes; `scripts/git/sync-docs-v2-pointers.sh` |
-| 4.5-d | `plugin-api-public.md` auth "none" | **fixed (routed)**, 2 lint errors | status routes |
+| 4.5-d | `plugin-api-public.md` auth "none" | **fixed** in-file: prior routed correction now reaches direct readers; links D16, docs 23/24, SECURITY.md and ADR 62. The two baseline lint errors were narrowly corrected | module Authentication; status routes |
 | 4.5-e | PT phase-0 master plan :117 | **out of scope** | PT lane |
 | 4.6-a | doc 20 placement and "# 18" title | **fixed**: dated note. The heading was not renumbered, to preserve the text | note in 20 |
 | 4.6-b | `rag-and-memory.md` | **fixed (routed)**, 2 lint errors | status routes |
@@ -118,7 +118,8 @@ Preserved provenance-pinned inputs were not edited.
 | `30` | **fixed (routed)**; in-file note **blocked** on paired PT pointer regeneration | status routes |
 | `36`, `37` | **fixed**: 00 note states their "Proposed" status governs | note in 00 |
 | `02-modules/README.md` | **fixed (routed)**, 1 error: path is `perpetua_core.graph.plugins.subgraphs` (Core `6d75cfe`) | status routes |
-| `02-modules/plugin-api-public.md`, `rag-and-memory.md`, `alphaclaw-mcp-smoke-test.md` | **fixed (routed)**, errors 2 / 2 / 8 | status routes |
+| `02-modules/plugin-api-public.md` | **fixed** in-file: authentication correction; the original 2 lint errors (long prose and an unlabeled fence) were corrected | module Authentication; 4.5-d |
+| `02-modules/rag-and-memory.md`, `alphaclaw-mcp-smoke-test.md` | **fixed (routed)**, errors 2 / 8 | status routes |
 
 ## Table 7.2: docs 38–74 and `plans/`
 

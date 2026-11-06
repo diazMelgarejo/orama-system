@@ -61,10 +61,11 @@ later ownership corrections to those inputs and their cross-reference plans.
 
 ## Status routes for documents not edited in place
 
-These documents have existing formatting debt, or carry a generated downstream
-pointer, so a dated note would change more than a narrow status line. Their
-corrections are recorded here instead; their text is unchanged. The per-finding
-ledger is [C1 dispositions](closure/c1-orama-dispositions-2026-11-06.md).
+Most documents below have existing formatting debt, or carry a generated
+downstream pointer; their corrections are routed here without in-file edits.
+The public plugin API authentication correction is also made in-file so direct
+readers receive it. The per-finding ledger is
+[C1 dispositions](closure/c1-orama-dispositions-2026-11-06.md).
 
 | Document | Current reading |
 | --- | --- |
@@ -75,9 +76,9 @@ ledger is [C1 dispositions](closure/c1-orama-dispositions-2026-11-06.md).
 | [29 mastery plan](29-oramasys-mastery-implementation-plan.md) | Historical. Its section 5 layout does not match the Oramasys `src/orama/` tree; "Approved for execution" is not current status. |
 | [30 multi-LLM router](30-multi-llm-router-caching-batching-decorator.md) | Scoped to v1 PT. It is not a v2 router; v2 endpoint security belongs to Telos under ADR 62. It is the canonical source of PT's generated ADR-002 pointer, so an in-file note needs a paired pointer regeneration in PT. |
 | [02-modules index](02-modules/README.md) | The subgraph helper is `perpetua_core.graph.plugins.subgraphs.as_node`. |
-| [Public plugin API module](02-modules/plugin-api-public.md) | Stub. "Internal auth: none" conflicts with D16, docs 23 and 24, and Telos/Phylax admission. Hardware routes belong to Agate. |
+| [Public plugin API module](02-modules/plugin-api-public.md) | Stub; authentication guidance corrected in-file against D16, docs 23 and 24, SECURITY.md and ADR 62. LAN locality is not authentication. Hardware routes belong to Agate. |
 | [RAG and memory module](02-modules/rag-and-memory.md) | Superseded in practice by docs [56](56-anamnesis-runtime-memory-migration.md), [67](67-lancedb-duckdb-dense-info-layer-shape.md) and [20](20-rag-and-memory-design.md). |
 | [AlphaClaw MCP smoke test](02-modules/alphaclaw-mcp-smoke-test.md) | v1 handshake specification; see [doc 40](40-oramaclaw-lifecycle-plugin.md) for the oramaclaw lifecycle. |
-| [Security roadmap](plans/security-v2-roadmap.md), [execution plan](plans/security-v2-roadmap-part2.md), `plans/security-v2-cursor-manifest-part2.json` | Superseded: the shared endpoint-policy package was rejected by ADR 62. |
+| [Security roadmap](plans/security-v2-roadmap.md), [execution plan](plans/security-v2-roadmap-part2.md), `plans/security-v2-cursor-manifest-part2.json` | Only the shared endpoint-policy package model is superseded by ADR 62. Other security requirements, including CSRF/origin protections and safe rendering, are not waived; check current owner sources and [SECURITY.md](../../SECURITY.md). |
 | [HUMAN-IN-LOOP-ACCOUNTABILITY](references/HUMAN-IN-LOOP-ACCOUNTABILITY.md) | Historical, principles only. Its self-declared authority, PT identity-verification placement and August 2, 2026 deadline are not current. Bounded autonomy is governed by [ADR 71](71-operator-provisioning-and-autonomous-tier-adr.md), approved policy but not deployed. Current rules: the refusal/HITL contract and [CONTRACT-DURABLE-HITL-EFFECTS](references/r4-safety-compatibility-platform-2026-10-10/CONTRACT-DURABLE-HITL-EFFECTS.md). |
 | [Agate MVP design](references/agate-mvp-design.md) | Superseded on ownership: Agate owns v2 hardware placement, and PT owns only the v1 policy. Its "ignore unknown keys" rule conflicts with the [graph policy contract](references/loop-graph-compatibility-2026-10-09/GRAPH-POLICY-CONTRACT.md), where unknown fields fail closed. |

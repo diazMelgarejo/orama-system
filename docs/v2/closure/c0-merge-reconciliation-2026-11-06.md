@@ -93,6 +93,45 @@ Open PRs at the time of reading, via GitHub REST:
 Each affected repository can therefore receive at most one new closure PR from
 a branch based on the merged `main` above.
 
+## Branch-base reverification
+
+For CodeRabbit comment 4489708545, read-only checks on 2026-11-06 reverified
+the exact objects above, not just branch names or ahead/behind counts:
+
+- GitHub REST still reports all four PRs merged at the recorded merge/head
+  SHAs and all three remote `main` heads at the recorded revisions.
+- `git show -s --format='%H %T %P'` confirms every recorded merge's exact
+  two parents and tree. The candidate is in the PR head's `git rev-list`
+  history (where applicable); the first parent is also in that history.
+  Each merge tree equals its PR head tree, and candidate-to-merge
+  `git diff --name-status` reproduces the path lists above.
+- The following immutable isolated-lane baselines contain the exact recorded
+  merges in their histories. No fetch or ref update was needed or performed.
+
+| Lane | Baseline checked | Recorded merge(s) present |
+| --- | --- | --- |
+| Orama (this review) | `006c226702b8c6bb265718fe5e0196db2d6e06fe` | #475 `1a370467725e9f659ffa218fbbee0cf8ec8a0de0` |
+| Oramasys | `0f690ce40865a58ea728c8ce9d1b92ff66a50c0b` | #93 `2188a9433d5c5d31d746fb50826623028ec54100`; #94 `fe4049ed75b5adaaadcdcd0fbe5f215e33b2c650` |
+| Perpetua-Tools | `4987ceaf9dcbfb7cf775c2415b5345a8d4150fa7` | #480 `e4cd20e0c51ad93ae7321f255042c7550a85972a` |
+
+The repository's documented rewrite boundary still matters. Local `main` refs
+observed during this check were Orama `a3c2bce039c9a62ae2dbd50c232a5145bcdf9f09`,
+Oramasys `6b4ce46d4251c2996ed09da34f741d2658214efa` and PT
+`85203cc4d54b312ce247069ee065254dd8298554`, not the REST-confirmed remote
+heads. None of those local histories contains its recorded merge SHA or a
+whole-tree twin of that merge. This does not prove missing content or establish
+when or how a rewrite occurred; those refs cannot substitute for the verified
+baselines. The exact ancestry checks above do not cross a rewrite boundary.
+
+The master plan therefore retains the verified content comparison as checked,
+but no longer calls it a fetch. Before clearing a different or later branch,
+verify its actual base against current remote main and the recorded merge.
+If a rewrite breaks SHA ancestry, use the canonical tree-twin/content protocol
+in `AGENTS.md`; do not infer omission or reapply old history from graph counts.
+The historical inventory above is not current PR or publication clearance.
+These verification checks performed no rewrite, re-anchor, commit, push, PR or
+board action; later integration and reporting are separate operations.
+
 ## Limits
 
 - Merge confirmation and the push-hold release are user statements recorded on

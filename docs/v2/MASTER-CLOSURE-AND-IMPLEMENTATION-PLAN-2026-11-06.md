@@ -46,10 +46,17 @@ These are candidate tips, not assumptions about the eventual merge SHAs.
 
 - [x] User confirms which PRs merged. User confirmed 2026-11-06: Orama #475,
   Oramasys #93 and #94, PT #480.
-- [x] Fetch actual merged mains and compare the changed paths against candidate
+- [x] Verify actual merged mains and compare the changed paths against candidate
   trees; account explicitly for squash merges, concurrent edits and omitted content.
   All were merge commits whose trees equal their PR heads; see the
-  [C0 record](closure/c0-merge-reconciliation-2026-11-06.md).
+  [C0 record](closure/c0-merge-reconciliation-2026-11-06.md#branch-base-reverification).
+  No fetch is claimed: read-only GitHub main identities matched available local
+  objects. Reverification confirms the exact recorded merges in the isolated
+  lane baselines, including Orama `006c226702b8c6bb265718fe5e0196db2d6e06fe`.
+  Before clearing any later closure branch, verify its actual base against the
+  recorded merge and current remote main, using tree/content reconciliation at
+  known rewrite boundaries. A checked comparison is not clearance for a stale
+  local `main` ref or a different branch base.
 - [x] Reapply only a verified missing delta from these local plan commits onto
   isolated branches based on merged main; preserve old local tips. No missing
   delta was found, so nothing was reapplied.
