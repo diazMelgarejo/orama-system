@@ -49,7 +49,7 @@ content-insertion authority after the execution shape is selected.
 | Audience, intent, and ambiguity | [AFRP](bin/orama-system/afrp/SKILL.md) | Route only after the task contract is clear. |
 | Method, planning, and verification | [Orama system](bin/orama-system/SKILL.md) | Guides work; it does not confer authorization. |
 | Content insertion | [CIDF](bin/orama-system/cidf/SKILL.md) | Preserve rank selection, automation gate, and readback. |
-| v1 orchestration, coordination, telemetry and memory | Perpetua-Tools | Treat records as scoped evidence, not universal authority. The planned v2 controller owns job claims and job-claim leases; existing v2 execution run leases are a separate mechanism. |
+| v1 orchestration, coordination, telemetry and memory | Perpetua-Tools | Treat records as scoped evidence, not universal authority. The v2 controller owns job claims and job-claim leases (partial oramasys implementation, not reviewed or deployed; PT stays manual per D1); existing v2 execution run leases are a separate mechanism. |
 | v2 structural graph primitives | `oramasys/perpetua-core` | Do not add a parallel v1 node or edge schema. |
 | v1 endpoint/security and hardware policy | Perpetua-Tools | PT owns the v1 endpoint policy and hardware policy; Orama mirrors the endpoint contract. See [ADR 62](docs/v2/62-telos-phylax-authority-gate0-adr.md) and [hardware enforcement](docs/v2/17-hardware-policy-enforcement.md). |
 | v2 endpoint, principal and hardware decisions | Telos, Phylax, and Agate | These v2 owners do not replace the operational v1 policy. |
