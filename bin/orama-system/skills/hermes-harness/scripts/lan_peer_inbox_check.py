@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Report whether a drop from the Mac peer has arrived in the local LAN peer inbox.
+"""Report whether a drop from the LAN peer has arrived in the local LAN peer inbox.
 
-The launcher runs this after every ``--lan-peer`` start. It is read-only apart from a small
-"already seen" state file, never touches the network and never prints file bodies.
+The launcher runs this after every ``--lan-peer`` start: the Windows launcher asks about Mac drops (the
+default, ``--peer mac``) and the Mac launcher asks about Windows drops (``--peer win``). It is read-only
+apart from a small per-peer "already seen" state file, never touches the network and never prints file
+bodies.
 
 A drop counts as coming from the Mac when its sidecar ``source`` carries a standalone ``mac`` token
 (the file name is used only when there is no source, so a Windows-sent file named mac-* is not counted). Each drop is integrity-checked: the stored bytes must hash to the
@@ -32,13 +34,26 @@ if _SRC_ROOT.is_dir() and str(_SRC_ROOT) not in sys.path:
 from orama_system.lan_peer_files import inbox_dir, lan_peer_state_dir  # noqa: E402
 
 _MAC_TOKEN = re.compile(r"(?<![a-z0-9])mac(?![a-z0-9])", re.IGNORECASE)
+_PEER_TOKENS = {"mac": _MAC_TOKEN, "win": re.compile(r"(?<![a-z0-9])win(?![a-z0-9])", re.IGNORECASE)}
+PEER_LABELS = {"mac": "Mac", "win": "Windows"}
 STATE_NAME = "inbox_check.json"
 
 
-def is_mac_drop(name: str, meta: dict[str, Any]) -> bool:
-    """Return True for a Mac drop: the sidecar source decides; the file name is used only when it has no source."""
+def state_name(peer: str = "mac") -> str:
+    """Return the already-seen state file name for *peer*; the Mac name is the original one, for compatibility."""
+    return STATE_NAME if peer == "mac" else f"inbox_check_{peer}.json"
+
+
+def is_peer_drop(name: str, meta: dict[str, Any], peer: str = "mac") -> bool:
+    """Return True for a drop from *peer*: the sidecar source decides; the file name is used only when it has no source."""
+    token = _PEER_TOKENS[peer]
     source = str(meta.get("source") or "").strip()
-    return bool(_MAC_TOKEN.search(source) if source else _MAC_TOKEN.search(name))
+    return bool(token.search(source) if source else token.search(name))
+
+
+def is_mac_drop(name: str, meta: dict[str, Any]) -> bool:
+    """Return True for a Mac drop (the original entry point, kept for existing callers)."""
+    return is_peer_drop(name, meta, "mac")
 
 
 def _read_meta(path: Path) -> dict[str, Any]:
@@ -51,8 +66,8 @@ def _read_meta(path: Path) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
-def collect(inbox: Path, now: float) -> list[dict[str, Any]]:
-    """Return Mac drops in *inbox*, newest first, each with age and integrity (ok/mismatch/unknown)."""
+def collect(inbox: Path, now: float, peer: str = "mac") -> list[dict[str, Any]]:
+    """Return *peer* drops in *inbox*, newest first, each with age and integrity (ok/mismatch/unknown)."""
     drops: list[dict[str, Any]] = []
     if not inbox.is_dir():
         return drops
@@ -60,7 +75,7 @@ def collect(inbox: Path, now: float) -> list[dict[str, Any]]:
         if not path.is_file() or path.name.endswith(".meta.json") or path.suffix == ".json":
             continue
         meta = _read_meta(path)
-        if not is_mac_drop(path.name, meta):
+        if not is_peer_drop(path.name, meta, peer):
             continue
         body = path.read_bytes()
         recorded = str(meta.get("sha256") or "")
@@ -118,29 +133,34 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--json", action="store_true", help="print one JSON object")
     parser.add_argument("--no-record", action="store_true", help="do not update the already-seen state")
+    parser.add_argument(
+        "--peer", choices=sorted(_PEER_TOKENS), default="mac",
+        help="which peer's drops to report (default mac: the Windows launcher; win: the Mac launcher)",
+    )
     args = parser.parse_args(argv)
+    peer, who = args.peer, PEER_LABELS[args.peer]
 
-    drops = collect(inbox_dir(), time.time())
-    state = lan_peer_state_dir() / STATE_NAME
+    drops = collect(inbox_dir(), time.time(), peer)
+    state = lan_peer_state_dir() / state_name(peer)
     status, new = evaluate(drops, _load_seen(state))
     result = {
         "status": status,
-        "mac_drops": len(drops),
+        f"{peer}_drops": len(drops),
         "new": [d["name"] for d in new],
         "newest": drops[0] if drops else None,
     }
     if args.json:
         print(json.dumps(result, indent=2))
     elif status == "none":
-        print("no drop from the Mac has arrived yet")
+        print(f"no drop from the {who} peer has arrived yet")
     elif status == "integrity-fail":
         bad = [d["name"] for d in drops if d["integrity"] == "mismatch"]
-        print(f"integrity FAIL for {len(bad)} Mac drop(s): {', '.join(bad)}")
+        print(f"integrity FAIL for {len(bad)} {who} drop(s): {', '.join(bad)}")
     else:
         newest = drops[0]
         label = {"new": f"{len(new)} new", "baseline": "first check", "quiet": "none new"}[status]
         print(
-            f"Mac drops: {len(drops)} total, {label}; newest {newest['name']} "
+            f"{who} drops: {len(drops)} total, {label}; newest {newest['name']} "
             f"({newest['bytes']} bytes, {_human_age(newest['age_seconds'])} ago, integrity {newest['integrity']})"
         )
     if not args.no_record and status != "integrity-fail":
