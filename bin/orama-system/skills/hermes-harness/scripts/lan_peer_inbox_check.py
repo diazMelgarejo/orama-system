@@ -6,21 +6,22 @@ default, ``--peer mac``) and the Mac launcher asks about Windows drops (``--peer
 apart from a small per-peer "already seen" state file, never touches the network and never prints file
 bodies.
 
-A drop counts as coming from the Mac when its sidecar ``source`` carries a standalone ``mac`` token
-(the file name is used only when there is no source, so a Windows-sent file named mac-* is not counted). Each drop is integrity-checked: the stored bytes must hash to the
-``sha256`` recorded in the sidecar. Statuses:
+A drop counts as coming from the peer when its sidecar ``source`` carries a standalone token for that peer
+(``mac`` or ``win``); the file name is used only when there is no source. Each drop is integrity-checked:
+the stored bytes must hash to the ``sha256`` recorded in the sidecar. Statuses:
 
-* ``new``            at least one Mac drop not seen by an earlier check;
-* ``baseline``       first ever check: existing Mac drops are recorded, none reported as new;
-* ``quiet``          Mac drops exist but none are new;
-* ``none``           no Mac drop has ever arrived;
-* ``integrity-fail`` a Mac drop does not match its recorded hash (exit code 2).
+* ``new``            at least one peer drop not seen by an earlier check;
+* ``baseline``       first ever check: existing peer drops are recorded, none reported as new;
+* ``quiet``          peer drops exist but none are new;
+* ``none``           no drop from the peer has ever arrived;
+* ``integrity-fail`` a peer drop does not match its recorded hash (exit code 2).
 """
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
+import os
 import re
 import sys
 import time
@@ -77,13 +78,16 @@ def collect(inbox: Path, now: float, peer: str = "mac") -> list[dict[str, Any]]:
         meta = _read_meta(path)
         if not is_peer_drop(path.name, meta, peer):
             continue
-        body = path.read_bytes()
-        recorded = str(meta.get("sha256") or "")
-        if not recorded:
-            integrity = "unknown"
-        else:
-            integrity = "ok" if hashlib.sha256(body).hexdigest() == recorded else "mismatch"
-        received = int(meta.get("received_at") or path.stat().st_mtime)
+        try:
+            body = path.read_bytes()
+            recorded = str(meta.get("sha256") or "")
+            if not recorded:
+                integrity = "unknown"
+            else:
+                integrity = "ok" if hashlib.sha256(body).hexdigest() == recorded else "mismatch"
+            received = int(meta.get("received_at") or path.stat().st_mtime)
+        except OSError:
+            continue
         drops.append(
             {
                 "name": path.name,
@@ -165,7 +169,18 @@ def main(argv: list[str] | None = None) -> int:
         )
     if not args.no_record and status != "integrity-fail":
         state.parent.mkdir(parents=True, exist_ok=True)
-        state.write_text(json.dumps({"seen": {d["name"]: d["sha256"] for d in drops}}) + "\n", encoding="utf-8")
+        content = json.dumps({"seen": {d["name"]: d["sha256"] for d in drops}}) + "\n"
+        tmp_state = state.with_name(f".{state.name}.tmp.{os.getpid()}")
+        try:
+            tmp_state.write_text(content, encoding="utf-8")
+            os.replace(tmp_state, state)
+        except OSError:
+            if tmp_state.exists():
+                try:
+                    tmp_state.unlink()
+                except OSError:
+                    pass
+            raise
     return 2 if status == "integrity-fail" else 0
 
 

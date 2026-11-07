@@ -101,3 +101,24 @@ def test_human_output_names_the_newest_drop(inbox, capsys) -> None:
     _drop(inbox, "mac-a.md")
     out = _run(capsys)[1]
     assert "mac-a.md" in out and "integrity ok" in out
+
+
+def test_unreadable_or_missing_drop_is_skipped_without_crashing(inbox, capsys, monkeypatch) -> None:
+    """An unreadable or removed drop raises OSError on read_bytes/stat and is safely skipped."""
+    _drop(inbox, "mac-good.md")
+    _drop(inbox, "mac-broken.md")
+
+    real_read_bytes = Path.read_bytes
+
+    def flaky_read(self):
+        if self.name == "mac-broken.md":
+            raise OSError("simulated permission denied or disappearing file")
+        return real_read_bytes(self)
+
+    monkeypatch.setattr(Path, "read_bytes", flaky_read)
+    code, out = _run(capsys, "--json")
+    assert code == 0
+    data = json.loads(out)
+    assert data["status"] == "baseline"
+    assert data["mac_drops"] == 1
+    assert data["newest"]["name"] == "mac-good.md"

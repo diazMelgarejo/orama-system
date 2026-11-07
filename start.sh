@@ -780,6 +780,9 @@ _peer_tls_port_args() {
   if [ -z "$ca" ] && [ "$enabled" = "0" ]; then return 0; fi
   if [ -n "$ca" ]; then
     export PEER_CA_FILE="$ca" PEER_PORTAL_TLS_ENABLED=1
+    if [ -n "$want" ]; then
+      export PEER_CA_SHA256="$want"
+    fi
   fi
   if [ -n "${PEER_PORTAL_TLS_PORT:-}" ]; then
     case "$PEER_PORTAL_TLS_PORT" in

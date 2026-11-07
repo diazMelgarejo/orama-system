@@ -96,6 +96,7 @@ class _Case:
                 'ARGS=' + ($r -join '|')
                 'ENABLED=' + $env:PEER_PORTAL_TLS_ENABLED
                 'CA=' + $env:PEER_CA_FILE
+                'SHA=' + $env:PEER_CA_SHA256
                 """
             ),
             encoding="utf-8",
@@ -131,6 +132,7 @@ def test_search_accepts_only_the_ca_matching_the_operator_fingerprint(case: _Cas
     assert "ARGS=--portal-port|8443" in out
     assert "ENABLED=1" in out
     assert f"CA={genuine}" in out
+    assert f"SHA={sha}" in out
 
 
 @needs_powershell

@@ -88,11 +88,11 @@ def test_explicit_ca_with_matching_fingerprint_selects_https_port(tmp_path) -> N
     ca = tmp_path / "ca.pem"
     ca.write_text(pem, encoding="utf-8")
     result = _bash(
-        tmp_path, '_peer_tls_port_args; echo "args=${_PEER_PORT_ARGS[*]} en=${PEER_PORTAL_TLS_ENABLED} ca=${PEER_CA_FILE##*/}"',
+        tmp_path, '_peer_tls_port_args; echo "args=${_PEER_PORT_ARGS[*]} en=${PEER_PORTAL_TLS_ENABLED} ca=${PEER_CA_FILE##*/} sha=${PEER_CA_SHA256:-unset}"',
         {"PEER_CA_FILE": str(ca), "PEER_CA_SHA256": digest.upper()},
     )
     assert result.returncode == 0, result.stderr
-    assert "args=--portal-port 8443 en=1 ca=ca.pem" in result.stdout
+    assert f"args=--portal-port 8443 en=1 ca=ca.pem sha={digest.lower()}" in result.stdout
 
 
 def test_fingerprint_mismatch_or_malformed_is_refused(tmp_path) -> None:

@@ -64,7 +64,7 @@ def test_peer_win_counts_only_windows_drops(inbox, capsys) -> None:
     data = json.loads(out)
     assert code == 0 and data["win_drops"] == 2 and "mac_drops" not in data
     code, out = _run(capsys, "--peer", "win", "--no-record")
-    assert "Windows drops: 2 total" in out and "Mac drops" not in out
+    assert code == 0 and "Windows drops: 2 total" in out and "Mac drops" not in out
 
 
 def test_peer_win_flags_integrity_failure_only_for_windows_drops(inbox, capsys) -> None:
@@ -89,7 +89,7 @@ def test_state_files_are_separate_per_peer(inbox, capsys) -> None:
     assert chk.state_name("win") != chk.state_name("mac")
     assert (inbox.parent / chk.state_name("win")).is_file() and (inbox.parent / chk.state_name("mac")).is_file()
     _drop(inbox, "w2.md", "win-agent", body=b"second")
-    code, out = _run(capsys, "--peer", "win", "--no-record")
+    _, out = _run(capsys, "--peer", "win", "--no-record")
     assert "1 new" in out
 
 

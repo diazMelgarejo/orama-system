@@ -1176,6 +1176,9 @@ function Get-PeerTlsPortArgs {
     if ($ca) {
         $env:PEER_CA_FILE = $ca
         $env:PEER_PORTAL_TLS_ENABLED = '1'
+        if ($want) {
+            $env:PEER_CA_SHA256 = $want
+        }
     }
     $port = 8443
     if ($env:PEER_PORTAL_TLS_PORT) {
