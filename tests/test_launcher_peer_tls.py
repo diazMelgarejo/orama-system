@@ -117,3 +117,13 @@ def test_configured_ca_file_and_port_are_honoured(tmp_path: Path) -> None:
     out = _run(tmp_path, f"$env:PEER_CA_FILE = '{own}'; $env:PEER_PORTAL_TLS_PORT = '9443'")
     assert "ARGS=--portal-port|9443" in out
     assert f"CA={own}" in out
+
+
+def test_lan_peer_branch_runs_the_inbox_check_after_the_probe_block() -> None:
+    """--lan-peer calls Invoke-LanPeerInboxCheck once, after the pinned probe branch and before the watcher."""
+    text = _text()
+    assert "function Invoke-LanPeerInboxCheck {" in text
+    assert "lan_peer_inbox_check.py" in text
+    assert text.count("\n    Invoke-LanPeerInboxCheck\n") == 1
+    assert text.index("} elseif (Invoke-LanPeerProbe) {") < text.index("\n    Invoke-LanPeerInboxCheck\n")
+    assert text.index("\n    Invoke-LanPeerInboxCheck\n") < text.index("# ── LM Link watcher autostart")

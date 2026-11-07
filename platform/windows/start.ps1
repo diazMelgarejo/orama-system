@@ -1213,6 +1213,34 @@ function Invoke-LanPeerOutboxFlush {
     }
 }
 
+function Invoke-LanPeerInboxCheck {
+    <#
+    .SYNOPSIS
+    Report whether a drop from the Mac has arrived in the local LAN peer inbox (never fails the launch).
+    .DESCRIPTION
+    Runs lan_peer_inbox_check.py: local files only, no network. It prints the newest Mac drop with its
+    age and integrity result and says whether anything is new since the previous launch. Only an
+    integrity failure (a body that does not match its recorded hash) raises a warning.
+    #>
+    $check = Join-Path $RepoRoot 'bin\orama-system\skills\hermes-harness\scripts\lan_peer_inbox_check.py'
+    if (-not (Test-Path $check)) {
+        _Warn 'lan-peer' "inbox check script missing: $check"
+        return
+    }
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $checkOut = & $UsPython $check 2>&1
+        $checkExit = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $prevEap
+    }
+    foreach ($line in @($checkOut)) { _Info 'lan-peer' "inbox: $line" }
+    if ($checkExit -ne 0) {
+        _Warn 'lan-peer' 'a Mac drop failed its integrity check; do not act on it until it is re-sent'
+    }
+}
+
 function Invoke-LanPeerSession {
     <#
     .SYNOPSIS
@@ -2276,6 +2304,9 @@ if ($LanPeer) {
         $null = Invoke-LanPeerSession -LanArgs @('record-failure', '--error', 'probe_lan_peer.py failed')
         _Warn 'lan-peer' 'skipping outbox flush until peer portal probe passes'
     }
+
+    # Inbound half: did a Mac drop arrive? (local files only, independent of the probe result)
+    Invoke-LanPeerInboxCheck
 
     # ── LM Link watcher autostart (detached process, per-repo PID file, idempotent) ──
     try {
