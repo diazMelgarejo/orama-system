@@ -6,6 +6,11 @@ os.environ, SSL_CERT_FILE, or any process-global SSL default.
 Settings (read from the environment on every call):
   PEER_CA_FILE               path to a PEM CA bundle. Peer https calls verify
                              chain AND hostname/IP-SAN against it.
+  PEER_CA_SHA256             operator-confirmed SHA-256 (hex) of the one CA certificate in
+                             PEER_CA_FILE. When set, the file is read ONCE, must hold exactly one
+                             PEM block (a CERTIFICATE with that fingerprint), and the context is
+                             built from those same verified DER bytes, never from the path again,
+                             so a file swapped after the check cannot become trusted.
   PEER_PINNED_FINGERPRINTS   comma list of SHA-256 hex fingerprints of peer
                              leaf certificates (colons / case ignored).
 
@@ -24,6 +29,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import ssl
 import threading
 from typing import Any
@@ -31,6 +37,9 @@ from urllib.parse import urlsplit
 
 PEER_CA_ENV = "PEER_CA_FILE"
 PEER_PINS_ENV = "PEER_PINNED_FINGERPRINTS"
+PEER_CA_SHA256_ENV = "PEER_CA_SHA256"
+_PEM_MARKER = re.compile(rb"-----BEGIN ([A-Z0-9 ]+)-----")
+_PEM_CERT = re.compile(rb"-----BEGIN CERTIFICATE-----(.+?)-----END CERTIFICATE-----", re.DOTALL)
 
 
 class PeerTrustError(OSError):
@@ -67,11 +76,56 @@ def cert_fingerprint(der: bytes) -> str:
     return hashlib.sha256(der).hexdigest()
 
 
-def _ca_context(cafile: str) -> ssl.SSLContext:
-    """Build a verifying SSL context that trusts the given CA file; raise PeerTrustError when it cannot be loaded."""
+def peer_ca_sha256() -> str:
+    """Return the normalised PEER_CA_SHA256, or an empty string when unset; raise PeerTrustError when malformed."""
+    raw = (os.environ.get(PEER_CA_SHA256_ENV) or "").strip()
+    if not raw:
+        return ""
     try:
-        return ssl.create_default_context(cafile=cafile)
-    except (OSError, ssl.SSLError) as exc:
+        return normalize_fingerprint(raw)
+    except ValueError as exc:
+        raise PeerTrustError(f"invalid {PEER_CA_SHA256_ENV}: {exc}") from exc
+
+
+def _verified_ca_der(data: bytes, expected: str) -> bytes:
+    """Return the DER of the single CERTIFICATE block in *data* when its SHA-256 equals *expected*.
+
+    Any other or additional PEM block (a second certificate, a TRUSTED CERTIFICATE, a key) is refused,
+    because the TLS library would otherwise load it as a further trust anchor.
+    """
+    markers = _PEM_MARKER.findall(data)
+    if markers != [b"CERTIFICATE"]:
+        raise PeerTrustError(f"{PEER_CA_ENV} must hold exactly one CERTIFICATE block when {PEER_CA_SHA256_ENV} is set")
+    match = _PEM_CERT.search(data)
+    if match is None:
+        raise PeerTrustError(f"{PEER_CA_ENV} has a malformed CERTIFICATE block")
+    try:
+        der = ssl.PEM_cert_to_DER_cert(
+            "-----BEGIN CERTIFICATE-----" + match.group(1).decode("ascii") + "-----END CERTIFICATE-----"
+        )
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise PeerTrustError(f"{PEER_CA_ENV} has a malformed CERTIFICATE block") from exc
+    if cert_fingerprint(der) != expected:
+        raise PeerTrustError(f"{PEER_CA_ENV} does not match {PEER_CA_SHA256_ENV}; refusing to trust it")
+    return der
+
+
+def _ca_context(cafile: str) -> ssl.SSLContext:
+    """Build a verifying SSL context that trusts the given CA file; raise PeerTrustError when it cannot be loaded.
+
+    The file is read once. With PEER_CA_SHA256 set, only the DER bytes that passed the fingerprint check
+    are loaded, so replacing the file after the check changes nothing.
+    """
+    try:
+        with open(cafile, "rb") as handle:
+            data = handle.read()
+        expected = peer_ca_sha256()
+        if expected:
+            cadata: str | bytes = _verified_ca_der(data, expected)
+        else:
+            cadata = data.decode("ascii") if b"-----BEGIN" in data else data
+        return ssl.create_default_context(cadata=cadata)
+    except (OSError, ssl.SSLError, UnicodeDecodeError) as exc:
         raise PeerTrustError(f"cannot load {PEER_CA_ENV}: {exc}") from exc
 
 
@@ -97,7 +151,7 @@ def _pinned_context(pem: str) -> ssl.SSLContext:
     return ctx
 
 
-_cache: dict[tuple[str, int, str, str], ssl.SSLContext] = {}
+_cache: dict[tuple[str, int, str, str, str], ssl.SSLContext] = {}
 _cache_lock = threading.Lock()
 
 
@@ -105,7 +159,7 @@ def context_for(host: str, port: int, timeout: float = 8.0) -> ssl.SSLContext:
     """Return the SSL context for a peer, honouring pins first and then the CA file, otherwise the default verified context; raise PeerTrustError when trust cannot be established."""
     pins = pinned_fingerprints()
     cafile = peer_ca_file()
-    key = (host, port, cafile, ",".join(sorted(pins)))
+    key = (host, port, cafile, ",".join(sorted(pins)), peer_ca_sha256())
     with _cache_lock:
         if key in _cache:
             return _cache[key]

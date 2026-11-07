@@ -150,6 +150,20 @@ def test_a_bundle_with_extra_certificates_is_not_authenticated(case: _Case) -> N
 
 
 @needs_powershell
+@pytest.mark.parametrize("label", ["TRUSTED CERTIFICATE", "PRIVATE KEY"])
+def test_a_file_with_any_extra_pem_block_is_not_authenticated(case: _Case, label: str) -> None:
+    """The TLS library would also trust a TRUSTED CERTIFICATE block, so any extra block voids the match."""
+    path, sha = case.ca("mac-ca-2026-11-03", b"genuine")
+    path.write_text(
+        path.read_text(encoding="utf-8")
+        + f"-----BEGIN {label}-----\n{base64.b64encode(b'extra').decode()}\n-----END {label}-----\n",
+        encoding="utf-8",
+    )
+    out = case.run("Get-PeerTlsPortArgs", f"$env:PEER_CA_SHA256 = '{sha}'")
+    assert "ARGS=" in out and "ENABLED=" in out
+
+
+@needs_powershell
 def test_explicit_ca_file_must_match_the_fingerprint_when_one_is_set(case: _Case) -> None:
     """An explicit PEER_CA_FILE that does not match PEER_CA_SHA256 is refused loudly."""
     path, _ = case.ca("own", b"explicit")

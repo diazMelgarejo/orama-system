@@ -1103,13 +1103,16 @@ function Topo-WriteProbeOutput {
 function Get-PemCertSha256 {
     <#
     .SYNOPSIS
-    SHA-256 (lowercase hex) of the DER certificate in a PEM file that holds exactly one certificate.
+    SHA-256 (lowercase hex) of the DER certificate in a PEM file that holds exactly one PEM block, a CERTIFICATE.
     .OUTPUTS
-    The hex string, or an empty string when the file is unreadable, has no certificate, or has more than one.
+    The hex string, or an empty string when the file is unreadable, has no certificate, or has any other or extra
+    PEM block (a second certificate, a TRUSTED CERTIFICATE, a key), since the TLS library would trust those too.
     #>
     param([string]$Path)
     try {
         $text = Get-Content -Raw -LiteralPath $Path -ErrorAction Stop
+        $markers = [regex]::Matches($text, '-----BEGIN [A-Z0-9 ]+-----')
+        if ($markers.Count -ne 1 -or $markers[0].Value -ne '-----BEGIN CERTIFICATE-----') { return '' }
         $blocks = [regex]::Matches($text, '-----BEGIN CERTIFICATE-----(.+?)-----END CERTIFICATE-----', 'Singleline')
         if ($blocks.Count -ne 1) { return '' }
         $der = [Convert]::FromBase64String(($blocks[0].Groups[1].Value -replace '\s', ''))
