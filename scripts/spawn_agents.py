@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextvars
 import datetime
 import json
 import os
@@ -42,6 +43,8 @@ from typing import Any, Dict, List, Optional
 # ── Config ────────────────────────────────────────────────────────────────────
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+# PT's shim uses this capability marker to avoid wrapping the same effect twice.
+PT_RUNTIME_DISPATCH_GUARD = 1
 _CURSOR_RACE_RETRY_DUE_FILE = REPO_ROOT / ".logs" / "cursor_standalone_retry_due.txt"
 
 for _stream in (sys.stdout, sys.stderr):
@@ -65,6 +68,7 @@ MANAGER_MODEL = os.getenv("MANAGER_MODEL", "qwen3.5:9b-mlx")
 
 # Windows GPU lock — one model at a time (CLAUDE.md §4 invariant)
 _WIN_GPU_LOCK = asyncio.Lock()
+_DISPATCH_SCOPE: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("spawn_dispatch_scope", default=None)
 
 
 def _is_event_loop_running() -> bool:
@@ -79,6 +83,7 @@ def _is_event_loop_running() -> bool:
 
 @dataclass
 class AgentInfo:
+    """Describe an agent and its discovered availability."""
     name: str
     kind: str          # "cli" | "http"
     available: bool = False
@@ -239,6 +244,7 @@ async def _dispatch_codex(task: str, context_file: Optional[Path] = None) -> Dic
 
     if os.name == "nt":
         def _run_plain() -> tuple[int, str]:
+            """Run Codex without a pseudo-terminal on Windows."""
             proc = subprocess.run(
                 cmd,
                 input="",
@@ -390,6 +396,7 @@ async def _dispatch_lmstudio(endpoint: str, model: str, task: str, *, win_gpu: b
         return {"ok": False, "output": "httpx not installed (pip install httpx)", "elapsed": 0}
 
     async def _call() -> Dict[str, Any]:
+        """Send the request and collect the provider response."""
         t0 = time.time()
         try:
             async with httpx.AsyncClient(timeout=120.0) as client:
@@ -465,6 +472,7 @@ async def _dispatch_cursor(task: str) -> Dict[str, Any]:
 
 
 def _find_hermes() -> Optional[str]:
+    """Find the Hermes executable in PATH or its local installation."""
     hermes_bin = shutil.which("hermes")
     if hermes_bin:
         return hermes_bin
@@ -585,13 +593,13 @@ async def _dispatch_race(task: str) -> Dict[str, Any]:
     if _cursor_race_leg_deferred():
         racers = {
             "direct-lmstudio-win": asyncio.create_task(
-                _dispatch_lmstudio(LMS_WIN_ENDPOINT, LMS_WIN_MODEL, task, win_gpu=True)
+                dispatch("lmstudio-win", task, model=LMS_WIN_MODEL)
             ),
         }
     else:
         racers = {
-            "cursor": asyncio.create_task(_dispatch_cursor(task)),
-            "hermes-lmstudio-win": asyncio.create_task(_dispatch_hermes_lmstudio_win(task)),
+            "cursor": asyncio.create_task(dispatch("cursor", task)),
+            "hermes-lmstudio-win": asyncio.create_task(dispatch("hermes-lmstudio-win", task)),
         }
     pending = set(racers.values())
     failures: Dict[str, str] = {}
@@ -636,7 +644,7 @@ async def _dispatch_race(task: str) -> Dict[str, Any]:
     # and direct-lmstudio-win is never itself a racer key, so this
     # condition only skips the redundant case, not the intended one.
     if "direct-lmstudio-win" not in failures:
-        direct = await _dispatch_lmstudio(LMS_WIN_ENDPOINT, LMS_WIN_MODEL, task, win_gpu=True)
+        direct = await dispatch("lmstudio-win", task, model=LMS_WIN_MODEL)
         if direct.get("ok"):
             direct["elapsed"] = time.time() - t0
             direct["output"] = "[RACE FALLBACK: direct-lmstudio-win]\n" + direct["output"]
@@ -652,17 +660,60 @@ async def _dispatch_race(task: str) -> Dict[str, Any]:
     }
 
 
-async def dispatch_race(task: str) -> Dict[str, Any]:
+async def dispatch_race(task: str, *, scope: Optional[str] = None) -> Dict[str, Any]:
     """Public wrapper around _dispatch_race for test importability.
 
     Returns the same dict as _dispatch_race: {ok, output, elapsed, winner}.
     """
-    return await _dispatch_race(task)
+    return await dispatch("race", task, scope=scope)
 
 
 # ── Orchestration ─────────────────────────────────────────────────────────────
 
-async def dispatch(agent_name: str, task: str, model: Optional[str] = None) -> Dict[str, Any]:
+async def dispatch(agent_name: str, task: str, model: Optional[str] = None, *, scope: Optional[str] = None) -> Dict[str, Any]:
+    """Use PT's durable policy authority before starting a legacy dispatch.
+
+    A repeated goal in the same repository scope is blocked after any attempt.
+    Pass an explicit scope for intentional independent work. No approvals are
+    inferred from the prompt, environment or caller flags. PT must be installed
+    or discoverable through PERPETUATOOLSROOT; missing authority fails closed.
+    """
+    pt_root = os.environ.get("PERPETUATOOLSROOT", "").strip()
+    if pt_root:
+        for path in (Path(pt_root), Path(pt_root) / "src"):
+            if str(path) not in sys.path:
+                sys.path.insert(0, str(path))
+    from orchestrator.dispatch_guard import DispatchGuard, DispatchRequest
+    from orchestrator.gossip_bus import resolve_default_state_dir
+
+    provider = agent_name.lower().strip()
+    if provider in {"codex", "gemini", "gemini-review", "cursor"} and model is not None:
+        raise ValueError("CLI model override is not supported by this worker")
+    effective_model = model
+    if provider in {"lmstudio-mac", "lmstudio-win"} and not effective_model:
+        effective_model = await _get_lmstudio_model(LMS_MAC_ENDPOINT if provider == "lmstudio-mac" else LMS_WIN_ENDPOINT)
+    elif provider == "ollama-mac":
+        effective_model = MANAGER_MODEL
+    elif provider == "hermes-lmstudio-win":
+        effective_model = LMS_WIN_MODEL
+    effective_scope = scope or _DISPATCH_SCOPE.get() or str(REPO_ROOT)
+    request = DispatchRequest(
+        scope=effective_scope,
+        provider=provider,
+        model=effective_model or "provider-default",
+        goal="spawn-agent",
+        prompt=task,
+    )
+    token = _DISPATCH_SCOPE.set(effective_scope)
+    try:
+        return await DispatchGuard(resolve_default_state_dir()).execute(
+            request, lambda: _dispatch_unchecked(agent_name, task, effective_model)
+        )
+    finally:
+        _DISPATCH_SCOPE.reset(token)
+
+
+async def _dispatch_unchecked(agent_name: str, task: str, model: Optional[str] = None) -> Dict[str, Any]:
     """Dispatch a task to a named agent. Returns result dict."""
     agent_name = agent_name.lower().strip()
 
@@ -699,11 +750,11 @@ async def dispatch(agent_name: str, task: str, model: Optional[str] = None) -> D
         # Parallel: Codex + Gemini + Ollama Mac + LM Studio Mac (non-GPU-bound)
         # Sequential: LM Studio Win (GPU-bound, serialized by lock)
         results = await asyncio.gather(
-            _dispatch_codex(task),
-            _dispatch_gemini(task),
-            _dispatch_ollama_mac(task),
-            _dispatch_lmstudio(LMS_MAC_ENDPOINT, model or await _get_lmstudio_model(LMS_MAC_ENDPOINT), task),
-            _dispatch_lmstudio(LMS_WIN_ENDPOINT, model or await _get_lmstudio_model(LMS_WIN_ENDPOINT), task, win_gpu=True),
+            dispatch("codex", task),
+            dispatch("gemini", task),
+            dispatch("ollama-mac", task),
+            dispatch("lmstudio-mac", task, model),
+            dispatch("lmstudio-win", task, model),
             return_exceptions=True,
         )
         agents_out = {}
@@ -722,6 +773,7 @@ async def dispatch(agent_name: str, task: str, model: Optional[str] = None) -> D
 # ── Status report ─────────────────────────────────────────────────────────────
 
 def print_status():
+    """Print discovered agent availability."""
     agents = discover_agents()
     print("\n  Agent Availability\n  " + "─" * 46)
     for key, ag in agents.items():
@@ -737,6 +789,7 @@ def print_status():
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 def status_payload() -> Dict[str, Any]:
+    """Return discovered agent availability as structured data."""
     agents = discover_agents()
     return {
         key: {
@@ -751,6 +804,7 @@ def status_payload() -> Dict[str, Any]:
 
 
 def main():
+    """Parse CLI arguments and dispatch the requested task or status query."""
     parser = argparse.ArgumentParser(
         description="Dispatch tasks to AI coding agents (Codex, Gemini, LM Studio).",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -779,6 +833,7 @@ def main():
         parser.error("--task is required (or use --status to probe agents)")
 
     async def _run():
+        """Dispatch once and print the result in the requested format."""
         result = await dispatch(args.agent, args.task, model=args.model)
         if args.json_output:
             print(json.dumps(result, indent=2))

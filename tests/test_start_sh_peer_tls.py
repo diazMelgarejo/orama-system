@@ -311,6 +311,43 @@ def test_frontend_skipped_when_disabled_and_honest_when_prerequisites_missing(tm
     assert "start" not in log.read_text(encoding="utf-8"), "an invalid config must never be started"
 
 
+def test_frontend_without_admin_directive_uses_default_without_host_probe(tmp_path: Path) -> None:
+    """An absent admin directive resolves to 2019 without probing a real listener."""
+    bindir, log = _fake_caddy(tmp_path)
+    cfg = _config_dir(tmp_path)
+    (cfg / "Caddyfile").write_text(
+        "https://:8443 {\n\treverse_proxy localhost:8002\n}\n", encoding="utf-8"
+    )
+    result = _bash(
+        tmp_path,
+        '_port_listening() { echo "CHECK $1"; [ "$1" = 2019 ]; }; _ensure_peer_tls_frontend',
+        {"ORAMA_LAN_CONTROL_PLANE_DIR": str(cfg), "PEER_PORTAL_TLS_PORT": "9443"},
+        path=f"{bindir}:/usr/bin:/bin",
+    )
+    assert result.returncode != 0
+    assert result.stdout.splitlines() == ["CHECK 9443", "CHECK 2019"]
+    assert "caddy stop --address localhost:2019" in result.stderr
+    assert not log.exists()
+
+
+def test_frontend_unset_tls_port_reaches_prerequisite_using_default(tmp_path: Path) -> None:
+    """Under nounset, an absent TLS port defaults to 8443 before prerequisite refusal."""
+    bindir, log = _fake_caddy(tmp_path)
+    missing = tmp_path / "unprovisioned"
+    missing.mkdir()
+    result = _bash(
+        tmp_path,
+        'unset PEER_PORTAL_TLS_PORT; '
+        '_port_listening() { echo "CHECK $1"; return 1; }; _ensure_peer_tls_frontend',
+        {"ORAMA_LAN_CONTROL_PLANE_DIR": str(missing)},
+        path=f"{bindir}:/usr/bin:/bin",
+    )
+    assert result.returncode != 0
+    assert result.stdout.splitlines() == ["CHECK 8443"]
+    assert "Caddyfile" in result.stderr and "unbound variable" not in result.stderr
+    assert not log.exists()
+
+
 def test_frontend_starts_validated_config_and_reports_listening(tmp_path) -> None:
     """A valid config is validated, started with the Caddyfile adapter, and success needs a real listener."""
     bindir, log = _fake_caddy(tmp_path)
