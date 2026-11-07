@@ -1,5 +1,9 @@
 # Release 0 to 2 contract freeze (2026-10-26)
 
+> **2026-11-06:** Still a draft freeze, not ratified. The later Oramasys
+> [post-merge qualification record](https://github.com/oramasys/oramasys/blob/main/docs/release12-postmerge-qualification-2026-11-04.md)
+> is release evidence, not ratification of this freeze.
+
 Status: **DRAFT freeze for implementation, not ratified.** Ratification is the operator's. A draft
 pull request, green CI or this file is not an activation, enablement or ratification record.
 `ORAMA_GRANT_SERVING` stays unset everywhere. No implementation may set it, read a date to enable

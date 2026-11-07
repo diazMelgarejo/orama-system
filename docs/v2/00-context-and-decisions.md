@@ -1,6 +1,15 @@
 <!-- lint-ignore LINT-013 -->
 # 00 — Context and Decisions
 
+> **2026-11-06:** This registry is a dated snapshot. D4's placement of
+> hardware and endpoint policy in Core is superseded in part by
+> [ADR 62](62-telos-phylax-authority-gate0-adr.md) and
+> [Agate ownership](42-agate-hardware-policy-orbit.md). Listing D17, D19 and D20
+> under "Locked decisions" does not override the "Proposed" status of docs 30, 36
+> and 37. Later decisions such as D22 (doc 40) and D23 (doc 45) are recorded in
+> their originating documents, not here. See
+> [reconciliation](architecture-status-2026-11-06.md).
+>
 > **Repository standard:** everything executable lives under `/src`; no root-level
 > `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay
 > `.gitignore`d, never committed with secrets, personal paths, or SecOps material.

@@ -1,5 +1,11 @@
 # Releases 1 and 2: coordinated implementation round
 
+> **2026-11-06:** This round stops at 2026-10-26. The later Oramasys
+> [post-merge qualification record](https://github.com/oramasys/oramasys/blob/main/docs/release12-postmerge-qualification-2026-11-04.md)
+> lists R4–R8 as open and does not claim production qualification for R1–R3.
+> Closure routing is in the [master plan](../MASTER-CLOSURE-AND-IMPLEMENTATION-PLAN-2026-11-06.md)
+> (C7–C11).
+
 Status: implementation in progress, not deployed or qualified.
 
 The operator requested one NEW PR per affected repository, leaving every existing

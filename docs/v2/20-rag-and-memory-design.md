@@ -1,5 +1,11 @@
 # 18 — RAG + Memory Design (v2 Forward Plan)
 
+> **2026-11-06:** Superseded in part. The heading's "18" is a historical
+> numbering error; this is doc 20. Planned `perpetua_core/memory/*` placement is
+> superseded by [doc 56](56-anamnesis-runtime-memory-migration.md) and
+> [doc 67](67-lancedb-duckdb-dense-info-layer-shape.md); dedicated satellites own
+> v2 runtime memory. See [reconciliation](architecture-status-2026-11-06.md).
+>
 > **Repository standard:** everything executable lives under `/src`; no root-level
 > `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay
 > `.gitignore`d, never committed with secrets, personal paths, or SecOps material.

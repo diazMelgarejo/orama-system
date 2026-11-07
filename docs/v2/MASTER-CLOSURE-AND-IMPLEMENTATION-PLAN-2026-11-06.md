@@ -3,6 +3,9 @@
 Status: scope decisions D1–D3 ratified by the user on 2026-11-06 UTC.
 Local preparation and commits are authorized. Publication
 is held until the user confirms the existing PRs have merged.
+**2026-11-06 update:** the user confirmed the merges and released the push
+hold for one PR per affected repository; see the
+[C0 record](closure/c0-merge-reconciliation-2026-11-06.md).
 
 ## Outcome and source authority
 
@@ -41,14 +44,28 @@ Prepared on existing PR tips: Orama #475 `6f5112b9`, Oramasys #93 `b952dc69`,
 PT #480 `256f97bc`. Full identities are recorded by the local Git parents.
 These are candidate tips, not assumptions about the eventual merge SHAs.
 
-- [ ] User confirms which PRs merged.
-- [ ] Fetch actual merged mains and compare the changed paths against candidate
+- [x] User confirms which PRs merged. User confirmed 2026-11-06: Orama #475,
+  Oramasys #93 and #94, PT #480.
+- [x] Verify actual merged mains and compare the changed paths against candidate
   trees; account explicitly for squash merges, concurrent edits and omitted content.
-- [ ] Reapply only a verified missing delta from these local plan commits onto
-  isolated branches based on merged main; preserve old local tips.
+  All were merge commits whose trees equal their PR heads; see the
+  [C0 record](closure/c0-merge-reconciliation-2026-11-06.md#branch-base-reverification).
+  No fetch is claimed: read-only GitHub main identities matched available local
+  objects. Reverification confirms the exact recorded merges in the isolated
+  lane baselines, including Orama `006c226702b8c6bb265718fe5e0196db2d6e06fe`.
+  Before clearing any later closure branch, verify its actual base against the
+  recorded merge and current remote main, using tree/content reconciliation at
+  known rewrite boundaries. A checked comparison is not clearance for a stale
+  local `main` ref or a different branch base.
+- [x] Reapply only a verified missing delta from these local plan commits onto
+  isolated branches based on merged main; preserve old local tips. No missing
+  delta was found, so nothing was reapplied.
 - [ ] Recheck open PR inventory: reuse one appropriate PR or open at most one
   per affected repository. Refresh descriptions for the final scope.
-- [ ] Publish only after the user releases the current push hold.
+  Inventory rechecked 2026-11-06 (C0 record); opening the PR and refreshing its
+  description remain with the integrator.
+- [x] Publish only after the user releases the current push hold. Push hold
+  released by the user 2026-11-06 for one PR per repository.
 
 Do not judge rewritten legacy branches from ahead/behind counts. Use the
 repository's content/tree comparison protocol. Do not amend or force-push the
@@ -65,10 +82,53 @@ existing signed/session commits to alter verification badges.
 Decision provenance: the user selected automatic release with expiry/fencing
 for v2 only and PT manual, retained shims, and both platforms before promotion.
 This ratifies implementation scope. Actual release qualification, generation
-approval and activation retain their separately evidenced gates. The push hold
-and merge barrier remain in effect.
+approval and activation retain their separately evidenced gates.
+The merge barrier remains in effect.
 
 ## Part 3 review and revised scope
+
+### Additional closure decisions confirmed on 2026-11-06
+
+The operator directly confirmed the six J1 recommendations after the
+GossipBus announcement in rows 6308 and 6309, topic
+`OPERATOR_RATIFICATION_ALL_SIX_DECISIONS_AND_CLOSURE_APPROVAL_20261106`.
+This direct confirmation, not the agent announcement alone, is the authority
+for the following scope. D1-D3 above retain their original meanings.
+
+| J1 ID | Ratified scope | Evidence still required |
+| --- | --- | --- |
+| CL-1 | Fresh capability-time check after verification and deadline enforcement under the SQLite write lock | Preserve expiry/refusal regressions; approval is not deployment evidence |
+| CL-2 | Detected absent or changing signing-key trust refuses the current operation, including prewarm, warm lookup and refresh | No retry into allow in the same operation; preserve real-signature regressions |
+| CL-3 | C6 expected workload: up to 256 events, separate refresh every 15 seconds, eight senders at five sends/second; send p95 at most 50 ms; zero fail-open | Physical target-filesystem and dual-host qualification remain open; the full owner specification retains its additional metrics |
+| CL-4 | Export sanitized derived views only; raw coordination history remains node-local | Source-database protection, topology scans and item-level delivery evidence |
+| CL-5 | macOS primary POSIX host and Windows 11 secondary peer; serving remains off, grant-serving flag unset and library default `governed=False` | Actual host/runtime receipts and separate activation gates |
+| CL-6 | Paired doc 30/PT pointers; no Doc 69 retrofit of legacy Core modules; strict D1 separation | Canonical generation and downstream parity checks; PT remains manual |
+
+Implemented integration heads accepted by the operator: Orama `9ecdf955`,
+PT `ec88e63c`, and Oramasys `c2f4a14`. A subsequent operator instruction permits
+K1-K3 remediation, local rehearsal and one final push per affected repository.
+No agent may infer merge, deployment, serving activation or completed host
+qualification from ratification. C3d uses operator-only human review under the
+[exact-head procedure](closure/c3d-operator-review-procedure-2026-11-06.md);
+a second human is not required. Fresh interactive GitHub authentication is
+performed by the operator, not an agent, and does not by itself prove review.
+All K1-K3 fixes precede final CI and exact-head acceptance; C6 runs last.
+
+**2026-11-07 operator amendment:** C6 scheduled latency p95 and
+successful-call send latency p95 must each be at most 60 ms, superseding
+the historical CL-3 50 ms target above. Scheduled p99 at most 250 ms and
+all other budgets remain unchanged. Three consecutive operator-run Mac
+passes, exact-head acceptance and separate native Windows qualification
+remain required; this amendment does not qualify an agent diagnostic.
+
+Cross-repository CI pairs differently named review branches through
+`config/docs-pointer-peers.json`: PR number to immutable PT commit. An explicit
+partner checkout must fail closed, never fall back to main on failure. Other
+PRs retain the existing same-branch/main lookup, and main always checks PT main.
+After PT lands, rerun the main parity gate; a paired-PR pass does not establish
+that the downstream main already contains the pointer updates. Preserve the
+ratified review/landing order Orama #477, PT #481, then Oramasys #95, with no
+deployment between the paired documentation merges.
 
 The August draft is superseded in the following implementation details:
 
@@ -131,6 +191,10 @@ older PT coordination plans, preserved September migration inputs and their erra
 the R1–R8 status chain, and stale ownership/pin claims. Use narrow status notes
 or a current errata route for preserved historical sources. Existing formatting
 debt remains explicit; do not silently exempt new content or call it verified.
+Orama-scope C1 dispositions are in the
+[C1 ledger](closure/c1-orama-dispositions-2026-11-06.md), which also records
+where the C2 artifacts live. PR publication and implementation evidence do not
+by themselves close review, host qualification or activation.
 
 C4 covers stored data as well as new events. Inventory existing gossip records
 and derived episodic views without printing private paths. Restrict or quarantine
@@ -142,8 +206,11 @@ through gossip-to-memory derivation and export, ensuring names and private paths
 are absent from portable views. Block export of unclassified legacy rows rather
 than assuming a new producer identifier repairs historical data.
 
-For C6, choose an expected workload and latency/error budget before claiming
-availability. For C7/C8, require actual deployment inputs rather than guessing a
+For C6, use the ratified CL-3 workload and the full owner specification; the
+operator selected the Mac APFS data volume, with Windows qualification separate.
+Obtain target-filesystem measurements after final CI and operator C3d acceptance
+before claiming availability. For C7/C8, require
+actual deployment inputs rather than guessing a
 host, service manager or configuration loader. C12 is a program of bounded
 follow-on slices; it is not authorization for an unreviewable kernel rewrite.
 

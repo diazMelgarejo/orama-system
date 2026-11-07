@@ -7,6 +7,10 @@
 > v2 policy boundaries. Core `6d75cfe` is the current production pin, not proof
 > of serving qualification. The graph R3/R4 and Release 1–2 R3/R4 are distinct
 > gate series. See [architecture reconciliation](architecture-status-2026-11-06.md).
+> Test counts, repository topology, the Sequencing section and the spec tree
+> (which omits 53–55 and 74) also belong to that snapshot. For closure work, the
+> [master closure plan](MASTER-CLOSURE-AND-IMPLEMENTATION-PLAN-2026-11-06.md) is
+> the one sequencing register.
 
 **Date opened:** 2026-04-30
 **Status:** Mixed: dated specifications and later decisions; see the reconciliation above.

@@ -49,7 +49,7 @@ content-insertion authority after the execution shape is selected.
 | Audience, intent, and ambiguity | [AFRP](bin/orama-system/afrp/SKILL.md) | Route only after the task contract is clear. |
 | Method, planning, and verification | [Orama system](bin/orama-system/SKILL.md) | Guides work; it does not confer authorization. |
 | Content insertion | [CIDF](bin/orama-system/cidf/SKILL.md) | Preserve rank selection, automation gate, and readback. |
-| v1 orchestration, coordination, telemetry and memory | Perpetua-Tools | Treat records as scoped evidence, not universal authority. The planned v2 controller owns job claims and job-claim leases; existing v2 execution run leases are a separate mechanism. |
+| v1 orchestration, coordination, telemetry and memory | Perpetua-Tools | Treat records as scoped evidence, not universal authority. The v2 controller owns job claims and job-claim leases (partial oramasys implementation, not reviewed or deployed; PT stays manual per D1); existing v2 execution run leases are a separate mechanism. |
 | v2 structural graph primitives | `oramasys/perpetua-core` | Do not add a parallel v1 node or edge schema. |
 | v1 endpoint/security and hardware policy | Perpetua-Tools | PT owns the v1 endpoint policy and hardware policy; Orama mirrors the endpoint contract. See [ADR 62](docs/v2/62-telos-phylax-authority-gate0-adr.md) and [hardware enforcement](docs/v2/17-hardware-policy-enforcement.md). |
 | v2 endpoint, principal and hardware decisions | Telos, Phylax, and Agate | These v2 owners do not replace the operational v1 policy. |
@@ -150,6 +150,27 @@ They do not supersede the contracts above:
 - [Phase 0 LLM Wiki graph](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/wiki/README.md)
   and [typed edge semantics](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/wiki/edges.md):
   historical STM/mesh-security specification relationships, not a universal decision graph.
+
+Further sources for review, not graph contracts:
+
+- Orama: [v2 spec index](docs/v2/README.md), security gates
+  [23](docs/v2/23-security-preconditions.md) and [24](docs/v2/24-security-first-platform.md),
+  [security plan](docs/v2/31-security-harness-excellence-plan.md),
+  [PT coordination identity](docs/v2/61-pt-coordination-principal-identity-design.md),
+  [store separation](docs/v2/67-lancedb-duckdb-dense-info-layer-shape.md),
+  [D-LG-5](docs/v2/references/loop-graph-compatibility-2026-10-09/ADR-D-LG-5-REDUCER-JOIN-DECLARATIONS.md),
+  [R4 index](docs/v2/references/r4-safety-compatibility-platform-2026-10-10/README.md),
+  [ownership registry](docs/v2/references/loop-graph-compatibility-2026-10-09/ownership-registry.json),
+  [activation plan](docs/v2/references/ACTIVATION-SERVING-T3-T5-REMOTE-AUTONOMY-PLAN-2026-10-25.md),
+  [readiness baseline](docs/v2/references/activation-readiness-baseline-2026-10-26.md),
+  [R0–R2 freeze](docs/v2/references/r0-r2-contract-freeze-2026-10-26.md) and the
+  [closure register](docs/v2/MASTER-CLOSURE-AND-IMPLEMENTATION-PLAN-2026-11-06.md).
+- Perpetua-Tools (v1 scope):
+  [v1 endpoint policy rules](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/AGENTS.md),
+  [minigraph compatibility evidence plan](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/plans/2026-10-09-minigraph-compatibility-evidence-plan.md),
+  [coordination README](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/coordination/README.md),
+  [lessons](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/.agent/memory/semantic/LESSONS.md)
+  and [operator decisions and blockers](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/.agent/memory/working/LOCKSTEP_OPERATOR_DECISIONS_AND_BLOCKERS_2026-10-22.md).
 
 ## Readiness Boundary
 

@@ -1,5 +1,8 @@
 # 08 — Technical Architecture Review (Gemini-Analyzer)
 
+> **2026-11-06:** Historical May 2026 review. Its "Active" label is not
+> a current status; see [reconciliation](architecture-status-2026-11-06.md).
+>
 > **Repository standard:** everything executable lives under `/src`; no root-level
 > `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never
 > committed with secrets, personal paths, or SecOps material. Additive — see

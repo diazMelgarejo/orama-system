@@ -1,5 +1,11 @@
 # 71 — Operator-provisioned recovery grants and C4 autonomous tier
 
+> **2026-11-06:** The dated statements below that the serving script calls
+> `open_grant_authority` are historical. Since Oramasys `15eae8d`, and at
+> `fe4049e`, `scripts/serve_with_phylax_grants.py` calls Phylax
+> `open_grant_verifier`. This is not deployment qualification; grant serving stays
+> off by default.
+>
 > **Repository standard:** additive — see
 > [`46-repository-standard.md`](46-repository-standard.md).
 > **Status:** APPROVED POLICY; NOT DEPLOYED.

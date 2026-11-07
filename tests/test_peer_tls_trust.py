@@ -21,7 +21,7 @@ import probe_lan_peer as probe  # noqa: E402
 def _env(monkeypatch, tmp_path):
     """Autouse: clear peer-trust and token variables, use a temporary home and a synthetic token, and reset the context cache around each test."""
     for var in (
-        "PEER_CA_FILE", "PEER_PINNED_FINGERPRINTS", "SSL_CERT_FILE", "ORAMA_CONTROL_PLANE_TOKEN_PEER",
+        "PEER_CA_FILE", "PEER_CA_SHA256", "PEER_PINNED_FINGERPRINTS", "SSL_CERT_FILE", "ORAMA_CONTROL_PLANE_TOKEN_PEER",
         "ORAMA_CONTROL_PLANE_TOKEN_LOCAL", "PT_CONTROL_PLANE_TOKEN", "PERPETUA_TOOLS_ROOT",
         "PERPETUATOOLSROOT", "PERPETUA_TOOLS_PATH", "PT_HOME",
     ):
@@ -169,3 +169,70 @@ def test_verification_is_never_disabled_in_source():
     assert "CERT_NONE" not in src
     assert "check_hostname = False" not in src
     assert "_create_unverified_context" not in src
+
+
+def _ca_files(tmp_path, monkeypatch):
+    """Write a genuine CA file, set PEER_CA_FILE and PEER_CA_SHA256 for it, and return (path, genuine cert)."""
+    _, genuine = fx.make_ca("genuine-peer-ca")
+    path = fx.write_pem(tmp_path / "ca.pem", genuine)
+    monkeypatch.setenv("PEER_CA_FILE", str(path))
+    monkeypatch.setenv("PEER_CA_SHA256", fx.fingerprint(genuine))
+    return path, genuine
+
+
+def _subjects(ctx):
+    """Return the common names of every CA the context trusts."""
+    return [dict(rdn[0] for rdn in c["subject"]).get("commonName") for c in ctx.get_ca_certs()]
+
+
+def test_fingerprinted_ca_is_loaded_from_the_verified_bytes(tmp_path, monkeypatch):
+    """With PEER_CA_SHA256 set the context trusts exactly the one certificate that matched."""
+    _ca_files(tmp_path, monkeypatch)
+    assert _subjects(peer_tls.context_for("localhost", 8443)) == ["genuine-peer-ca"]
+
+
+def test_a_file_swapped_after_the_fingerprint_check_is_never_trusted(tmp_path, monkeypatch):
+    """The CA file is replaced after verification and before the context is built: the verified bytes still win."""
+    path, _ = _ca_files(tmp_path, monkeypatch)
+    _, planted = fx.make_ca("planted-peer-ca")
+    real = peer_tls.ssl.create_default_context
+    seen = {}
+
+    def swap_then_build(*args, **kwargs):
+        """Replace the file on disk exactly when the TLS context is being built, then build it."""
+        seen.update(kwargs)
+        fx.write_pem(path, planted)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(peer_tls.ssl, "create_default_context", swap_then_build)
+    ctx = peer_tls.context_for("localhost", 8443)
+    assert "cafile" not in seen and seen.get("cadata")
+    assert _subjects(ctx) == ["genuine-peer-ca"]
+
+
+def test_a_ca_file_that_does_not_match_the_fingerprint_is_refused(tmp_path, monkeypatch):
+    """A planted CA with the wrong hash raises and no context is produced."""
+    _ca_files(tmp_path, monkeypatch)
+    _, planted = fx.make_ca("planted-peer-ca")
+    fx.write_pem(tmp_path / "ca.pem", planted)
+    with pytest.raises(peer_tls.PeerTrustError, match="does not match PEER_CA_SHA256"):
+        peer_tls.context_for("localhost", 8443)
+
+
+@pytest.mark.parametrize("label", ["TRUSTED CERTIFICATE", "CERTIFICATE", "PRIVATE KEY"])
+def test_any_extra_pem_block_is_refused_when_a_fingerprint_is_set(tmp_path, monkeypatch, label):
+    """A second certificate, a TRUSTED CERTIFICATE or a key beside the verified one would also become a trust anchor."""
+    path, genuine = _ca_files(tmp_path, monkeypatch)
+    _, extra = fx.make_ca("extra-peer-ca")
+    body = extra.public_bytes(fx._PEM).decode().replace("CERTIFICATE", label)
+    path.write_bytes(path.read_bytes() + body.encode())
+    with pytest.raises(peer_tls.PeerTrustError, match="exactly one CERTIFICATE block"):
+        peer_tls.context_for("localhost", 8443)
+
+
+def test_a_malformed_ca_fingerprint_is_a_hard_error(tmp_path, monkeypatch):
+    """PEER_CA_SHA256 must be 64 hex characters."""
+    _ca_files(tmp_path, monkeypatch)
+    monkeypatch.setenv("PEER_CA_SHA256", "abc")
+    with pytest.raises(peer_tls.PeerTrustError, match="invalid PEER_CA_SHA256"):
+        peer_tls.context_for("localhost", 8443)

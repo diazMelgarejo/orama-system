@@ -1,5 +1,11 @@
 # Activation-readiness baseline receipt (2026-10-26)
 
+> **2026-11-06:** Draft baseline as of 2026-10-26 only; it is not an
+> activation record. For later evidence see the Oramasys
+> [post-merge qualification record](https://github.com/oramasys/oramasys/blob/main/docs/release12-postmerge-qualification-2026-11-04.md)
+> and the [master plan](../MASTER-CLOSURE-AND-IMPLEMENTATION-PLAN-2026-11-06.md)
+> (C7–C11).
+
 State: **DRAFT baseline receipt, metadata only.** This is not a merge, not a pin promotion and
 not an activation. It records identifiers, digests, counts and statuses observed on 2026-10-26.
 It does not enable serving, effects, transport, continuation or autonomous settlement.

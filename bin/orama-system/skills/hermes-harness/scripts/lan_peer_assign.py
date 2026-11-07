@@ -881,6 +881,20 @@ def cmd_outbox_resubmit(args: argparse.Namespace) -> int:
     return 0 if ok else 1
 
 
+def _parse_port_remap(specs: list[str]) -> dict[int, int]:
+    """Parse repeated FROM:TO port specs into a map, refusing anything that is not two valid TCP ports."""
+    remap: dict[int, int] = {}
+    for spec in specs:
+        old, sep, new = str(spec).partition(":")
+        if not (sep and old.strip().isdigit() and new.strip().isdigit()):
+            raise SystemExit(f"--remap-port needs FROM:TO numeric ports, got {spec!r}")
+        src, dst = int(old), int(new)
+        if not (1 <= src <= 65535 and 1 <= dst <= 65535):
+            raise SystemExit(f"--remap-port ports must be 1-65535, got {spec!r}")
+        remap[src] = dst
+    return remap
+
+
 def cmd_flush_outbox(args: argparse.Namespace) -> int:
     """Retry queued outbox items against each item's own recorded peer and report delivered or remaining; returns 0, or 1 on errors (or any remainder with --strict)."""
     _ensure_orama_src()
@@ -919,6 +933,20 @@ def cmd_flush_outbox(args: argparse.Namespace) -> int:
             raise SystemExit("--retarget-live needs PEER_PORTAL_TLS_ENABLED=1")
         if not _peer_trust_configured():
             raise SystemExit("--retarget-live needs PEER_CA_FILE or PEER_PINNED_FINGERPRINTS")
+    # Opt-in http->https port upgrade for items queued before peer TLS was on. It only
+    # touches items whose stored peer is one of the named IPs and whose stored port is
+    # a FROM port; other peers and operator-approved destinations are never remapped.
+    port_remap = _parse_port_remap(list(getattr(args, "remap_port", None) or []))
+    remap_ips = {ip.strip() for ip in (getattr(args, "remap_peer_ip", None) or []) if ip.strip()}
+    if port_remap:
+        if not remap_ips:
+            raise SystemExit("--remap-port needs --remap-peer-ip <peer-ip> (repeatable)")
+        if not _peer_portal_tls_enabled():
+            raise SystemExit("--remap-port needs PEER_PORTAL_TLS_ENABLED=1")
+        if not _peer_trust_configured():
+            raise SystemExit("--remap-port needs PEER_CA_FILE or PEER_PINNED_FINGERPRINTS")
+    elif remap_ips:
+        raise SystemExit("--remap-peer-ip needs --remap-port")
     resolve_cache: dict[Any, Any] = {}
     plan: list[dict[str, Any]] = []
     default_peer: tuple[str, int] | None = None
@@ -985,6 +1013,10 @@ def cmd_flush_outbox(args: argparse.Namespace) -> int:
                 if live is not None:
                     retargeted_from = f"{item_ip}:{item_port}"
                     (item_ip, item_port), record_history, auto_retarget = live, True, True
+                elif item_ip in remap_ips and item_port in port_remap:
+                    retargeted_from = f"{item_ip}:{item_port}"
+                    item_port = port_remap[item_port]
+                    record_history, auto_retarget = True, True
             else:
                 if default_peer is None:
                     default_peer = _resolve_peer(args)
@@ -1141,6 +1173,12 @@ def main(argv: list[str] | None = None) -> int:
                             "(needs --retarget-from, PEER_PORTAL_TLS_ENABLED and a pinned CA)")
     flush.add_argument("--retarget-from", action="append", default=[], metavar="STALE_IP",
                        help="Only retarget items whose stored address is this stale IP; repeatable")
+    flush.add_argument("--remap-port", action="append", default=[], metavar="FROM:TO",
+                       help="Opt in: resend queued items stored on port FROM to port TO (for example the "
+                            "plain portal port to the peer https port); needs --remap-peer-ip, "
+                            "PEER_PORTAL_TLS_ENABLED and a pinned CA")
+    flush.add_argument("--remap-peer-ip", action="append", default=[], metavar="PEER_IP",
+                       help="Only remap items whose stored peer is this IP; repeatable")
     flush.add_argument("--dry-run", action="store_true",
                        help="With --retarget-live: list the intended from/to hops and send nothing")
     flush.set_defaults(func=cmd_flush_outbox)
