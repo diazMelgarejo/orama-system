@@ -211,8 +211,8 @@ class TestFleetTopologyStateWrite:
             timestamp=1234567890.0,
         )
 
-        # Mock write_text to raise PermissionError
-        with patch.object(Path, "write_text", side_effect=PermissionError("denied")):
+        # The writer publishes the exact hashed bytes, so fail that write.
+        with patch.object(Path, "write_bytes", side_effect=PermissionError("denied")):
             result = write_fleet_topology(state, topo_path)
             assert result is False
 
@@ -450,6 +450,7 @@ class TestErrorHandling:
         import urllib.error
 
         def mock_urlopen(req, timeout=None):
+            """Simulate a peer request that times out."""
             raise urllib.error.URLError("Connection timeout")
 
         # In query_peer_topology.py, this would be caught and peer skipped
