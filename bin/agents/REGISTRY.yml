@@ -125,6 +125,7 @@ roles:
     stage: research
     openclaw_workspace: ${HOME}/.openclaw/agents/mac-researcher
     staged_soul: bin/agents/mac-researcher/SOUL.md
+    staged_agent_card: bin/agents/mac-researcher/agent.md
 
   - staging_folder: win-researcher
     dispatch_lane: L-Fleet
@@ -136,6 +137,7 @@ roles:
     stage: research
     openclaw_workspace: ${HOME}/.openclaw/agents/win-researcher
     staged_soul: bin/agents/win-researcher/SOUL.md
+    staged_agent_card: bin/agents/win-researcher/agent.md
 
   - staging_folder: autoresearcher
     dispatch_lane: L-Fleet
@@ -147,6 +149,7 @@ roles:
     stage: research
     openclaw_workspace: ${HOME}/autoresearch
     staged_soul: bin/agents/autoresearcher/SOUL.md
+    staged_agent_card: bin/agents/autoresearcher/agent.md
 
   - staging_folder: coder
     dispatch_lane: L-Fleet
@@ -157,6 +160,7 @@ roles:
     soul_id: orama.executor
     stage: 4-win-lmstudio
     staged_soul: bin/agents/coder/SOUL.md
+    staged_agent_card: bin/agents/coder/agent.md
     notes: Win LM Studio path; shares OpenClaw id with executor row
 
   - staging_folder: cole
@@ -267,6 +271,7 @@ lifecycle:
     openclaw_workspace: ${HOME}/.alphaclaw/.openclaw/workspace
     hermes_profile: null
     staged_soul: bin/agents/lifecycle/SOUL.md
+    staged_agent_card: bin/agents/lifecycle/agent.md
     notes: Cole-facing operator home; hub docs/oramasys — not a Hermes profile
 
 # Deprecated — all relay-parity adapters now have bin/agents folders (2026-07-26)
