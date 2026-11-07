@@ -82,8 +82,8 @@ existing signed/session commits to alter verification badges.
 Decision provenance: the user selected automatic release with expiry/fencing
 for v2 only and PT manual, retained shims, and both platforms before promotion.
 This ratifies implementation scope. Actual release qualification, generation
-approval and activation retain their separately evidenced gates. The push hold
-and merge barrier remain in effect.
+approval and activation retain their separately evidenced gates.
+The merge barrier remains in effect.
 
 ## Part 3 review and revised scope
 
@@ -113,6 +113,13 @@ qualification from ratification. C3d uses operator-only human review under the
 a second human is not required. Fresh interactive GitHub authentication is
 performed by the operator, not an agent, and does not by itself prove review.
 All K1-K3 fixes precede final CI and exact-head acceptance; C6 runs last.
+
+**2026-11-07 operator amendment:** C6 scheduled latency p95 and
+successful-call send latency p95 must each be at most 60 ms, superseding
+the historical CL-3 50 ms target above. Scheduled p99 at most 250 ms and
+all other budgets remain unchanged. Three consecutive operator-run Mac
+passes, exact-head acceptance and separate native Windows qualification
+remain required; this amendment does not qualify an agent diagnostic.
 
 Cross-repository CI pairs differently named review branches through
 `config/docs-pointer-peers.json`: PR number to immutable PT commit. An explicit

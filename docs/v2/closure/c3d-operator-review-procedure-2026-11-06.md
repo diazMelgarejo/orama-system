@@ -16,7 +16,12 @@ pointers, not substitutes for the operator's decision.
 1. Implement and review K1-K3, including all remaining inline findings. Commit
    locally, rehearse the combined checks, and freeze the exact code heads.
 2. Publish once per affected repository under the operator's explicit authority.
-   Obtain final hosted CI results for those exact heads. No merge or deployment.
+   Record each workflow run and attempt, the tested commit, PR head and base revisions,
+   and the tested tree. PR CI may check out a synthetic merge commit rather than
+   the contributor head. Verify that the tested tree equals the accepted head's
+   tree from step 4, or run CI directly on that accepted head. Only then treat the
+   results as exact-head evidence; a base or head change requires renewed binding.
+   No merge or deployment.
 3. The operator performs a fresh interactive `gh auth login` on their own
    account, not through an agent. Existing tokens or `gh auth status` alone do
    not establish a fresh authentication ceremony. Never record device codes,
