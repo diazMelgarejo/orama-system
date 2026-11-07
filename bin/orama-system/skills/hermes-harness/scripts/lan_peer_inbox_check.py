@@ -4,8 +4,8 @@
 The launcher runs this after every ``--lan-peer`` start. It is read-only apart from a small
 "already seen" state file, never touches the network and never prints file bodies.
 
-A drop counts as coming from the Mac when its sidecar ``source`` or its file name carries a
-standalone ``mac`` token. Each drop is integrity-checked: the stored bytes must hash to the
+A drop counts as coming from the Mac when its sidecar ``source`` carries a standalone ``mac`` token
+(the file name is used only when there is no source, so a Windows-sent file named mac-* is not counted). Each drop is integrity-checked: the stored bytes must hash to the
 ``sha256`` recorded in the sidecar. Statuses:
 
 * ``new``            at least one Mac drop not seen by an earlier check;
@@ -36,8 +36,9 @@ STATE_NAME = "inbox_check.json"
 
 
 def is_mac_drop(name: str, meta: dict[str, Any]) -> bool:
-    """Return True when the file name or sidecar source carries a standalone ``mac`` token."""
-    return bool(_MAC_TOKEN.search(name) or _MAC_TOKEN.search(str(meta.get("source") or "")))
+    """Return True for a Mac drop: the sidecar source decides; the file name is used only when it has no source."""
+    source = str(meta.get("source") or "").strip()
+    return bool(_MAC_TOKEN.search(source) if source else _MAC_TOKEN.search(name))
 
 
 def _read_meta(path: Path) -> dict[str, Any]:
@@ -137,7 +138,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"integrity FAIL for {len(bad)} Mac drop(s): {', '.join(bad)}")
     else:
         newest = drops[0]
-        label = {"new": f"{len(new)} new", "baseline": "baseline recorded", "quiet": "none new"}[status]
+        label = {"new": f"{len(new)} new", "baseline": "first check", "quiet": "none new"}[status]
         print(
             f"Mac drops: {len(drops)} total, {label}; newest {newest['name']} "
             f"({newest['bytes']} bytes, {_human_age(newest['age_seconds'])} ago, integrity {newest['integrity']})"

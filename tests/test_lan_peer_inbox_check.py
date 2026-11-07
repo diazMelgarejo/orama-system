@@ -43,6 +43,8 @@ def test_mac_token_matching_is_standalone() -> None:
     assert chk.is_mac_drop("note.md", {"source": "Mac"})
     assert not chk.is_mac_drop("machine-report.md", {"source": "macro-bot"})
     assert not chk.is_mac_drop("win-note.md", {"source": "win"})
+    assert not chk.is_mac_drop("mac-named-by-windows.md", {"source": "win"})
+    assert chk.is_mac_drop("mac-no-source.md", {})
 
 
 def test_empty_inbox_reports_none(inbox, capsys) -> None:
