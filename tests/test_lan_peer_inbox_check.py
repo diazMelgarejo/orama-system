@@ -110,7 +110,7 @@ def test_unreadable_or_missing_drop_is_skipped_without_crashing(inbox, capsys, m
 
     real_read_bytes = Path.read_bytes
 
-    def flaky_read(self):
+    def flaky_read(self: Path) -> bytes:
         if self.name == "mac-broken.md":
             raise OSError("simulated permission denied or disappearing file")
         return real_read_bytes(self)

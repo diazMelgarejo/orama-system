@@ -88,11 +88,28 @@ def test_explicit_ca_with_matching_fingerprint_selects_https_port(tmp_path) -> N
     ca = tmp_path / "ca.pem"
     ca.write_text(pem, encoding="utf-8")
     result = _bash(
-        tmp_path, '_peer_tls_port_args; echo "args=${_PEER_PORT_ARGS[*]} en=${PEER_PORTAL_TLS_ENABLED} ca=${PEER_CA_FILE##*/} sha=${PEER_CA_SHA256:-unset}"',
-        {"PEER_CA_FILE": str(ca), "PEER_CA_SHA256": digest.upper()},
+        tmp_path,
+        f"PEER_CA_SHA256={digest.upper()}; "
+        '_peer_tls_port_args; echo "args=${_PEER_PORT_ARGS[*]} en=${PEER_PORTAL_TLS_ENABLED} ca=${PEER_CA_FILE##*/} sha=${PEER_CA_SHA256:-unset}"; '
+        """ "$US_PYTHON" -c 'import os; print("child_sha=" + os.environ.get("PEER_CA_SHA256", "unset"))'""",
+        {"PEER_CA_FILE": str(ca)},
     )
     assert result.returncode == 0, result.stderr
     assert f"args=--portal-port 8443 en=1 ca=ca.pem sha={digest.lower()}" in result.stdout
+    assert f"child_sha={digest.lower()}" in result.stdout
+
+
+def test_tls_enabled_without_ca_exports_enablement_to_child(tmp_path) -> None:
+    """Unexported PEER_PORTAL_TLS_ENABLED=1 selects https 8443 and exports enablement to child processes."""
+    result = _bash(
+        tmp_path,
+        'PEER_PORTAL_TLS_ENABLED=1; '
+        '_peer_tls_port_args; echo "args=${_PEER_PORT_ARGS[*]} en=${PEER_PORTAL_TLS_ENABLED}"; '
+        """ "$US_PYTHON" -c 'import os; print("child_en=" + os.environ.get("PEER_PORTAL_TLS_ENABLED", "unset"))'""",
+    )
+    assert result.returncode == 0, result.stderr
+    assert "args=--portal-port 8443 en=1" in result.stdout
+    assert "child_en=1" in result.stdout
 
 
 def test_fingerprint_mismatch_or_malformed_is_refused(tmp_path) -> None:

@@ -1173,9 +1173,9 @@ function Get-PeerTlsPortArgs {
     }
     $enabled = $flag -in @('1', 'true', 'yes', 'on')
     if (-not $ca -and -not $enabled) { return @() }
+    $env:PEER_PORTAL_TLS_ENABLED = '1'
     if ($ca) {
         $env:PEER_CA_FILE = $ca
-        $env:PEER_PORTAL_TLS_ENABLED = '1'
         if ($want) {
             $env:PEER_CA_SHA256 = $want
         }

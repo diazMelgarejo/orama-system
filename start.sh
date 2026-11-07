@@ -778,8 +778,9 @@ _peer_tls_port_args() {
   fi
   case "$flag" in 1|true|yes|on) enabled=1 ;; esac
   if [ -z "$ca" ] && [ "$enabled" = "0" ]; then return 0; fi
+  export PEER_PORTAL_TLS_ENABLED=1
   if [ -n "$ca" ]; then
-    export PEER_CA_FILE="$ca" PEER_PORTAL_TLS_ENABLED=1
+    export PEER_CA_FILE="$ca"
     if [ -n "$want" ]; then
       export PEER_CA_SHA256="$want"
     fi
