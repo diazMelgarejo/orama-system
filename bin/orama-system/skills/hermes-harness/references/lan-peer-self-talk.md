@@ -192,6 +192,16 @@ The front end config is the operator's, outside the repo. The default is
 `~/.local/share/oramasys/lan-control-plane/Caddyfile`; override the folder with
 `ORAMA_LAN_CONTROL_PLANE_DIR`. `ORAMA_PEER_TLS_FRONTEND=0` turns launcher management off.
 
+For listener restoration while queued deliveries require individual reconciliation, run
+`LAN_PEER_OUTBOX_AUTO_FLUSH=0 ORAMA_ORCHESTRATOR_AUTO_DISPATCH=0 ./start.sh --lan-peer --no-open --no-coord-pulse`.
+This preserves the queue without sending it; probes and inbox checks still run.
+The default remains automatic flushing. Accepted boolean values are `1/true/yes/on`
+and `0/false/no/off`; an invalid value refuses flushing and preserves queued items.
+Resume only explicitly authorized deliveries after checking receiver receipts.
+`ORAMA_ORCHESTRATOR_AUTO_DISPATCH=0` also disables the one-shot researcher and
+Windows research watcher; `--no-coord-pulse` alone prevents scheduler installation,
+not these dispatch hooks. It accepts the same booleans and defaults to enabled.
+
 **Idempotent by rule — the launcher never stops, restarts or reloads anything.**
 
 - Something already listening on the peer port: the launcher does nothing.

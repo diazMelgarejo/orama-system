@@ -914,6 +914,14 @@ _lan_peer_session() {
 }
 
 _flush_lan_peer_outbox() {
+  # Operators can restore listeners without replaying an unresolved backlog.
+  case "${LAN_PEER_OUTBOX_AUTO_FLUSH:-1}" in
+    0|false|no|off)
+      _info "lan-peer" "automatic outbox flush disabled; queued peer drops preserved"
+      return 0 ;;
+    1|true|yes|on) ;;
+    *) _warn "lan-peer" "LAN_PEER_OUTBOX_AUTO_FLUSH must be a boolean; queued peer drops preserved"; return 1 ;;
+  esac
   local assign="$SCRIPT_DIR/bin/orama-system/skills/hermes-harness/scripts/lan_peer_assign.py"
   if [ ! -f "$assign" ]; then
     _warn "lan-peer" "assignment script missing: $assign"
@@ -1993,6 +2001,17 @@ echo ""
 #           the moment LM Studio is PASS, dispatches the H6 real-task to
 #           the win-autoresearcher via dual_path_dispatch.py.
 # Both paths log to $LOG_DIR/orchestrator-wire.log.
+
+# BEGIN ORCHESTRATOR DISPATCH GATE
+case "${ORAMA_ORCHESTRATOR_AUTO_DISPATCH:-1}" in
+  0|false|no|off)
+    _info "orch-wire" "automatic researcher dispatch disabled; services remain available"
+    exit 0
+    ;;
+  1|true|yes|on) ;;
+  *) _warn "orch-wire" "ORAMA_ORCHESTRATOR_AUTO_DISPATCH must be a boolean; no jobs dispatched"; exit 1 ;;
+esac
+# END ORCHESTRATOR DISPATCH GATE
 
 _ORCH_LOG="${LOG_DIR}/orchestrator-wire.log"
 _COORD_PULSE="$SCRIPT_DIR/bin/orama-system/skills/hermes-harness/scripts/coord_pulse.sh"
