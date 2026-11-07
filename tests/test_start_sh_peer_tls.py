@@ -273,7 +273,8 @@ def _config_dir(tmp: Path, proxy: str = "localhost:8002", admin: int | None = No
     """Create a front end config directory with a Caddyfile that proxies to *proxy* (and sets *admin* when given)."""
     directory = tmp / "cp"
     directory.mkdir(exist_ok=True)
-    head = f"{{\n\tadmin localhost:{admin}\n}}\n\n" if admin else ""
+    admin_port = admin if admin is not None else _free_port()
+    head = f"{{\n\tadmin localhost:{admin_port}\n}}\n\n"
     (directory / "Caddyfile").write_text(f"{head}https://:8443 {{\n\treverse_proxy {proxy}\n}}\n", encoding="utf-8")
     return directory
 
@@ -294,15 +295,17 @@ def test_frontend_skipped_when_disabled_and_honest_when_prerequisites_missing(tm
     """Disabled is a no-op; missing caddy, missing Caddyfile or failed validation each warn and return non-zero."""
     bindir, log = _fake_caddy(tmp_path)
     cfg = _config_dir(tmp_path)
-    off = _bash(tmp_path, "_ensure_peer_tls_frontend", {"ORAMA_PEER_TLS_FRONTEND": "0", "ORAMA_LAN_CONTROL_PLANE_DIR": str(cfg)}, path=f"{bindir}:/usr/bin:/bin")
+    port = _free_port()
+    off = _bash(tmp_path, "_ensure_peer_tls_frontend", {"ORAMA_PEER_TLS_FRONTEND": "0", "ORAMA_LAN_CONTROL_PLANE_DIR": str(cfg), "PEER_PORTAL_TLS_PORT": str(port)}, path=f"{bindir}:/usr/bin:/bin")
     assert off.returncode == 0 and not log.exists()
-    nocaddy = _bash(tmp_path, "_ensure_peer_tls_frontend", {"ORAMA_LAN_CONTROL_PLANE_DIR": str(cfg)}, path="/usr/bin:/bin")
+    env = {"ORAMA_LAN_CONTROL_PLANE_DIR": str(cfg), "PEER_PORTAL_TLS_PORT": str(port)}
+    nocaddy = _bash(tmp_path, "_ensure_peer_tls_frontend", env, path="/usr/bin:/bin")
     assert nocaddy.returncode != 0 and "caddy" in nocaddy.stderr
     empty = tmp_path / "empty"
     empty.mkdir()
-    nofile = _bash(tmp_path, "_ensure_peer_tls_frontend", {"ORAMA_LAN_CONTROL_PLANE_DIR": str(empty)}, path=f"{bindir}:/usr/bin:/bin")
+    nofile = _bash(tmp_path, "_ensure_peer_tls_frontend", {"ORAMA_LAN_CONTROL_PLANE_DIR": str(empty), "PEER_PORTAL_TLS_PORT": str(port)}, path=f"{bindir}:/usr/bin:/bin")
     assert nofile.returncode != 0 and "Caddyfile" in nofile.stderr and not log.exists()
-    invalid = _bash(tmp_path, "_ensure_peer_tls_frontend", {"ORAMA_LAN_CONTROL_PLANE_DIR": str(cfg), "FAKE_CADDY_VALIDATE_RC": "1"}, path=f"{bindir}:/usr/bin:/bin")
+    invalid = _bash(tmp_path, "_ensure_peer_tls_frontend", {**env, "FAKE_CADDY_VALIDATE_RC": "1"}, path=f"{bindir}:/usr/bin:/bin")
     assert invalid.returncode != 0 and "validation" in invalid.stderr
     assert "start" not in log.read_text(encoding="utf-8"), "an invalid config must never be started"
 
