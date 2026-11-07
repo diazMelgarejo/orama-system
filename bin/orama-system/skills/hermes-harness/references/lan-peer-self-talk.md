@@ -18,6 +18,7 @@
 ### A. One-time setup (run on **each** host)
 
 1. **Sync orama-system on `main`:**
+
    ```bash
    export ORAMA_SYSTEM_PATH="$(git -C /path/to/orama-system rev-parse --show-toplevel)"
    cd "$ORAMA_SYSTEM_PATH"
@@ -25,6 +26,7 @@
    ```
 
 2. **env-local file** in the orama-system clone root (never commit; **same token on both hosts**):
+
    ```dotenv
    PORTAL_BIND_LAN=1
    ORAMA_BIND_LAN=1
@@ -42,9 +44,11 @@
    per hardware policy.
 
 5. **Install Hermes thin wrapper** (once per host after pull):
+
    ```bash
    python3 bin/orama-system/skills/hermes-harness/scripts/install_hermes_thin_skills.py --install --verify
    ```
+
    Windows: use `python` instead of `python3`.
 
 6. **Restart portal/stack** if already running so `PORTAL_BIND_LAN=1` takes effect.
@@ -57,17 +61,20 @@ is required only for peer `/health` and `/api/status` on port 8002.
 ### B. What to tell Hermes (copy-paste)
 
 **Slash command (preferred):**
-```
+
+```text
 /lan-peer-self-talk
 ```
 
 **Plain English:**
-```
+
+```text
 Probe the LAN peer orama install. Use last_discovery.json for the peer IP, run
 probe_lan_peer.py --json from ORAMA_SYSTEM_PATH, and report every check in checks[].
 ```
 
 **JSON envelope** (programmatic dispatch):
+
 ```json
 {
   "skill_id": "lan-peer-self-talk",
@@ -109,7 +116,7 @@ Hermes must print `SUCCESS` and the full path in the operator reply.
 
 | Failure | Fix |
 |---------|-----|
-| `portal-health` FAIL | Set `PORTAL_BIND_LAN=1`, restart portal on **peer** |
+| `portal-health` FAIL | Set `PORTAL_BIND_LAN=1`, restart portal on **peer** (a peer with an HTTPS front end keeps the portal on loopback instead: start the front end, see **G**) |
 | `portal-status` FAIL | Align tokens: same `ORAMA_CONTROL_PLANE_TOKEN` on both hosts, or set `ORAMA_CONTROL_PLANE_TOKEN_PEER` to the peer's token (probe tries all candidates) |
 | `peer-lmstudio` FAIL | Re-run discovery; ensure LM Studio listening on peer |
 | No peer IP | Refresh `last_discovery.json`; do not hardcode LAN IP |
@@ -170,6 +177,32 @@ WS/SSE remain for **heartbeat + probe** only; assignments travel as files.
 
 For cross-host **inference** (e.g. Mac using Win 27B), use `verify_partner_canaries.py`
 and `start.sh --status` / `start.ps1 --status` — not a separate Hermes RPC layer.
+
+### G. Mac HTTPS front end and bidirectional parity (`start.sh --lan-peer`)
+
+`start.sh --lan-peer` is the Mac mirror of `start.ps1 --lan-peer`:
+
+| Direction | What the Mac launcher does |
+|-----------|----------------------------|
+| Mac → Win | Probe and `flush-outbox` use the peer's HTTPS port (default `8443`) when an **operator-authenticated** CA is configured: `PEER_CA_FILE` (checked against `PEER_CA_SHA256` when set) or a `win-ca-*/orama-lan-ca.pem` whose single certificate has exactly the `PEER_CA_SHA256` fingerprint. A CA found on disk without that fingerprint is never trusted. Trust is process-scoped. Items queued on the plain portal port are resent to the HTTPS port through `--remap-port`/`--remap-peer-ip` for the discovered Windows peer only. |
+| Win → Mac | The Mac's own HTTPS front end (Caddy: TLS on `8443`, proxying to the **loopback** portal) accepts peer calls. The plain-HTTP portal stays on loopback while a front end is configured, so the only LAN exposure is the TLS port. An operator-set `PORTAL_BIND_LAN` still wins. |
+| Inbox | After every `--lan-peer` launch the Mac reports whether a Windows drop arrived (`lan_peer_inbox_check.py --peer win`): local files only, integrity-checked against the recorded hash. |
+
+The front end config is the operator's, outside the repo. The default is
+`~/.local/share/oramasys/lan-control-plane/Caddyfile`; override the folder with
+`ORAMA_LAN_CONTROL_PLANE_DIR`. `ORAMA_PEER_TLS_FRONTEND=0` turns launcher management off.
+
+**Idempotent by rule — the launcher never stops, restarts or reloads anything.**
+
+- Something already listening on the peer port: the launcher does nothing.
+- A Caddy admin endpoint already up while the peer port is closed: it refuses to start a
+  second instance and prints the command to run first:
+  `caddy stop --address localhost:<admin-port>`.
+- An invalid Caddyfile, no `caddy`, or a listener that never comes up: it warns and fails
+  honestly; peers stay unreachable.
+
+To change or restart the front end, **you** stop it explicitly first, then run
+`./start.sh --lan-peer` again.
 
 ---
 
