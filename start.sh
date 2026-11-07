@@ -590,12 +590,34 @@ PATHSEOF
   [ "$DISCOVER_ONLY" = "1" ] && exit 0
 fi
 
+# ── peer HTTPS front end location (Mac mirror of the Windows TLS front end) ───
+# The Caddy config lives OUTSIDE the repo (it names local certificate files). Nothing here starts,
+# stops or restarts anything: see _ensure_peer_tls_frontend for the idempotent, never-restart rule.
+_peer_tls_frontend_dir() {
+  printf '%s' "${ORAMA_LAN_CONTROL_PLANE_DIR:-$HOME/.local/share/oramasys/lan-control-plane}"
+}
+
+_peer_tls_frontend_configured() {
+  case "$(printf '%s' "${ORAMA_PEER_TLS_FRONTEND:-1}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')" in
+    0|false|no|off) return 1 ;;
+  esac
+  command -v caddy >/dev/null 2>&1 && [ -f "$(_peer_tls_frontend_dir)/Caddyfile" ]
+}
+
 # ── --lan-peer (enable LAN bind before host resolution) ───────────────────────
 if [ "$_LAN_PEER_MODE" = "1" ]; then
   export PT_BIND_LAN="${PT_BIND_LAN:-1}"
   export ORAMA_BIND_LAN="${ORAMA_BIND_LAN:-1}"
-  export PORTAL_BIND_LAN="${PORTAL_BIND_LAN:-1}"
-  _info "lan-peer" "LAN bind enabled (PT/ORAMA/PORTAL) — peer HTTP on this host"
+  if _peer_tls_frontend_configured; then
+    # Zero exposure: the plain-HTTP portal stays on loopback and peers reach it only through the
+    # HTTPS front end. An operator-set PORTAL_BIND_LAN still wins.
+    export PORTAL_BIND_LAN="${PORTAL_BIND_LAN:-0}"
+    _info "lan-peer" "LAN bind enabled (PT/ORAMA); portal stays on loopback behind the peer HTTPS front end"
+  else
+    export PORTAL_BIND_LAN="${PORTAL_BIND_LAN:-1}"
+    _info "lan-peer" "LAN bind enabled (PT/ORAMA/PORTAL) — peer HTTP on this host"
+    _warn "lan-peer" "no peer HTTPS front end configured (caddy + Caddyfile): peers refuse tokens over plain http"
+  fi
 fi
 
 PT_PORT=${PT_PORT:-8000}
@@ -693,6 +715,173 @@ if [ "${PT_BIND_LAN:-0}" = "1" ] || [ "${ORAMA_BIND_LAN:-0}" = "1" ] || [ "${POR
   _require_control_plane_token_for_lan || exit 1
 fi
 
+# ── LAN peer TLS (Mac mirror of platform/windows/start.ps1 Get-PeerTlsPortArgs) ─
+# SHA-256 (lowercase hex) of the DER certificate in a PEM file holding exactly one CERTIFICATE block;
+# empty for anything else (a second certificate, a key, an unreadable file): the TLS library would trust those too.
+_peer_cert_sha256() {
+  "$US_PYTHON" - "$1" <<'PY' 2>/dev/null || true
+import base64, hashlib, re, sys
+try:
+    text = open(sys.argv[1], encoding="utf-8").read()
+except OSError:
+    sys.exit(0)
+markers = re.findall(r"-----BEGIN [A-Z0-9 ]+-----", text)
+if len(markers) != 1 or markers[0] != "-----BEGIN CERTIFICATE-----":
+    sys.exit(0)
+blocks = re.findall(r"-----BEGIN CERTIFICATE-----(.+?)-----END CERTIFICATE-----", text, re.S)
+if len(blocks) != 1:
+    sys.exit(0)
+try:
+    der = base64.b64decode(re.sub(r"\s", "", blocks[0]), validate=True)
+except ValueError:
+    sys.exit(0)
+print(hashlib.sha256(der).hexdigest())
+PY
+}
+
+# Decide whether peer calls use the peer's HTTPS front end; sets _PEER_PORT_ARGS (empty or --portal-port N).
+# A CA found on disk is NOT trusted just because it is there: only an operator-authenticated CA is used
+# (PEER_CA_FILE, checked against PEER_CA_SHA256 when set, or a win-ca-*/orama-lan-ca.pem whose single
+# certificate has exactly the PEER_CA_SHA256 fingerprint). Trust stays process-scoped: SSL_CERT_FILE and
+# the system trust store are never touched. Returns 1 when the configuration is rejected.
+_peer_tls_port_args() {
+  _PEER_PORT_ARGS=()
+  local flag want ca="" dir i cand port=8443 enabled=0
+  flag="$(printf '%s' "${PEER_PORTAL_TLS_ENABLED:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+  case "$flag" in 0|false|no|off) return 0 ;; esac
+  want="$(printf '%s' "${PEER_CA_SHA256:-}" | tr -d '[:space:]:' | tr '[:upper:]' '[:lower:]')"
+  if [ -n "$want" ] && ! printf '%s' "$want" | grep -Eq '^[0-9a-f]{64}$'; then
+    _warn "lan-peer" "PEER_CA_SHA256 must be 64 hex characters (the SHA-256 of the CA certificate)"
+    return 1
+  fi
+  if [ -n "${PEER_CA_FILE:-}" ] && [ -f "$PEER_CA_FILE" ]; then
+    ca="$PEER_CA_FILE"
+    if [ -n "$want" ] && [ "$(_peer_cert_sha256 "$ca")" != "$want" ]; then
+      _warn "lan-peer" "PEER_CA_FILE is not a single certificate matching PEER_CA_SHA256; refusing to trust it"
+      return 1
+    fi
+  elif [ -n "$want" ]; then
+    dir="$SCRIPT_DIR"
+    for i in 0 1 2 3; do
+      for cand in "$dir"/win-ca-*/orama-lan-ca.pem; do
+        [ -f "$cand" ] || continue
+        # names sort ascending, so the last match is the newest
+        if [ "$(_peer_cert_sha256 "$cand")" = "$want" ]; then ca="$cand"; fi
+      done
+      [ -n "$ca" ] && break
+      [ "$dir" = "/" ] && break
+      dir="$(dirname "$dir")"
+    done
+    if [ -z "$ca" ]; then
+      _warn "lan-peer" "no win-ca-* file matches PEER_CA_SHA256; peer stays on http (tokens are refused there)"
+    fi
+  fi
+  case "$flag" in 1|true|yes|on) enabled=1 ;; esac
+  if [ -z "$ca" ] && [ "$enabled" = "0" ]; then return 0; fi
+  if [ -n "$ca" ]; then
+    export PEER_CA_FILE="$ca" PEER_PORTAL_TLS_ENABLED=1
+  fi
+  if [ -n "${PEER_PORTAL_TLS_PORT:-}" ]; then
+    case "$PEER_PORTAL_TLS_PORT" in
+      ''|*[!0-9]*) _warn "lan-peer" "PEER_PORTAL_TLS_PORT must be a TCP port between 1 and 65535"; return 1 ;;
+    esac
+    if [ "$PEER_PORTAL_TLS_PORT" -lt 1 ] || [ "$PEER_PORTAL_TLS_PORT" -gt 65535 ]; then
+      _warn "lan-peer" "PEER_PORTAL_TLS_PORT must be a TCP port between 1 and 65535"
+      return 1
+    fi
+    port="$PEER_PORTAL_TLS_PORT"
+  fi
+  _PEER_PORT_ARGS=(--portal-port "$port")
+  _info "lan-peer" "peer calls use https on port $port (CA authenticated, trusted for this process only)"
+}
+
+# The Windows peer's address from the discovery file (never hardcoded); empty when absent or not an IPv4 address.
+_peer_ip_from_discovery() {
+  "$US_PYTHON" - "${HOME}/.openclaw/state/last_discovery.json" <<'PY' 2>/dev/null || true
+import json, re, sys
+try:
+    data = json.load(open(sys.argv[1], encoding="utf-8"))
+    ip = str(((data.get("endpoints") or {}).get("win") or {}).get("ip") or "")
+except (OSError, ValueError, AttributeError):
+    ip = ""
+if re.fullmatch(r"(?:\d{1,3}\.){3}\d{1,3}", ip):
+    print(ip)
+PY
+}
+
+# Arguments that let flush-outbox resend items queued on the plain portal port to the peer's https port.
+# Only for the discovered Windows peer; other peers and operator-approved destinations are never remapped.
+_peer_outbox_remap_args() {
+  _PEER_REMAP_ARGS=()
+  local enabled tls=8443 plain=8002 ip
+  enabled="$(printf '%s' "${PEER_PORTAL_TLS_ENABLED:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+  case "$enabled" in 1|true|yes|on) ;; *) return 0 ;; esac
+  [ -n "${PEER_CA_FILE:-}${PEER_PINNED_FINGERPRINTS:-}" ] || return 0
+  case "${PEER_PORTAL_TLS_PORT:-}" in ''|*[!0-9]*) ;; *) tls="$PEER_PORTAL_TLS_PORT" ;; esac
+  case "${PORTAL_PORT:-}" in ''|*[!0-9]*) ;; *) plain="$PORTAL_PORT" ;; esac
+  [ "$plain" != "$tls" ] || return 0
+  ip="$(_peer_ip_from_discovery)"
+  [ -n "$ip" ] || return 0
+  _PEER_REMAP_ARGS=(--remap-port "${plain}:${tls}" --remap-peer-ip "$ip")
+}
+
+# True when something accepts TCP connections on loopback port $1 (no external tool needed).
+_port_listening() {
+  ( exec 3<>"/dev/tcp/localhost/$1" ) 2>/dev/null
+}
+
+# Make sure this Mac's peer HTTPS front end (Caddy: TLS on the peer port, proxying to the loopback portal) is up.
+# IDEMPOTENT by rule: it never stops, restarts or reloads anything. If the peer port already has a listener it
+# does nothing; if a Caddy admin endpoint is already up without the peer port listening it refuses to start a
+# second instance and tells the operator which explicit stop command to run first. Only called under --lan-peer.
+_ensure_peer_tls_frontend() {
+  case "$(printf '%s' "${ORAMA_PEER_TLS_FRONTEND:-1}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')" in
+    0|false|no|off)
+      _info "lan-peer" "peer HTTPS front end management is disabled (ORAMA_PEER_TLS_FRONTEND=0)"
+      return 0 ;;
+  esac
+  local dir cfg port admin proxy i
+  dir="$(_peer_tls_frontend_dir)"; cfg="$dir/Caddyfile"; port="${PEER_PORTAL_TLS_PORT:-8443}"
+  case "$port" in ''|*[!0-9]*) _warn "lan-peer" "PEER_PORTAL_TLS_PORT must be a TCP port between 1 and 65535"; return 1 ;; esac
+  if _port_listening "$port"; then
+    _info "lan-peer" "peer HTTPS front end already listening on port $port; not starting another (to change it, stop it explicitly first)"
+    return 0
+  fi
+  if ! command -v caddy >/dev/null 2>&1; then
+    _warn "lan-peer" "caddy is not installed, so LAN peers cannot reach this Mac over https (install it, e.g. brew install caddy)"
+    return 1
+  fi
+  if [ ! -f "$cfg" ]; then
+    _warn "lan-peer" "no Caddyfile at $cfg; the peer HTTPS front end is not provisioned"
+    return 1
+  fi
+  proxy="$(sed -n 's/.*reverse_proxy[[:space:]]\{1,\}[^:[:space:]]*:\([0-9]\{1,5\}\).*/\1/p' "$cfg" | head -n1)"
+  if [ -n "$proxy" ] && [ "$proxy" != "${PORTAL_PORT:-8002}" ]; then
+    _warn "lan-peer" "the Caddyfile proxies to port $proxy but PORTAL_PORT is ${PORTAL_PORT:-8002}; peers would reach the wrong service"
+  fi
+  admin="$(sed -n 's/^[[:space:]]*admin[[:space:]]\{1,\}[^:[:space:]]*:\([0-9]\{1,5\}\).*/\1/p' "$cfg" | head -n1)"
+  admin="${admin:-2019}"
+  if _port_listening "$admin"; then
+    _warn "lan-peer" "a caddy admin endpoint is already up on port $admin but nothing listens on $port; not starting a second instance. Stop it explicitly first: caddy stop --address localhost:$admin"
+    return 1
+  fi
+  if ! caddy validate --config "$cfg" --adapter caddyfile >/dev/null 2>&1; then
+    _warn "lan-peer" "the Caddyfile failed validation; not starting the peer HTTPS front end"
+    return 1
+  fi
+  _info "lan-peer" "starting the peer HTTPS front end on port $port (explicit stop: caddy stop --address localhost:$admin)"
+  caddy start --config "$cfg" --adapter caddyfile >/dev/null 2>&1 || true
+  for i in 1 2 3 4 5 6; do
+    if _port_listening "$port"; then
+      _info "lan-peer" "peer HTTPS front end listening on port $port (TLS health is checked by the peer probe with the pinned CA)"
+      return 0
+    fi
+    sleep 0.5
+  done
+  _warn "lan-peer" "the peer HTTPS front end did not come up on port $port; LAN peers cannot reach this Mac"
+  return 1
+}
+
 _run_lan_peer_probe() {
   local probe="$SCRIPT_DIR/bin/orama-system/skills/hermes-harness/scripts/probe_lan_peer.py"
   if [ ! -f "$probe" ]; then
@@ -701,8 +890,12 @@ _run_lan_peer_probe() {
   fi
   _info "lan-peer" "running probe_lan_peer.py --json ..."
   _sync_control_plane_token
+  if ! _peer_tls_port_args; then
+    _warn "lan-peer" "peer TLS configuration rejected; not probing"
+    return 1
+  fi
   PERPETUA_TOOLS_ROOT="${PT_DIR:-}" ORAMA_CONTROL_PLANE_TOKEN="${ORAMA_CONTROL_PLANE_TOKEN:-}" \
-    "$US_PYTHON" "$probe" --json \
+    "$US_PYTHON" "$probe" --json ${_PEER_PORT_ARGS[@]+"${_PEER_PORT_ARGS[@]}"} \
       --timeout "${LAN_PEER_PROBE_TIMEOUT:-2}" \
       --status-timeout "${LAN_PEER_STATUS_TIMEOUT:-3}" \
       --ws-timeout "${LAN_PEER_WS_TIMEOUT:-2}" || {
@@ -728,11 +921,36 @@ _flush_lan_peer_outbox() {
   fi
   _info "lan-peer" "flushing queued peer drops..."
   _sync_control_plane_token
+  if ! _peer_tls_port_args; then
+    _warn "lan-peer" "peer TLS configuration rejected; queued peer drops remain pending"
+    return 1
+  fi
+  _peer_outbox_remap_args
   PERPETUA_TOOLS_ROOT="${PT_DIR:-}" ORAMA_CONTROL_PLANE_TOKEN="${ORAMA_CONTROL_PLANE_TOKEN:-}" \
-    "$US_PYTHON" "$assign" flush-outbox --peer --timeout "${LAN_PEER_HTTP_TIMEOUT:-2}" || {
+    "$US_PYTHON" "$assign" flush-outbox --peer \
+      ${_PEER_PORT_ARGS[@]+"${_PEER_PORT_ARGS[@]}"} ${_PEER_REMAP_ARGS[@]+"${_PEER_REMAP_ARGS[@]}"} \
+      --timeout "${LAN_PEER_HTTP_TIMEOUT:-2}" || {
     _warn "lan-peer" "queued peer drops remain pending"
     return 1
   }
+}
+
+# Report whether a drop from the Windows peer has arrived in the local inbox: local files only, no network,
+# never fails the launch. Only an integrity failure (a body that does not match its recorded hash) warns.
+_run_lan_peer_inbox_check() {
+  local check="$SCRIPT_DIR/bin/orama-system/skills/hermes-harness/scripts/lan_peer_inbox_check.py" out rc=0 line
+  if [ ! -f "$check" ]; then
+    _warn "lan-peer" "inbox check script missing: $check"
+    return 0
+  fi
+  out="$("$US_PYTHON" "$check" --peer win 2>&1)" || rc=$?
+  while IFS= read -r line; do
+    if [ -n "$line" ]; then _info "lan-peer" "inbox: $line"; fi
+  done <<<"$out"
+  if [ "$rc" -ne 0 ]; then
+    _warn "lan-peer" "a Windows drop failed its integrity check; do not act on it until it is re-sent"
+  fi
+  return 0
 }
 
 _run_discover_force_with_timeout() {
@@ -1718,6 +1936,11 @@ if [ "${_LAN_PEER_MODE:-0}" = "1" ]; then
 fi
 
 if [ "${_LAN_PEER_MODE:-0}" = "1" ]; then
+  # Idempotent: a no-op when the peer port already has a listener; never stops or restarts anything.
+  _ensure_peer_tls_frontend || _warn "lan-peer" "peer HTTPS front end is not running: LAN peers cannot reach this Mac until it is started"
+fi
+
+if [ "${_LAN_PEER_MODE:-0}" = "1" ]; then
   if ! _lan_peer_session should-retry >/dev/null; then
     _warn "lan-peer" "macOS-only degraded mode active; next Windows peer retry waits for LAN_PEER_DEGRADED_RETRY_SECONDS=${LAN_PEER_DEGRADED_RETRY_SECONDS:-900}"
   elif _run_lan_peer_probe; then
@@ -1727,6 +1950,10 @@ if [ "${_LAN_PEER_MODE:-0}" = "1" ]; then
     _lan_peer_session record-failure --error "probe_lan_peer.py failed" >/dev/null || true
     _warn "lan-peer" "skipping outbox flush until peer portal probe passes"
   fi
+fi
+
+if [ "${_LAN_PEER_MODE:-0}" = "1" ]; then
+  _run_lan_peer_inbox_check || true
 fi
 
 # ── network watcher install (--install-watcher flag or first-time setup) ──────
