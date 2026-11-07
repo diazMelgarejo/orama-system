@@ -1100,40 +1100,73 @@ function Topo-WriteProbeOutput {
     }
 }
 
+function Get-PemCertSha256 {
+    <#
+    .SYNOPSIS
+    SHA-256 (lowercase hex) of the DER certificate in a PEM file that holds exactly one certificate.
+    .OUTPUTS
+    The hex string, or an empty string when the file is unreadable, has no certificate, or has more than one.
+    #>
+    param([string]$Path)
+    try {
+        $text = Get-Content -Raw -LiteralPath $Path -ErrorAction Stop
+        $blocks = [regex]::Matches($text, '-----BEGIN CERTIFICATE-----(.+?)-----END CERTIFICATE-----', 'Singleline')
+        if ($blocks.Count -ne 1) { return '' }
+        $der = [Convert]::FromBase64String(($blocks[0].Groups[1].Value -replace '\s', ''))
+        $hash = [System.Security.Cryptography.SHA256]::Create().ComputeHash($der)
+        return (($hash | ForEach-Object { $_.ToString('x2') }) -join '')
+    } catch {
+        return ''
+    }
+}
+
 function Get-PeerTlsPortArgs {
     <#
     .SYNOPSIS
     Decide whether LAN peer calls use the peer's HTTPS front end and return the port arguments.
     .DESCRIPTION
     The peer (Mac) portal listens on loopback behind a TLS front end, so plain-http peer calls are
-    refused by design and the tokens must never travel over http. This makes the https path the
-    default whenever a peer CA is available, with no operator step per launch:
+    refused by design and tokens must never travel over http. A CA found on disk is NOT trusted
+    just because it is there: anyone who can write to a searched folder could plant one and receive
+    the control-plane tokens. A CA is used only when the operator authenticated it:
       - PEER_PORTAL_TLS_ENABLED set to 0/false/no/off keeps the legacy http behaviour;
-      - PEER_CA_FILE (existing file) is used as given, otherwise the newest
-        mac-ca-*\orama-lan-ca.pem found in the repo root or up to three parent folders is used;
-      - with a CA, PEER_PORTAL_TLS_ENABLED=1 and PEER_CA_FILE are set for this process only,
-        and the peer port is PEER_PORTAL_TLS_PORT (default 8443).
-    The local Portal port (PORTAL_PORT) is never changed. The CA is public trust material only.
-    System trust stores and SSL_CERT_FILE are never touched.
+      - PEER_CA_FILE (existing file) is the operator's explicit choice; when PEER_CA_SHA256 is also
+        set the file must be a single certificate with exactly that SHA-256 or this throws;
+      - with PEER_CA_SHA256 alone (the operator-confirmed SHA-256 of the CA certificate, hex, colons
+        allowed), the newest mac-ca-*\orama-lan-ca.pem in the repo root or up to three parent folders
+        whose single certificate matches that fingerprint is used; non-matching files are ignored;
+      - with neither, no CA is used and nothing changes.
+    With a CA, PEER_PORTAL_TLS_ENABLED=1 and PEER_CA_FILE are set for this process only, and the peer
+    port is PEER_PORTAL_TLS_PORT (default 8443). A malformed or out-of-range port throws.
+    The local Portal port (PORTAL_PORT) is never changed. System trust stores and SSL_CERT_FILE are
+    never touched.
     .OUTPUTS
     String array: '--portal-port', '<port>' when the peer is reached over https, otherwise empty.
     #>
     $flag = ("$($env:PEER_PORTAL_TLS_ENABLED)").Trim().ToLowerInvariant()
     if ($flag -in @('0', 'false', 'no', 'off')) { return @() }
+    $want = ("$($env:PEER_CA_SHA256)" -replace '[\s:]', '').ToLowerInvariant()
+    if ($want -and $want -notmatch '^[0-9a-f]{64}$') {
+        throw 'PEER_CA_SHA256 must be 64 hex characters (the SHA-256 of the CA certificate)'
+    }
     $ca = ''
     if ($env:PEER_CA_FILE -and (Test-Path -LiteralPath $env:PEER_CA_FILE -PathType Leaf)) {
         $ca = $env:PEER_CA_FILE
-    } else {
+        if ($want -and (Get-PemCertSha256 $ca) -ne $want) {
+            throw 'PEER_CA_FILE is not a single certificate matching PEER_CA_SHA256; refusing to trust it'
+        }
+    } elseif ($want) {
         $dir = $RepoRoot
         for ($i = 0; $i -le 3 -and $dir -and -not $ca; $i++) {
             $hit = Get-ChildItem -LiteralPath $dir -Directory -Filter 'mac-ca-*' -ErrorAction SilentlyContinue |
                 Sort-Object Name -Descending |
                 ForEach-Object { Join-Path $_.FullName 'orama-lan-ca.pem' } |
-                Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } |
+                Where-Object { (Test-Path -LiteralPath $_ -PathType Leaf) -and ((Get-PemCertSha256 $_) -eq $want) } |
                 Select-Object -First 1
             if ($hit) { $ca = $hit }
             $dir = Split-Path -Parent $dir
         }
+        if (-not $ca) { _Warn 'lan-peer' 'no mac-ca-* file matches PEER_CA_SHA256; peer stays on http (tokens are refused there)' }
     }
     $enabled = $flag -in @('1', 'true', 'yes', 'on')
     if (-not $ca -and -not $enabled) { return @() }
@@ -1142,9 +1175,36 @@ function Get-PeerTlsPortArgs {
         $env:PEER_PORTAL_TLS_ENABLED = '1'
     }
     $port = 8443
-    if ($env:PEER_PORTAL_TLS_PORT -match '^[0-9]{1,5}$') { $port = [int]$env:PEER_PORTAL_TLS_PORT }
-    _Info 'lan-peer' "peer calls use https on port $port (CA pinned for this process only)"
+    if ($env:PEER_PORTAL_TLS_PORT) {
+        if ($env:PEER_PORTAL_TLS_PORT -notmatch '^[0-9]{1,5}$' -or [int]$env:PEER_PORTAL_TLS_PORT -lt 1 -or [int]$env:PEER_PORTAL_TLS_PORT -gt 65535) {
+            throw 'PEER_PORTAL_TLS_PORT must be a TCP port between 1 and 65535'
+        }
+        $port = [int]$env:PEER_PORTAL_TLS_PORT
+    }
+    _Info 'lan-peer' "peer calls use https on port $port (CA authenticated, trusted for this process only)"
     return @('--portal-port', "$port")
+}
+
+function Get-PeerOutboxRemapArgs {
+    <#
+    .SYNOPSIS
+    Arguments that let flush-outbox resend items queued on the plain portal port to the peer's https port.
+    .DESCRIPTION
+    Items queued before peer TLS was on keep their stored http port, so with https enabled they would be
+    retried as https on the plain port and stay queued forever. When https is active and MAC_IP names the
+    peer, this maps the plain portal port (PORTAL_PORT, default 8002) to the https port for items stored
+    for that peer only. Other peers and operator-approved destinations are never remapped.
+    .OUTPUTS
+    String array of flush-outbox arguments, or empty when https is not active or MAC_IP is unset.
+    #>
+    $enabled = ("$($env:PEER_PORTAL_TLS_ENABLED)").Trim().ToLowerInvariant() -in @('1', 'true', 'yes', 'on')
+    if (-not $enabled -or -not $env:MAC_IP -or -not ($env:PEER_CA_FILE -or $env:PEER_PINNED_FINGERPRINTS)) { return @() }
+    $tls = 8443
+    if ($env:PEER_PORTAL_TLS_PORT -match '^[0-9]{1,5}$') { $tls = [int]$env:PEER_PORTAL_TLS_PORT }
+    $plain = 8002
+    if ($env:PORTAL_PORT -match '^[0-9]{1,5}$') { $plain = [int]$env:PORTAL_PORT }
+    if ($plain -eq $tls) { return @() }
+    return @('--remap-port', "${plain}:${tls}", '--remap-peer-ip', "$($env:MAC_IP)")
 }
 
 function Invoke-LanPeerProbe {
@@ -1162,7 +1222,12 @@ function Invoke-LanPeerProbe {
     Sync-ControlPlaneToken
     if ($PtDir) { Set-LauncherPtEnv -Dir $PtDir -RootOnly }
     _Info 'lan-peer' 'running probe_lan_peer.py --json ...'
-    $peerPortArgs = @(Get-PeerTlsPortArgs)
+    try {
+        $peerPortArgs = @(Get-PeerTlsPortArgs)
+    } catch {
+        _Warn 'lan-peer' "peer TLS configuration rejected: $($_.Exception.Message)"
+        return $false
+    }
     $probeTimeout = if ($env:LAN_PEER_PROBE_TIMEOUT) { $env:LAN_PEER_PROBE_TIMEOUT } else { '2' }
     $statusTimeout = if ($env:LAN_PEER_STATUS_TIMEOUT) { $env:LAN_PEER_STATUS_TIMEOUT } else { '3' }
     $wsTimeout = if ($env:LAN_PEER_WS_TIMEOUT) { $env:LAN_PEER_WS_TIMEOUT } else { '2' }
@@ -1197,12 +1262,18 @@ function Invoke-LanPeerOutboxFlush {
     Sync-ControlPlaneToken
     if ($PtDir) { Set-LauncherPtEnv -Dir $PtDir -RootOnly }
     _Info 'lan-peer' 'flushing queued peer drops ...'
-    $peerPortArgs = @(Get-PeerTlsPortArgs)
+    try {
+        $peerPortArgs = @(Get-PeerTlsPortArgs)
+    } catch {
+        _Warn 'lan-peer' "peer TLS configuration rejected: $($_.Exception.Message)"
+        return
+    }
+    $remapArgs = @(Get-PeerOutboxRemapArgs)
     $httpTimeout = if ($env:LAN_PEER_HTTP_TIMEOUT) { $env:LAN_PEER_HTTP_TIMEOUT } else { '2' }
     $prevEap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
-        $flushOut = & $UsPython $assign flush-outbox --peer @peerPortArgs --timeout $httpTimeout 2>&1
+        $flushOut = & $UsPython $assign flush-outbox --peer @peerPortArgs @remapArgs --timeout $httpTimeout 2>&1
         $flushExit = $LASTEXITCODE
     } finally {
         $ErrorActionPreference = $prevEap
