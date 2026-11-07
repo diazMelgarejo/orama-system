@@ -296,16 +296,17 @@ def test_frontend_skipped_when_disabled_and_honest_when_prerequisites_missing(tm
     bindir, log = _fake_caddy(tmp_path)
     cfg = _config_dir(tmp_path)
     port = _free_port()
-    off = _bash(tmp_path, "_ensure_peer_tls_frontend", {"ORAMA_PEER_TLS_FRONTEND": "0", "ORAMA_LAN_CONTROL_PLANE_DIR": str(cfg), "PEER_PORTAL_TLS_PORT": str(port)}, path=f"{bindir}:/usr/bin:/bin")
+    stub = "_port_listening() { return 1; }; "
+    off = _bash(tmp_path, stub + "_ensure_peer_tls_frontend", {"ORAMA_PEER_TLS_FRONTEND": "0", "ORAMA_LAN_CONTROL_PLANE_DIR": str(cfg), "PEER_PORTAL_TLS_PORT": str(port)}, path=f"{bindir}:/usr/bin:/bin")
     assert off.returncode == 0 and not log.exists()
     env = {"ORAMA_LAN_CONTROL_PLANE_DIR": str(cfg), "PEER_PORTAL_TLS_PORT": str(port)}
-    nocaddy = _bash(tmp_path, "_ensure_peer_tls_frontend", env, path="/usr/bin:/bin")
+    nocaddy = _bash(tmp_path, stub + "_ensure_peer_tls_frontend", env, path="/usr/bin:/bin")
     assert nocaddy.returncode != 0 and "caddy" in nocaddy.stderr
     empty = tmp_path / "empty"
     empty.mkdir()
-    nofile = _bash(tmp_path, "_ensure_peer_tls_frontend", {"ORAMA_LAN_CONTROL_PLANE_DIR": str(empty), "PEER_PORTAL_TLS_PORT": str(port)}, path=f"{bindir}:/usr/bin:/bin")
+    nofile = _bash(tmp_path, stub + "_ensure_peer_tls_frontend", {"ORAMA_LAN_CONTROL_PLANE_DIR": str(empty), "PEER_PORTAL_TLS_PORT": str(port)}, path=f"{bindir}:/usr/bin:/bin")
     assert nofile.returncode != 0 and "Caddyfile" in nofile.stderr and not log.exists()
-    invalid = _bash(tmp_path, "_ensure_peer_tls_frontend", {**env, "FAKE_CADDY_VALIDATE_RC": "1"}, path=f"{bindir}:/usr/bin:/bin")
+    invalid = _bash(tmp_path, stub + "_ensure_peer_tls_frontend", {**env, "FAKE_CADDY_VALIDATE_RC": "1"}, path=f"{bindir}:/usr/bin:/bin")
     assert invalid.returncode != 0 and "validation" in invalid.stderr
     assert "start" not in log.read_text(encoding="utf-8"), "an invalid config must never be started"
 

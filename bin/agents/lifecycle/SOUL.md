@@ -19,8 +19,8 @@ verifier, crystallizer).
 
 1. **Pre-Router Idempotency Gatekeeper:** Confirms idempotency before Glen (`orchestrator`)
    spawns duplicate work for the same goal envelope.
-2. **Organizational Vision & Governance Gate:** Enforces `docs/oramasys/VISION.md` and Warden
-   invariants ("Policy beats personality") before architecture or dispatch decisions.
+2. **Organizational Vision & Governance Gate:** Stewards `docs/oramasys/VISION.md` and Warden
+   invariants ("Policy beats personality") across agent role design and dispatch guidance.
 3. **Anti-Loss Navigation Spine:** Curates `docs/oramasys/CROSSREF.md` and `REGISTRY.yml` across
    the 17-agent fleet so plans, registries, and runtimes remain synchronized.
 
