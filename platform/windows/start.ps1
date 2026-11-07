@@ -1100,6 +1100,53 @@ function Topo-WriteProbeOutput {
     }
 }
 
+function Get-PeerTlsPortArgs {
+    <#
+    .SYNOPSIS
+    Decide whether LAN peer calls use the peer's HTTPS front end and return the port arguments.
+    .DESCRIPTION
+    The peer (Mac) portal listens on loopback behind a TLS front end, so plain-http peer calls are
+    refused by design and the tokens must never travel over http. This makes the https path the
+    default whenever a peer CA is available, with no operator step per launch:
+      - PEER_PORTAL_TLS_ENABLED set to 0/false/no/off keeps the legacy http behaviour;
+      - PEER_CA_FILE (existing file) is used as given, otherwise the newest
+        mac-ca-*\orama-lan-ca.pem found in the repo root or up to three parent folders is used;
+      - with a CA, PEER_PORTAL_TLS_ENABLED=1 and PEER_CA_FILE are set for this process only,
+        and the peer port is PEER_PORTAL_TLS_PORT (default 8443).
+    The local Portal port (PORTAL_PORT) is never changed. The CA is public trust material only.
+    System trust stores and SSL_CERT_FILE are never touched.
+    .OUTPUTS
+    String array: '--portal-port', '<port>' when the peer is reached over https, otherwise empty.
+    #>
+    $flag = ("$($env:PEER_PORTAL_TLS_ENABLED)").Trim().ToLowerInvariant()
+    if ($flag -in @('0', 'false', 'no', 'off')) { return @() }
+    $ca = ''
+    if ($env:PEER_CA_FILE -and (Test-Path -LiteralPath $env:PEER_CA_FILE -PathType Leaf)) {
+        $ca = $env:PEER_CA_FILE
+    } else {
+        $dir = $RepoRoot
+        for ($i = 0; $i -le 3 -and $dir -and -not $ca; $i++) {
+            $hit = Get-ChildItem -LiteralPath $dir -Directory -Filter 'mac-ca-*' -ErrorAction SilentlyContinue |
+                Sort-Object Name -Descending |
+                ForEach-Object { Join-Path $_.FullName 'orama-lan-ca.pem' } |
+                Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } |
+                Select-Object -First 1
+            if ($hit) { $ca = $hit }
+            $dir = Split-Path -Parent $dir
+        }
+    }
+    $enabled = $flag -in @('1', 'true', 'yes', 'on')
+    if (-not $ca -and -not $enabled) { return @() }
+    if ($ca) {
+        $env:PEER_CA_FILE = $ca
+        $env:PEER_PORTAL_TLS_ENABLED = '1'
+    }
+    $port = 8443
+    if ($env:PEER_PORTAL_TLS_PORT -match '^[0-9]{1,5}$') { $port = [int]$env:PEER_PORTAL_TLS_PORT }
+    _Info 'lan-peer' "peer calls use https on port $port (CA pinned for this process only)"
+    return @('--portal-port', "$port")
+}
+
 function Invoke-LanPeerProbe {
     <#
     .SYNOPSIS
@@ -1115,6 +1162,7 @@ function Invoke-LanPeerProbe {
     Sync-ControlPlaneToken
     if ($PtDir) { Set-LauncherPtEnv -Dir $PtDir -RootOnly }
     _Info 'lan-peer' 'running probe_lan_peer.py --json ...'
+    $peerPortArgs = @(Get-PeerTlsPortArgs)
     $probeTimeout = if ($env:LAN_PEER_PROBE_TIMEOUT) { $env:LAN_PEER_PROBE_TIMEOUT } else { '2' }
     $statusTimeout = if ($env:LAN_PEER_STATUS_TIMEOUT) { $env:LAN_PEER_STATUS_TIMEOUT } else { '3' }
     $wsTimeout = if ($env:LAN_PEER_WS_TIMEOUT) { $env:LAN_PEER_WS_TIMEOUT } else { '2' }
@@ -1124,7 +1172,7 @@ function Invoke-LanPeerProbe {
     $prevEap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
-        $out = & $UsPython $probe --json --timeout $probeTimeout --status-timeout $statusTimeout --ws-timeout $wsTimeout 2>&1
+        $out = & $UsPython $probe --json @peerPortArgs --timeout $probeTimeout --status-timeout $statusTimeout --ws-timeout $wsTimeout 2>&1
         $probeExit = $LASTEXITCODE
     } finally {
         $ErrorActionPreference = $prevEap
@@ -1149,11 +1197,12 @@ function Invoke-LanPeerOutboxFlush {
     Sync-ControlPlaneToken
     if ($PtDir) { Set-LauncherPtEnv -Dir $PtDir -RootOnly }
     _Info 'lan-peer' 'flushing queued peer drops ...'
+    $peerPortArgs = @(Get-PeerTlsPortArgs)
     $httpTimeout = if ($env:LAN_PEER_HTTP_TIMEOUT) { $env:LAN_PEER_HTTP_TIMEOUT } else { '2' }
     $prevEap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
-        $flushOut = & $UsPython $assign flush-outbox --peer --timeout $httpTimeout 2>&1
+        $flushOut = & $UsPython $assign flush-outbox --peer @peerPortArgs --timeout $httpTimeout 2>&1
         $flushExit = $LASTEXITCODE
     } finally {
         $ErrorActionPreference = $prevEap
