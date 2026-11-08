@@ -1,7 +1,7 @@
 ---
 name: clinepass-deepseek-flash
 description: Run Cline CLI as a non-interactive fan-out worker using the authenticated ClinePass DeepSeek V4.1 Flash (1017) route with high reasoning. Use when the user asks for free/low-cost ClinePass-only bot dispatch, Cline bot fan-out, headless Cline review, EXA plus Firecrawl verification for Cline usage, or a parallel Cline route that does not replace the existing GLM ClinePass skill.
-version: 1.2.1
+version: 1.2.2
 license: Apache 2.0
 compatibility: cline, openclaw, macos
 parent_skill: orama-system
@@ -145,8 +145,12 @@ bin/orama-system/skills/clinepass-deepseek-flash/scripts/run_clinepass_deepseek_
   "Review this sanitized summary. Return risks, tests, and next steps."
 ```
 
-The wrapper pins `cline-pass/deepseek-v4.1-flash-1017`, high reasoning, JSON output,
-and the current Cline auto-approval flag shape.
+The wrapper pins provider `cline-pass`, `cline-pass/deepseek-v4.1-flash-1017`,
+`--thinking medium`, JSON output, and the current Cline auto-approval flag
+shape. Every one of those is fail-closed: it inspects `cline --help` and refuses
+to dispatch when the CLI cannot pin the provider, the reasoning level, or tool
+approval, because an unpinned provider is how this route silently landed on a
+provider that rejects the ClinePass slug.
 
 ## Verify Current CLI Shape
 
