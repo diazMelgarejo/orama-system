@@ -9,6 +9,7 @@
       },
       "models": {
         "google/gemini-3.8-flash": {},
+        "google/gemini-3.1-pro-preview": {},
         "bigmodel/glm-5.3-flash": {}
       },
       "thinkingDefault": "off",

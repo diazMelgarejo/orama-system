@@ -930,12 +930,14 @@ def test_cline_pass_default_is_deepseek_v4_1_flash_1017_at_a_documented_effort()
 
 
 def test_cline_pass_default_needs_no_approval() -> None:
+    """Verify cline pass default needs no approval."""
     plan = plan_launch(default_launch("cline_pass"))
     assert plan.requires_human_approval is False
     assert plan.effective == plan.requested
 
 
 def test_cline_pass_muse_spark_1_3_contributor_is_allowed_ungated() -> None:
+    """Verify cline pass muse spark 1 3 contributor is allowed ungated."""
     spec = LaunchSpec(
         path="cline_pass",
         launch_id="muse-spark-1.3-contributor",
@@ -970,6 +972,7 @@ def test_cline_pass_glm_5_3_flash_refuses_efforts_other_than_medium(effort: str)
 
 
 def test_cline_pass_refuses_a_listed_id_at_an_unlisted_effort() -> None:
+    """Verify cline pass refuses a listed id at an unlisted effort."""
     spec = LaunchSpec(
         path="cline_pass",
         launch_id="deepseek-v4.1-flash-1017",
@@ -988,6 +991,7 @@ def test_cline_pass_refuses_an_unlisted_model() -> None:
 
 
 def test_cline_pass_refuses_fast_mode_without_escalation() -> None:
+    """Verify cline pass refuses fast mode without escalation."""
     spec = LaunchSpec(
         path="cline_pass",
         launch_id="muse-spark-1.3-contributor",
@@ -996,3 +1000,18 @@ def test_cline_pass_refuses_fast_mode_without_escalation() -> None:
     )
     with pytest.raises(ModelGovernanceError):
         assert_launch_allowed(spec)
+
+
+@pytest.mark.parametrize("operation", [plan_launch, assert_launch_allowed])
+@pytest.mark.parametrize("policy", [
+    {},
+    {"default": {"launch_id": "test", "effort": "medium"}, "allowed_ungated": [{}]},
+    {"default": {"launch_id": "test", "effort": "medium"}, "gated": {"test": {}}},
+    {"default": {"launch_id": "test", "effort": "medium"}, "planning": {"launch_id": "test", "effort": "medium"}},
+    {"default": {"launch_id": "test", "effort": "medium"}, "controller": {"launch_id": "test", "effort": "medium"}},
+])
+def test_cline_pass_malformed_or_gated_policy_fails_closed(operation, policy) -> None:
+    """Verify cline pass malformed or gated policy fails closed."""
+    spec = LaunchSpec(path="cline_pass", launch_id="test", effort="medium")
+    with pytest.raises(ModelGovernanceError, match="config unavailable"):
+        operation(spec, config={"cline_pass": policy})
