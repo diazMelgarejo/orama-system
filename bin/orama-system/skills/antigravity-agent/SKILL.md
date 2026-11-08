@@ -154,23 +154,27 @@ reduces but does not eliminate risk, untrusted workspaces force tool prompts,
 write/shell tools default to `ask_user`, and non-interactive plan workflows can
 otherwise fall through into YOLO-style execution after approval-mode transitions.
 
-## Models (from `agy models`, verified 2026-07-11)
+## Models (from `agy models`, re-verified 2026-11-03)
 
-```
-Gemini 3.5 Flash (Medium)
-Gemini 3.5 Flash (High)
-Gemini 3.5 Flash (Low)
-Gemini 3.1 Pro (Low)
-Gemini 3.1 Pro (High)
-Claude Sonnet 4.6 (Thinking)
-Claude Opus 4.6 (Thinking)
-GPT-OSS 120B (Medium)
+```text
+gemini-3.8-flash-high    Gemini 3.8 Flash (High)
+gemini-3.8-flash-medium  Gemini 3.8 Flash (Medium)
+gemini-3.8-flash-low     Gemini 3.8 Flash (Low)
+claude-sonnet-4-6        Claude Sonnet 4.6 (Thinking)
+claude-opus-4-6-thinking Claude Opus 4.6 (Thinking)
+gpt-oss-120b-medium      GPT-OSS 120B (Medium)
 ```
 
-**User-stated preference order (2026-07-11):** 1) `Claude Sonnet 4.6
-(Thinking)`, 2) `Gemini 3.1 Pro (Low)`, 3) whatever other agent templates
-use as their fallback defaults. Pass the exact string from `agy models`
-via `--model`:
+The 2026-07-11 listing's `Gemini 3.5 Flash (Medium/High/Low)` and
+`Gemini 3.1 Pro (Low/High)` entries are no longer offered: Gemini 3.1 Pro has
+been dropped from the lineup and the Flash tier is now Gemini 3.8 Flash.
+`--model` still takes the exact display string from `agy models`.
+
+**Preference order:** 1) `Claude Sonnet 4.6 (Thinking)`, 2) `Gemini 3.8 Flash
+(Medium)` — repointed 2026-11-03 from the retired `Gemini 3.1 Pro (Low)` slot,
+matching the repo-wide Gemini 3.8 Flash · medium default — 3) whatever other
+agent templates use as their fallback defaults. Pass the exact string from
+`agy models` via `--model`:
 
 ```bash
 agy --model "Claude Sonnet 4.6 (Thinking)" -p "..."
@@ -178,7 +182,7 @@ agy --model "Claude Sonnet 4.6 (Thinking)" -p "..."
 
 **No automatic fallback chain** — same limitation class as every other
 fan-out CLI in this stack (kimi, cursor-agent): if the primary model errors,
-retry the same prompt with `--model "Gemini 3.1 Pro (Low)"` explicitly. Do
+retry the same prompt with `--model "Gemini 3.8 Flash (Medium)"` explicitly. Do
 not assume `agy` retries across models on its own.
 
 ## Output Shape (verified live, v1.1.1)
