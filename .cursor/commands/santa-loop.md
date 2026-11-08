@@ -116,15 +116,16 @@ rm -f "$PROMPT_FILE"
 ```
 
 **Claude Agent fallback** (only if neither `codex` nor `gemini` is installed)
-Launch a second Claude Agent (subagent_type: `code-reviewer`, model: `opus`). Log a warning that
-both reviewers share the same model family — true model diversity was not achieved but context
-isolation is still enforced.
+Launch a second Claude Agent (subagent_type: `code-reviewer`, model: `opus`) for additional
+feedback. It cannot satisfy the distinct-model shipping gate; obtain a review from a different model
+before shipping.
 
 In all cases, the reviewer must return the same structured JSON verdict as Reviewer A.
 
 ### Step 4: Verdict Gate
 
-- **Both PASS** → **NICE** — proceed to Step 6 (push)
+- **Both PASS with distinct models** → **NICE** — proceed to Step 6 (push)
+- **Both PASS with the Claude-only fallback** → stop and obtain a distinct-model review; do not push.
 - **Either FAIL** → **NAUGHTY** — merge all critical issues from both reviewers, deduplicate,
   proceed to Step 5
 
@@ -156,7 +157,7 @@ Do NOT push.
 
 ### Step 6: Push (NICE path)
 
-When both reviewers return PASS:
+When both reviewers use distinct models and return PASS:
 
 ```bash
 git push -u origin HEAD
@@ -186,10 +187,8 @@ Result:     [PUSHED / ESCALATED TO USER]
 ## Notes
 
 - Reviewer A (Claude Opus) always runs — guarantees at least one strong reviewer regardless of tooling.
-- Model diversity is the goal for Reviewer B. GPT-5.4 or Gemini 2.5 Pro gives true independence —
-  different training data, different biases, different blind spots. The Claude-only fallback still
-  provides value via context isolation but loses model diversity.
-- Strongest available models are used: Opus for Reviewer A, GPT-5.4 or Gemini 2.5 Pro for Reviewer B.
+- Reviewer B uses GPT-5.4 or Gemini 3.8 Flash for model diversity. The Claude-only fallback
+  provides context isolation but does not satisfy the shipping gate.
 - External reviewers run with `--sandbox read-only` (Codex) to prevent repo mutation during review.
 - Fresh reviewers each round prevents anchoring bias from prior findings.
 - The rubric is the most important input. Tighten it if reviewers rubber-stamp or flag subjective

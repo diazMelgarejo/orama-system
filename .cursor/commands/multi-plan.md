@@ -73,9 +73,11 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 **IMPORTANT**:
 
 - Must specify `timeout: 600000`, otherwise default 30 seconds will cause premature timeout
-- If still incomplete after 10 minutes, continue polling with `TaskOutput`, **NEVER kill the process**
-- If waiting is skipped due to timeout, **MUST call `AskUserQuestion` to ask user whether to
-  continue waiting or kill task**
+- If still incomplete after 10 minutes, continue polling with `TaskOutput` unless the user
+  explicitly approves cancellation.
+- If waiting is skipped due to timeout, **MUST call `AskUserQuestion` to ask whether to continue
+  waiting or cancel**. Terminate only with user approval. If cancellation leaves output unavailable,
+  record the gap and continue planning with the available results.
 
 ---
 

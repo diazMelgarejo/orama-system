@@ -396,8 +396,8 @@ Key review protocol invariants:
 - **Phase 4 (Verification):** Run authoritative tools directly (real linters, tests, and mutants).
 - **Phase 5 (Closure):** Execute the **Mandatory Bot Inline Thread Reply Protocol** (`@{BotName} we fixed
   this in commit {SHA}` or evidence-backed decline).
-- **Phase 6 (Cross-Repo Synchronization):** Mirror structural and byte-identical fixes across sibling
-  repos before pushing.
+- **Phase 6 (Cross-Repo Synchronization):** When findings affect files covered by an established
+  sync policy, apply applicable fixes to sibling repos before pushing.
 
 Pairs with [`skills/code-review/SKILL.md`](skills/code-review/SKILL.md) and
 [`references/integration-synthesis-and-verification.md`](references/integration-synthesis-and-verification.md).

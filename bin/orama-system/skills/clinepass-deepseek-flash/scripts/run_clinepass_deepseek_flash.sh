@@ -73,6 +73,11 @@ fi
 
 help_text="$(cline --help 2>&1 || true)"
 
+if ! grep -q -- '--provider' <<<"$help_text"; then
+  echo "cline does not advertise --provider; refusing unbound dispatch" >&2
+  exit 1
+fi
+
 auto_args=()
 if grep -q -- '--auto-approve-all' <<<"$help_text"; then
   auto_args=(--auto-approve-all)
@@ -87,7 +92,7 @@ elif grep -q -- '--thinking' <<<"$help_text"; then
   reasoning_args=(--thinking high)
 fi
 
-cmd=(cline --json)
+cmd=(cline --json --provider cline-pass)
 [[ -z "$mode" ]] || cmd+=("$mode")
 cmd+=("${auto_args[@]}")
 cmd+=("${reasoning_args[@]}")
