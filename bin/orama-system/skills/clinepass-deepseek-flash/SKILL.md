@@ -1,13 +1,14 @@
 ---
 name: clinepass-deepseek-flash
 description: Run Cline CLI as a non-interactive fan-out worker using the authenticated ClinePass DeepSeek V4.1 Flash (1017) route with high reasoning. Use when the user asks for free/low-cost ClinePass-only bot dispatch, Cline bot fan-out, headless Cline review, EXA plus Firecrawl verification for Cline usage, or a parallel Cline route that does not replace the existing GLM ClinePass skill.
-version: 1.2.0
+version: 1.2.1
 license: Apache 2.0
 compatibility: cline, openclaw, macos
 parent_skill: orama-system
 origin: ClinePass DeepSeek fan-out skill, repointed 2026-11-03 to the successor
-  model id; 1.2.0 reconciles the schema with the installed CLI 3.0.65
-  (binary location, provider id, `--thinking` levels)
+  model id; 1.2.x reconciles the schema with the installed CLI 3.0.74
+  (binary location, provider id, `--thinking` levels, `-p` = `--plan`,
+  auto-approve default, resume limits)
 triggers:
   - clinepass deepseek fan-out
   - cline headless dispatch
@@ -59,7 +60,7 @@ operator identity.
 
 - Model: `cline-pass/deepseek-v4.1-flash-1017`
 - Reasoning: `medium` by default, `high` for deep review.
-- Flag: `--thinking <level>`. The installed CLI `3.0.65` documents
+- Flag: `--thinking <level>`. The installed CLI `3.0.74` documents
   `none|low|medium|high|xhigh`, and a bare `--thinking` means `medium`. It has
   no `--reasoning-effort` flag; the wrapper script adapts between the two
   names. Earlier versions of this card claimed the DeepSeek V4.1 Flash family
@@ -90,14 +91,14 @@ the `v24.14.1` tree (a Node-version move, not a subfolder reclassification):
 
 ```text
 $HOME/.nvm/versions/node/v24.14.1/bin/cline
-  -> ../lib/node_modules/cline/bin/cline      (Cline CLI 3.0.65)
+  -> ../lib/node_modules/cline/bin/cline      (Cline CLI 3.0.74)
 ```
 
 Resolve the binary instead of assuming `cline` resolves:
 
 ```bash
 CLINE="$(command -v cline || echo "$HOME/.nvm/versions/node/v24.14.1/bin/cline")"
-[ -x "$CLINE" ] && "$CLINE" --version   # expect 3.0.65
+[ -x "$CLINE" ] && "$CLINE" --version   # expect 3.0.74
 ```
 
 Two provider ids look alike in `~/.cline/data/settings/providers.json`:
@@ -108,15 +109,29 @@ explicitly with `-P cline-pass`; a model slug alone does not prove the route.
 `cline config` requires a TTY (`error: interactive mode requires a TTY`), so
 read `providers.json` instead when running headless.
 
-Resuming an existing session uses the operator-supplied session id:
+Verified headless dispatch (live-probed 2026-11-03 on CLI `3.0.74`, returned
+the expected text): pass the prompt as a positional argument, and turn
+auto-approval off because it defaults to **true**.
 
 ```bash
-"$CLINE" --id <session-id> \
-  -P cline-pass \
-  -m cline-pass/deepseek-v4.1-flash-1017 \
-  --thinking medium -p --json -c "$PWD" -t 300 \
-  "Continue: <scoped task>"
+"$CLINE" -P cline-pass -m cline-pass/deepseek-v4.1-flash-1017 \
+  --thinking medium --auto-approve false --json -t 120 \
+  "Reply with exactly: PROBE-OK. Do not use tools."
 ```
+
+`-p` is `--plan` (no mutations), not a "print" flag. Avoid `-y/--yolo`
+unless the workspace is sandboxed.
+
+Resuming with `--id <session-id>` is **not** headless-capable in `3.0.74`:
+
+- `--id` + `--json` fails with `JSON output mode requires a prompt argument or
+  piped stdin (interactive mode is unsupported)` even when a positional prompt
+  or a redirected stdin is supplied.
+- `--id` without `--json` fails with `interactive mode requires a TTY
+  (stdin/stdout must both be terminals)`.
+
+Drive `--id` resumes from a real terminal (or the TUI, `-i`); do not promise a
+headless resume.
 
 ## Quick Start
 
@@ -340,9 +355,10 @@ Source facts verified this way:
   field; the installed CLI auth error used provider id `clinepass`, while the
   current settings key is `cline-pass`.
 - Local Cline `2.14.0` used `--auto-approve-all` and
-  `--reasoning-effort high`. Local `3.0.65` uses `--auto-approve <boolean>`
-  and `--thinking none|low|medium|high|xhigh`, and has no
-  `--reasoning-effort` flag; official docs may still show the older pair.
+  `--reasoning-effort high`. Local `3.0.74` uses `--auto-approve <boolean>`
+  (default **true**), `--thinking none|low|medium|high|xhigh`, and `-p/--plan`;
+  it has no `--reasoning-effort` flag. Official docs may still show the older
+  pair.
 
 When docs and local help disagree, prefer local help for execution and keep the
 doc variant as a compatibility note.
