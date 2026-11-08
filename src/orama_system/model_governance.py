@@ -109,6 +109,10 @@ def plan_launch(
     controller = policy.get("controller") or {}
     is_planning_model = spec.launch_id == planning.get("launch_id")
     gated = (policy.get("gated") or {}).get(spec.launch_id)
+    if provider == "cline_pass":
+        # This provider has a closed allowlist; proof cannot authorize gated rows.
+        assert_launch_allowed(spec, config=cfg)
+        gated = None
     if is_planning_model or spec.launch_id == controller.get("launch_id"):
         row = planning if is_planning_model else controller
         allowed_efforts = row.get("allowed_efforts", [row.get("effort")])
@@ -386,8 +390,17 @@ def _assert_cline_pass_launch(spec: LaunchSpec, *, cfg: Mapping[str, Any]) -> No
     table, and a proof never lifts this path. That keeps ``gated: {}`` in config
     an enforced fact rather than a comment.
     """
-    policy = cfg["cline_pass"]
-    default = policy["default"]
+    policy = cfg.get("cline_pass")
+    if not isinstance(policy, Mapping):
+        raise ModelGovernanceError("invalid ClinePass policy")
+    default = policy.get("default")
+    rows = policy.get("allowed_ungated") or []
+    if not isinstance(default, Mapping) or not default.get("launch_id"):
+        raise ModelGovernanceError("invalid ClinePass default")
+    if not isinstance(rows, list) or any(
+        not isinstance(row, Mapping) or not row.get("launch_id") for row in rows
+    ):
+        raise ModelGovernanceError("invalid ClinePass allowed model")
     if spec.launch_id == str(default["launch_id"]):
         _assert_gated_params(spec, default)
         return
@@ -395,7 +408,7 @@ def _assert_cline_pass_launch(spec: LaunchSpec, *, cfg: Mapping[str, Any]) -> No
         raise ModelGovernanceError(
             "fast mode requires an operator request plus a real escalation token"
         )
-    for row in policy.get("allowed_ungated") or []:
+    for row in rows:
         if str(row["launch_id"]) == spec.launch_id:
             _assert_gated_params(spec, row)
             return

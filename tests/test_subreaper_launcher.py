@@ -46,3 +46,30 @@ def test_launcher_preserves_signal_exit_code() -> None:
         timeout=15,
     )
     assert result.returncode == 128 + signal.SIGTERM
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="Linux subreapers are unavailable")
+def test_launcher_bounds_wait_for_running_adopted_child(tmp_path: Path) -> None:
+    """A long-lived orphan cannot prevent the command's status being returned."""
+    import os
+    import signal
+
+    pidfile = tmp_path / "child.pid"
+    command = (
+        "import subprocess,sys; "
+        "p=subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'], "
+        "stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL); "
+        "open(sys.argv[1], 'w').write(str(p.pid)); sys.exit(7)"
+    )
+    try:
+        result = subprocess.run(
+            [sys.executable, str(LAUNCHER), sys.executable, "-c", command, str(pidfile)],
+            timeout=10,
+        )
+        assert result.returncode == 7
+    finally:
+        if pidfile.exists():
+            try:
+                os.kill(int(pidfile.read_text()), signal.SIGTERM)
+            except ProcessLookupError:
+                pass
