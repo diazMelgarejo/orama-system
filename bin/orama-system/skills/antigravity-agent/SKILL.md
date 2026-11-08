@@ -23,6 +23,20 @@ allowed-tools: bash, file-operations
 
 # Antigravity Agent Skill
 
+## Purpose
+
+Give the main orchestration session one documented way to borrow a second
+agentic coding CLI (`agy`) for light, parallel, or mechanical work that does
+not need the orchestrator's own context: rename sweeps, test scaffolding,
+format/lint fixes, doc generation. The skill exists so fan-out uses a
+runtime-discovered binary and an operator-approved scope instead of a
+persistent OpenClaw agent — see § Why direct CLI, not OpenClaw for that
+history.
+
+Not the tool for architecture decisions, CIDF write discipline, cross-repo
+synthesis, security/policy review, or final crystallisation. Those stay with
+the main session (see the division-of-labour table below).
+
 ## Disambiguation
 
 **`agy`** is Google's Antigravity CLI — a standalone agentic coding tool in
@@ -54,7 +68,7 @@ there was no code path that could ever authenticate or run inference
 through OpenClaw for this provider. The `google-antigravity` provider
 stanza and its `agy-*` alias entries were deleted from `openclaw.json` as
 part of this correction; `gemini-coder` (the OpenClaw agent) now points at
-the real `google` plugin (`google/gemini-3.1-pro-preview`) as a secondary
+the real `google` plugin (`google/gemini-3.8-flash`) as a secondary
 path, but is not the primary way to reach Antigravity.
 
 **The actual Antigravity CLI (`agy`) needs none of that.** It can be discovered
@@ -264,6 +278,52 @@ slots into the same "mechanical fan-out" tier, not the orchestrator tier):**
 | `agy update` | Update CLI |
 | `agy changelog` | Show changelog and release notes |
 | `agy help` | Show help for subcommands |
+
+## Boundaries
+
+### Always Do
+
+- Discover the CLI at runtime (`command -v agy`) and print the resolved path;
+  never hardcode a host-local binary path.
+- Smoke-test before real work (`agy -p "reply with exactly: agy-ok"`) and treat
+  an auth prompt or error as stop-and-surface, not as a reason to guess.
+- Start with a sandboxed `--mode plan` pass and keep `--add-dir` limited to the
+  repository directories the approved task actually needs.
+- Record the approval (plan, diff scope, log directory) before switching to
+  `--mode accept-edits`, and preserve each task's stdout/stderr log before
+  parsing it.
+- Collect every parallel task's exit status independently, and treat `exit 0`
+  with empty stdout as a per-task failure until its log proves otherwise.
+- Pass the exact model string from `agy models` via `--model`, and retry a
+  failed prompt explicitly rather than assuming an automatic fallback chain.
+- Fail closed when any reusable log parent (`.agent`, `.agent/logs`, the
+  per-CLI log directory) is a symlink.
+
+### Ask First
+
+- Any switch from the plan/read-only pass to `--mode accept-edits`; the operator
+  approves the exact task, scope, and target repository.
+- Any `--add-dir` path outside the current repository, especially broad
+  home-directory access.
+- Any background fan-out that edits files rather than returning text.
+- Any use of `--dangerously-skip-permissions`, unless the command, workspace,
+  prompt, and approval record are already controlled (trusted/CI only).
+- Resolving the five Open Items at the end of this card — surface them to the
+  user instead of deciding silently.
+
+### Never Do
+
+- Never present `agy` as a working OpenClaw provider, or resurrect a
+  `google-antigravity` stanza or `agy-*` model aliases; that path had no code
+  path that could authenticate or run inference and was deleted.
+- Never register `agy` in `bin/orama-system/config/agent_registry.json`, which
+  is reserved for SOUL-file-backed gateway agents.
+- Never put secrets, credentials, or unsanitised prompts into prompts, logs, or
+  committed guidance.
+- Never describe a model, option, or output-shape claim as verified when it was
+  only observed on trivial no-tool prompts.
+- Never let one successful `wait` mask another task's failure or empty-success
+  case, and never exit 0 on a fan-out that had a failed task.
 
 ## References
 

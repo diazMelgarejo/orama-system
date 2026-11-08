@@ -8,15 +8,7 @@
         "primary": "ollama/qwen3.5:9b-mlx"
       },
       "models": {
-        "google/gemini-2.5-flash-FALL": {},
-        "google/gemini-2.5-flash-lite-FALL": {},
-        "google/gemini-2.5-pro": {},
-        "google/gemini-3-flash-preview": {},
-        "google/gemini-3-flash-preview-FALL": {},
-        "google/gemini-3.1-flash-lite-preview": {},
-        "google/gemini-3.1-flash-lite-preview-FALL": {},
-        "google/gemini-3.1-pro-preview": {},
-        "google/gemini-3.1-pro-preview-FALL": {},
+        "google/gemini-3.8-flash": {},
         "bigmodel/glm-5.3-flash": {}
       },
       "thinkingDefault": "off",
@@ -29,13 +21,8 @@
         "id": "main",
         "model": {
           "fallbacks": [
-            "google/gemini-3.1-pro-preview",
-            "google/gemini-3-flash-preview",
-            "google/gemini-3.1-flash-lite-preview",
-            "google/gemini-3.1-flash-lite-preview-FALL",
-            "google/gemini-2.5-pro",
-            "google/gemini-2.5-flash-FALL",
-            "google/gemini-2.5-flash-lite-FALL"
+            "google/gemini-3.8-flash",
+            "bigmodel/glm-5.3-flash"
           ],
           "primary": "lmstudio-mac/qwen3.5-9b-mlx"
         },

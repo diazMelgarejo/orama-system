@@ -4,9 +4,13 @@ description: Run a full multi-model development workflow with research, planning
 
 # Workflow - Multi-Model Collaborative Development
 
-Multi-model collaborative development workflow (Research → Ideation → Plan → Execute → Optimize → Review), with intelligent routing: Frontend → Gemini, Backend → Codex.
+Multi-model collaborative development workflow (Research → Ideation → Plan → Execute → Optimize →
+Review), with intelligent routing: Frontend → Gemini, Backend → Codex.
 
-> **Prerequisite:** Requires the external `ccg-workflow` runtime, which is **not** part of the base ECC install. Initialize it with `npx ccg-workflow` to provision `~/.claude/bin/codeagent-wrapper` and the `~/.claude/.ccg/prompts/*` role files this command depends on. Without that runtime, this command will not run correctly.
+> **Prerequisite:** Requires the external `ccg-workflow` runtime, which is **not** part of the base
+> ECC install. Initialize it with `npx ccg-workflow` to provision `~/.claude/bin/codeagent-wrapper`
+> and the `~/.claude/.ccg/prompts/*` role files this command depends on. Without that runtime, this
+> command will not run correctly.
 
 Structured development workflow with quality gates, MCP services, and multi-model collaboration.
 
@@ -25,9 +29,12 @@ Structured development workflow with quality gates, MCP services, and multi-mode
 
 ## Your Role
 
-You are the **Orchestrator**, coordinating a multi-model collaborative system (Research → Ideation → Plan → Execute → Optimize → Review). Communicate concisely and professionally for experienced developers.
+You are the **Orchestrator**, coordinating a multi-model collaborative system (Research → Ideation →
+Plan → Execute → Optimize → Review). Communicate concisely and professionally for experienced
+developers.
 
 **Collaborative Models**:
+
 - **ace-tool MCP** (optional) – Code retrieval + Prompt enhancement
 - **Codex** – Backend logic, algorithms, debugging (**Backend authority, trustworthy**)
 - **Gemini** – Frontend UI/UX, visual design (**Frontend expert, backend opinions for reference only**)
@@ -39,7 +46,7 @@ You are the **Orchestrator**, coordinating a multi-model collaborative system (R
 
 **Call syntax** (parallel: `run_in_background: true`, sequential: `false`):
 
-```
+```text
 # New session call
 Bash({
   command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--backend <codex|gemini> {{GEMINI_MODEL_FLAG}}- \"$PWD\" <<'EOF'
@@ -72,7 +79,9 @@ EOF",
 ```
 
 **Model Parameter Notes**:
-- `{{GEMINI_MODEL_FLAG}}`: When using `--backend gemini`, replace with `--gemini-model gemini-3-pro-preview` (note trailing space); use empty string for codex
+
+- `{{GEMINI_MODEL_FLAG}}`: When using `--backend gemini`, replace with `--gemini-model
+  gemini-3.8-flash` (note trailing space); use empty string for codex
 
 **Role Prompts**:
 
@@ -82,20 +91,24 @@ EOF",
 | Planning | `~/.claude/.ccg/prompts/codex/architect.md` | `~/.claude/.ccg/prompts/gemini/architect.md` |
 | Review | `~/.claude/.ccg/prompts/codex/reviewer.md` | `~/.claude/.ccg/prompts/gemini/reviewer.md` |
 
-**Session Reuse**: Each call returns `SESSION_ID: xxx`, use `resume xxx` subcommand for subsequent phases (note: `resume`, not `--resume`).
+**Session Reuse**: Each call returns `SESSION_ID: xxx`, use `resume xxx` subcommand for subsequent
+phases (note: `resume`, not `--resume`).
 
-**Parallel Calls**: Use `run_in_background: true` to start, wait for results with `TaskOutput`. **Must wait for all models to return before proceeding to next phase**.
+**Parallel Calls**: Use `run_in_background: true` to start, wait for results with `TaskOutput`.
+**Must wait for all models to return before proceeding to next phase**.
 
 **Wait for Background Tasks** (use max timeout 600000ms = 10 minutes):
 
-```
+```text
 TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 ```
 
 **IMPORTANT**:
+
 - Must specify `timeout: 600000`, otherwise default 30 seconds will cause premature timeout.
 - If still incomplete after 10 minutes, continue polling with `TaskOutput`, **NEVER kill the process**.
-- If waiting is skipped due to timeout, **MUST call `AskUserQuestion` to ask user whether to continue waiting or kill task. Never kill directly.**
+- If waiting is skipped due to timeout, **MUST call `AskUserQuestion` to ask user whether to
+  continue waiting or kill task. Never kill directly.**
 
 ---
 
@@ -109,7 +122,10 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 
 ## When to Use External Orchestration
 
-Use external tmux/worktree orchestration when the work must be split across parallel workers that need isolated git state, independent terminals, or separate build/test execution. Use in-process subagents for lightweight analysis, planning, or review where the main session remains the only writer.
+Use external tmux/worktree orchestration when the work must be split across parallel workers that
+need isolated git state, independent terminals, or separate build/test execution. Use in-process
+subagents for lightweight analysis, planning, or review where the main session remains the only
+writer.
 
 ```bash
 node scripts/orchestrate-worktrees.js .claude/plan/workflow-e2e-test.json --execute
@@ -125,8 +141,12 @@ node scripts/orchestrate-worktrees.js .claude/plan/workflow-e2e-test.json --exec
 
 `[Mode: Research]` - Understand requirements and gather context:
 
-1. **Prompt Enhancement** (if ace-tool MCP available): Call `mcp__ace-tool__enhance_prompt`, **replace original $ARGUMENTS with enhanced result for all subsequent Codex/Gemini calls**. If unavailable, use `$ARGUMENTS` as-is.
-2. **Context Retrieval** (if ace-tool MCP available): Call `mcp__ace-tool__search_context`. If unavailable, use built-in tools: `Glob` for file discovery, `Grep` for symbol search, `Read` for context gathering, `Task` (Explore agent) for deeper exploration.
+1. **Prompt Enhancement** (if ace-tool MCP available): Call `mcp__ace-tool__enhance_prompt`,
+  **replace original $ARGUMENTS with enhanced result for all subsequent Codex/Gemini calls**. If
+  unavailable, use `$ARGUMENTS` as-is.
+2. **Context Retrieval** (if ace-tool MCP available): Call `mcp__ace-tool__search_context`. If
+  unavailable, use built-in tools: `Glob` for file discovery, `Grep` for symbol search, `Read` for
+  context gathering, `Task` (Explore agent) for deeper exploration.
 3. **Requirement Completeness Score** (0-10):
    - Goal clarity (0-3), Expected outcome (0-3), Scope boundaries (0-2), Constraints (0-2)
    - ≥7: Continue | <7: Stop, ask clarifying questions
@@ -136,6 +156,7 @@ node scripts/orchestrate-worktrees.js .claude/plan/workflow-e2e-test.json --exec
 `[Mode: Ideation]` - Multi-model parallel analysis:
 
 **Parallel Calls** (`run_in_background: true`):
+
 - Codex: Use analyzer prompt, output technical feasibility, solutions, risks
 - Gemini: Use analyzer prompt, output UI feasibility, solutions, UX evaluation
 
@@ -150,6 +171,7 @@ Synthesize both analyses, output solution comparison (at least 2 options), wait 
 `[Mode: Plan]` - Multi-model collaborative planning:
 
 **Parallel Calls** (resume session with `resume <SESSION_ID>`):
+
 - Codex: Use architect prompt + `resume $CODEX_SESSION`, output backend architecture
 - Gemini: Use architect prompt + `resume $GEMINI_SESSION`, output frontend architecture
 
@@ -157,7 +179,8 @@ Wait for results with `TaskOutput`.
 
 **Follow the `IMPORTANT` instructions in `Multi-Model Call Specification` above**
 
-**Claude Synthesis**: Adopt Codex backend plan + Gemini frontend plan, save to `.claude/plan/task-name.md` after user approval.
+**Claude Synthesis**: Adopt Codex backend plan + Gemini frontend plan, save to
+`.claude/plan/task-name.md` after user approval.
 
 ### Phase 4: Implementation
 
@@ -172,6 +195,7 @@ Wait for results with `TaskOutput`.
 `[Mode: Optimize]` - Multi-model parallel review:
 
 **Parallel Calls**:
+
 - Codex: Use reviewer prompt, focus on security, performance, error handling
 - Gemini: Use reviewer prompt, focus on accessibility, design consistency
 

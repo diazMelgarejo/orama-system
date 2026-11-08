@@ -137,9 +137,9 @@ Run the kanban app.
 | `cline-pass` | `cline-pass/glm-5.3-flash` | WorkOS OAuth | Same token as `cline`; `lastUsedProvider` |
 | `anthropic` | `claude-fable-5` | API key | — |
 | `openrouter` | `minimax/minimax-m2.5:free` | API key | — |
-| `openai-compatible` | `google/gemini-3.1-pro-preview` | API key | Custom baseUrl |
+| `openai-compatible` | `google/gemini-3.8-flash` | API key | Custom baseUrl |
 | `openai-codex` | — | OAuth | — |
-| `gemini` | `gemini-3.5-flash` | API key | — |
+| `gemini` | `gemini-3.8-flash` | API key | — |
 | `sapaicore` | `gpt-5.5` | — | SAP AI Core |
 
 ## Upstream Endpoint

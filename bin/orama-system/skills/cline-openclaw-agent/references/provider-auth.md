@@ -12,9 +12,9 @@ object), `model`, `timeout`, and `reasoning`.
 | `cline-pass` | `cline-pass/glm-5.3-flash` | WorkOS OAuth | Cline Credits | `api.cline.bot` |
 | `anthropic` | `claude-fable-5` | API key (`sk-ant-...`) | Anthropic | `api.anthropic.com` |
 | `openrouter` | `minimax/minimax-m2.5:free` | API key (`sk-or-v1-...`) | OpenRouter | `openrouter.ai` |
-| `openai-compatible` | `google/gemini-3.1-pro-preview` | API key | Google AI | `generativelanguage.googleapis.com` |
+| `openai-compatible` | `google/gemini-3.8-flash` | API key | Google AI | `generativelanguage.googleapis.com` |
 | `openai-codex` | — | OAuth | OpenAI | `api.openai.com` |
-| `gemini` | `gemini-3.5-flash` | API key | Google AI | `generativelanguage.googleapis.com` |
+| `gemini` | `gemini-3.8-flash` | API key | Google AI | `generativelanguage.googleapis.com` |
 | `sapaicore` | `gpt-5.5` | SAP AI Core | SAP | — |
 
 ## `cline` vs `cline-pass`
