@@ -1,13 +1,38 @@
 ---
 name: clinepass-deepseek-flash
-description: Run Cline CLI as a non-interactive fan-out worker using the authenticated ClinePass DeepSeek V4 Flash route with high reasoning. Use when the user asks for free/low-cost ClinePass-only bot dispatch, Cline bot fan-out, headless Cline review, EXA plus Firecrawl verification for Cline usage, or a parallel Cline route that does not replace the existing GLM ClinePass skill.
+description: Run Cline CLI as a non-interactive fan-out worker using the authenticated ClinePass DeepSeek V4.1 Flash (1017) route with high reasoning. Use when the user asks for free/low-cost ClinePass-only bot dispatch, Cline bot fan-out, headless Cline review, EXA plus Firecrawl verification for Cline usage, or a parallel Cline route that does not replace the existing GLM ClinePass skill.
+version: 1.1.0
+license: Apache 2.0
+compatibility: cline, openclaw, macos
+parent_skill: orama-system
+origin: ClinePass DeepSeek fan-out skill, repointed 2026-11-03 to the successor model id
+triggers:
+  - clinepass deepseek fan-out
+  - cline headless dispatch
+  - cline bot fan-out
+  - headless cline review
+  - clinepass route
+allowed-tools: bash, file-operations
 ---
 
 # ClinePass DeepSeek Flash
 
 Use this skill to dispatch Cline as a headless worker on the operator-approved
-ClinePass DeepSeek V4 Flash route. This is a parallel route to the GLM ClinePass
-skill, not a replacement.
+ClinePass DeepSeek V4.1 Flash (1017) route. This is a parallel route to the GLM
+ClinePass skill, not a replacement.
+
+## Purpose
+
+Dispatch Cline as a headless worker on the operator-approved ClinePass
+DeepSeek V4.1 Flash (1017) route for constrained, low-cost fan-out work:
+review summaries, plan drafts, mechanical implementation passes, and
+independent second opinions.
+
+## When to Use
+
+- Free/low-cost ClinePass-only bot dispatch is requested.
+- A parallel reviewer or implementer is needed beside the main session.
+- EXA plus Firecrawl verification of Cline usage claims is required.
 
 ## Disambiguation
 
@@ -30,8 +55,12 @@ operator identity.
 
 ## Contract
 
-- Model: `cline-pass/deepseek-v4-flash`
+- Model: `cline-pass/deepseek-v4.1-flash-1017`
 - Reasoning: `high`
+- History: repointed 2026-11-03 from the retired `cline-pass/deepseek-v4-flash`
+  (Cline retired it alongside GLM-5.2, Kimi K2.6, and Kimi K2.7 Code). Cline
+  documents off/low/high/max for the DeepSeek V4.1 Flash family — no `medium`
+  — so `high` remains a documented level for this id.
 - Access policy: ClinePass-only. Do not silently fall back to GLM, Pro, Kimi,
   OpenRouter, direct Cline API, or any provider key path.
 - Auth: rely on the already-authenticated Cline CLI/ClinePass account. Do not
@@ -56,7 +85,7 @@ bin/orama-system/skills/clinepass-deepseek-flash/scripts/run_clinepass_deepseek_
   "Review this sanitized summary. Return risks, tests, and next steps."
 ```
 
-The wrapper pins `cline-pass/deepseek-v4-flash`, high reasoning, JSON output,
+The wrapper pins `cline-pass/deepseek-v4.1-flash-1017`, high reasoning, JSON output,
 and the current Cline auto-approval flag shape.
 
 ## Verify Current CLI Shape
@@ -71,7 +100,11 @@ cline auth --help
 
 **Historical** — shape verified on Cline CLI `2.14.0`, an older version
 than the one currently installed (see the v3.0.49 findings below). Kept
-for reference only; do not use this shape against a current install:
+for reference only; do not use this shape against a current install.
+Retirement note (2026-11-03): the model id shown in this block
+(`cline-pass/deepseek-v4-flash`) has since been retired by Cline — the
+live pin is `cline-pass/deepseek-v4.1-flash-1017`. Only the flag shape
+below is historical reference material:
 
 ```bash
 cline \
@@ -94,7 +127,7 @@ cline \
   --json \
   --auto-approve true \
   --thinking high \
-  -m cline-pass/deepseek-v4-flash \
+  -m cline-pass/deepseek-v4.1-flash-1017 \
   -c /private/tmp \
   -t 180 \
   "Reply with exactly: CLINE_DEEPSEEK_FLASH_READY"
@@ -122,7 +155,7 @@ documented equivalent" block above is the correct one on this version
 With the CLI-shape bugs fixed, the wrapper script now reaches real
 model dispatch. In the tested configuration (Cline CLI v3.0.49), this
 currently fails with
-`cline-pass/deepseek-v4-flash is not a valid model ID`
+`cline-pass/deepseek-v4.1-flash-1017 is not a valid model ID`
 (`provider: openrouter`) — exactly the pre-existing "Observed failure
 mode" documented below: ClinePass isn't authenticated as the active
 route yet, so Cline falls back to another provider that doesn't
@@ -133,7 +166,7 @@ not a new bug.
 
 Before real work, run a harmless smoke prompt. If the JSON output reports a
 provider other than ClinePass or returns "not a valid model ID" for
-`cline-pass/deepseek-v4-flash`, stop and fix Cline auth/config first.
+`cline-pass/deepseek-v4.1-flash-1017`, stop and fix Cline auth/config first.
 
 ```bash
 bin/orama-system/skills/clinepass-deepseek-flash/scripts/run_clinepass_deepseek_flash.sh \
@@ -152,16 +185,18 @@ Configure auth explicitly through Cline's supported flow:
 
 ```bash
 cline auth --help
-cline auth --provider clinepass --apikey "$CLINE_API_KEY" --modelid cline-pass/deepseek-v4-flash
+cline auth --provider clinepass --apikey "$CLINE_API_KEY" --modelid cline-pass/deepseek-v4.1-flash-1017
 ```
 
 Exact formats:
 
 - Cline CLI provider id for this installed auth flow: `clinepass`
-- ClinePass model id: `cline-pass/deepseek-v4-flash`
-- Direct DeepSeek provider model id, not this route: `deepseek-v4-flash`
+- ClinePass model id: `cline-pass/deepseek-v4.1-flash-1017`
+- Direct DeepSeek provider ids are out of scope here: this skill only
+  dispatches through the ClinePass route.
 - Third-party wrapper formats may prefix again, for example
-  `clinepass/cline-pass/deepseek-v4-flash`; do not use that in native Cline CLI.
+  `clinepass/cline-pass/deepseek-v4.1-flash-1017`; do not use that in native
+  Cline CLI.
 
 Use the API key from Cline's own dashboard/local secret surface. Keep it in an
 environment variable or ignored local config; never paste it into prompts,
@@ -192,7 +227,7 @@ cline \
   --json \
   --auto-approve-all \
   --reasoning-effort high \
-  -m cline-pass/deepseek-v4-flash \
+  -m cline-pass/deepseek-v4.1-flash-1017 \
   -c /private/tmp \
   -t 300 \
   "Review this sanitized summary. Do not access files. Return risks and tests."
@@ -206,7 +241,7 @@ cline \
   --json \
   --auto-approve-all \
   --reasoning-effort high \
-  -m cline-pass/deepseek-v4-flash \
+  -m cline-pass/deepseek-v4.1-flash-1017 \
   -c /private/tmp \
   -t 300 \
   "Create a concise implementation plan from this sanitized summary."
@@ -221,7 +256,7 @@ cline \
   --json \
   --auto-approve-all \
   --reasoning-effort high \
-  -m cline-pass/deepseek-v4-flash \
+  -m cline-pass/deepseek-v4.1-flash-1017 \
   -c "$PWD" \
   -t 900 \
   "Implement the requested scoped change. Preserve unrelated local changes."
@@ -269,7 +304,7 @@ doc variant as a compatibility note.
 Check liveness without dumping prompts or logs:
 
 ```bash
-pgrep -af 'cline|cline-pass|deepseek-v4-flash'
+pgrep -af 'cline|cline-pass|deepseek-v4.1-flash'
 ps -p <pid> -o pid,ppid,stat,lstart,etime,command
 ```
 
@@ -277,6 +312,23 @@ For JSON output, parse only final non-partial `say` text. Do not assume every
 line is a final answer.
 
 ## Boundaries
+
+This route is a worker lane; the main session owns repository state.
+
+### Always Do
+
+- Pin `cline-pass/deepseek-v4.1-flash-1017` and verify the active task route
+  is ClinePass before dispatch.
+- Default the workspace to `/private/tmp` for read-only or sensitive fan-out.
+- Rely on the already-authenticated Cline CLI/ClinePass account.
+
+### Ask First
+
+- Adding repository access beyond `/private/tmp`.
+- Changing the provider, model id, or reasoning effort.
+- Running any new auth flow or handling API keys.
+
+### Never Do
 
 - Do not replace the GLM ClinePass skill.
 - Do not install new providers or call direct Cline API unless explicitly asked.

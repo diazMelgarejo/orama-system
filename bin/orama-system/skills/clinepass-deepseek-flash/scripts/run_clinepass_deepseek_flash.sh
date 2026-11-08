@@ -6,7 +6,7 @@ usage() {
 Usage: run_clinepass_deepseek_flash.sh [--cwd PATH] [--timeout SECONDS] [--plan|--act] PROMPT
 
 Dispatch Cline non-interactively with:
-  model:     cline-pass/deepseek-v4-flash
+  model:     cline-pass/deepseek-v4.1-flash-1017
   reasoning: high
   output:    JSON lines
 
@@ -91,7 +91,7 @@ cmd=(cline --json)
 [[ -z "$mode" ]] || cmd+=("$mode")
 cmd+=("${auto_args[@]}")
 cmd+=("${reasoning_args[@]}")
-cmd+=(-m cline-pass/deepseek-v4-flash -c "$cwd" -t "$timeout")
+cmd+=(-m cline-pass/deepseek-v4.1-flash-1017 -c "$cwd" -t "$timeout")
 cmd+=("$*")
 
 exec "${cmd[@]}"
