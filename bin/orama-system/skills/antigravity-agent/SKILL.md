@@ -68,9 +68,8 @@ there was no code path that could ever authenticate or run inference
 through OpenClaw for this provider. The `google-antigravity` provider
 stanza and its `agy-*` alias entries were deleted from `openclaw.json` as
 part of this correction; `gemini-coder` (the OpenClaw agent) now points at
-the real `google` plugin as a secondary path, but is not the primary way to
-reach Antigravity. Its model is host-specific and may differ from
-`google/gemini-3.8-flash`; inspect the host configuration before relying on it.
+the real `google` plugin as a secondary path, not the primary Antigravity route.
+Its model is host-specific; inspect the host configuration before relying on it.
 
 **The actual Antigravity CLI (`agy`) needs none of that.** It can be discovered
 from `PATH` and, when the current machine is authenticated, answers headless
