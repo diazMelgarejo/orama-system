@@ -12,7 +12,7 @@ execute; the shell subprocesses never launch. The fix: call external models
 directly from the orchestrator's Bash. The orchestrator (Opus-4.8 or Sonnet-4.6)
 handles synthesis; external calls go via `subprocess`, `curl`, or direct CLI tools.
 
-```
+```text
 WRONG  (all lanes die when Anthropic cap hits):
   orchestrator:agent() → Claude:agent("use codex") → codex exec …
   orchestrator:agent() → Claude:agent("use ollama") → ollama http call …
@@ -41,7 +41,8 @@ Key structural decisions from that run:
 
 ## Adopted features from the frugal `.mjs` workflow
 
-The `.mjs` at `docs/superpowers/plans/2026-06-19-codex-openclaw-agent-frugal-multimodel-workflow.mjs`
+The `.mjs` at
+`docs/superpowers/plans/2026-06-19-codex-openclaw-agent-frugal-multimodel-workflow.mjs`
 had several design features worth keeping:
 
 - **Probe-first gate**: check that a lane is reachable before sending the full prompt
