@@ -348,6 +348,29 @@ def test_frontend_unset_tls_port_reaches_prerequisite_using_default(tmp_path: Pa
     assert not log.exists()
 
 
+def test_frontend_without_admin_directive_validates_and_starts(tmp_path: Path) -> None:
+    """Closed TLS/admin ports allow no-admin configuration startup without host probes."""
+    bindir, log = _fake_caddy(tmp_path)
+    cfg = _config_dir(tmp_path)
+    (cfg / "Caddyfile").write_text(
+        "https://:8443 {\n\treverse_proxy localhost:8002\n}\n", encoding="utf-8"
+    )
+    result = _bash(
+        tmp_path,
+        'probe_count=0; _port_listening() { '
+        'probe_count=$((probe_count + 1)); echo "CHECK $1"; [ "$probe_count" -gt 2 ]; }; '
+        '_ensure_peer_tls_frontend',
+        {"ORAMA_LAN_CONTROL_PLANE_DIR": str(cfg), "PEER_PORTAL_TLS_PORT": "9443"},
+        path=f"{bindir}:/usr/bin:/bin",
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines()[:2] == ["CHECK 9443", "CHECK 2019"]
+    calls = log.read_text(encoding="utf-8").splitlines()
+    assert calls[0].startswith("validate --config")
+    assert calls[1].startswith("start --config")
+    assert "listening on port 9443" in result.stdout
+
+
 def test_frontend_starts_validated_config_and_reports_listening(tmp_path) -> None:
     """A valid config is validated, started with the Caddyfile adapter, and success needs a real listener."""
     bindir, log = _fake_caddy(tmp_path)

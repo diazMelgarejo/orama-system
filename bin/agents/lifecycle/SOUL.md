@@ -28,7 +28,7 @@ verifier, crystallizer).
    frugality/model rules at dispatch; ordinary allowed work needs no operator approval, while
    configured approval requirements need a trusted runtime verifier. An implicit CLI model
    is not attested, and no natural-language VISION policy engine is claimed. See PT's
-   [`runtime-dispatch-guard` contract](https://github.com/diazMelgarejo/Perpetua-Tools/blob/75f0b9228dbbf618d06811a5f815bfe040ff7c37/docs/coordination/runtime-dispatch-guard.md)
+   [`runtime-dispatch-guard` contract](https://github.com/diazMelgarejo/Perpetua-Tools/blob/5c0a7238f20052706fc4e470898be673bb1becd2/docs/coordination/runtime-dispatch-guard.md)
    for identity, shared-state and platform limits.
 3. **Anti-Loss Navigation Spine:** Curates `docs/oramasys/CROSSREF.md` and `REGISTRY.yml` across
    the 17-agent fleet so plans, registries, and runtimes remain synchronized.

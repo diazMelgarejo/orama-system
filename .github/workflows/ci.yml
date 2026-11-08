@@ -93,6 +93,8 @@ jobs:
         python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
 
       - name: Resolve PT dispatch test producer
         id: pt-dispatch
@@ -125,13 +127,16 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install ".[test]" build
 
-      - name: Verify PT runtime imports and policy
+      - name: Verify PT guarded dispatch with a mocked effect
         run: |
-          PYTHONPATH="$PERPETUATOOLSROOT:$PERPETUATOOLSROOT/src" python -c 'from orchestrator.dispatch_guard import DispatchGuard, DispatchRequest; DispatchGuard("unused")._authorize(DispatchRequest("ci", "echo", "echo", "check", "check"))'
+          PT_STATE_DIR="$(mktemp -d)" python -c 'import asyncio; from unittest.mock import AsyncMock, patch; from scripts import spawn_agents; effect = AsyncMock(return_value={"ok": True});
+          with patch.object(spawn_agents, "_dispatch_unchecked", effect):
+              assert asyncio.run(spawn_agents.dispatch("ci", "smoke test", scope="ci")) == {"ok": True}
+              assert effect.await_count == 1'
       
       - name: Run pytest
         run: |
-          pytest -q tests/
+          python scripts/ci/run_with_subreaper.py pytest -q tests/
           # -p no:asyncio, not a version bump: the real CI failure (confirmed
           # via the actual failed job's log, run 33576369375/100081247152)
           # is pytest-asyncio 0.23.3's pytest_collectstart hook crashing with
@@ -145,7 +150,7 @@ jobs:
           # so disabling the plugin for just this invocation has no
           # functional cost and avoids touching the global pytest-asyncio
           # pin other tests may depend on.
-          pytest -q bin/orama-system/cidf/tests/ -p no:asyncio
+          python scripts/ci/run_with_subreaper.py pytest -q bin/orama-system/cidf/tests/ -p no:asyncio
       
       - name: Run package install test
         run: |

@@ -47,6 +47,30 @@ Use this map to load only the context needed for the current task.
 
 ## Development Guidelines
 
+### Test setup
+
+Dispatch tests require the Perpetua-Tools commit pinned in `.github/pt-dispatch-test-ref`.
+From the repository root, provision a new local checkout and export its path before pytest:
+
+```bash
+set -eu
+ref=$(<.github/pt-dispatch-test-ref)
+[[ "$ref" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid PT test SHA" >&2; exit 1; }
+test ! -e .ci/pt-dispatch || { echo "Checkout already exists; inspect it first" >&2; exit 1; }
+mkdir -p .ci
+git clone --no-checkout https://github.com/diazMelgarejo/Perpetua-Tools.git .ci/pt-dispatch
+git -C .ci/pt-dispatch fetch origin "$ref"
+git -C .ci/pt-dispatch checkout --detach "$ref"
+test "$(git -C .ci/pt-dispatch rev-parse HEAD)" = "$ref"
+export PERPETUATOOLSROOT="$PWD/.ci/pt-dispatch"
+python -m pytest tests/
+```
+
+The checkout is local test data; do not commit it or local absolute paths. For an existing
+checkout, inspect its changes and compare `git -C .ci/pt-dispatch rev-parse HEAD` with the pin
+before using it. Do not replace a dirty or different checkout automatically. Rerun the export in
+each new shell. Pytest itself does not download the producer.
+
 ### Before Submitting
 
 - [ ] Keep `.env`, `.env.local`, and `.paths` untracked; update examples instead
