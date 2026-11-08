@@ -8,18 +8,16 @@
 # ever storing a literal secret in a tracked file.
 #
 # Profiles (this directory):
-#   google-gemini-3.1-pro   — real Gemini 3.1 Pro via Google's OpenAI-
-#                             compatible shim (note the required /openai
-#                             path segment on the base URL). Corrected
-#                             2026-08-05: the config this replaced had
-#                             model="bigmodel/glm-5.3-flash" pointed at this
-#                             same Google endpoint — a mislabeled
-#                             leftover, not a real BigModel route. This
-#                             key's Gemini project currently has 0 free-
-#                             tier quota (verified via a live 429) — the
-#                             endpoint/model are now correct, but real
-#                             requests will still fail until the project
-#                             has quota/billing configured.
+#   google-gemini-3.8-flash — Gemini 3.8 Flash (medium reasoning) via
+#                             Google's OpenAI-compatible shim (note the
+#                             required /openai path segment on the base
+#                             URL). 2026-11-03: repointed from the stale
+#                             gemini-3.1-pro-preview@high profile. The
+#                             2026-08-05 note still stands: this key's
+#                             Gemini project had 0 free-tier quota
+#                             (verified via a live 429) — real requests
+#                             fail until the project has quota/billing
+#                             configured.
 #   wandb-deepseek-v4-flash — DeepSeek-V4-Flash via wanDB.ai (Weave
 #                             tracing), per the cline-wandb skill.
 #   bigmodel-glm52          — the REAL BigModel glm-5.3-flash endpoint, per
@@ -88,7 +86,7 @@ fi
 
 # Each profile knows which .env.<loader> file(s) it needs sourced first.
 case "$PROFILE" in
-  google-gemini-3.1-pro)
+  google-gemini-3.8-flash)
     ENV_FILES=("$HOME/.openclaw/.env.cline-google-gemini")
     REQUIRED_VARS=("CLINE_GOOGLE_GEMINI_API_KEY")
     ;;
