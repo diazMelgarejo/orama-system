@@ -50,6 +50,15 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 PT_RUNTIME_DISPATCH_GUARD = 1
 _CURSOR_RACE_RETRY_DUE_FILE = REPO_ROOT / ".logs" / "cursor_standalone_retry_due.txt"
 
+try:
+    from perpetua_tools.model_governance import ModelGovernanceError
+except ImportError:
+    try:
+        from orama_system.model_governance import ModelGovernanceError
+    except ImportError:
+        class ModelGovernanceError(RuntimeError):  # type: ignore[no-redef]
+            """Raised when a launch violates model governance or config cannot be evaluated."""
+
 for _stream in (sys.stdout, sys.stderr):
     if hasattr(_stream, "reconfigure"):
         try:
@@ -885,8 +894,8 @@ def main():
         except (ValueError, PermissionError) as exc:
             parser.exit(2, f"dispatch refused: {exc}\n")
         except RuntimeError as exc:
-            from perpetua_tools.model_governance import ModelGovernanceError
-            if isinstance(exc, (duplicate_dispatch_error_type(), ModelGovernanceError)):
+            gov_err = ModelGovernanceError
+            if isinstance(exc, (duplicate_dispatch_error_type(), gov_err)) or exc.__class__.__name__ == "ModelGovernanceError":
                 parser.exit(2, f"dispatch refused: {exc}\n")
             raise
         if args.json_output:

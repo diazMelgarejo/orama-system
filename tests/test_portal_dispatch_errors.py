@@ -79,3 +79,75 @@ def test_duplicate_dispatch_returns_conflict_with_foreign_cached_package(monkeyp
         response = client.post("/api/spawn-agent", json={"agent": "codex", "task": "test"})
     assert response.status_code == 409
     assert "already claimed" in response.json()["detail"]
+
+
+def test_duplicate_requests_through_real_guard_return_conflict(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Duplicate requests through the real guard return 409 Conflict."""
+    pt_root = os.environ.get("PERPETUATOOLSROOT", "")
+    if not pt_root or not (Path(pt_root) / "orchestrator" / "dispatch_guard.py").is_file():
+        candidate = Path(__file__).resolve().parents[2] / "perplexity-api" / "Perpetua-Tools"
+        if (candidate / "orchestrator" / "dispatch_guard.py").is_file():
+            pt_root = str(candidate)
+        else:
+            pytest.skip("PT dispatch authority is not configured")
+
+    monkeypatch.setenv("PERPETUATOOLSROOT", pt_root)
+    monkeypatch.setenv("PT_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("ORAMA_INSECURE_DEV", "1")
+
+    path = Path(__file__).resolve().parents[1] / "scripts" / "spawn_agents.py"
+    spec = importlib.util.spec_from_file_location("spawn_agents", path)
+    assert spec is not None and spec.loader is not None
+    spawn_agents = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, "spawn_agents", spawn_agents)
+    spec.loader.exec_module(spawn_agents)
+
+    async def mock_effect(task: str) -> dict:
+        return {"ok": True, "output": "done", "elapsed": 0.01}
+
+    monkeypatch.setattr(spawn_agents, "_dispatch_codex", mock_effect)
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        first = client.post("/api/spawn-agent", json={"agent": "codex", "task": "real guard test"})
+        assert first.status_code == 200
+        assert first.json()["ok"] is True
+
+        second = client.post("/api/spawn-agent", json={"agent": "codex", "task": "real guard test"})
+        assert second.status_code == 409
+        assert "already claimed" in second.json()["detail"]
+
+
+@pytest.mark.parametrize(
+    ("reason", "expected_status"),
+    [
+        ("config unavailable for model-governance", 503),
+        ("banned launch id: test-banned", 403),
+        ("unlisted role model: test-unlisted", 403),
+        ("unsupported task kind", 422),
+        ("unknown harness path for provider", 422),
+        ("unexpected governance failure", 500),
+    ],
+)
+def test_portal_maps_governance_refusals_semantically(
+    monkeypatch: pytest.MonkeyPatch, reason: str, expected_status: int
+) -> None:
+    """Governance refusals map to semantic HTTP status codes."""
+    path = Path(__file__).resolve().parents[1] / "scripts" / "spawn_agents.py"
+    spec = importlib.util.spec_from_file_location("spawn_agents", path)
+    assert spec is not None and spec.loader is not None
+    spawn_agents = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, "spawn_agents", spawn_agents)
+    spec.loader.exec_module(spawn_agents)
+
+    gov_error_cls = getattr(spawn_agents, "ModelGovernanceError", RuntimeError)
+
+    async def dispatch(agent: str, task: str, model: str | None = None) -> dict:
+        raise gov_error_cls(reason)
+
+    monkeypatch.setattr(spawn_agents, "dispatch", dispatch)
+    monkeypatch.setenv("ORAMA_INSECURE_DEV", "1")
+    with TestClient(app, raise_server_exceptions=False) as client:
+        response = client.post("/api/spawn-agent", json={"agent": "codex", "task": "test"})
+    assert response.status_code == expected_status
+    if expected_status != 500:
+        assert reason in response.json()["detail"]

@@ -14,6 +14,7 @@
 | [Collaborative reasoning safety](collaborative-reasoning-safety.md) | Multi-agent safety (M3) |
 | [Communication guidelines](communication-guidelines.md) | Writing guidelines (M6) |
 | [Multi-agent collaboration protocol](multi-agent-collaboration-protocol.md) | Pre-session sync, scope claims, version-bump registry, conflict recovery |
+| [Post-review micro-remediation](post-review-micro-remediation.md) | 7-phase review remediation: finding matrix, single-edit rule, bot inline replies, cross-repo sync |
 | [OmniRoute](../skills/omniroute/SKILL.md) | Canonical optional sidecar: probe, parallel dispatch, operations/configuration, and disable/re-enable runbook |
 | [Periscope ECC](../skills/periscope-ecc/SKILL.md) | Optional idempotent Agents/Claude skill mirror verification; v2 satellite |
 | [Hermes harness](../skills/hermes-harness/SKILL.md) | Hermes onboarding, ECC cross-harness import rules, provider setup, and bounded partner prompts |

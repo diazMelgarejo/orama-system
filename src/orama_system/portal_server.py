@@ -3735,6 +3735,17 @@ async def api_spawn_agent(req: SpawnAgentRequest):
         duplicate_type = getattr(_mod, "duplicate_dispatch_error_type", None)
         if duplicate_type is not None and isinstance(exc, duplicate_type()):
             raise HTTPException(status_code=409, detail=str(exc)) from exc
+        ModelGovernanceError = getattr(_mod, "ModelGovernanceError", None)
+        if (ModelGovernanceError is not None and isinstance(exc, ModelGovernanceError)) or exc.__class__.__name__ == "ModelGovernanceError":
+            reason = str(exc)
+            reason_lower = reason.lower()
+            if "config unavailable" in reason_lower:
+                raise HTTPException(status_code=503, detail=reason) from exc
+            if "banned launch id" in reason_lower or "unlisted" in reason_lower:
+                raise HTTPException(status_code=403, detail=reason) from exc
+            if "unsupported" in reason_lower or "unknown harness path" in reason_lower:
+                raise HTTPException(status_code=422, detail=reason) from exc
+            raise HTTPException(status_code=500, detail=reason) from exc
         raise
     return result
 

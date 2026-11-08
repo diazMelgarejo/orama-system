@@ -34,3 +34,15 @@ def test_launcher_preserves_command_exit_code(exit_code: int) -> None:
         [sys.executable, str(LAUNCHER), sys.executable, "-c", f"raise SystemExit({exit_code})"], timeout=15
     )
     assert result.returncode == exit_code
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="Linux subreapers are unavailable")
+def test_launcher_preserves_signal_exit_code() -> None:
+    """A command terminated by a signal exits with 128 + signum."""
+    import signal
+
+    result = subprocess.run(
+        [sys.executable, str(LAUNCHER), sys.executable, "-c", "import os, signal; os.kill(os.getpid(), signal.SIGTERM)"],
+        timeout=15,
+    )
+    assert result.returncode == 128 + signal.SIGTERM

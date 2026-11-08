@@ -121,6 +121,54 @@ def test_cli_passes_explicit_scope(monkeypatch: pytest.MonkeyPatch) -> None:
     assert seen == ["reconciled"]
 
 
+@pytest.mark.parametrize(
+    "refusal_exc",
+    [
+        ValueError("model override is not supported by this worker"),
+        PermissionError("banned launch id"),
+        RuntimeError("dispatch claim conflict"),
+    ],
+)
+def test_cli_refusal_exits_with_code_2(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], refusal_exc: Exception
+) -> None:
+    """CLI refusal handling exits with code 2 and prints refusal message."""
+    module = _load_spawn()
+
+    async def dispatch(agent: str, task: str, model: str | None = None, *, scope: str | None = None) -> dict:
+        raise refusal_exc
+
+    monkeypatch.setattr(module, "dispatch", dispatch)
+    if type(refusal_exc) is RuntimeError:
+        monkeypatch.setattr(module, "duplicate_dispatch_error_type", lambda: RuntimeError)
+    monkeypatch.setattr(sys, "argv", ["spawn_agents.py", "--task", "review"])
+    with pytest.raises(SystemExit) as exc:
+        module.main()
+    assert exc.value.code == 2
+    captured = capsys.readouterr()
+    assert "dispatch refused:" in captured.err
+    assert str(refusal_exc) in captured.err
+
+
+def test_cli_governance_refusal_exits_with_code_2(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Governance refusal from dispatch exits with code 2 and prints refusal message."""
+    module = _load_spawn()
+    gov_err_type = getattr(module, "ModelGovernanceError", RuntimeError)
+
+    async def dispatch(agent: str, task: str, model: str | None = None, *, scope: str | None = None) -> dict:
+        raise gov_err_type("banned launch id: test-banned")
+
+    monkeypatch.setattr(module, "dispatch", dispatch)
+    monkeypatch.setattr(sys, "argv", ["spawn_agents.py", "--task", "review"])
+    with pytest.raises(SystemExit) as exc:
+        module.main()
+    assert exc.value.code == 2
+    captured = capsys.readouterr()
+    assert "dispatch refused: banned launch id: test-banned" in captured.err
+
+
 def test_foreign_cached_orchestrator_cannot_replace_pt_guard(tmp_path: Path) -> None:
     """A cached package with the same name cannot intercept PT authorization."""
     pt_root = os.environ.get("PERPETUATOOLSROOT")

@@ -5,16 +5,31 @@ On other platforms, run the command directly without Linux-specific setup.
 """
 from __future__ import annotations
 
+import errno
+import logging
 import os
 import subprocess
 import sys
 import time
 
+logger = logging.getLogger("run_with_subreaper")
+if not logger.handlers:
+    _handler = logging.StreamHandler(sys.stderr)
+    _handler.setFormatter(logging.Formatter("%(message)s"))
+    logger.addHandler(_handler)
+    logger.setLevel(logging.INFO)
+
+
+def _exitcode_from_status(status: int) -> int:
+    """Convert wait status to exit code, preserving 128 + signum convention."""
+    code = os.waitstatus_to_exitcode(status)
+    return code if code >= 0 else 128 - code
+
 
 def main(argv: list[str]) -> int:
     """Run argv and return its exit code while reaping adopted Linux children."""
     if not argv:
-        print("usage: run_with_subreaper.py COMMAND [ARG ...]", file=sys.stderr)
+        logger.error("usage: run_with_subreaper.py COMMAND [ARG ...]")
         return 2
     if sys.platform != "linux":
         return subprocess.call(argv)
@@ -24,16 +39,29 @@ def main(argv: list[str]) -> int:
     libc = ctypes.CDLL(None, use_errno=True)
     if libc.prctl(36, 1, 0, 0, 0) != 0:  # PR_SET_CHILD_SUBREAPER
         error = ctypes.get_errno()
-        print(f"cannot enable child subreaper: {os.strerror(error)}", file=sys.stderr)
+        logger.error("cannot enable child subreaper: %s", os.strerror(error))
         return 1
     proc = subprocess.Popen(argv)
+    saved_exit_code: int | None = None
     while True:
-        pid, status = os.waitpid(-1, os.WNOHANG)
-        if pid == proc.pid:
-            proc.returncode = os.waitstatus_to_exitcode(status)
-            return proc.returncode if proc.returncode >= 0 else 128 - proc.returncode
-        if pid == 0:
-            time.sleep(0.01)
+        try:
+            if saved_exit_code is None:
+                pid, status = os.waitpid(-1, os.WNOHANG)
+                if pid == 0:
+                    time.sleep(0.01)
+                    continue
+                if pid == proc.pid:
+                    saved_exit_code = _exitcode_from_status(status)
+            else:
+                pid, status = os.waitpid(-1, 0)
+        except ChildProcessError:
+            break
+        except OSError as exc:
+            if exc.errno == errno.ECHILD:
+                break
+            raise
+
+    return saved_exit_code if saved_exit_code is not None else 1
 
 
 if __name__ == "__main__":
