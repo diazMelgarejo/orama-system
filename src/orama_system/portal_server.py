@@ -3723,7 +3723,19 @@ async def api_spawn_agent(req: SpawnAgentRequest):
         log.warning("[portal] affinity warning for spawn: %s", _aff_exc)
         # Non-fatal: let dispatch proceed; agent_launcher will hard-gate
 
-    result = await _mod.dispatch(req.agent, req.task, model=req.model or None)
+    try:
+        result = await _mod.dispatch(req.agent, req.task, model=req.model or None)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        # The authority may load under an isolated name when another
+        # orchestrator package is cached; ask dispatch for its actual type.
+        duplicate_type = getattr(_mod, "duplicate_dispatch_error_type", None)
+        if duplicate_type is not None and isinstance(exc, duplicate_type()):
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise
     return result
 
 

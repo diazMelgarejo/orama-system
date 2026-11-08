@@ -29,6 +29,9 @@ import argparse
 import asyncio
 import contextvars
 import datetime
+import hashlib
+import importlib
+import importlib.util
 import json
 import os
 import shutil
@@ -65,10 +68,54 @@ LMS_WIN_MODEL = os.getenv(
 
 OLLAMA_MAC_ENDPOINT = os.getenv("OLLAMA_MAC_ENDPOINT", "http://127.0.0.1:11434")
 MANAGER_MODEL = os.getenv("MANAGER_MODEL", "qwen3.5:9b-mlx")
+CURSOR_MODEL = "claude-4.6-sonnet-medium"
 
 # Windows GPU lock — one model at a time (CLAUDE.md §4 invariant)
 _WIN_GPU_LOCK = asyncio.Lock()
 _DISPATCH_SCOPE: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("spawn_dispatch_scope", default=None)
+
+
+def _pt_dispatch_authority() -> tuple[Any, Any, Any]:
+    """Load PT's authority without replacing a foreign cached orchestrator package."""
+    pt_root = os.environ.get("PERPETUATOOLSROOT", "").strip()
+    if pt_root:
+        root = Path(pt_root).resolve()
+        for path in (root, root / "src"):
+            if str(path) not in sys.path:
+                sys.path.insert(0, str(path))
+        package_dir = root / "orchestrator"
+        cached = sys.modules.get("orchestrator")
+        cached_guard = sys.modules.get("orchestrator.dispatch_guard")
+        package_file = getattr(cached, "__file__", None)
+        guard_file = getattr(cached_guard, "__file__", None)
+        collision = (cached is not None and (not package_file or Path(package_file).resolve() != package_dir / "__init__.py")) or (
+            cached_guard is not None and (not guard_file or Path(guard_file).resolve() != package_dir / "dispatch_guard.py")
+        )
+        if collision:
+            name = "_pt_dispatch_" + hashlib.sha256(str(root).encode()).hexdigest()[:16]
+            if name not in sys.modules:
+                spec = importlib.util.spec_from_file_location(name, package_dir / "__init__.py", submodule_search_locations=[str(package_dir)])
+                if spec is None or spec.loader is None:
+                    raise ImportError("PT dispatch authority is unavailable")
+                module = importlib.util.module_from_spec(spec)
+                sys.modules[name] = module
+                try:
+                    spec.loader.exec_module(module)
+                except BaseException:
+                    del sys.modules[name]
+                    raise
+            guard = importlib.import_module(f"{name}.dispatch_guard")
+            state = importlib.import_module(f"{name}.state_dir")
+            return guard.DispatchGuard, guard.DispatchRequest, state.resolve_default_state_dir
+    from orchestrator.dispatch_guard import DispatchGuard, DispatchRequest
+    from orchestrator.state_dir import resolve_default_state_dir
+    return DispatchGuard, DispatchRequest, resolve_default_state_dir
+
+
+def duplicate_dispatch_error_type() -> type[Exception]:
+    """Return the active PT guard's duplicate-claim exception type."""
+    guard, _, _ = _pt_dispatch_authority()
+    return importlib.import_module(guard.__module__).DuplicateDispatch
 
 
 def _is_event_loop_running() -> bool:
@@ -449,14 +496,14 @@ async def _dispatch_cursor(task: str) -> Dict[str, Any]:
     try:
         if cursor_bin.endswith(".ps1"):
             proc = await asyncio.create_subprocess_exec(
-                "powershell", "-ExecutionPolicy", "Bypass", "-File", cursor_bin, "--print", "--model", "claude-4.6-sonnet-medium", task,
+                "powershell", "-ExecutionPolicy", "Bypass", "-File", cursor_bin, "--print", "--model", CURSOR_MODEL, task,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
                 cwd=str(REPO_ROOT),
             )
         else:
             proc = await asyncio.create_subprocess_exec(
-                cursor_bin, "--print", "--model", "claude-4.6-sonnet-medium", task,
+                cursor_bin, "--print", "--model", CURSOR_MODEL, task,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
                 cwd=str(REPO_ROOT),
@@ -678,24 +725,22 @@ async def dispatch(agent_name: str, task: str, model: Optional[str] = None, *, s
     inferred from the prompt, environment or caller flags. PT must be installed
     or discoverable through PERPETUATOOLSROOT; missing authority fails closed.
     """
-    pt_root = os.environ.get("PERPETUATOOLSROOT", "").strip()
-    if pt_root:
-        for path in (Path(pt_root), Path(pt_root) / "src"):
-            if str(path) not in sys.path:
-                sys.path.insert(0, str(path))
-    from orchestrator.dispatch_guard import DispatchGuard, DispatchRequest
-    from orchestrator.gossip_bus import resolve_default_state_dir
+    DispatchGuard, DispatchRequest, resolve_default_state_dir = _pt_dispatch_authority()
 
     provider = agent_name.lower().strip()
-    if provider in {"codex", "gemini", "gemini-review", "cursor"} and model is not None:
-        raise ValueError("CLI model override is not supported by this worker")
+    if provider in {"codex", "gemini", "gemini-review", "cursor", "ollama-mac"} and model is not None:
+        raise ValueError("model override is not supported by this worker")
     effective_model = model
     if provider in {"lmstudio-mac", "lmstudio-win"} and not effective_model:
         effective_model = await _get_lmstudio_model(LMS_MAC_ENDPOINT if provider == "lmstudio-mac" else LMS_WIN_ENDPOINT)
     elif provider == "ollama-mac":
+        if not MANAGER_MODEL or not MANAGER_MODEL.strip():
+            raise ValueError("Ollama model configuration is empty")
         effective_model = MANAGER_MODEL
     elif provider == "hermes-lmstudio-win":
         effective_model = LMS_WIN_MODEL
+    elif provider == "cursor":
+        effective_model = CURSOR_MODEL
     effective_scope = scope or _DISPATCH_SCOPE.get() or str(REPO_ROOT)
     request = DispatchRequest(
         scope=effective_scope,
@@ -818,6 +863,7 @@ def main():
         help="Agent to dispatch (default: codex)",
     )
     parser.add_argument("--model", "-m", help="Optional model override for LM Studio agents")
+    parser.add_argument("--scope", help="Explicit scope for reconciled independent work")
     parser.add_argument("--status", "-s", action="store_true", help="Show agent availability and exit")
     parser.add_argument("--json", dest="json_output", action="store_true", help="Output result as JSON")
     args = parser.parse_args()
@@ -834,7 +880,15 @@ def main():
 
     async def _run():
         """Dispatch once and print the result in the requested format."""
-        result = await dispatch(args.agent, args.task, model=args.model)
+        try:
+            result = await dispatch(args.agent, args.task, model=args.model, scope=args.scope)
+        except (ValueError, PermissionError) as exc:
+            parser.exit(2, f"dispatch refused: {exc}\n")
+        except RuntimeError as exc:
+            from perpetua_tools.model_governance import ModelGovernanceError
+            if isinstance(exc, (duplicate_dispatch_error_type(), ModelGovernanceError)):
+                parser.exit(2, f"dispatch refused: {exc}\n")
+            raise
         if args.json_output:
             print(json.dumps(result, indent=2))
         else:
