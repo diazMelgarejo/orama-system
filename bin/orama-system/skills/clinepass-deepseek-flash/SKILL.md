@@ -1,11 +1,13 @@
 ---
 name: clinepass-deepseek-flash
 description: Run Cline CLI as a non-interactive fan-out worker using the authenticated ClinePass DeepSeek V4.1 Flash (1017) route with high reasoning. Use when the user asks for free/low-cost ClinePass-only bot dispatch, Cline bot fan-out, headless Cline review, EXA plus Firecrawl verification for Cline usage, or a parallel Cline route that does not replace the existing GLM ClinePass skill.
-version: 1.1.0
+version: 1.2.0
 license: Apache 2.0
 compatibility: cline, openclaw, macos
 parent_skill: orama-system
-origin: ClinePass DeepSeek fan-out skill, repointed 2026-11-03 to the successor model id
+origin: ClinePass DeepSeek fan-out skill, repointed 2026-11-03 to the successor
+  model id; 1.2.0 reconciles the schema with the installed CLI 3.0.65
+  (binary location, provider id, `--thinking` levels)
 triggers:
   - clinepass deepseek fan-out
   - cline headless dispatch
@@ -56,11 +58,18 @@ operator identity.
 ## Contract
 
 - Model: `cline-pass/deepseek-v4.1-flash-1017`
-- Reasoning: `high`
+- Reasoning: `medium` by default, `high` for deep review.
+- Flag: `--thinking <level>`. The installed CLI `3.0.65` documents
+  `none|low|medium|high|xhigh`, and a bare `--thinking` means `medium`. It has
+  no `--reasoning-effort` flag; the wrapper script adapts between the two
+  names. Earlier versions of this card claimed the DeepSeek V4.1 Flash family
+  had no `medium` — local help contradicts that, and local help wins for
+  execution.
+- Wrapper default: `scripts/run_clinepass_deepseek_flash.sh` still pins `high`
+  for its own conservative default. Invoke the CLI directly (see § Binary
+  Location) when the cheaper `medium` lane is wanted.
 - History: repointed 2026-11-03 from the retired `cline-pass/deepseek-v4-flash`
-  (Cline retired it alongside GLM-5.2, Kimi K2.6, and Kimi K2.7 Code). Cline
-  documents off/low/high/max for the DeepSeek V4.1 Flash family — no `medium`
-  — so `high` remains a documented level for this id.
+  (Cline retired it alongside GLM-5.2, Kimi K2.6, and Kimi K2.7 Code).
 - Access policy: ClinePass-only. Do not silently fall back to GLM, Pro, Kimi,
   OpenRouter, direct Cline API, or any provider key path.
 - Auth: rely on the already-authenticated Cline CLI/ClinePass account. Do not
@@ -72,6 +81,42 @@ operator identity.
   names, or workstation-specific paths into prompts or outputs.
 - Workspace: default to `/private/tmp` for read-only or sensitive fan-out. Add
   repository access only when the task needs file reads or edits.
+
+## Binary Location
+
+`cline` is not on `PATH` for a default shell here: `~/.nvm/alias/default` is
+`22.22.2`, and Cline is no longer installed in that Node tree. It lives under
+the `v24.14.1` tree (a Node-version move, not a subfolder reclassification):
+
+```text
+$HOME/.nvm/versions/node/v24.14.1/bin/cline
+  -> ../lib/node_modules/cline/bin/cline      (Cline CLI 3.0.65)
+```
+
+Resolve the binary instead of assuming `cline` resolves:
+
+```bash
+CLINE="$(command -v cline || echo "$HOME/.nvm/versions/node/v24.14.1/bin/cline")"
+[ -x "$CLINE" ] && "$CLINE" --version   # expect 3.0.65
+```
+
+Two provider ids look alike in `~/.cline/data/settings/providers.json`:
+`cline-pass` (live, model `cline-pass/deepseek-v4.1-flash-1017`) and
+`clinepass` (stale, retired `cline-pass/deepseek-v4-flash`). Pin the provider
+explicitly with `-P cline-pass`; a model slug alone does not prove the route.
+
+`cline config` requires a TTY (`error: interactive mode requires a TTY`), so
+read `providers.json` instead when running headless.
+
+Resuming an existing session uses the operator-supplied session id:
+
+```bash
+"$CLINE" --id <session-id> \
+  -P cline-pass \
+  -m cline-pass/deepseek-v4.1-flash-1017 \
+  --thinking medium -p --json -c "$PWD" -t 300 \
+  "Continue: <scoped task>"
+```
 
 ## Quick Start
 
@@ -289,12 +334,15 @@ Source facts verified this way:
 
 - Cline headless mode activates with `--json`, piped stdin, redirected stdout,
   and related automation flags.
-- ClinePass lists DeepSeek V4 Flash as `cline-pass/deepseek-v4-flash`.
+- ClinePass listed DeepSeek V4 Flash as `cline-pass/deepseek-v4-flash`; that id
+  is retired and the live route is `cline-pass/deepseek-v4.1-flash-1017`.
 - ClinePass API examples use the full `cline-pass/...` model slug in the model
-  field; the installed CLI auth error uses provider id `clinepass`.
-- Local Cline `2.14.0` uses `--auto-approve-all` and
-  `--reasoning-effort high`; current official docs may show
-  `--auto-approve true` and `--thinking high`.
+  field; the installed CLI auth error used provider id `clinepass`, while the
+  current settings key is `cline-pass`.
+- Local Cline `2.14.0` used `--auto-approve-all` and
+  `--reasoning-effort high`. Local `3.0.65` uses `--auto-approve <boolean>`
+  and `--thinking none|low|medium|high|xhigh`, and has no
+  `--reasoning-effort` flag; official docs may still show the older pair.
 
 When docs and local help disagree, prefer local help for execution and keep the
 doc variant as a compatibility note.
