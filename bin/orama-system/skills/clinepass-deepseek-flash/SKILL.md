@@ -1,7 +1,7 @@
 ---
 name: clinepass-deepseek-flash
 description: Run Cline CLI as a non-interactive fan-out worker using the authenticated ClinePass DeepSeek V4.1 Flash (1017) route with medium reasoning. Use when the user asks for free/low-cost ClinePass-only bot dispatch, Cline bot fan-out, headless Cline review, EXA plus Firecrawl verification for Cline usage, or a parallel Cline route that does not replace the existing GLM ClinePass skill.
-version: 1.1.0
+version: 1.1.1
 license: Apache 2.0
 compatibility: cline, openclaw, macos
 parent_skill: orama-system
@@ -56,11 +56,14 @@ operator identity.
 ## Contract
 
 - Model: `cline-pass/deepseek-v4.1-flash-1017`
-- Reasoning: `medium` (`--thinking medium` in CLI 3.0.65)
+- Reasoning: `medium` (`--thinking medium`)
 - History: repointed 2026-11-03 from the retired `cline-pass/deepseek-v4-flash`
   (Cline retired it alongside GLM-5.2, Kimi K2.6, and Kimi K2.7 Code). Cline
-  previously documented high effort. CLI 3.0.65 lists medium as a valid
-  `--thinking` level; CLI support alone does not establish model-side behavior.
+  previously documented high effort. The installed CLI help lists `medium` as a
+  valid `--thinking` level; CLI support alone does not establish model-side
+  behavior. Do not pin a single CLI version as the supported one here: the
+  wrapper reads capabilities from `cline --help`, so a newer patch release such
+  as 3.0.74 stays usable without a doc change.
 - Access policy: ClinePass-only. Do not silently fall back to GLM, Pro, Kimi,
   OpenRouter, direct Cline API, or any provider key path.
 - Auth: rely on the already-authenticated Cline CLI/ClinePass account. Do not
@@ -119,7 +122,8 @@ cline \
 If `cline --help` does not list `--auto-approve-all` (confirmed absent
 in v3.0.49 — not verified against any other version; check `cline
 --version` and `cline --help` directly before assuming this applies),
-use a supported invocation instead. For CLI 3.0.65, select the provider explicitly:
+use a supported invocation instead. On the installed CLI (verified against
+3.0.74), select the provider explicitly:
 
 ```bash
 cline \
