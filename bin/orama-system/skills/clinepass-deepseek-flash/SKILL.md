@@ -1,6 +1,6 @@
 ---
 name: clinepass-deepseek-flash
-description: Run Cline CLI as a non-interactive fan-out worker using the authenticated ClinePass DeepSeek V4.1 Flash (1017) route with high reasoning. Use when the user asks for free/low-cost ClinePass-only bot dispatch, Cline bot fan-out, headless Cline review, EXA plus Firecrawl verification for Cline usage, or a parallel Cline route that does not replace the existing GLM ClinePass skill.
+description: Run Cline CLI as a non-interactive fan-out worker using the authenticated ClinePass DeepSeek V4.1 Flash (1017) route with medium reasoning. Use when the user asks for free/low-cost ClinePass-only bot dispatch, Cline bot fan-out, headless Cline review, EXA plus Firecrawl verification for Cline usage, or a parallel Cline route that does not replace the existing GLM ClinePass skill.
 version: 1.1.0
 license: Apache 2.0
 compatibility: cline, openclaw, macos
@@ -56,11 +56,11 @@ operator identity.
 ## Contract
 
 - Model: `cline-pass/deepseek-v4.1-flash-1017`
-- Reasoning: `high`
+- Reasoning: `medium` (`--thinking medium` in CLI 3.0.65)
 - History: repointed 2026-11-03 from the retired `cline-pass/deepseek-v4-flash`
   (Cline retired it alongside GLM-5.2, Kimi K2.6, and Kimi K2.7 Code). Cline
-  documents off/low/high/max for the DeepSeek V4.1 Flash family — no `medium`
-  — so `high` remains a documented level for this id.
+  previously documented high effort. CLI 3.0.65 lists medium as a valid
+  `--thinking` level; CLI support alone does not establish model-side behavior.
 - Access policy: ClinePass-only. Do not silently fall back to GLM, Pro, Kimi,
   OpenRouter, direct Cline API, or any provider key path.
 - Auth: rely on the already-authenticated Cline CLI/ClinePass account. Do not
@@ -85,7 +85,7 @@ bin/orama-system/skills/clinepass-deepseek-flash/scripts/run_clinepass_deepseek_
   "Review this sanitized summary. Return risks, tests, and next steps."
 ```
 
-The wrapper pins `cline-pass/deepseek-v4.1-flash-1017`, high reasoning, JSON output,
+The wrapper pins provider `cline-pass`, `cline-pass/deepseek-v4.1-flash-1017`, medium reasoning, JSON output,
 and the current Cline auto-approval flag shape.
 
 ## Verify Current CLI Shape
@@ -95,7 +95,6 @@ Start with local help because Cline CLI flags drift faster than docs:
 ```bash
 cline --version
 cline --help
-cline auth --help
 ```
 
 **Historical** — shape verified on Cline CLI `2.14.0`, an older version
@@ -120,13 +119,14 @@ cline \
 If `cline --help` does not list `--auto-approve-all` (confirmed absent
 in v3.0.49 — not verified against any other version; check `cline
 --version` and `cline --help` directly before assuming this applies),
-use the current documented equivalent instead:
+use a supported invocation instead. For CLI 3.0.65, select the provider explicitly:
 
 ```bash
 cline \
   --json \
   --auto-approve true \
-  --thinking high \
+  -P cline-pass \
+  --thinking medium \
   -m cline-pass/deepseek-v4.1-flash-1017 \
   -c /private/tmp \
   -t 180 \
@@ -135,9 +135,8 @@ cline \
 
 Do not use both variants in the same command.
 
-**Verified 2026-08-05 against installed CLI v3.0.49.** The "current
-documented equivalent" block above is the correct one on this version
-— confirmed live, along with two things worth knowing:
+**Historical verification 2026-08-05 against CLI v3.0.49.** Two things
+worth knowing from that version:
 
 - There is no `task` subcommand. Earlier drafts of this skill and its
   bundled wrapper script invoked `cline task ...`; that fails with
@@ -152,15 +151,14 @@ documented equivalent" block above is the correct one on this version
   affect the examples above, but matters if you improvise a shorter
   test prompt by hand.
 
-With the CLI-shape bugs fixed, the wrapper script now reaches real
-model dispatch. In the tested configuration (Cline CLI v3.0.49), this
-currently fails with
+Historically, in the tested CLI v3.0.49 configuration, dispatch failed with
 `cline-pass/deepseek-v4.1-flash-1017 is not a valid model ID`
 (`provider: openrouter`) — exactly the pre-existing "Observed failure
 mode" documented below: ClinePass isn't authenticated as the active
-route yet, so Cline falls back to another provider that doesn't
+route then, so Cline fell back to another provider that did not
 recognize the ClinePass model slug. That's the known auth/config gap,
-not a new bug.
+not a new bug. The current wrapper binds the provider explicitly; this has not
+been verified with a live dispatch in the present review.
 
 ## Provider Auth Gate
 
@@ -181,23 +179,15 @@ still routing the request through a non-ClinePass provider, which rejects the
 ClinePass model slug. That is an auth/config problem, not a reason to switch
 models.
 
-Configure auth interactively through the locally installed Cline's supported
-flow. Inspect its help first, then enter credentials only at a non-echoing
-interactive prompt. Do not pass a key through `--apikey`, an argument, or a
-command substitution: those expose it to process inspection. If the installed
-version offers no safe interactive or documented stdin/environment mechanism,
-stop and consult its documentation rather than dispatching.
-
-```bash
-cline auth --help
-```
-
-Select provider `clinepass` and model `cline-pass/deepseek-v4.1-flash-1017`
-in that flow, then verify the active provider and model before dispatch.
+Use the existing authenticated `cline-pass` profile; do not reauthenticate or
+pass a key. The wrapper binds `-P cline-pass` and the pinned model on every
+invocation. If the profile is unavailable or authentication fails, stop and
+ask the operator to repair it through an approved interactive flow. Never pass
+keys in arguments or command substitutions.
 
 Exact formats:
 
-- Cline CLI provider id for this installed auth flow: `clinepass`
+- Cline CLI provider id for this route: `cline-pass` (not the legacy `clinepass`)
 - ClinePass model id: `cline-pass/deepseek-v4.1-flash-1017`
 - Direct DeepSeek provider ids are out of scope here: this skill only
   dispatches through the ClinePass route.
@@ -205,9 +195,7 @@ Exact formats:
   `clinepass/cline-pass/deepseek-v4.1-flash-1017`; do not use that in native
   Cline CLI.
 
-Use the API key from Cline's own dashboard/local secret surface. Keep it in an
-environment variable or ignored local config; never paste it into prompts,
-tracked files, command history that will be shared, or logs.
+Do not read, print, or pass API keys for this already-authenticated route.
 
 ## First-Class Fan-Out Pattern
 
@@ -287,11 +275,10 @@ Source facts verified this way:
   and related automation flags.
 - The formerly listed `cline-pass/deepseek-v4-flash` is retired; this route
   pins `cline-pass/deepseek-v4.1-flash-1017`.
-- ClinePass API examples use the full `cline-pass/...` model slug in the model
-  field; the installed CLI auth error uses provider id `clinepass`.
+- The full `cline-pass/...` model slug is distinct from provider id `cline-pass`.
 - Local Cline `2.14.0` uses `--auto-approve-all` and
   `--reasoning-effort high`; current official docs may show
-  `--auto-approve true` and `--thinking high`.
+  `--auto-approve true` and `--thinking medium`.
 
 When docs and local help disagree, prefer local help for execution and keep the
 doc variant as a compatibility note.

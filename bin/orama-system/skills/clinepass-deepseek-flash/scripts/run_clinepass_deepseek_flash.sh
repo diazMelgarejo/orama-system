@@ -7,11 +7,12 @@ Usage: run_clinepass_deepseek_flash.sh [--cwd PATH] [--timeout SECONDS] [--plan|
 
 Dispatch Cline non-interactively with:
   model:     cline-pass/deepseek-v4.1-flash-1017
-  reasoning: high
+  provider:  cline-pass
+  reasoning: medium
   output:    JSON lines
 
-The script adapts to Cline CLI flag drift between --auto-approve-all and
---auto-approve true, and between --reasoning-effort high and --thinking high.
+Set CLINE_BIN to an absolute executable path if cline is not on PATH. The
+installed CLI must support explicit provider selection and --thinking.
 
 Fixed 2026-08-05: earlier versions of this script invoked `cline task ...`.
 There is no `task` subcommand on the real CLI (verified against v3.0.49) --
@@ -66,12 +67,20 @@ done
 
 [[ $# -gt 0 ]] || { echo "missing prompt" >&2; usage >&2; exit 2; }
 
-if ! command -v cline >/dev/null 2>&1; then
+cline_bin="${CLINE_BIN:-cline}"
+if ! command -v "$cline_bin" >/dev/null 2>&1; then
   echo "cline CLI not found on PATH" >&2
   exit 127
 fi
 
-help_text="$(cline --help 2>&1 || true)"
+if ! help_text="$("$cline_bin" --help 2>&1)"; then
+  echo "cannot inspect cline CLI help" >&2
+  exit 1
+fi
+if ! grep -q -- '--provider' <<<"$help_text" || ! grep -q -- '--thinking' <<<"$help_text"; then
+  echo "cline CLI lacks explicit provider or thinking support" >&2
+  exit 1
+fi
 
 auto_args=()
 if grep -q -- '--auto-approve-all' <<<"$help_text"; then
@@ -80,18 +89,10 @@ elif grep -q -- '--auto-approve ' <<<"$help_text"; then
   auto_args=(--auto-approve true)
 fi
 
-reasoning_args=()
-if grep -q -- '--reasoning-effort' <<<"$help_text"; then
-  reasoning_args=(--reasoning-effort high)
-elif grep -q -- '--thinking' <<<"$help_text"; then
-  reasoning_args=(--thinking high)
-fi
-
-cmd=(cline --json)
+cmd=("$cline_bin" --json)
 [[ -z "$mode" ]] || cmd+=("$mode")
 cmd+=("${auto_args[@]}")
-cmd+=("${reasoning_args[@]}")
-cmd+=(-m cline-pass/deepseek-v4.1-flash-1017 -c "$cwd" -t "$timeout")
+cmd+=(-P cline-pass -m cline-pass/deepseek-v4.1-flash-1017 --thinking medium -c "$cwd" -t "$timeout")
 cmd+=("$*")
 
 exec "${cmd[@]}"

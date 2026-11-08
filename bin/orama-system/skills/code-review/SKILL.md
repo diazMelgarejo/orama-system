@@ -163,9 +163,11 @@ PR is a branch-versus-base review.
 
 ## Post-review
 
-- Micro-remediation (cluster findings by root cause,
-  one commit per failure class, no revert chains):
-  `bin/orama-system/references/post-review-micro-remediation.md`
+- Before beginning any micro-remediation, including from a standalone
+  post-review summary, load and follow
+  [`post-review-micro-remediation.md`](../../references/post-review-micro-remediation.md).
+  Cluster findings by root cause, use one commit per failure class, and retain
+  the protocol's individual inline-thread reply requirement.
 - Upstream contribution discipline (porting a fix to a vendored repo):
   [`references/upstream-contribution-discipline.md`](references/upstream-contribution-discipline.md)
 - Optional provider onboarding (Claude/Codex/Antigravity/Cline/BigModel/Perplexity):
