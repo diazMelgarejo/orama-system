@@ -13,6 +13,7 @@ import sys
 import time
 
 logger = logging.getLogger("run_with_subreaper")
+REAP_GRACE_SECONDS = 5.0
 if not logger.handlers:
     _handler = logging.StreamHandler(sys.stderr)
     _handler.setFormatter(logging.Formatter("%(message)s"))
@@ -43,17 +44,19 @@ def main(argv: list[str]) -> int:
         return 1
     proc = subprocess.Popen(argv)
     saved_exit_code: int | None = None
+    deadline: float | None = None
     while True:
+        if deadline is not None and time.monotonic() >= deadline:
+            logger.warning("timed out waiting for adopted children")
+            break
         try:
-            if saved_exit_code is None:
-                pid, status = os.waitpid(-1, os.WNOHANG)
-                if pid == 0:
-                    time.sleep(0.01)
-                    continue
-                if pid == proc.pid:
-                    saved_exit_code = _exitcode_from_status(status)
-            else:
-                pid, status = os.waitpid(-1, 0)
+            pid, status = os.waitpid(-1, os.WNOHANG)
+            if pid == 0:
+                time.sleep(0.01)
+                continue
+            if pid == proc.pid:
+                saved_exit_code = _exitcode_from_status(status)
+                deadline = time.monotonic() + REAP_GRACE_SECONDS
         except ChildProcessError:
             break
         except OSError as exc:

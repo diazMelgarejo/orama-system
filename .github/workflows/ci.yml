@@ -127,6 +127,9 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install ".[test]" build aiosqlite
 
+      - name: Verify model governance parity against pinned PT producer
+        run: python scripts/review/verify_governance_parity.py "$PERPETUATOOLSROOT"
+
       - name: Verify PT guarded dispatch with a mocked effect
         run: |
           PT_STATE_DIR="$(mktemp -d)" python -c 'import asyncio; from unittest.mock import AsyncMock, patch; from scripts import spawn_agents; effect = AsyncMock(return_value={"ok": True});
