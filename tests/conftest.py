@@ -29,6 +29,8 @@ os.environ["ORAMA_SWARM_APPROVAL_SECRET"] = "pytest-swarm-approval-secret"
 def _orama_insecure_dev_for_tests(monkeypatch):
     monkeypatch.setenv("ORAMA_INSECURE_DEV", "1")
     monkeypatch.delenv("ORAMA_CONTROL_PLANE_TOKEN", raising=False)
+    for _name in ("ORAMA_BIND_LAN", "PORTAL_BIND_LAN", "PT_BIND_LAN"):
+        monkeypatch.delenv(_name, raising=False)
 
 
 @pytest.fixture(scope="session")

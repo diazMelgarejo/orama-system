@@ -90,7 +90,7 @@ _requires_orchestrator = pytest.mark.skipif(
 def test_http_get_retries_next_token_on_401(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[str] = []
 
-    def fake_urlopen(req: urllib.request.Request, timeout: float = 2):
+    def fake_urlopen(req: urllib.request.Request, timeout: float = 2, **kwargs: Any):
         token = req.headers.get("Authorization", "").removeprefix("Bearer ").strip()
         calls.append(token)
         if token == "bad":
@@ -129,7 +129,7 @@ def test_http_get_retries_next_token_on_401(monkeypatch: pytest.MonkeyPatch) -> 
 def test_http_get_returns_none_when_all_candidates_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[str] = []
 
-    def fake_urlopen(req: urllib.request.Request, timeout: float = 2):
+    def fake_urlopen(req: urllib.request.Request, timeout: float = 2, **kwargs: Any):
         token = req.headers.get("Authorization", "").removeprefix("Bearer ").strip()
         calls.append(token)
         raise qpt.urllib.error.HTTPError(req.full_url, 401, "Unauthorized", hdrs=None, fp=None)
