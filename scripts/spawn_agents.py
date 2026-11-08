@@ -87,6 +87,21 @@ _DISPATCH_SCOPE: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
 def _pt_dispatch_authority() -> tuple[Any, Any, Any]:
     """Load PT's authority without replacing a foreign cached orchestrator package."""
     pt_root = os.environ.get("PERPETUATOOLSROOT", "").strip()
+    if not pt_root:
+        for key in ("PERPETUA_TOOLS_ROOT", "PERPETUA_TOOLS_PATH"):
+            val = os.environ.get(key, "").strip()
+            if val and Path(val).is_dir():
+                pt_root = val
+                break
+    if not pt_root:
+        for candidate in (
+            REPO_ROOT.parent / "perplexity-api" / "Perpetua-Tools",
+            REPO_ROOT.parent / "Perpetua-Tools",
+            REPO_ROOT.parent / "repos" / "Perpetua-Tools",
+        ):
+            if (candidate / "orchestrator" / "dispatch_guard.py").is_file():
+                pt_root = str(candidate)
+                break
     if pt_root:
         root = Path(pt_root).resolve()
         for path in (root, root / "src"):
