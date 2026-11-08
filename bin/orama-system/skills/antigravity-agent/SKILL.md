@@ -122,9 +122,8 @@ machine's configuration.
 | `--print-timeout <dur>` | Timeout for print mode wait (default `5m0s`) |
 | `--log-file <path>` | Override CLI log file path |
 
-Default to a sandboxed **plan/read-only pass** first. Do not let a background
-worker modify files until a human approves the exact task, scope, and target
-repository.
+Default to a sandboxed **plan/read-only pass** first. Delegated file changes
+require a human to approve the exact task, scope, and target repository first.
 
 ```bash
 agy --mode plan --sandbox --add-dir "$PWD" \
