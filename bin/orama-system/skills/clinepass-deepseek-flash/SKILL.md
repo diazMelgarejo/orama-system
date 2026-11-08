@@ -181,12 +181,19 @@ still routing the request through a non-ClinePass provider, which rejects the
 ClinePass model slug. That is an auth/config problem, not a reason to switch
 models.
 
-Configure auth explicitly through Cline's supported flow:
+Configure auth interactively through the locally installed Cline's supported
+flow. Inspect its help first, then enter credentials only at a non-echoing
+interactive prompt. Do not pass a key through `--apikey`, an argument, or a
+command substitution: those expose it to process inspection. If the installed
+version offers no safe interactive or documented stdin/environment mechanism,
+stop and consult its documentation rather than dispatching.
 
 ```bash
 cline auth --help
-cline auth --provider clinepass --apikey "$CLINE_API_KEY" --modelid cline-pass/deepseek-v4.1-flash-1017
 ```
+
+Select provider `clinepass` and model `cline-pass/deepseek-v4.1-flash-1017`
+in that flow, then verify the active provider and model before dispatch.
 
 Exact formats:
 
@@ -223,27 +230,20 @@ or resolve policy disputes.
 Read-only review:
 
 ```bash
-cline \
-  --json \
-  --auto-approve-all \
-  --reasoning-effort high \
-  -m cline-pass/deepseek-v4.1-flash-1017 \
-  -c /private/tmp \
-  -t 300 \
+bin/orama-system/skills/clinepass-deepseek-flash/scripts/run_clinepass_deepseek_flash.sh \
+  --cwd /private/tmp \
+  --timeout 300 \
+  --act \
   "Review this sanitized summary. Do not access files. Return risks and tests."
 ```
 
 Plan-first review:
 
 ```bash
-cline \
-  -p \
-  --json \
-  --auto-approve-all \
-  --reasoning-effort high \
-  -m cline-pass/deepseek-v4.1-flash-1017 \
-  -c /private/tmp \
-  -t 300 \
+bin/orama-system/skills/clinepass-deepseek-flash/scripts/run_clinepass_deepseek_flash.sh \
+  --cwd /private/tmp \
+  --timeout 300 \
+  --plan \
   "Create a concise implementation plan from this sanitized summary."
 ```
 
@@ -251,14 +251,10 @@ Repo-bound implementation, only on a clean branch:
 
 ```bash
 git status --short --branch
-cline \
-  -a \
-  --json \
-  --auto-approve-all \
-  --reasoning-effort high \
-  -m cline-pass/deepseek-v4.1-flash-1017 \
-  -c "$PWD" \
-  -t 900 \
+bin/orama-system/skills/clinepass-deepseek-flash/scripts/run_clinepass_deepseek_flash.sh \
+  --cwd "$PWD" \
+  --timeout 900 \
+  --act \
   "Implement the requested scoped change. Preserve unrelated local changes."
 ```
 
@@ -289,7 +285,8 @@ Source facts verified this way:
 
 - Cline headless mode activates with `--json`, piped stdin, redirected stdout,
   and related automation flags.
-- ClinePass lists DeepSeek V4 Flash as `cline-pass/deepseek-v4-flash`.
+- The formerly listed `cline-pass/deepseek-v4-flash` is retired; this route
+  pins `cline-pass/deepseek-v4.1-flash-1017`.
 - ClinePass API examples use the full `cline-pass/...` model slug in the model
   field; the installed CLI auth error uses provider id `clinepass`.
 - Local Cline `2.14.0` uses `--auto-approve-all` and
@@ -304,8 +301,8 @@ doc variant as a compatibility note.
 Check liveness without dumping prompts or logs:
 
 ```bash
-pgrep -af 'cline|cline-pass|deepseek-v4.1-flash'
-ps -p <pid> -o pid,ppid,stat,lstart,etime,command
+pgrep -f 'cline|cline-pass|deepseek-v4.1-flash'
+ps -p <pid> -o pid,ppid,stat,lstart,etime
 ```
 
 For JSON output, parse only final non-partial `say` text. Do not assume every

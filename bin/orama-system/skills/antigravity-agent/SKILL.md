@@ -67,9 +67,10 @@ google-antigravity` failed live with "Error: No provider plugins found" —
 there was no code path that could ever authenticate or run inference
 through OpenClaw for this provider. The `google-antigravity` provider
 stanza and its `agy-*` alias entries were deleted from `openclaw.json` as
-part of this correction; `gemini-coder` (the OpenClaw agent) now points at
-the real `google` plugin (`google/gemini-3.8-flash`) as a secondary
-path, but is not the primary way to reach Antigravity.
+part of this correction; `gemini-coder` (the OpenClaw agent) uses a
+host-specific secondary configuration, which may differ from
+`google/gemini-3.8-flash`. Verify the host configuration before relying on it;
+it is not the primary way to reach Antigravity.
 
 **The actual Antigravity CLI (`agy`) needs none of that.** It can be discovered
 from `PATH` and, when the current machine is authenticated, answers headless
@@ -182,7 +183,8 @@ agy --model "Claude Sonnet 4.6 (Thinking)" -p "..."
 
 **No automatic fallback chain** — same limitation class as every other
 fan-out CLI in this stack (kimi, cursor-agent): if the primary model errors,
-retry the same prompt with `--model "Gemini 3.8 Flash (Medium)"` explicitly. Do
+first inspect and reconcile partial edits, then retry only the remaining work
+with `--model "Gemini 3.8 Flash (Medium)"` explicitly. Do
 not assume `agy` retries across models on its own.
 
 ## Output Shape (verified live, v1.1.1)
