@@ -10,6 +10,11 @@ describe("RoutingView", () => {
     expect(screen.getByText(LMSTUDIO_WIN_ROW_MODEL)).toBeInTheDocument();
   });
 
+  it("lists Gemini 3.8 Flash as the cloud fallback row", () => {
+    render(<RoutingView state={mockState} />);
+    expect(screen.getByText("google/gemini-3.8-flash")).toBeInTheDocument();
+  });
+
   it("hides the Win LM Studio row when lmstudio_win is offline", () => {
     const runtimeData = mockState.runtime.data as Record<string, string>;
     const offline: typeof mockState = {

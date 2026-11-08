@@ -38,8 +38,7 @@
           "openrouter/inclusionai/ling-2.6-flash:free",
           "openrouter/openrouter/free",
           // Gemini at end — Gemini-Analyzer use-cases only (3rd-choice)
-          "google/gemini-2.5-pro",
-          "google/gemini-2.5-flash"
+          "google/gemini-3.8-flash"
         ]
       },
 
@@ -82,8 +81,7 @@
   //   7. openrouter/z-ai/glm-4.5-air:free             (agentic backup)
   //   8. openrouter/inclusionai/ling-2.6-flash:free   (lightweight, 262K)
   //   9. openrouter/openrouter/free                   (auto-router last resort)
-  //  10. google/gemini-2.5-pro                        (Gemini-Analyzer use-cases)
-  //  11. google/gemini-2.5-flash                      (Gemini-Analyzer use-cases)
+  //  10. google/gemini-3.8-flash                      (Gemini-Analyzer use-cases)
   //
   // To verify the chain is in effect:
   //   scripts/verify-openrouter-models.sh
