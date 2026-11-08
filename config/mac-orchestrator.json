@@ -9,6 +9,10 @@
       },
       "models": {
         "google/gemini-3.8-flash": {},
+        "google/gemini-3.5-flash-lite": {},
+        "google/gemini-flash-latest": {},
+        "google/gemini-pro-latest": {},
+        "google/gemini-4-argon": {},
         "bigmodel/glm-5.3-flash": {}
       },
       "thinkingDefault": "off",
@@ -22,6 +26,7 @@
         "model": {
           "fallbacks": [
             "google/gemini-3.8-flash",
+            "google/gemini-flash-latest",
             "bigmodel/glm-5.3-flash"
           ],
           "primary": "lmstudio-mac/qwen3.5-9b-mlx"
@@ -178,9 +183,9 @@
               "input": 0,
               "output": 0
             },
-            "id": "google/gemini-3.8-flash-FALL",
+            "id": "google/gemini-flash-latest-FALL",
             "maxTokens": 32768,
-            "name": "Gemini 3.8 Flash (medium)-FALL"
+            "name": "Gemini Flash Latest (Dynamic Stable Alias)-FALL"
           }
         ]
       },
@@ -190,14 +195,54 @@
         "baseUrl": "https://generativelanguage.googleapis.com/v1beta",
         "models": [
           {
-            "contextWindow": 65536,
+            "contextWindow": 1048576,
             "cost": {
-              "input": 0,
-              "output": 0
+              "input": 0.75,
+              "output": 3.75
             },
             "id": "google/gemini-3.8-flash",
-            "maxTokens": 32768,
-            "name": "Gemini 3.8 Flash (medium)"
+            "maxTokens": 65536,
+            "name": "Gemini 3.8 Flash (General Default Use)"
+          },
+          {
+            "contextWindow": 1048576,
+            "cost": {
+              "input": 0.15,
+              "output": 1.00
+            },
+            "id": "google/gemini-3.5-flash-lite",
+            "maxTokens": 65536,
+            "name": "Gemini 3.5 Flash-Lite (Fast Economical Subagents)"
+          },
+          {
+            "contextWindow": 1048576,
+            "cost": {
+              "input": 0.75,
+              "output": 3.75
+            },
+            "id": "google/gemini-flash-latest",
+            "maxTokens": 65536,
+            "name": "Gemini Flash Latest (Stable Fallback Resolver)"
+          },
+          {
+            "contextWindow": 2097152,
+            "cost": {
+              "input": 1.25,
+              "output": 5.00
+            },
+            "id": "google/gemini-pro-latest",
+            "maxTokens": 65536,
+            "name": "Gemini Pro Latest (HITL Escalation, Opus 5.5 class)"
+          },
+          {
+            "contextWindow": 2097152,
+            "cost": {
+              "input": 2.50,
+              "output": 10.00
+            },
+            "id": "google/gemini-4-argon",
+            "maxTokens": 65536,
+            "name": "Gemini 4 Argon (HITL Escalation, Fable 5.1 class)"
           }
         ]
       },

@@ -38,7 +38,8 @@
           "openrouter/inclusionai/ling-2.6-flash:free",
           "openrouter/openrouter/free",
           // Gemini at end — Gemini-Analyzer use-cases only (3rd-choice)
-          "google/gemini-3.8-flash"
+          "google/gemini-3.8-flash",
+          "google/gemini-flash-latest"
         ]
       },
 
@@ -82,6 +83,7 @@
   //   8. openrouter/inclusionai/ling-2.6-flash:free   (lightweight, 262K)
   //   9. openrouter/openrouter/free                   (auto-router last resort)
   //  10. google/gemini-3.8-flash                      (Gemini-Analyzer use-cases)
+  //  11. google/gemini-flash-latest                   (Dynamic stable fallback resolver)
   //
   // To verify the chain is in effect:
   //   scripts/verify-openrouter-models.sh
