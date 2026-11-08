@@ -13,7 +13,8 @@ ROOT = Path(__file__).resolve().parents[2]
 VERSION = "0.17.2"
 
 
-def ignored(path, patterns):
+def ignored(path: str, patterns: list[str]) -> bool:
+    """Return whether the configured exclusions cover a tracked path."""
     return path == "CHANGELOG.md" or any(
         fnmatch.fnmatchcase(path, pattern)
         or fnmatch.fnmatchcase("x/" + path, pattern)
@@ -21,7 +22,8 @@ def ignored(path, patterns):
     )
 
 
-def main():
+def main() -> int:
+    """Select eligible files, run the pinned linter, and verify its count."""
     parser = argparse.ArgumentParser()
     parser.add_argument("mode", choices=("changed", "debt"))
     parser.add_argument("--base")

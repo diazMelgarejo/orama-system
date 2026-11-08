@@ -1,3 +1,5 @@
+"""Regression coverage for the counted Markdown lint gate."""
+
 import os
 import shutil
 import subprocess
@@ -9,12 +11,14 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def git(repo, *args):
+def git(repo: Path, *args: str) -> str:
+    """Run a Git command in the fixture repository."""
     return subprocess.check_output(["git", *args], cwd=repo, text=True).strip()
 
 
 @pytest.fixture
-def repo(tmp_path):
+def repo(tmp_path: Path) -> Path:
+    """Create an isolated repository with the real local linter available."""
     (tmp_path / "scripts/git").mkdir(parents=True)
     shutil.copy(ROOT / "scripts/git/markdown_lint.py", tmp_path / "scripts/git")
     shutil.copy(ROOT / ".markdownlint-cli2.jsonc", tmp_path)
@@ -25,24 +29,28 @@ def repo(tmp_path):
     return tmp_path
 
 
-def commit(repo):
+def commit(repo: Path) -> str:
+    """Commit fixture files and return the resulting revision."""
     git(repo, "add", "-f", ".")
     git(repo, "commit", "-qm", "fixture")
     return git(repo, "rev-parse", "HEAD")
 
 
-def run(repo, *args):
+def run(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    """Run the Markdown gate and capture its output."""
     return subprocess.run(["python3", "scripts/git/markdown_lint.py", *args], cwd=repo,
                           text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
 
-def test_debt_scan_rejects_zero_files(repo):
+def test_debt_scan_rejects_zero_files(repo: Path) -> None:
+    """A full scan with no eligible files fails closed."""
     result = run(repo, "debt")
     assert result.returncode != 0
     assert "selected zero" in result.stdout
 
 
-def test_real_scan_counts_first_party_and_excludes_vendor_and_environments(repo):
+def test_real_scan_counts_first_party_and_excludes_vendor_and_environments(repo: Path) -> None:
+    """The real linter scans first-party files but skips excluded trees."""
     for name in ("good.md", "vendor/bad.md", ".venv/bad.md", "venv/bad.md",
                  ".tox/bad.md", ".nox/bad.md", "nested/vendor/bad.md"):
         path = repo / name
@@ -54,7 +62,8 @@ def test_real_scan_counts_first_party_and_excludes_vendor_and_environments(repo)
     assert "Linting: 1 file(s)" in result.stdout
 
 
-def test_changed_scan_fails_on_new_violation_and_skips_no_changes(repo):
+def test_changed_scan_fails_on_new_violation_and_skips_no_changes(repo: Path) -> None:
+    """Changed files must pass lint; an empty change is explicitly skipped."""
     (repo / "good.md").write_text("# Good\n")
     base = commit(repo)
     assert "lint skipped" in run(repo, "changed", "--base", base).stdout
@@ -66,7 +75,8 @@ def test_changed_scan_fails_on_new_violation_and_skips_no_changes(repo):
     assert "MD013" in result.stdout
 
 
-def test_zero_linter_count_fails_closed(repo):
+def test_zero_linter_count_fails_closed(repo: Path) -> None:
+    """A linter reporting zero checked files cannot pass the gate."""
     (repo / "good.md").write_text("# Good\n")
     commit(repo)
     (repo / "node_modules").unlink()
