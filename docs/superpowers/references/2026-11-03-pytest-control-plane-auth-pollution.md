@@ -112,8 +112,6 @@ note carrying it was corrected the same day.
 
 ## Fix options (applied & verified in stack)
 
-Reproduction is cheap once scoped to the leaking module plus a victim module:
-
 ```bash
 python3 -m pytest tests/test_fleet_topology_real_schema_regression.py \
                   tests/test_api_server.py tests/test_local_workspace.py -q
@@ -152,9 +150,12 @@ def pytest_collection_finish(session):
     assert not leaked, f"control-plane bind flags leaked during collection: {leaked}"
 ```
 
-**R5 — identify the writer (open).** Still unknown; the flip is bracketed to
-`tests/test_fleet_topology_real_schema_regression.py`. Re-run the `pytest_collectstart`
-probe from `## Proof` with `--collect-only` on shrinking file sets to pin the exact import.
+**R5 — identify the writer (open).** Shrinking file sets and the `pytest_collectstart`
+probe narrow collection boundaries, not the writer within a module's nested imports.
+In a throwaway process, install an early `-p` plugin before collection that wraps
+`type(os.environ).__setitem__` and `os.putenv` for the three bind keys. Record only stack
+frame filenames, function names and line numbers, never values, locals or source lines;
+restore both methods afterward. Native writes need separate tracing; no writer is proven yet.
 
 **Not recommended:** teaching `auth_enforced()` about `PYTEST_CURRENT_TEST`. It would make
 tests immune to arbitrary environment leaks and hide the production-relevant question of
@@ -177,9 +178,8 @@ run.
 ## Diagnosing a suspect failure
 
 1. Re-run just the failing file. If it passes alone, suspect session state before the code.
-2. Search the full-run log for `401` near the failure before assuming a logic bug.
-3. Bisect the import order with `pytest <file-a> <file-b> -q` to find the poisoning module.
-4. Confirm with the probe above; `auth_enforced()` flipping to `True` is conclusive.
+2. Bisect the import order with `pytest <file-a> <file-b> -q` to find the poisoning module.
+3. Trace writes as above; an auth-state flip alone does not identify the writer.
 
 ## Boundaries
 
