@@ -115,9 +115,12 @@ client = TestClient(app, raise_server_exceptions=False)
 assert client.get("/api/status").status_code == 401
 authorized = client.get("/api/status", headers={"Authorization": "Bearer test-token"})
 assert authorized.status_code == 200, authorized.status_code
+rejected = client.get("/api/status", headers={"Authorization": "Bearer wrong-token"})
+assert rejected.status_code == 401, rejected.status_code
 '''
-    subprocess.run([sys.executable, "-c", code], cwd=tmp_path, env=env,
-                   capture_output=True, text=True, check=True, timeout=30)
+    # Output is not captured here, so pytest shows the child's stderr (including the status in the
+    # assertion message) when the child fails.
+    subprocess.run([sys.executable, "-c", code], cwd=tmp_path, env=env, check=True, timeout=30)
 
 
 @pytest.mark.skipif(AGUARA is None, reason="aguara must be installed; no installation is attempted")
