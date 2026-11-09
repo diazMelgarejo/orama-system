@@ -1587,6 +1587,9 @@ if ($Stop) {
             $isWatcher = ($pf.BaseName -eq 'lm_link_watch')
             if ($isWatcher) {
                 $owned = Life-PidMatches $recorded '^(powershell|pwsh)$' 'lm_link_watch'
+            } elseif ($pf.BaseName -eq 'lan_peer_pulse') {
+                # LAN peer pulse: command-line match on lan_peer_pulse, never by name.
+                $owned = Life-PidMatches $recorded '^pythonw?[0-9.]*$' 'lan_peer_pulse'
             } elseif ($pf.BaseName -eq 'portal_tls') {
                 # Portal TLS proxy: command-line match on portal_tls_proxy, never by name.
                 $owned = Life-PidMatches $recorded '^pythonw?[0-9.]*$' 'portal_tls_proxy'
@@ -2409,6 +2412,32 @@ if ($LanPeer) {
         }
     } catch {
         _Warn 'lan-peer' "failed to start lm-link-watch: $($_.Exception.Message)"
+    }
+
+    # ── LAN peer pulse autostart: read-only both-direction health, every LAN_PEER_PULSE_SECONDS (default 1800) ──
+    try {
+        $PulseScript = Join-Path $RepoRoot 'bin\orama-system\skills\hermes-harness\scripts\lan_peer_pulse.py'
+        if (-not (Test-Path $PulseScript)) {
+            _Warn 'lan-peer' "lan_peer_pulse.py not found at: $PulseScript - skipping pulse autostart"
+        } else {
+            $pulsePidFile = Join-Path $LogDir 'lan_peer_pulse.pid'
+            $pulsePid = Life-ReadPid $pulsePidFile
+            if ($pulsePid -gt 0 -and (Life-PidMatches $pulsePid '^pythonw?[0-9.]*$' 'lan_peer_pulse')) {
+                _Info 'lan-peer' "lan-peer-pulse already running (PID $pulsePid)"
+            } else {
+                $null = New-Item -ItemType Directory -Force -Path $LogDir
+                $pulseLog = Join-Path $LogDir 'lan_peer_pulse.log'
+                $newPulsePid = Life-Spawn -LogFile $pulseLog -PidFile $pulsePidFile -WorkDir $RepoRoot `
+                    -Cmd @($UsPython, '-X', 'utf8', $PulseScript)
+                if ($newPulsePid -gt 0) {
+                    _Info 'lan-peer' "lan-peer-pulse started detached (PID $newPulsePid, log $pulseLog)"
+                } else {
+                    _Warn 'lan-peer' 'lan-peer-pulse failed to start'
+                }
+            }
+        }
+    } catch {
+        _Warn 'lan-peer' "failed to start lan-peer-pulse: $($_.Exception.Message)"
     }
 }
 
