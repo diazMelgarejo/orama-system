@@ -64,6 +64,12 @@
         },
         "openrouter/openrouter/free": {
           "alias": "Free-Router"
+        },
+        "gemini-main/gemini-3.8-flash": {
+          "alias": "Gemini-Default"
+        },
+        "gemini-fallback/gemini-flash-latest": {
+          "alias": "Gemini-Stable-Fallback"
         }
       }
     }
@@ -81,8 +87,7 @@
   //   7. openrouter/z-ai/glm-4.5-air:free             (agentic backup)
   //   8. openrouter/inclusionai/ling-2.6-flash:free   (lightweight, 262K)
   //   9. openrouter/openrouter/free                   (auto-router last resort)
-  //  10. google/gemini-3.8-flash                      (Gemini-Analyzer use-cases)
-  //  11. google/gemini-flash-latest                   (Dynamic stable fallback resolver)
+  //  10. gemini-fallback/gemini-flash-latest           (only automatic Google fallback)
   //
   // To verify the chain is in effect:
   //   scripts/verify-openrouter-models.sh

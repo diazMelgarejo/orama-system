@@ -45,6 +45,10 @@ def test_policy_merges_exact_provider_references_into_allowlist() -> None:
         "gemini-fallback/gemini-flash-latest",
     }
     assert all(value["id"] == key for key, value in models_to_merge.items())
+    mirror = _load_jsonc(REPO_ROOT / "infra/deployments/macbook-pro-head/openclaw/openclaw.model-policy.jsonc")
+    defaults = mirror["agents"]["defaults"]
+    assert set(models_to_merge).issubset(defaults["models_to_merge"])
+    assert defaults["model"]["fallbacks_to_merge"][-1] == "gemini-fallback/gemini-flash-latest"
 
 
 def test_apply_script_strips_gemini_from_existing_fallbacks() -> None:
