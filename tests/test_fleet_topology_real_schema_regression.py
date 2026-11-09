@@ -93,6 +93,7 @@ def test_http_get_retries_next_token_on_401(monkeypatch: pytest.MonkeyPatch) -> 
     contexts: list[ssl.SSLContext | None] = []
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     urls: list[str] = []
+    request_urls: list[str] = []
 
     def tls_kwargs(url: str, timeout: float) -> dict[str, ssl.SSLContext]:
         """Record the destination for each TLS configuration request."""
@@ -103,6 +104,7 @@ def test_http_get_retries_next_token_on_401(monkeypatch: pytest.MonkeyPatch) -> 
         """Reject the first token and return JSON for the next one."""
         token = req.headers.get("Authorization", "").removeprefix("Bearer ").strip()
         calls.append(token)
+        request_urls.append(req.full_url)
         contexts.append(kwargs.get("context"))
         if token == "bad":
             raise qpt.urllib.error.HTTPError(
@@ -141,6 +143,7 @@ def test_http_get_retries_next_token_on_401(monkeypatch: pytest.MonkeyPatch) -> 
     assert len(calls) == 2  # ALL candidates were attempted, not short-circuited
     assert contexts == [context, context]
     assert urls == [PEER_TOPOLOGY_URL] * 2
+    assert request_urls == [PEER_TOPOLOGY_URL] * 2  # the built requests target the same destination
 
 
 @pytest.mark.unit
@@ -150,6 +153,7 @@ def test_http_get_returns_none_when_all_candidates_rejected(monkeypatch: pytest.
     contexts: list[ssl.SSLContext | None] = []
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     urls: list[str] = []
+    request_urls: list[str] = []
 
     def tls_kwargs(url: str, timeout: float) -> dict[str, ssl.SSLContext]:
         """Record the destination for each TLS configuration request."""
@@ -160,6 +164,7 @@ def test_http_get_returns_none_when_all_candidates_rejected(monkeypatch: pytest.
         """Record and reject each attempted bearer token."""
         token = req.headers.get("Authorization", "").removeprefix("Bearer ").strip()
         calls.append(token)
+        request_urls.append(req.full_url)
         contexts.append(kwargs.get("context"))
         raise qpt.urllib.error.HTTPError(req.full_url, 401, "Unauthorized", hdrs=None, fp=None)
 
@@ -172,6 +177,7 @@ def test_http_get_returns_none_when_all_candidates_rejected(monkeypatch: pytest.
     assert calls == ["bad1", "bad2"]
     assert contexts == [context, context]
     assert urls == [PEER_TOPOLOGY_URL] * 2
+    assert request_urls == [PEER_TOPOLOGY_URL] * 2  # the built requests target the same destination
 
 
 @pytest.mark.unit

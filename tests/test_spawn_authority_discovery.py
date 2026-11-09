@@ -3,6 +3,7 @@
 from collections.abc import Iterator
 from contextlib import contextmanager
 import importlib
+import importlib.metadata
 from pathlib import Path
 from types import ModuleType
 import sys
@@ -204,6 +205,12 @@ def test_missing_candidates_refuse_ambient_authority(
         monkeypatch.setitem(sys.modules, module.__name__, module)
     assert importlib.import_module(guard.__name__) is guard
     assert importlib.import_module(state.__name__) is state
+
+    def no_distribution(_name: str) -> None:
+        """Model a machine with no installed PT, whatever this environment has."""
+        raise importlib.metadata.PackageNotFoundError
+
+    monkeypatch.setattr(spawn.importlib.metadata, "distribution", no_distribution)
     with pytest.raises(ImportError, match="PT dispatch authority is unavailable"):
         spawn._pt_dispatch_authority()
 
@@ -239,10 +246,14 @@ def test_cached_governance_from_other_checkout_is_refused(
     assert sys.modules[name] is foreign
 
 
-def test_foreign_governance_imported_during_load_is_refused(
+def test_selected_policy_precedes_foreign_search_path_entry(
     spawn: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The post-import check catches a cold policy shadowed on the search path."""
+    """The selected policy directory wins even when a foreign one is earlier on sys.path.
+
+    A cold policy import triggered while loading the guard resolves to the selected
+    checkout, not to a foreign directory that was added to sys.path first.
+    """
     selected = _checkout(tmp_path / "selected")
     foreign = _checkout(tmp_path / "foreign")
     guard = selected / "orchestrator/dispatch_guard.py"
@@ -250,6 +261,7 @@ def test_foreign_governance_imported_during_load_is_refused(
     monkeypatch.setenv("PERPETUATOOLSROOT", str(selected))
     monkeypatch.setattr(sys, "path", [str(foreign / "src"), str(selected / "src"), *sys.path])
     assert "perpetua_tools.model_governance" not in sys.modules
-    with pytest.raises(ImportError, match="governance origin"):
-        spawn._pt_dispatch_authority()
-    assert Path(sys.modules["perpetua_tools.model_governance"].__file__).resolve() == foreign / "src/perpetua_tools/model_governance.py"
+    spawn._pt_dispatch_authority()
+    loaded = Path(sys.modules["perpetua_tools.model_governance"].__file__).resolve()
+    assert loaded == (selected / "src/perpetua_tools/model_governance.py").resolve()
+    assert sys.path.index(str(selected / "src")) < sys.path.index(str(foreign / "src"))

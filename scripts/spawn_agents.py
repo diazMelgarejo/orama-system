@@ -96,16 +96,21 @@ def _assert_pt_governance_origin(policy_dir: Path) -> None:
         cached = sys.modules.get(name)
         if cached is not None:
             origin = getattr(cached, "__file__", None)
-            if not origin or Path(origin).resolve() != policy_dir / relative:
+            if not origin or Path(origin).resolve() != (policy_dir / relative).resolve():
                 raise ImportError("PT governance origin does not match selected authority")
 
 
 def _load_pt_authority(package_dir: Path, policy_dir: Path) -> tuple[Any, Any, Any]:
     """Bind guard/state modules to validated paths and preserve exception identity."""
     _assert_pt_governance_origin(policy_dir)
+    # Selected authority wins even when both checkout paths are already on sys.path:
+    # move each selected directory to the front (priority: policy dir, then package dir).
     for path in (package_dir.parent, policy_dir.parent):
-        if str(path) not in sys.path:
-            sys.path.insert(0, str(path))
+        entry = str(path)
+        while entry in sys.path:
+            sys.path.remove(entry)
+    for path in (package_dir.parent, policy_dir.parent):
+        sys.path.insert(0, str(path))
     name = "_pt_dispatch_" + hashlib.sha256(str(package_dir).encode()).hexdigest()[:16]
     if name not in sys.modules:
         spec = importlib.util.spec_from_file_location(name, package_dir / "__init__.py", submodule_search_locations=[str(package_dir)])

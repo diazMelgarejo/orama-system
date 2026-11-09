@@ -104,7 +104,7 @@ def test_fixture_clears_flags(flag: str) -> None:
 
 
 def test_lan_insecure_mode_still_protects_status_route(tmp_path: Path) -> None:
-    """A configured token does not permit unauthenticated LAN status access."""
+    """A configured token blocks unauthenticated LAN status access and admits the valid bearer token."""
     env = _isolated_subprocess_env(tmp_path)
     env.update({"PYTHON_DOTENV_DISABLED": "1", "PYTHONPATH": os.pathsep.join((str(ROOT / "src"), str(ROOT))),
                 "ORAMA_INSECURE_DEV": "1", "ORAMA_BIND_LAN": "1", "ORAMA_CONTROL_PLANE_TOKEN": "test-token"})
@@ -113,6 +113,8 @@ from fastapi.testclient import TestClient
 from orama_system.portal_server import app
 client = TestClient(app, raise_server_exceptions=False)
 assert client.get("/api/status").status_code == 401
+authorized = client.get("/api/status", headers={"Authorization": "Bearer test-token"})
+assert authorized.status_code == 200, authorized.status_code
 '''
     subprocess.run([sys.executable, "-c", code], cwd=tmp_path, env=env,
                    capture_output=True, text=True, check=True, timeout=30)

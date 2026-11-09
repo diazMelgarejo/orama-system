@@ -11,8 +11,18 @@ SCANNER = ROOT / "scripts/ci/run_agent_security_scans.sh"
 
 
 def _not_suppressed(value: object) -> bool:
-    """Accept only an absent or explicit YAML false suppression value."""
-    return value is None or value is False or (isinstance(value, str) and value.lower() == "false")
+    """Accept only an absent or explicit YAML boolean false; a quoted "false" is a string and is rejected."""
+    return value is None or value is False
+
+
+def _typed_jobs() -> dict:
+    """Load jobs with YAML scalar types preserved (BaseLoader would stringify booleans)."""
+    return yaml.safe_load(WORKFLOW.read_text())["jobs"]
+
+
+def _exact_cache_key(key: str, name: str, pin: str) -> bool:
+    """Require the full scanner cache key; a longer or shorter version never matches."""
+    return key == f"{name}-${{{{ runner.os }}}}-{pin}"
 
 
 def test_stacked_pull_requests_trigger_without_changing_push_scope() -> None:
@@ -22,7 +32,7 @@ def test_stacked_pull_requests_trigger_without_changing_push_scope() -> None:
     assert events["pull_request"] == {"branches": ["**"]}
     assert events["push"] == {"branches": ["main", "develop"]}
     assert "pull_request_target" not in events
-    for job in workflow["jobs"].values():
+    for job in _typed_jobs().values():
         assert _not_suppressed(job.get("continue-on-error"))
         assert all(_not_suppressed(step.get("continue-on-error")) for step in job["steps"])
     for name in ("aguara", "agent-audit", "skill-scanner", "mcp-scanner", "ramparts"):
@@ -73,6 +83,24 @@ def test_security_workflow_retains_pinned_actions_and_scanners() -> None:
                   f"actions/cache@{actions['actions/cache']}" and
                   paths[name] in step.get("with", {}).get("path", "").splitlines()]
         assert len(caches) == 1
-        assert caches[0]["with"]["key"] == f"{name}-${{{{ runner.os }}}}-{pin}"
+        assert _exact_cache_key(caches[0]["with"]["key"], name, pin)
         assert not caches[0]["with"].get("restore-keys", "").strip()
         assert "if" not in caches[0]
+
+
+def test_suppression_predicate_rejects_quoted_false_and_other_values() -> None:
+    """Only a missing key or a real YAML false counts as not suppressed."""
+    assert _not_suppressed(None) and _not_suppressed(False)
+    for bad in ("false", "False", True, "true", 0, ""):
+        assert not _not_suppressed(bad)
+    quoted = yaml.safe_load("continue-on-error: 'false'\nother: false\n")
+    assert not _not_suppressed(quoted["continue-on-error"]) and _not_suppressed(quoted["other"])
+
+
+def test_cache_key_match_is_exact_so_082_cannot_select_0820() -> None:
+    """A requested 0.8.2 cache key never equals, or prefixes into, a 0.8.20 key."""
+    base = "ramparts-${{ runner.os }}-"
+    assert _exact_cache_key(base + "0.8.2", "ramparts", "0.8.2")
+    for other in ("0.8.20", "0.8.2.1", "0.8.", "0.8.2 "):
+        assert not _exact_cache_key(base + other, "ramparts", "0.8.2")
+    assert not _exact_cache_key(base + "0.8.2", "ramparts", "0.8.20")
