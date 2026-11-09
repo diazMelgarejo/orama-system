@@ -1,8 +1,8 @@
-"""Portal duplicate dispatch returns 409 under every authority discovery mode, with no skips."""
+"""Portal duplicate dispatch returns 409 under every authority discovery mode, through the real dispatch path."""
 
 from importlib import metadata
 from pathlib import Path
-from types import ModuleType, SimpleNamespace
+from types import ModuleType
 import sys
 from typing import Callable
 
@@ -13,15 +13,48 @@ from orama_system.portal_server import app
 from test_spawn_authority_discovery import _checkout, spawn as spawn
 from test_spawn_installed_authority import _installation
 
+DUPLICATE_CAPABLE_GUARD = """\"\"\"Isolated guard that claims each request once and rejects an equivalent repeat.\"\"\"
+_CLAIMED = set()
+
+
+class DuplicateDispatch(RuntimeError):
+    \"\"\"Raised when an equivalent dispatch was already claimed.\"\"\"
+
+
+class DispatchRequest:
+    \"\"\"Carry the fields spawn_agents.dispatch builds.\"\"\"
+    def __init__(self, **fields):
+        self.__dict__.update(fields)
+
+
+class DispatchGuard:
+    \"\"\"Claim, then run the effect once.\"\"\"
+    def __init__(self, state_dir):
+        self.state_dir = state_dir
+
+    async def execute(self, request, effect):
+        key = (request.scope, request.provider, request.model, request.goal, request.prompt)
+        if key in _CLAIMED:
+            raise DuplicateDispatch("equivalent dispatch already claimed")
+        _CLAIMED.add(key)
+        return await effect()
+"""
+
+
+def _duplicate_capable(root: Path) -> Path:
+    """Give a synthetic authority a guard that really rejects a repeated dispatch."""
+    (root / "orchestrator/dispatch_guard.py").write_text(DUPLICATE_CAPABLE_GUARD)
+    return root
+
 
 def _select_environment_root(spawn: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Select the authority through an explicit environment root."""
-    monkeypatch.setenv("PERPETUATOOLSROOT", str(_checkout(tmp_path / "explicit")))
+    monkeypatch.setenv("PERPETUATOOLSROOT", str(_duplicate_capable(_checkout(tmp_path / "explicit"))))
 
 
 def _select_alternate_root(spawn: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Select the authority through the alternate sibling-checkout root."""
-    _checkout(tmp_path / "perplexity-api/Perpetua-Tools")
+    _duplicate_capable(_checkout(tmp_path / "perplexity-api/Perpetua-Tools"))
 
 
 def _select_installed_authority(spawn: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -31,7 +64,7 @@ def _select_installed_authority(spawn: ModuleType, tmp_path: Path, monkeypatch: 
     developer machine's real editable PT distribution shadow the fixture on the second
     lookup. Pinning the lookup keeps this test about the 409 mapping, not the host install.
     """
-    monkeypatch.syspath_prepend(str(_installation(tmp_path / "site")))
+    monkeypatch.syspath_prepend(str(_duplicate_capable(_installation(tmp_path / "site"))))
     fixture_distribution = metadata.distribution("perpetua-tools")
     monkeypatch.setattr(metadata, "distribution", lambda _name: fixture_distribution)
 
@@ -48,20 +81,23 @@ def test_duplicate_dispatch_is_conflict_in_each_discovery_mode(
     spawn: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     select: Callable[[ModuleType, Path, pytest.MonkeyPatch], None],
 ) -> None:
-    """A DuplicateDispatch from the selected authority maps to HTTP 409, never 500."""
+    """The first dispatch runs; the real guard rejects the repeat and the portal answers 409, never 500."""
     select(spawn, tmp_path, monkeypatch)
-    duplicate_type = spawn.duplicate_dispatch_error_type()
-    assert duplicate_type.__name__ == "DuplicateDispatch"
+    effects: list[str] = []
 
-    async def dispatch(agent: str, task: str, model: str | None = None) -> dict:
-        """Simulate the selected guard rejecting an already claimed dispatch."""
-        raise duplicate_type("equivalent dispatch already claimed")
+    async def effect(task: str) -> dict:
+        """Record the one real effect that the guard allows."""
+        effects.append(task)
+        return {"ok": True, "output": "done", "elapsed": 0.01}
 
-    monkeypatch.setitem(sys.modules, "spawn_agents", SimpleNamespace(
-        dispatch=dispatch, duplicate_dispatch_error_type=spawn.duplicate_dispatch_error_type,
-    ))
+    monkeypatch.setattr(spawn, "_dispatch_codex", effect)
+    monkeypatch.setitem(sys.modules, "spawn_agents", spawn)
     monkeypatch.setenv("ORAMA_INSECURE_DEV", "1")
+    body = {"agent": "codex", "task": "duplicate mode test"}
     with TestClient(app, raise_server_exceptions=False) as client:
-        response = client.post("/api/spawn-agent", json={"agent": "codex", "task": "test"})
-    assert response.status_code == 409
-    assert "already claimed" in response.json()["detail"]
+        first = client.post("/api/spawn-agent", json=body)
+        second = client.post("/api/spawn-agent", json=body)
+    assert first.status_code == 200 and first.json()["ok"] is True
+    assert second.status_code == 409
+    assert "already claimed" in second.json()["detail"]
+    assert effects == ["duplicate mode test"], "the duplicate must be rejected before any effect runs"
