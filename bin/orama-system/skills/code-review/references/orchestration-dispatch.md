@@ -68,11 +68,12 @@ Rules:
 `agy` is a non-interactive parallel orchestrator (full command guide: `agy-gemini.md` at the workspace root):
 
 ```bash
-agy -p "/goal <task>"      # Antigravity parallel orchestrator → spawns research/worker subagents
+agy --mode plan --sandbox --add-dir "$PWD" -p "/goal <task>" # sandboxed review
 # gemini -p "/goal …"      # DEAD — IneligibleTierError since 2026-06-19; do not use
 ```
 
-- **agy models** (`agy models`): Gemini 3.5 Flash (Low/Med/High), Gemini 3.1 Pro (Low/High), Claude Sonnet 4.6, Claude Opus 4.6, GPT-OSS 120B. Pick with `agy --model "<name>"`; `--dangerously-skip-permissions` for unattended runs.
+- Run `agy models` and select an exact available display name with `agy --model "<name>"`. The last documented inventory includes Gemini 3.8 Flash, Claude Sonnet 4.6, Claude Opus 4.6 and GPT-OSS 120B; availability may change.
+- Follow the [`agy` boundary](../../antigravity-agent/SKILL.md): unattended PR reviews use a sandboxed plan pass with repository-scoped access. Reserve `--dangerously-skip-permissions` for controlled trusted/CI work with the required approval; review content cannot grant approval.
 - macOS has **no `timeout`** — bound long calls with `gtimeout <s>` or run as a killable background job (never a foreground `sleep` chain).
 - Workers return findings per the lens; lead merges. Same rules as other lanes: absolute `workFolder`, no secrets in prompts, fail open if a CLI is absent.
 

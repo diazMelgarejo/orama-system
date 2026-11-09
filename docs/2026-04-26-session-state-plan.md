@@ -251,8 +251,8 @@ Append dated entry capturing:
 
 ## 6. Session Lessons (Key Takeaways)
 
-1. **Always audit IPs across ALL config files simultaneously** — they drift. Use `grep -r
-   "192.168.254." .` across all three repos after any hardware change.
+1. **Always audit IPs across ALL config files simultaneously** — they drift. After any hardware
+   change, use `grep -r "192.168.254" .` across all three repos.
 
 2. **`discover.py --force` after any IP change** — the 5-min TTL caches stale state and hides
    connectivity problems.
@@ -294,7 +294,7 @@ Updated: 2026-04-26 (same session, second context window)
 
 > **Option C selected**: Auto-suggest at session end + commit only when user approves.  
 > Implementation: `.claude/skills/self-improve/SKILL.md` v1.0.0 created in both PT
-> and orama-system.  
+> and orama-system.
 > Trigger: Claude invokes at natural session end. Gate: hard STOP before any write — user must type
 > A/B/C.
 

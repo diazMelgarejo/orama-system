@@ -36,6 +36,7 @@ class ModelGovernanceError(RuntimeError):
 
 @dataclass(frozen=True)
 class LaunchSpec:
+    """Describe a requested provider launch and its execution settings."""
     path: str
     launch_id: str
     effort: str | None = None
@@ -92,6 +93,8 @@ def plan_launch(
         raise ModelGovernanceError("unsupported orchestration mode")
     _require_consistent_effort(spec)
     cfg = dict(config) if config is not None else load_model_governance()
+    if spec.path == "cline_pass":
+        _validate_cline_pass_config(cfg)
     if spec.launch_id in cfg.get("banned_launch_ids", ()):
         raise ModelGovernanceError(f"banned launch id: {spec.launch_id}")
     provider = "anthropic" if spec.path == "cursor_grok_bot" and spec.launch_id.startswith("claude-") else spec.path
@@ -107,10 +110,17 @@ def plan_launch(
     policy = cfg[provider]
     planning = policy.get("planning") or {}
     controller = policy.get("controller") or {}
+    fallback_row = policy.get("fallback") or {}
     is_planning_model = spec.launch_id == planning.get("launch_id")
+    is_controller_model = spec.launch_id == controller.get("launch_id")
+    is_fallback_model = spec.launch_id == fallback_row.get("launch_id")
     gated = (policy.get("gated") or {}).get(spec.launch_id)
-    if is_planning_model or spec.launch_id == controller.get("launch_id"):
-        row = planning if is_planning_model else controller
+    if provider == "cline_pass":
+        # This provider has a closed allowlist; proof cannot authorize gated rows.
+        assert_launch_allowed(spec, config=cfg)
+        gated = None
+    if is_planning_model or is_controller_model or is_fallback_model:
+        row = planning if is_planning_model else (controller if is_controller_model else fallback_row)
         allowed_efforts = row.get("allowed_efforts", [row.get("effort")])
         if _named_effort(spec) not in allowed_efforts:
             raise ModelGovernanceError("role requires an explicitly permitted effort")
@@ -125,7 +135,7 @@ def plan_launch(
         assert_launch_allowed(spec, config=cfg)
     needs_approval = mode == "ultracode" or (
         is_planning_model and task_kind != "planning"
-    ) or (gated is not None and not is_planning_model)
+    ) or (gated is not None and (provider == "google" or not is_planning_model))
     if not needs_approval:
         return LaunchPlan(spec, spec, False, "planning" if is_planning_model else "allowed")
     fallback = replace(default_launch(provider, config=cfg), path=spec.path)
@@ -138,6 +148,7 @@ def plan_launch(
 
 
 def _repo_root() -> Path:
+    """Locate the repository containing the governance configuration."""
     here = Path(__file__).resolve()
     for parent in here.parents:
         candidate = parent / _CONFIG_REL
@@ -153,6 +164,7 @@ class _UniqueKeyLoader(yaml.SafeLoader):
 def _construct_unique_mapping(
     loader: _UniqueKeyLoader, node: yaml.MappingNode, deep: bool = False
 ) -> dict[Any, Any]:
+    """Construct a YAML mapping while rejecting duplicate keys."""
     mapping: dict[Any, Any] = {}
     for key_node, value_node in node.value:
         key = loader.construct_object(key_node, deep=deep)
@@ -171,6 +183,7 @@ _UniqueKeyLoader.add_constructor(
 
 @lru_cache(maxsize=8)
 def load_model_governance(config_path: str | None = None) -> dict[str, Any]:
+    """Load and validate the local governance policy."""
     path = Path(config_path) if config_path else _repo_root() / _CONFIG_REL
     try:
         raw = yaml.load(path.read_text(encoding="utf-8"), Loader=_UniqueKeyLoader) or {}
@@ -186,7 +199,10 @@ def load_model_governance(config_path: str | None = None) -> dict[str, Any]:
 
 
 def default_launch(path: str, *, config: Mapping[str, Any] | None = None) -> LaunchSpec:
+    """Construct the configured default, validating the closed ClinePass policy."""
     cfg = dict(config) if config is not None else load_model_governance()
+    if path == "cline_pass":
+        _validate_cline_pass_config(cfg)
     if path == "cursor_grok_bot":
         row = cfg["cursor_grok_bot"]["default"]
         return LaunchSpec(
@@ -215,6 +231,7 @@ def default_launch(path: str, *, config: Mapping[str, Any] | None = None) -> Lau
 
 
 def _ungated_cursor_ids(cfg: Mapping[str, Any]) -> set[str]:
+    """Collect Cursor launch IDs permitted without escalation."""
     ids = {str(cfg["cursor_grok_bot"]["default"]["launch_id"])}
     for row in cfg["cursor_grok_bot"].get("allowed_ungated") or []:
         ids.add(str(row["launch_id"]))
@@ -233,6 +250,7 @@ def _ungated_cursor_row(cfg: Mapping[str, Any], launch_id: str) -> Mapping[str, 
 
 
 def _anthropic_ungated_ids(cfg: Mapping[str, Any]) -> set[str]:
+    """Collect the current and legacy Anthropic default IDs."""
     row = cfg["anthropic"]["default"]
     ids = {str(row["launch_id"])}
     legacy = row.get("legacy_pin")
@@ -242,6 +260,7 @@ def _anthropic_ungated_ids(cfg: Mapping[str, Any]) -> set[str]:
 
 
 def _named_effort(spec: LaunchSpec) -> str | None:
+    """Return the specified effort under either supported field."""
     return spec.effort or spec.reasoning_effort
 
 
@@ -288,10 +307,13 @@ def assert_launch_allowed(
     approval_scope: str | None = None,
     task_kind: str | None = None,
 ) -> None:
+    """Refuse invalid launches and require covering proof for gated models."""
     if task_kind not in (None, "planning", "execution"):
         raise ModelGovernanceError("unsupported harness task kind")
     _require_consistent_effort(spec)
     cfg = dict(config) if config is not None else load_model_governance()
+    if spec.path == "cline_pass":
+        _validate_cline_pass_config(cfg)
     banned = {str(x) for x in cfg.get("banned_launch_ids") or []}
     if spec.launch_id in banned:
         raise ModelGovernanceError(f"banned launch id: {spec.launch_id}")
@@ -315,6 +337,14 @@ def assert_launch_allowed(
             spec, proof, now=now, approval_scope=approval_scope
         ):
             raise ModelGovernanceError("cloud escalation default-deny: escalation token required")
+        row = (cfg[spec.path].get("gated") or {}).get(spec.launch_id) or {}
+        requirements = row.get("requires") or []
+        if isinstance(requirements, str):
+            requirements = [requirements]
+        if "budget_cap" in requirements and not (
+            proof and isinstance(proof.budget_cap, str) and proof.budget_cap.strip()
+        ):
+            raise ModelGovernanceError("cloud escalation default-deny: approved budget cap required")
         return
     if spec.path in ("anthropic", "cursor_grok_bot"):
         policy = cfg["anthropic"]
@@ -368,6 +398,7 @@ def _token_covers(
 
 
 def _assert_gated_params(spec: LaunchSpec, row: Mapping[str, Any]) -> None:
+    """Enforce the effort and fast settings on a policy row."""
     wanted_effort = row.get("effort")
     if wanted_effort is not None and _named_effort(spec) not in row.get(
         "allowed_efforts", [str(wanted_effort)]
@@ -379,24 +410,34 @@ def _assert_gated_params(spec: LaunchSpec, row: Mapping[str, Any]) -> None:
         raise ModelGovernanceError(f"{spec.launch_id} requires fast={row['fast']}")
 
 
-def _assert_cline_pass_launch(spec: LaunchSpec, *, cfg: Mapping[str, Any]) -> None:
-    """ClinePass: the pinned default plus the explicitly listed ids, nothing else.
+def _validate_cline_pass_config(cfg: Mapping[str, Any]) -> None:
+    """Reject malformed ClinePass policy and unsupported role or gated rows."""
+    policy = cfg.get("cline_pass")
+    if not isinstance(policy, Mapping):
+        raise ModelGovernanceError("config unavailable: invalid ClinePass policy")
+    default = policy.get("default")
+    rows = policy.get("allowed_ungated", [])
+    if (not isinstance(default, Mapping) or not default.get("launch_id")
+            or not default.get("effort") or not isinstance(rows, list)
+            or any(not isinstance(row, Mapping) or not row.get("launch_id") for row in rows)
+            or policy.get("gated") not in (None, {})
+            or policy.get("planning") is not None or policy.get("controller") is not None):
+        raise ModelGovernanceError("config unavailable: invalid ClinePass policy")
 
-    An unlisted id is refused outright instead of being deferred to a gated
-    table, and a proof never lifts this path. That keeps ``gated: {}`` in config
-    an enforced fact rather than a comment.
-    """
+
+def _assert_cline_pass_launch(spec: LaunchSpec, *, cfg: Mapping[str, Any]) -> None:
+    """Allow only explicitly listed ClinePass models and parameters."""
+    _validate_cline_pass_config(cfg)
     policy = cfg["cline_pass"]
     default = policy["default"]
+    rows = policy.get("allowed_ungated", [])
     if spec.launch_id == str(default["launch_id"]):
         _assert_gated_params(spec, default)
         return
-    if spec.fast is True:
-        raise ModelGovernanceError(
-            "fast mode requires an operator request plus a real escalation token"
-        )
-    for row in policy.get("allowed_ungated") or []:
+    for row in rows:
         if str(row["launch_id"]) == spec.launch_id:
+            if spec.fast is True:
+                raise ModelGovernanceError("fast mode is unsupported for non-default ClinePass models")
             _assert_gated_params(spec, row)
             return
     raise ModelGovernanceError("unlisted ClinePass model")
@@ -410,7 +451,9 @@ def _assert_cursor_launch(
     now: datetime | None,
     approval_scope: str | None = None,
 ) -> None:
+    """Apply Cursor model and escalation requirements."""
     def covers() -> bool:
+        """Check whether the proof covers this launch."""
         return _token_covers(spec, proof, now=now, approval_scope=approval_scope)
 
     if spec.launch_id.startswith("claude-"):
@@ -451,6 +494,7 @@ def _assert_anthropic_launch(
 ) -> None:
     # R2: fast mode is not a supported escalation for this policy; refuse it
     # before any ungated-model early return.
+    """Apply Anthropic model and escalation requirements."""
     if spec.fast is True:
         raise ModelGovernanceError("fast mode is unsupported for this Anthropic policy")
     if spec.launch_id in _anthropic_ungated_ids(cfg):

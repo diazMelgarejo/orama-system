@@ -1,10 +1,12 @@
 """Exercise the test-suite launcher with real orphaned processes."""
 from __future__ import annotations
 
+import importlib.util
 import subprocess
 import sys
 import textwrap
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -46,3 +48,59 @@ def test_launcher_preserves_signal_exit_code() -> None:
         timeout=15,
     )
     assert result.returncode == 128 + signal.SIGTERM
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="Linux subreapers are unavailable")
+def test_launcher_bounds_wait_for_running_adopted_child(tmp_path: Path) -> None:
+    """A long-lived orphan cannot prevent the command's status being returned."""
+    import os
+    import signal
+
+    pidfile = tmp_path / "child.pid"
+    command = (
+        "import subprocess,sys; "
+        "p=subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'], "
+        "stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL); "
+        "open(sys.argv[1], 'w').write(str(p.pid)); sys.exit(7)"
+    )
+    try:
+        result = subprocess.run(
+            [sys.executable, str(LAUNCHER), sys.executable, "-c", command, str(pidfile)],
+            timeout=10,
+        )
+        assert result.returncode == 7
+    finally:
+        if pidfile.exists():
+            try:
+                os.kill(int(pidfile.read_text()), signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="Linux subreapers are unavailable")
+def test_launcher_bounds_wait_for_lingering_descendant(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An indefinitely running adopted child cannot hold the command's exit status hostage."""
+    import ctypes
+
+    spec = importlib.util.spec_from_file_location("subreaper_launcher", LAUNCHER)
+    assert spec and spec.loader
+    launcher = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(launcher)
+    monkeypatch.setattr(ctypes, "CDLL", lambda *args, **kwargs: SimpleNamespace(prctl=lambda *args: 0))
+    monkeypatch.setattr(launcher.subprocess, "Popen", lambda argv: SimpleNamespace(pid=123))
+    clock = [0.0]
+    monkeypatch.setattr(launcher.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(launcher.time, "sleep", lambda duration: clock.__setitem__(0, clock[0] + duration))
+    calls = [0]
+
+    def waitpid(pid: int, options: int) -> tuple[int, int]:
+        """Simulate a completed command followed by a lingering descendant."""
+        calls[0] += 1
+        if calls[0] == 1:
+            return 123, 7 << 8
+        assert options == launcher.os.WNOHANG, "waiting for descendants must not block"
+        return 0, 0
+
+    monkeypatch.setattr(launcher.os, "waitpid", waitpid)
+    assert launcher.main(["command"]) == 7
+    assert clock[0] <= 10

@@ -1,5 +1,11 @@
 // markdownlint-cli2 configuration (matches Perpetua-Tools / diazMelgarejo conventions)
-// Run locally: npx markdownlint-cli2 "**/*.md"
+// Install markdownlint-cli2@0.17.2 locally, then run:
+//   python3 scripts/git/markdown_lint.py changed --base <base-ref>
+//   python3 scripts/git/markdown_lint.py debt
+// The first command checks eligible changed files; no changes is an explicit skip.
+// The second reports all tracked eligible files and exits nonzero while debt remains.
+// On 2026-11-08 at PR #481 head plus the three document fixes, the debt scan
+// checked 1036 files and reported 5345 violations. This is not a passing baseline.
 {
   "config": {
     "default": true,
@@ -74,6 +80,12 @@
   // are cheap to keep compliant, and the PR that added this entry fixed its
   // own new reference doc rather than exempting it.
   "ignores": [
+    "**/node_modules/**",
+    "**/vendor/**",
+    "**/.venv/**",
+    "**/venv/**",
+    "**/.tox/**",
+    "**/.nox/**",
     // Byte-preserved source archive; active revision-3 records remain linted.
     "docs/v2/references/loop-graph-compatibility-2026-10-09/history/**",
     // Byte-preserved operator draft that the R4 reference set was derived from.

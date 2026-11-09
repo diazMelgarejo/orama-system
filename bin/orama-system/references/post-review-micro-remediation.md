@@ -100,6 +100,8 @@
   or adjacent functions are resolved holistically before modifying code.
 
 - **The Single-Edit Rule (Atomic Per-File Remediation):**
+  Affected files are those requiring changes in the consolidated fix plan; files with only
+  declined findings are excluded. If no changes are required, proceed without file edits.
   Each affected file must be touched **exactly once per remediation cycle** across all review
   findings.
   - **Prohibition on incremental edits:** Never patch a file for finding 1, save, then return to
@@ -329,17 +331,25 @@ a status field or a first glance is accurate):
   Greptile) or peer reviewers MUST be explicitly replied to directly on GitHub before closing,
   merging, or requesting re-review. Silence, bulk dismissal without reply, or untracked local
   fixes are strictly prohibited.
+  Findings present only in a review body have no inline thread: reply with a PR conversation
+  comment linking that review and, for fixed findings, the fix commit SHA. Keep direct replies
+  for findings with inline threads.
   - **For fixed findings:** Reply directly in the GitHub inline comment thread with the exact
     commit SHA: `@{BotName} we fixed this in commit {SHA}` (optionally append a brief description
     of the verified fix or regression test proving it).
+  - **Review-body-only findings:** If no inline thread exists, post a PR conversation comment
+    linking to the review and including the fix commit SHA or an evidence-backed decline.
   - **For declined findings:** Reply with an evidence-backed rationale derived from Phase 1 checks:
     `@{BotName} declined with evidence: <reason, e.g. test proves mutating key is required during restart; documented in docstring in commit {SHA}>`.
   - **For superseded findings:** Reply referencing the consolidated architectural fix:
     `@{BotName} superseded by shared abstraction fix in commit {SHA} (<root-cause cluster rationale>)`.
-  - **Thread resolution:** Mark the GitHub conversation thread as resolved (or prompt the bot to
-    re-evaluate) only after posting the inline reply with the commit SHA and evidence. This ensures
+  - **Thread resolution:** Mark the thread resolved only after posting the reply with the commit SHA
+    and evidence. Request reviewer or bot re-evaluation only after applicable Phase 6 synchronization
+    is complete and the fix has been pushed to the PR head. This ensures
     an auditable receipt linking review feedback directly to git history.
 - Leave the branch open for human review if requested.
+- Complete applicable Phase 6 synchronization and publish the fixes before requesting
+  re-evaluation. If a push hold remains, defer re-evaluation until the updated head is visible.
 - Merge only after review approval.
 
 ### Phase 6 — Cross-repo synchronization
@@ -410,7 +420,7 @@ Skillify pattern:
 | Skill | Phases it needs |
 | --- | --- |
 | [`agent-methodology`](../skills/agent-methodology/SKILL.md) | All 7 — this is the doctrine's home methodology |
-| [`code-review`](../skills/code-review/SKILL.md) | Phase 1 (root-cause clustering: finding matrix & single-edit rule), Phase 4 (verification gates), Phase 5 (closure: bot inline thread reply protocol) |
+| [`code-review`](../skills/code-review/SKILL.md) | Load this protocol before beginning remediation, including from a standalone post-review summary; apply Phase 1 (root-cause clustering), Phase 4 (verification), and Phase 5 (individual inline-thread replies). |
 | [`git-history-surgery`](../skills/git-history-surgery/SKILL.md) | Phase 3 (integration — safety refs, reset-vs-rebase decision), Phase 6 (cross-repo sync — same discipline as this skill's own cross-host sync card, applied to review remediation specifically) |
 | [`gstack`](../gstack/SKILL.md) | Phase 0 (freeze), Phase 5 (closure) — AutoPlan review gating |
 | [`cursor-pr-body`](../skills/cursor-pr-body/SKILL.md) | Phase 2 (PR body append-only workflow) |

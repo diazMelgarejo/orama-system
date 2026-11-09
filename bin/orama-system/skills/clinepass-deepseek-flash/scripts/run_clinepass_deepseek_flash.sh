@@ -18,9 +18,10 @@ or tool auto-approval is refused rather than dispatched. An unpinned provider is
 the documented root cause of the original "routed through another provider"
 blocker -- the slug is then rejected by a provider that never had it.
 
-Flag drift absorbed here:
-  --auto-approve-all (older CLI)  vs --auto-approve true
-  --reasoning-effort high (legacy) vs --thinking medium
+Set CLINE_BIN to an absolute executable path if cline is not on PATH. The
+installed CLI must support explicit provider selection and --thinking.
+Older approval flag shapes remain supported, but an older CLI without medium
+thinking support is refused rather than silently changing the approved effort.
 
 Fixed 2026-08-05: earlier versions of this script invoked `cline task ...`.
 There is no `task` subcommand on the real CLI (verified against v3.0.49) --
@@ -85,24 +86,16 @@ if ! help_text="$("$cline_bin" --help 2>&1)"; then
   echo "cannot inspect cline CLI help" >&2
   exit 1
 fi
-
-# Fail closed on a missing provider pin. Cline 3.0.74 defaults -P/--provider to
-# `cline`, so an unpinned dispatch resolves the ClinePass slug against the wrong
-# provider and is rejected there -- the route's original blocker.
-if grep -q -- '--provider' <<<"$help_text"; then
-  provider_args=(-P cline-pass)
-else
-  echo "cline CLI lacks --provider; refusing to dispatch an unpinned ClinePass route" >&2
+if ! grep -q -- '--provider' <<<"$help_text"; then
+  echo "cline CLI lacks --provider support" >&2
   exit 1
 fi
-
-if grep -q -- '--thinking' <<<"$help_text"; then
-  reasoning_args=(--thinking medium)
-elif grep -q -- '--reasoning-effort' <<<"$help_text"; then
-  # Legacy shape that predates the `medium` level; keep its documented value.
-  reasoning_args=(--reasoning-effort high)
-else
-  echo "cline CLI lacks --thinking and --reasoning-effort; refusing to dispatch" >&2
+if ! grep -q -- '--thinking' <<<"$help_text"; then
+  echo "cline CLI lacks --thinking support" >&2
+  exit 1
+fi
+if ! grep -qw -- 'medium' <<<"$help_text"; then
+  echo "cline CLI lacks medium thinking support" >&2
   exit 1
 fi
 
@@ -118,10 +111,8 @@ fi
 
 cmd=("$cline_bin" --json)
 [[ -z "$mode" ]] || cmd+=("$mode")
-cmd+=("${provider_args[@]}")
-cmd+=("${reasoning_args[@]}")
 cmd+=("${auto_args[@]}")
-cmd+=(-m cline-pass/deepseek-v4.1-flash-1017 -c "$cwd" -t "$timeout")
+cmd+=(-P cline-pass -m cline-pass/deepseek-v4.1-flash-1017 --thinking medium -c "$cwd" -t "$timeout")
 cmd+=("$*")
 
 exec "${cmd[@]}"

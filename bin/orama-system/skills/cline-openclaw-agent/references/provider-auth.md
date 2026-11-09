@@ -12,12 +12,15 @@ object), `model`, `timeout`, and `reasoning`.
 | `cline-pass` | `cline-pass/glm-5.3-flash` | WorkOS OAuth | Cline Credits | `api.cline.bot` |
 | `anthropic` | `claude-fable-5` | API key (`sk-ant-...`) | Anthropic | `api.anthropic.com` |
 | `openrouter` | `minimax/minimax-m2.5:free` | API key (`sk-or-v1-...`) | OpenRouter | `openrouter.ai` |
-| `openai-compatible` | `google/gemini-3.8-flash` | API key | Google AI | `generativelanguage.googleapis.com` |
+| `openai-compatible` | `gemini-3.8-flash` | API key | Google AI | `generativelanguage.googleapis.com` |
 | `openai-codex` | — | OAuth | OpenAI | `api.openai.com` |
-| `gemini` | `gemini-3.8-flash` | API key | Google AI | `generativelanguage.googleapis.com` |
+| `gemini` | Saved model (host-specific) | API key | Google AI | `generativelanguage.googleapis.com` |
 | `sapaicore` | `gpt-5.5` | SAP AI Core | SAP | — |
 
 ## `cline` vs `cline-pass`
+
+Selecting the `gemini` profile without a model override can retain its saved model;
+inspect the active configuration before assuming a specific model.
 
 Both carry the **identical** WorkOS OAuth token (`accessToken`, `refreshToken`,
 `expiresAt`, `accountId` all match). They hit the same backend
