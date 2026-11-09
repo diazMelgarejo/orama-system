@@ -15,6 +15,23 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 
+@pytest.fixture(autouse=True)
+def isolated_legacy_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Keep legacy discovery independent of real user logs and configured paths."""
+    home = tmp_path / "isolated-home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    monkeypatch.delenv("ORAMASYS_LEGACY_LESSONS_PATH", raising=False)
+    return home
+
+
+def test_legacy_home_fixture_is_empty_and_private(isolated_legacy_home: Path) -> None:
+    """A negative legacy test never consults an existing operator lesson log."""
+    assert Path.home() == isolated_legacy_home
+    assert not (isolated_legacy_home / "tasks").exists()
+
+
 def _payload(controller):
     """Build a representative lesson payload for controller tests."""
     return controller.LessonPayload(
