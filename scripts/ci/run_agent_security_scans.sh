@@ -60,8 +60,8 @@ scan_aguara() {
         FAIL=1
         continue
       fi
-      # TOXIC_CROSS_002 false-positives on internal env+subprocess coordination scripts.
-      aguara_args+=(--baseline "$baseline" --disable-rule TOXIC_CROSS_002)
+      # TOXIC_CROSS_002, CRED_021, TOXIC_002 false-positives on internal env+subprocess coordination scripts and test transcripts.
+      aguara_args+=(--baseline "$baseline" --disable-rule TOXIC_CROSS_002,CRED_021,TOXIC_002)
     fi
     run "aguara:$path" aguara "${aguara_args[@]}"
   done

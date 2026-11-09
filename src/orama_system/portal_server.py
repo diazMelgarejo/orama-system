@@ -104,9 +104,10 @@ from utils.control_plane_auth import (
 # Load .env so IPs are correct whether portal is run from start.sh or directly.
 try:
     from dotenv import load_dotenv as _load_dotenv
-    _repo_root = Path(__file__).resolve().parents[2]
-    _load_dotenv(_repo_root / ".env",       override=False)
-    _load_dotenv(_repo_root / ".env.local", override=True)
+    if not os.getenv("PYTHON_DOTENV_DISABLED"):
+        _repo_root = Path(__file__).resolve().parents[2]
+        _load_dotenv(_repo_root / ".env",       override=False)
+        _load_dotenv(_repo_root / ".env.local", override=True)
 except ImportError:
     pass
 

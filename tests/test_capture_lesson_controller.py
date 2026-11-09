@@ -163,6 +163,7 @@ def test_quick_capture_collects_only_a_rule_and_delegates(monkeypatch) -> None:
 def test_development_legacy_review_without_initialized_log(monkeypatch, capsys) -> None:
     import capture_lesson
 
+    monkeypatch.setenv("HOME", "/definitely-empty")
     monkeypatch.setattr(
         capture_lesson.sys,
         "argv",
@@ -208,6 +209,7 @@ def test_development_legacy_stats_without_initialized_log(monkeypatch, capsys) -
 def test_runtime_review_and_stats_fail_closed(action: str, monkeypatch) -> None:
     import capture_lesson
 
+    monkeypatch.setenv("HOME", "/definitely-empty")
     monkeypatch.setattr(
         capture_lesson.sys,
         "argv",
@@ -263,6 +265,7 @@ def test_legacy_review_without_initialized_log_exits_zero(
 ) -> None:
     import capture_lesson
 
+    monkeypatch.setenv("HOME", str(tmp_path / "empty-home"))
     monkeypatch.setattr(
         capture_lesson.sys,
         "argv",
