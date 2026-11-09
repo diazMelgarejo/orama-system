@@ -31,6 +31,7 @@ import contextvars
 import datetime
 import hashlib
 import importlib
+import importlib.metadata
 import importlib.util
 import json
 import os
@@ -39,6 +40,8 @@ import platform
 import subprocess
 import sys
 import time
+from urllib.parse import urlsplit
+from urllib.request import url2pathname
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -84,21 +87,103 @@ _WIN_GPU_LOCK = asyncio.Lock()
 _DISPATCH_SCOPE: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("spawn_dispatch_scope", default=None)
 
 
-def _assert_pt_governance_origin(root: Path) -> None:
-    """Refuse cached policy modules from another checkout without evicting them."""
+def _assert_pt_governance_origin(policy_dir: Path) -> None:
+    """Refuse cached policy modules outside the selected source or installation."""
     for name, relative in (
-        ("perpetua_tools", "src/perpetua_tools/__init__.py"),
-        ("perpetua_tools.model_governance", "src/perpetua_tools/model_governance.py"),
+        ("perpetua_tools", "__init__.py"),
+        ("perpetua_tools.model_governance", "model_governance.py"),
     ):
         cached = sys.modules.get(name)
         if cached is not None:
             origin = getattr(cached, "__file__", None)
-            if not origin or Path(origin).resolve() != root / relative:
-                raise ImportError("PT governance origin does not match selected checkout")
+            if not origin or Path(origin).resolve() != policy_dir / relative:
+                raise ImportError("PT governance origin does not match selected authority")
+
+
+def _load_pt_authority(package_dir: Path, policy_dir: Path) -> tuple[Any, Any, Any]:
+    """Bind guard/state modules to validated paths and preserve exception identity."""
+    _assert_pt_governance_origin(policy_dir)
+    for path in (package_dir.parent, policy_dir.parent):
+        if str(path) not in sys.path:
+            sys.path.insert(0, str(path))
+    name = "_pt_dispatch_" + hashlib.sha256(str(package_dir).encode()).hexdigest()[:16]
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, package_dir / "__init__.py", submodule_search_locations=[str(package_dir)])
+        if spec is None or spec.loader is None:
+            raise ImportError("PT dispatch authority is unavailable")
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[name] = module
+        try:
+            spec.loader.exec_module(module)
+        except BaseException:
+            del sys.modules[name]
+            raise
+    guard = importlib.import_module(f"{name}.dispatch_guard")
+    state = importlib.import_module(f"{name}.state_dir")
+    _assert_pt_governance_origin(policy_dir)
+    return guard.DispatchGuard, guard.DispatchRequest, state.resolve_default_state_dir
+
+
+def _installed_pt_authority() -> tuple[Any, Any, Any]:
+    """Select modules recorded by the trusted local PT installation, not ambient imports.
+
+    Distribution metadata establishes local package ownership, not a signature or
+    protection against a malicious same-user installer. Policy-origin checks still
+    reject mixed cached modules. Missing/incomplete metadata remains fail-closed.
+    """
+    try:
+        distribution = importlib.metadata.distribution("perpetua-tools")
+    except importlib.metadata.PackageNotFoundError as exc:
+        raise ImportError("PT dispatch authority is unavailable: no checkout or installed PT") from exc
+    if distribution.metadata.get("Name", "").lower().replace("_", "-") != "perpetua-tools":
+        raise ImportError("PT dispatch authority is unavailable: invalid distribution ownership")
+    files = {str(path): Path(distribution.locate_file(path)).resolve() for path in distribution.files or ()}
+    guard_paths = ("orchestrator/__init__.py", "orchestrator/dispatch_guard.py", "orchestrator/state_dir.py")
+    for prefix in ("perpetua_tools", "src/perpetua_tools"):
+        required = (*guard_paths, f"{prefix}/__init__.py", f"{prefix}/model_governance.py")
+        if all(name in files and files[name].is_file() for name in required):
+            package_dir = files[guard_paths[0]].parent
+            policy_dir = files[f"{prefix}/__init__.py"].parent
+            if (all(files[name].parent == package_dir for name in guard_paths)
+                    and files[f"{prefix}/model_governance.py"].parent == policy_dir):
+                return _load_pt_authority(package_dir, policy_dir)
+    direct_url = distribution.read_text("direct_url.json")
+    if direct_url:
+        try:
+            import tomllib
+        except ModuleNotFoundError:
+            try:
+                import tomli as tomllib
+            except ModuleNotFoundError as exc:
+                raise ImportError("PT dispatch authority is unavailable: editable parsing requires tomli") from exc
+        try:
+            record = json.loads(direct_url)
+            url = urlsplit(record["url"])
+            if (record.get("dir_info", {}).get("editable") is not True
+                    or url.scheme != "file" or url.netloc not in ("", "localhost")
+                    or url.query or url.fragment):
+                raise ValueError("invalid editable source")
+            root = Path(url2pathname(url.path))
+            if not root.is_absolute():
+                raise ValueError("editable source must be absolute")
+            root = root.resolve()
+            project = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+            if project["project"]["name"].lower().replace("_", "-") != "perpetua-tools":
+                raise ValueError("invalid editable project")
+            package_dir, policy_dir = root / "orchestrator", root / "src/perpetua_tools"
+            if not all(path.is_file() for path in (
+                package_dir / "__init__.py", package_dir / "dispatch_guard.py", package_dir / "state_dir.py",
+                policy_dir / "__init__.py", policy_dir / "model_governance.py",
+            )):
+                raise ValueError("incomplete editable source")
+        except (OSError, ValueError, TypeError, KeyError, AttributeError) as exc:
+            raise ImportError("PT dispatch authority is unavailable: invalid editable ownership") from exc
+        return _load_pt_authority(package_dir, policy_dir)
+    raise ImportError("PT dispatch authority is unavailable: incomplete distribution ownership")
 
 
 def _pt_dispatch_authority() -> tuple[Any, Any, Any]:
-    """Load the first complete PT checkout, never an ambient orchestrator package.
+    """Load a complete PT checkout or metadata-owned installed PT authority.
 
     Incomplete discovery candidates may be skipped; import or policy failures in
     a selected complete checkout must remain visible rather than change authority.
@@ -123,27 +208,8 @@ def _pt_dispatch_authority() -> tuple[Any, Any, Any]:
             "__init__.py", "model_governance.py",
         )):
             continue
-        _assert_pt_governance_origin(root)
-        for path in (root, root / "src"):
-            if str(path) not in sys.path:
-                sys.path.insert(0, str(path))
-        name = "_pt_dispatch_" + hashlib.sha256(str(root).encode()).hexdigest()[:16]
-        if name not in sys.modules:
-            spec = importlib.util.spec_from_file_location(name, package_dir / "__init__.py", submodule_search_locations=[str(package_dir)])
-            if spec is None or spec.loader is None:
-                raise ImportError("PT dispatch authority is unavailable")
-            module = importlib.util.module_from_spec(spec)
-            sys.modules[name] = module
-            try:
-                spec.loader.exec_module(module)
-            except BaseException:
-                del sys.modules[name]
-                raise
-        guard = importlib.import_module(f"{name}.dispatch_guard")
-        state = importlib.import_module(f"{name}.state_dir")
-        _assert_pt_governance_origin(root)
-        return guard.DispatchGuard, guard.DispatchRequest, state.resolve_default_state_dir
-    raise ImportError("PT dispatch authority is unavailable: no complete checkout found")
+        return _load_pt_authority(package_dir, root / "src/perpetua_tools")
+    return _installed_pt_authority()
 
 
 def duplicate_dispatch_error_type() -> type[Exception]:

@@ -2,6 +2,7 @@
 
 from collections.abc import Iterator
 from contextlib import contextmanager
+import importlib
 from pathlib import Path
 from types import ModuleType
 import sys
@@ -188,8 +189,21 @@ def test_incomplete_sibling_is_skipped(spawn: ModuleType, tmp_path: Path) -> Non
     assert spawn._pt_dispatch_authority()[2]() == str(valid)
 
 
-def test_missing_candidates_refuse_ambient_authority(spawn: ModuleType) -> None:
+def test_missing_candidates_refuse_ambient_authority(
+    spawn: ModuleType, monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """An installed or cached unrelated orchestrator is never a discovery fallback."""
+    package = ModuleType("orchestrator")
+    package.__path__ = []
+    guard = ModuleType("orchestrator.dispatch_guard")
+    guard.DispatchGuard = object()
+    guard.DispatchRequest = object()
+    state = ModuleType("orchestrator.state_dir")
+    state.resolve_default_state_dir = object()
+    for module in (package, guard, state):
+        monkeypatch.setitem(sys.modules, module.__name__, module)
+    assert importlib.import_module(guard.__name__) is guard
+    assert importlib.import_module(state.__name__) is state
     with pytest.raises(ImportError, match="PT dispatch authority is unavailable"):
         spawn._pt_dispatch_authority()
 
@@ -223,3 +237,19 @@ def test_cached_governance_from_other_checkout_is_refused(
     with pytest.raises(ImportError, match="governance origin"):
         spawn._pt_dispatch_authority()
     assert sys.modules[name] is foreign
+
+
+def test_foreign_governance_imported_during_load_is_refused(
+    spawn: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The post-import check catches a cold policy shadowed on the search path."""
+    selected = _checkout(tmp_path / "selected")
+    foreign = _checkout(tmp_path / "foreign")
+    guard = selected / "orchestrator/dispatch_guard.py"
+    guard.write_text(guard.read_text() + "import perpetua_tools.model_governance\n")
+    monkeypatch.setenv("PERPETUATOOLSROOT", str(selected))
+    monkeypatch.setattr(sys, "path", [str(foreign / "src"), str(selected / "src"), *sys.path])
+    assert "perpetua_tools.model_governance" not in sys.modules
+    with pytest.raises(ImportError, match="governance origin"):
+        spawn._pt_dispatch_authority()
+    assert Path(sys.modules["perpetua_tools.model_governance"].__file__).resolve() == foreign / "src/perpetua_tools/model_governance.py"
