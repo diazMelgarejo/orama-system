@@ -336,6 +336,16 @@ def test_cline_identity_is_approved_agent(profile, name):
     assert result.matched_kind == "agent"
 
 
+@pytest.mark.parametrize("profile", ["configured", "strict"])
+def test_cline_bot_identity_is_approved_agent(profile: str) -> None:
+    """The paired Cline bot identity is classified as an agent in both profiles."""
+    result = audit_engine.is_approved_identity(
+        "Cline", "noreply@cline.bot", root=Path("."), policy_path=REAL_POLICY, profile=profile,
+    )
+    assert result.approved
+    assert result.matched_kind == "agent"
+
+
 @pytest.mark.parametrize("repo,approved", [
     ("orama-system", True),
     ("Perpetua-Tools", True),
