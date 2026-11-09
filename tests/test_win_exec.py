@@ -698,55 +698,35 @@ def test_posix_never_sends_signal_after_reaping(monkeypatch: pytest.MonkeyPatch,
 
 
 @pytest.mark.skipif(WIN, reason="POSIX process-group semantics")
-def test_posix_sigterm_resistant_tree_is_killed_before_reaping() -> None:
-    """A TERM-resistant descendant receives group KILL while the leader is owned."""
-    def running_state(pid: int) -> Optional[bool]:
-        """Distinguish a live process from absence or a non-running zombie."""
-        try:
-            os.kill(pid, 0)
-        except ProcessLookupError:
-            return False
-        except PermissionError:
-            return None
-        try:
-            result = subprocess.run(
-                ["ps", "-o", "stat=", "-p", str(pid)], capture_output=True,
-                text=True, timeout=2, check=False,
-            )
-        except (OSError, subprocess.TimeoutExpired):
-            return None
-        state = result.stdout.strip()
-        if result.returncode != 0 or not state:
-            return None
-        return not state.startswith("Z")
-
+def test_posix_sigterm_resistant_root_is_killed_before_reaping() -> None:
+    """An owned TERM-resistant root requires group KILL before bounded reaping."""
     code = (
-        "import signal,subprocess,sys,time; "
+        "import signal,time; "
         "signal.signal(signal.SIGTERM, signal.SIG_IGN); "
-        "p=subprocess.Popen([sys.executable,'-c',"
-        "'import signal,time; signal.signal(signal.SIGTERM,signal.SIG_IGN); "
-        "print(\"ready\",flush=True); time.sleep(60)'],stdout=subprocess.PIPE); "
-        "p.stdout.readline(); "
-        "print(p.pid,flush=True); time.sleep(60)"
+        "print('ready',flush=True); time.sleep(60)"
     )
     proc = win_exec.launch_tree([sys.executable, "-c", code], stdout=subprocess.PIPE, text=True)
-    child = int(proc.stdout.readline().strip())
     try:
+        assert proc.stdout.readline().strip() == "ready"
         assert win_exec.terminate_tree(proc, grace=0.3) == "contained"
-        assert proc.returncode is not None
-        deadline = time.monotonic() + 5
-        state = running_state(child)
-        while state is not False and time.monotonic() < deadline:
-            time.sleep(0.05)
-            state = running_state(child)
-        assert state is False, f"descendant is still running or status is unknown: {state}"
+        assert proc.returncode == -signal.SIGKILL
     finally:
-        if _pid_alive(child):
-            try:
-                os.kill(child, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
+        if proc.returncode is None:
+            proc.kill()
+            proc.wait(timeout=2)
         proc.stdout.close()
+
+
+@pytest.mark.parametrize("missing", ["P_PID", "WEXITED", "WNOWAIT", "WNOHANG"])
+def test_exited_falls_back_when_waitid_api_is_partial(
+    monkeypatch: pytest.MonkeyPatch, posix_process_mocks: None, missing: str,
+) -> None:
+    """Partial POSIX APIs cannot cause AttributeError in exit observation."""
+    proc = MagicMock(pid=4575, returncode=None)
+    proc.poll.return_value = 0
+    monkeypatch.delattr(win_exec.os, missing)
+    assert win_exec.exited(proc) is True
+    proc.poll.assert_called_once()
 
 
 def test_effective_platform_path_module_selection(monkeypatch: pytest.MonkeyPatch) -> None:

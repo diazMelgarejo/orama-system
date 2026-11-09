@@ -728,7 +728,9 @@ def exited(proc: "subprocess.Popen") -> bool:
     """
     if proc.returncode is not None:
         return True
-    if _win() or not hasattr(os, "waitid"):
+    if _win() or not all(
+        hasattr(os, name) for name in ("waitid", "P_PID", "WEXITED", "WNOWAIT", "WNOHANG")
+    ):
         return proc.poll() is not None
     try:
         state = os.waitid(os.P_PID, proc.pid, os.WEXITED | os.WNOWAIT | os.WNOHANG)
