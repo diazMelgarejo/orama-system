@@ -1,5 +1,7 @@
 """Bind dispatch authority to the first complete explicitly discovered checkout."""
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from types import ModuleType
 import sys
@@ -9,15 +11,90 @@ import pytest
 from test_spawn_dispatch_governance import _load_spawn
 
 
+@contextmanager
+def _isolated_governance_cache() -> Iterator[None]:
+    """Isolate synthetic policy imports, restoring every inherited module identity."""
+    def policy_module(name: str) -> bool:
+        """Match only the absolute policy package and its descendants."""
+        return name == "perpetua_tools" or name.startswith("perpetua_tools.")
+
+    with pytest.MonkeyPatch.context() as cache:
+        for name in tuple(sys.modules):
+            if policy_module(name):
+                cache.delitem(sys.modules, name)
+        try:
+            yield
+        finally:
+            for name in tuple(sys.modules):
+                if policy_module(name):
+                    del sys.modules[name]
+
+
 @pytest.fixture
-def spawn(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ModuleType:
-    """Remove workstation discovery settings and all real sibling candidates."""
+def spawn(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[ModuleType]:
+    """Isolate synthetic checkouts from workstation paths and inherited policies."""
     for key in ("PERPETUATOOLSROOT", "PERPETUA_TOOLS_ROOT", "PERPETUA_TOOLS_PATH"):
         monkeypatch.delenv(key, raising=False)
     module = _load_spawn()
     monkeypatch.setattr(module, "REPO_ROOT", tmp_path / "orama-system")
     monkeypatch.setattr(sys, "path", sys.path.copy())
-    return module
+    with _isolated_governance_cache():
+        try:
+            yield module
+        finally:
+            # Test-local cache patches must unwind before inherited modules return.
+            monkeypatch.undo()
+
+
+@pytest.mark.parametrize("exceptional", [False, True])
+def test_policy_cache_restores_originals_and_discards_synthetic_modules(
+    monkeypatch: pytest.MonkeyPatch, exceptional: bool,
+) -> None:
+    """Normal and exceptional exits preserve preloaded policy objects exactly."""
+    package = ModuleType("perpetua_tools")
+    policy = ModuleType("perpetua_tools.model_governance")
+    monkeypatch.setitem(sys.modules, package.__name__, package)
+    monkeypatch.setitem(sys.modules, policy.__name__, policy)
+    original = {name: module for name, module in sys.modules.items()
+                if name == "perpetua_tools" or name.startswith("perpetua_tools.")}
+    try:
+        with _isolated_governance_cache():
+            assert not any(name in sys.modules for name in original)
+            sys.modules[package.__name__] = ModuleType(package.__name__)
+            sys.modules["perpetua_tools.synthetic_child"] = ModuleType("perpetua_tools.synthetic_child")
+            if exceptional:
+                raise RuntimeError("synthetic test failure")
+    except RuntimeError as exc:
+        assert exceptional and str(exc) == "synthetic test failure"
+    restored = {name: module for name, module in sys.modules.items()
+                if name == "perpetua_tools" or name.startswith("perpetua_tools.")}
+    assert restored.keys() == original.keys()
+    assert all(restored[name] is module for name, module in original.items())
+
+
+def test_spawn_fixture_preserves_cache_after_complete_teardown(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The later monkeypatch finalizer cannot remove restored inherited modules."""
+    originals = {name: ModuleType(name) for name in (
+        "perpetua_tools", "perpetua_tools.model_governance",
+    )}
+    for name, module in originals.items():
+        monkeypatch.setitem(sys.modules, name, module)
+    local = pytest.MonkeyPatch()
+    fixture = spawn.__wrapped__(tmp_path, local)
+    try:
+        next(fixture)
+        for name in originals:
+            assert name not in sys.modules
+            local.setitem(sys.modules, name, ModuleType(name))
+        with pytest.raises(StopIteration):
+            next(fixture)
+        local.undo()
+        assert all(sys.modules.get(name) is module for name, module in originals.items())
+    finally:
+        fixture.close()
+        local.undo()
 
 
 def _checkout(root: Path) -> Path:
