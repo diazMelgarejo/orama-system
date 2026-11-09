@@ -1,9 +1,11 @@
 ﻿# cline_autoresearcher_watch.ps1 — AutoResearcher 15-min checkback watcher (Windows)
 #
-# Called by start.ps1 with three positional args:
-#   $1 = RepoRoot   (orama-system repo root)
-#   $2 = UsPython   (Python interpreter path)
-#   $3 = LogDir     (.logs directory)
+# Started detached by start.ps1 (--lan-peer) with named parameters:
+#   -RepoRoot  (orama-system repo root)
+#   -UsPython  (Python interpreter path)
+#   -LogDir    (.logs directory)
+# start.ps1 also sets PT_AGENT_ID (default win-researcher), PT_STATE_DIR and PYTHONUTF8 for it, writes
+# .logs\autoresearcher_watch.pid and stops it on --stop (matched by command line, never by name).
 #
 # Runs an infinite loop checking every 15 minutes whether the ClinePass
 # AutoResearcher fallback should be active. When the Hermes Gateway is

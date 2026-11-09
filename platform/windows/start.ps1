@@ -1590,6 +1590,9 @@ if ($Stop) {
             } elseif ($pf.BaseName -eq 'lan_peer_pulse') {
                 # LAN peer pulse: command-line match on lan_peer_pulse, never by name.
                 $owned = Life-PidMatches $recorded '^pythonw?[0-9.]*$' 'lan_peer_pulse'
+            } elseif ($pf.BaseName -eq 'autoresearcher_watch') {
+                # AutoResearcher fallback watcher: command-line match on its script, never by name.
+                $owned = Life-PidMatches $recorded '^(powershell|pwsh)$' 'cline_autoresearcher_watch'
             } elseif ($pf.BaseName -eq 'portal_tls') {
                 # Portal TLS proxy: command-line match on portal_tls_proxy, never by name.
                 $owned = Life-PidMatches $recorded '^pythonw?[0-9.]*$' 'portal_tls_proxy'
@@ -2438,6 +2441,41 @@ if ($LanPeer) {
         }
     } catch {
         _Warn 'lan-peer' "failed to start lan-peer-pulse: $($_.Exception.Message)"
+    }
+
+    # ── AutoResearcher fallback watcher autostart: 15-minute report-only check, detached, idempotent ──
+    # Identity comes from AUTORESEARCHER_AGENT_ID (default win-researcher); PT_STATE_DIR is explicit because the
+    # run worktrees are linked git worktrees (the PT state-authority guard refuses an implicit state directory).
+    # Set AUTORESEARCHER_WATCH_DISABLE=1 to skip it.
+    try {
+        $WatchScript = Join-Path $RepoRoot 'scripts\cline_autoresearcher_watch.ps1'
+        if ($env:AUTORESEARCHER_WATCH_DISABLE -eq '1') {
+            _Info 'lan-peer' 'autoresearcher-watch autostart disabled (AUTORESEARCHER_WATCH_DISABLE=1)'
+        } elseif (-not (Test-Path $WatchScript)) {
+            _Warn 'lan-peer' "cline_autoresearcher_watch.ps1 not found at: $WatchScript - skipping watcher autostart"
+        } else {
+            $arPidFile = Join-Path $LogDir 'autoresearcher_watch.pid'
+            $arPid = Life-ReadPid $arPidFile
+            if ($arPid -gt 0 -and (Life-PidMatches $arPid '^(powershell|pwsh)$' 'cline_autoresearcher_watch')) {
+                _Info 'lan-peer' "autoresearcher-watch already running (PID $arPid)"
+            } else {
+                $arAgent = if ($env:AUTORESEARCHER_AGENT_ID) { $env:AUTORESEARCHER_AGENT_ID } else { 'win-researcher' }
+                $arState = if ($env:PT_STATE_DIR) { $env:PT_STATE_DIR } else { Join-Path $env:USERPROFILE (Join-Path '.orama-state' $arAgent) }
+                $null = New-Item -ItemType Directory -Force -Path $LogDir, $arState
+                $arLog = Join-Path $LogDir 'autoresearcher-watch.log'
+                $newArPid = Life-Spawn -LogFile $arLog -PidFile $arPidFile -WorkDir $RepoRoot `
+                    -EnvExtra @{ PT_AGENT_ID = $arAgent; PT_STATE_DIR = $arState; PYTHONUTF8 = '1' } `
+                    -Cmd @('powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $WatchScript,
+                           '-RepoRoot', $RepoRoot, '-UsPython', $UsPython, '-LogDir', $LogDir)
+                if ($newArPid -gt 0) {
+                    _Info 'lan-peer' "autoresearcher-watch started detached (PID $newArPid, agent $arAgent, log $arLog)"
+                } else {
+                    _Warn 'lan-peer' 'autoresearcher-watch failed to start'
+                }
+            }
+        }
+    } catch {
+        _Warn 'lan-peer' "failed to start autoresearcher-watch: $($_.Exception.Message)"
     }
 }
 
