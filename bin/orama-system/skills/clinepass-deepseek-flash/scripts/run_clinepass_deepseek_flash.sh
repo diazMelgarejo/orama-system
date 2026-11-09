@@ -6,12 +6,21 @@ usage() {
 Usage: run_clinepass_deepseek_flash.sh [--cwd PATH] [--timeout SECONDS] [--plan|--act] PROMPT
 
 Dispatch Cline non-interactively with:
+  provider:  cline-pass (explicit -P pin; the CLI default provider is `cline`)
   model:     cline-pass/deepseek-v4.1-flash-1017
-  reasoning: high
+  reasoning: medium (--thinking medium)
   output:    JSON lines
+  approvals: --auto-approve true (CLI 3.0.74 default; still passed explicitly)
 
-The script adapts to Cline CLI flag drift between --auto-approve-all and
---auto-approve true, and between --reasoning-effort high and --thinking high.
+Required capabilities are read from `cline --help` instead of being assumed, and
+each one fails closed: a CLI that cannot pin the provider, the reasoning level,
+or tool auto-approval is refused rather than dispatched. An unpinned provider is
+the documented root cause of the original "routed through another provider"
+blocker -- the slug is then rejected by a provider that never had it.
+
+Flag drift absorbed here:
+  --auto-approve-all (older CLI)  vs --auto-approve true
+  --reasoning-effort high (legacy) vs --thinking medium
 
 Fixed 2026-08-05: earlier versions of this script invoked `cline task ...`.
 There is no `task` subcommand on the real CLI (verified against v3.0.49) --
@@ -66,31 +75,52 @@ done
 
 [[ $# -gt 0 ]] || { echo "missing prompt" >&2; usage >&2; exit 2; }
 
-if ! command -v cline >/dev/null 2>&1; then
+cline_bin="${CLINE_BIN:-cline}"
+if ! command -v "$cline_bin" >/dev/null 2>&1; then
   echo "cline CLI not found on PATH" >&2
   exit 127
 fi
 
-help_text="$(cline --help 2>&1 || true)"
+if ! help_text="$("$cline_bin" --help 2>&1)"; then
+  echo "cannot inspect cline CLI help" >&2
+  exit 1
+fi
 
-auto_args=()
+# Fail closed on a missing provider pin. Cline 3.0.74 defaults -P/--provider to
+# `cline`, so an unpinned dispatch resolves the ClinePass slug against the wrong
+# provider and is rejected there -- the route's original blocker.
+if grep -q -- '--provider' <<<"$help_text"; then
+  provider_args=(-P cline-pass)
+else
+  echo "cline CLI lacks --provider; refusing to dispatch an unpinned ClinePass route" >&2
+  exit 1
+fi
+
+if grep -q -- '--thinking' <<<"$help_text"; then
+  reasoning_args=(--thinking medium)
+elif grep -q -- '--reasoning-effort' <<<"$help_text"; then
+  # Legacy shape that predates the `medium` level; keep its documented value.
+  reasoning_args=(--reasoning-effort high)
+else
+  echo "cline CLI lacks --thinking and --reasoning-effort; refusing to dispatch" >&2
+  exit 1
+fi
+
 if grep -q -- '--auto-approve-all' <<<"$help_text"; then
   auto_args=(--auto-approve-all)
-elif grep -q -- '--auto-approve ' <<<"$help_text"; then
+elif grep -q -- '--auto-approve' <<<"$help_text"; then
   auto_args=(--auto-approve true)
+else
+  # A non-TTY run cannot answer approval prompts, so an unflagged dispatch hangs.
+  echo "cline CLI lacks an auto-approve flag; refusing to dispatch non-interactively" >&2
+  exit 1
 fi
 
-reasoning_args=()
-if grep -q -- '--reasoning-effort' <<<"$help_text"; then
-  reasoning_args=(--reasoning-effort high)
-elif grep -q -- '--thinking' <<<"$help_text"; then
-  reasoning_args=(--thinking high)
-fi
-
-cmd=(cline --json)
+cmd=("$cline_bin" --json)
 [[ -z "$mode" ]] || cmd+=("$mode")
-cmd+=("${auto_args[@]}")
+cmd+=("${provider_args[@]}")
 cmd+=("${reasoning_args[@]}")
+cmd+=("${auto_args[@]}")
 cmd+=(-m cline-pass/deepseek-v4.1-flash-1017 -c "$cwd" -t "$timeout")
 cmd+=("$*")
 
