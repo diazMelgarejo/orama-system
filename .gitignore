@@ -199,3 +199,6 @@ lance_memory.lance/
 
 # Detached-service PID files
 .logs/*.pid
+
+# CI checkouts (CodeRabbit 4505222051)
+/.ci/pt-dispatch/

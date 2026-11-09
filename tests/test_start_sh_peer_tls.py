@@ -273,7 +273,8 @@ def _config_dir(tmp: Path, proxy: str = "localhost:8002", admin: int | None = No
     """Create a front end config directory with a Caddyfile that proxies to *proxy* (and sets *admin* when given)."""
     directory = tmp / "cp"
     directory.mkdir(exist_ok=True)
-    head = f"{{\n\tadmin localhost:{admin}\n}}\n\n" if admin else ""
+    admin_port = admin if admin is not None else _free_port()
+    head = f"{{\n\tadmin localhost:{admin_port}\n}}\n\n"
     (directory / "Caddyfile").write_text(f"{head}https://:8443 {{\n\treverse_proxy {proxy}\n}}\n", encoding="utf-8")
     return directory
 
@@ -294,17 +295,80 @@ def test_frontend_skipped_when_disabled_and_honest_when_prerequisites_missing(tm
     """Disabled is a no-op; missing caddy, missing Caddyfile or failed validation each warn and return non-zero."""
     bindir, log = _fake_caddy(tmp_path)
     cfg = _config_dir(tmp_path)
-    off = _bash(tmp_path, "_ensure_peer_tls_frontend", {"ORAMA_PEER_TLS_FRONTEND": "0", "ORAMA_LAN_CONTROL_PLANE_DIR": str(cfg)}, path=f"{bindir}:/usr/bin:/bin")
+    port = _free_port()
+    stub = "_port_listening() { return 1; }; "
+    off = _bash(tmp_path, stub + "_ensure_peer_tls_frontend", {"ORAMA_PEER_TLS_FRONTEND": "0", "ORAMA_LAN_CONTROL_PLANE_DIR": str(cfg), "PEER_PORTAL_TLS_PORT": str(port)}, path=f"{bindir}:/usr/bin:/bin")
     assert off.returncode == 0 and not log.exists()
-    nocaddy = _bash(tmp_path, "_ensure_peer_tls_frontend", {"ORAMA_LAN_CONTROL_PLANE_DIR": str(cfg)}, path="/usr/bin:/bin")
+    env = {"ORAMA_LAN_CONTROL_PLANE_DIR": str(cfg), "PEER_PORTAL_TLS_PORT": str(port)}
+    nocaddy = _bash(tmp_path, stub + "_ensure_peer_tls_frontend", env, path="/usr/bin:/bin")
     assert nocaddy.returncode != 0 and "caddy" in nocaddy.stderr
     empty = tmp_path / "empty"
     empty.mkdir()
-    nofile = _bash(tmp_path, "_ensure_peer_tls_frontend", {"ORAMA_LAN_CONTROL_PLANE_DIR": str(empty)}, path=f"{bindir}:/usr/bin:/bin")
+    nofile = _bash(tmp_path, stub + "_ensure_peer_tls_frontend", {"ORAMA_LAN_CONTROL_PLANE_DIR": str(empty), "PEER_PORTAL_TLS_PORT": str(port)}, path=f"{bindir}:/usr/bin:/bin")
     assert nofile.returncode != 0 and "Caddyfile" in nofile.stderr and not log.exists()
-    invalid = _bash(tmp_path, "_ensure_peer_tls_frontend", {"ORAMA_LAN_CONTROL_PLANE_DIR": str(cfg), "FAKE_CADDY_VALIDATE_RC": "1"}, path=f"{bindir}:/usr/bin:/bin")
+    invalid = _bash(tmp_path, stub + "_ensure_peer_tls_frontend", {**env, "FAKE_CADDY_VALIDATE_RC": "1"}, path=f"{bindir}:/usr/bin:/bin")
     assert invalid.returncode != 0 and "validation" in invalid.stderr
     assert "start" not in log.read_text(encoding="utf-8"), "an invalid config must never be started"
+
+
+def test_frontend_without_admin_directive_uses_default_without_host_probe(tmp_path: Path) -> None:
+    """An absent admin directive resolves to 2019 without probing a real listener."""
+    bindir, log = _fake_caddy(tmp_path)
+    cfg = _config_dir(tmp_path)
+    (cfg / "Caddyfile").write_text(
+        "https://:8443 {\n\treverse_proxy localhost:8002\n}\n", encoding="utf-8"
+    )
+    result = _bash(
+        tmp_path,
+        '_port_listening() { echo "CHECK $1"; [ "$1" = 2019 ]; }; _ensure_peer_tls_frontend',
+        {"ORAMA_LAN_CONTROL_PLANE_DIR": str(cfg), "PEER_PORTAL_TLS_PORT": "9443"},
+        path=f"{bindir}:/usr/bin:/bin",
+    )
+    assert result.returncode != 0
+    assert result.stdout.splitlines() == ["CHECK 9443", "CHECK 2019"]
+    assert "caddy stop --address localhost:2019" in result.stderr
+    assert not log.exists()
+
+
+def test_frontend_unset_tls_port_reaches_prerequisite_using_default(tmp_path: Path) -> None:
+    """Under nounset, an absent TLS port defaults to 8443 before prerequisite refusal."""
+    bindir, log = _fake_caddy(tmp_path)
+    missing = tmp_path / "unprovisioned"
+    missing.mkdir()
+    result = _bash(
+        tmp_path,
+        'unset PEER_PORTAL_TLS_PORT; '
+        '_port_listening() { echo "CHECK $1"; return 1; }; _ensure_peer_tls_frontend',
+        {"ORAMA_LAN_CONTROL_PLANE_DIR": str(missing)},
+        path=f"{bindir}:/usr/bin:/bin",
+    )
+    assert result.returncode != 0
+    assert result.stdout.splitlines() == ["CHECK 8443"]
+    assert "Caddyfile" in result.stderr and "unbound variable" not in result.stderr
+    assert not log.exists()
+
+
+def test_frontend_without_admin_directive_validates_and_starts(tmp_path: Path) -> None:
+    """Closed TLS/admin ports allow no-admin configuration startup without host probes."""
+    bindir, log = _fake_caddy(tmp_path)
+    cfg = _config_dir(tmp_path)
+    (cfg / "Caddyfile").write_text(
+        "https://:9443 {\n\treverse_proxy localhost:8002\n}\n", encoding="utf-8"
+    )
+    result = _bash(
+        tmp_path,
+        'probe_count=0; _port_listening() { '
+        'probe_count=$((probe_count + 1)); echo "CHECK $1"; [ "$probe_count" -gt 2 ]; }; '
+        '_ensure_peer_tls_frontend',
+        {"ORAMA_LAN_CONTROL_PLANE_DIR": str(cfg), "PEER_PORTAL_TLS_PORT": "9443"},
+        path=f"{bindir}:/usr/bin:/bin",
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines()[:2] == ["CHECK 9443", "CHECK 2019"]
+    calls = log.read_text(encoding="utf-8").splitlines()
+    assert calls[0].startswith("validate --config")
+    assert calls[1].startswith("start --config")
+    assert "listening on port 9443" in result.stdout
 
 
 def test_frontend_starts_validated_config_and_reports_listening(tmp_path) -> None:

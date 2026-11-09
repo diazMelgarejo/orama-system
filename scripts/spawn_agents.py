@@ -27,7 +27,13 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
+import contextvars
 import datetime
+import hashlib
+import importlib
+import importlib.metadata
+import importlib.util
 import json
 import os
 import shutil
@@ -35,6 +41,8 @@ import platform
 import subprocess
 import sys
 import time
+from urllib.parse import urlsplit
+from urllib.request import url2pathname
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -42,7 +50,18 @@ from typing import Any, Dict, List, Optional
 # ── Config ────────────────────────────────────────────────────────────────────
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+# PT's shim uses this capability marker to avoid wrapping the same effect twice.
+PT_RUNTIME_DISPATCH_GUARD = 1
 _CURSOR_RACE_RETRY_DUE_FILE = REPO_ROOT / ".logs" / "cursor_standalone_retry_due.txt"
+
+try:
+    from perpetua_tools.model_governance import ModelGovernanceError
+except ImportError:
+    try:
+        from orama_system.model_governance import ModelGovernanceError
+    except ImportError:
+        class ModelGovernanceError(RuntimeError):  # type: ignore[no-redef]
+            """Raised when a launch violates model governance or config cannot be evaluated."""
 
 for _stream in (sys.stdout, sys.stderr):
     if hasattr(_stream, "reconfigure"):
@@ -62,9 +81,160 @@ LMS_WIN_MODEL = os.getenv(
 
 OLLAMA_MAC_ENDPOINT = os.getenv("OLLAMA_MAC_ENDPOINT", "http://127.0.0.1:11434")
 MANAGER_MODEL = os.getenv("MANAGER_MODEL", "qwen3.5:9b-mlx")
+CURSOR_MODEL = "claude-4.6-sonnet-medium"
 
 # Windows GPU lock — one model at a time (CLAUDE.md §4 invariant)
 _WIN_GPU_LOCK = asyncio.Lock()
+_DISPATCH_SCOPE: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("spawn_dispatch_scope", default=None)
+
+
+def _assert_pt_governance_origin(policy_dir: Path) -> None:
+    """Refuse cached policy modules outside the selected source or installation."""
+    for name, relative in (
+        ("perpetua_tools", "__init__.py"),
+        ("perpetua_tools.model_governance", "model_governance.py"),
+    ):
+        cached = sys.modules.get(name)
+        if cached is not None:
+            origin = getattr(cached, "__file__", None)
+            if not origin or Path(origin).resolve() != (policy_dir / relative).resolve():
+                raise ImportError("PT governance origin does not match selected authority")
+
+
+@contextlib.contextmanager
+def _selected_import_paths(*paths: Path) -> Any:
+    """Give the selected authority directories import precedence only while it loads.
+
+    sys.path is restored exactly afterwards, so a module living beside the selected
+    authority (an httpx-like name, a ``utils`` package) can never shadow unrelated
+    imports for the rest of the process. Path changes made during the load are discarded.
+    """
+    saved = list(sys.path)
+    entries = [str(path) for path in dict.fromkeys(paths)]
+    try:
+        sys.path[:] = [*entries, *(entry for entry in saved if entry not in entries)]
+        yield
+    finally:
+        sys.path[:] = saved
+
+
+def _load_pt_authority(package_dir: Path, policy_dir: Path) -> tuple[Any, Any, Any]:
+    """Bind guard/state modules to validated paths and preserve exception identity."""
+    _assert_pt_governance_origin(policy_dir)
+    name = "_pt_dispatch_" + hashlib.sha256(str(package_dir).encode()).hexdigest()[:16]
+    with _selected_import_paths(policy_dir.parent, package_dir.parent):
+        if name not in sys.modules:
+            spec = importlib.util.spec_from_file_location(name, package_dir / "__init__.py", submodule_search_locations=[str(package_dir)])
+            if spec is None or spec.loader is None:
+                raise ImportError("PT dispatch authority is unavailable")
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[name] = module
+            try:
+                spec.loader.exec_module(module)
+            except BaseException:
+                del sys.modules[name]
+                raise
+        guard = importlib.import_module(f"{name}.dispatch_guard")
+        state = importlib.import_module(f"{name}.state_dir")
+        # The guard imports the policy module lazily at execute time. Import it now, while the
+        # selected directories lead sys.path, so it is cached and needs no permanent path entry.
+        importlib.import_module("perpetua_tools.model_governance")
+    _assert_pt_governance_origin(policy_dir)
+    return guard.DispatchGuard, guard.DispatchRequest, state.resolve_default_state_dir
+
+
+def _installed_pt_authority() -> tuple[Any, Any, Any]:
+    """Select modules recorded by the trusted local PT installation, not ambient imports.
+
+    Distribution metadata establishes local package ownership, not a signature or
+    protection against a malicious same-user installer. Policy-origin checks still
+    reject mixed cached modules. Missing/incomplete metadata remains fail-closed.
+    """
+    try:
+        distribution = importlib.metadata.distribution("perpetua-tools")
+    except importlib.metadata.PackageNotFoundError as exc:
+        raise ImportError("PT dispatch authority is unavailable: no checkout or installed PT") from exc
+    if distribution.metadata.get("Name", "").lower().replace("_", "-") != "perpetua-tools":
+        raise ImportError("PT dispatch authority is unavailable: invalid distribution ownership")
+    files = {str(path): Path(distribution.locate_file(path)).resolve() for path in distribution.files or ()}
+    guard_paths = ("orchestrator/__init__.py", "orchestrator/dispatch_guard.py", "orchestrator/state_dir.py")
+    for prefix in ("perpetua_tools", "src/perpetua_tools"):
+        required = (*guard_paths, f"{prefix}/__init__.py", f"{prefix}/model_governance.py")
+        if all(name in files and files[name].is_file() for name in required):
+            package_dir = files[guard_paths[0]].parent
+            policy_dir = files[f"{prefix}/__init__.py"].parent
+            if (all(files[name].parent == package_dir for name in guard_paths)
+                    and files[f"{prefix}/model_governance.py"].parent == policy_dir):
+                return _load_pt_authority(package_dir, policy_dir)
+    direct_url = distribution.read_text("direct_url.json")
+    if direct_url:
+        try:
+            import tomllib
+        except ModuleNotFoundError:
+            try:
+                import tomli as tomllib
+            except ModuleNotFoundError as exc:
+                raise ImportError("PT dispatch authority is unavailable: editable parsing requires tomli") from exc
+        try:
+            record = json.loads(direct_url)
+            url = urlsplit(record["url"])
+            if (record.get("dir_info", {}).get("editable") is not True
+                    or url.scheme != "file" or url.netloc not in ("", "localhost")
+                    or url.query or url.fragment):
+                raise ValueError("invalid editable source")
+            root = Path(url2pathname(url.path))
+            if not root.is_absolute():
+                raise ValueError("editable source must be absolute")
+            root = root.resolve()
+            project = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+            if project["project"]["name"].lower().replace("_", "-") != "perpetua-tools":
+                raise ValueError("invalid editable project")
+            package_dir, policy_dir = root / "orchestrator", root / "src/perpetua_tools"
+            if not all(path.is_file() for path in (
+                package_dir / "__init__.py", package_dir / "dispatch_guard.py", package_dir / "state_dir.py",
+                policy_dir / "__init__.py", policy_dir / "model_governance.py",
+            )):
+                raise ValueError("incomplete editable source")
+        except (OSError, ValueError, TypeError, KeyError, AttributeError) as exc:
+            raise ImportError("PT dispatch authority is unavailable: invalid editable ownership") from exc
+        return _load_pt_authority(package_dir, policy_dir)
+    raise ImportError("PT dispatch authority is unavailable: incomplete distribution ownership")
+
+
+def _pt_dispatch_authority() -> tuple[Any, Any, Any]:
+    """Load a complete PT checkout or metadata-owned installed PT authority.
+
+    Incomplete discovery candidates may be skipped; import or policy failures in
+    a selected complete checkout must remain visible rather than change authority.
+    A path-bound namespace preserves exception identity without evicting foreign
+    cached packages or combining modules from different checkouts.
+    """
+    candidates = [
+        Path(value) for key in ("PERPETUATOOLSROOT", "PERPETUA_TOOLS_ROOT", "PERPETUA_TOOLS_PATH")
+        if (value := os.environ.get(key, "").strip())
+    ]
+    candidates.extend((
+        REPO_ROOT.parent / "perplexity-api" / "Perpetua-Tools",
+        REPO_ROOT.parent / "Perpetua-Tools",
+        REPO_ROOT.parent / "repos" / "Perpetua-Tools",
+    ))
+    for candidate in candidates:
+        root = candidate.resolve()
+        package_dir = root / "orchestrator"
+        if not all((package_dir / filename).is_file() for filename in (
+            "__init__.py", "dispatch_guard.py", "state_dir.py",
+        )) or not all((root / "src/perpetua_tools" / filename).is_file() for filename in (
+            "__init__.py", "model_governance.py",
+        )):
+            continue
+        return _load_pt_authority(package_dir, root / "src/perpetua_tools")
+    return _installed_pt_authority()
+
+
+def duplicate_dispatch_error_type() -> type[Exception]:
+    """Return the active PT guard's duplicate-claim exception type."""
+    guard, _, _ = _pt_dispatch_authority()
+    return importlib.import_module(guard.__module__).DuplicateDispatch
 
 
 def _is_event_loop_running() -> bool:
@@ -79,6 +249,7 @@ def _is_event_loop_running() -> bool:
 
 @dataclass
 class AgentInfo:
+    """Describe an agent and its discovered availability."""
     name: str
     kind: str          # "cli" | "http"
     available: bool = False
@@ -239,6 +410,7 @@ async def _dispatch_codex(task: str, context_file: Optional[Path] = None) -> Dic
 
     if os.name == "nt":
         def _run_plain() -> tuple[int, str]:
+            """Run Codex without a pseudo-terminal on Windows."""
             proc = subprocess.run(
                 cmd,
                 input="",
@@ -390,6 +562,7 @@ async def _dispatch_lmstudio(endpoint: str, model: str, task: str, *, win_gpu: b
         return {"ok": False, "output": "httpx not installed (pip install httpx)", "elapsed": 0}
 
     async def _call() -> Dict[str, Any]:
+        """Send the request and collect the provider response."""
         t0 = time.time()
         try:
             async with httpx.AsyncClient(timeout=120.0) as client:
@@ -442,14 +615,14 @@ async def _dispatch_cursor(task: str) -> Dict[str, Any]:
     try:
         if cursor_bin.endswith(".ps1"):
             proc = await asyncio.create_subprocess_exec(
-                "powershell", "-ExecutionPolicy", "Bypass", "-File", cursor_bin, "--print", "--model", "claude-4.6-sonnet-medium", task,
+                "powershell", "-ExecutionPolicy", "Bypass", "-File", cursor_bin, "--print", "--model", CURSOR_MODEL, task,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
                 cwd=str(REPO_ROOT),
             )
         else:
             proc = await asyncio.create_subprocess_exec(
-                cursor_bin, "--print", "--model", "claude-4.6-sonnet-medium", task,
+                cursor_bin, "--print", "--model", CURSOR_MODEL, task,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
                 cwd=str(REPO_ROOT),
@@ -465,6 +638,7 @@ async def _dispatch_cursor(task: str) -> Dict[str, Any]:
 
 
 def _find_hermes() -> Optional[str]:
+    """Find the Hermes executable in PATH or its local installation."""
     hermes_bin = shutil.which("hermes")
     if hermes_bin:
         return hermes_bin
@@ -585,13 +759,13 @@ async def _dispatch_race(task: str) -> Dict[str, Any]:
     if _cursor_race_leg_deferred():
         racers = {
             "direct-lmstudio-win": asyncio.create_task(
-                _dispatch_lmstudio(LMS_WIN_ENDPOINT, LMS_WIN_MODEL, task, win_gpu=True)
+                dispatch("lmstudio-win", task, model=LMS_WIN_MODEL)
             ),
         }
     else:
         racers = {
-            "cursor": asyncio.create_task(_dispatch_cursor(task)),
-            "hermes-lmstudio-win": asyncio.create_task(_dispatch_hermes_lmstudio_win(task)),
+            "cursor": asyncio.create_task(dispatch("cursor", task)),
+            "hermes-lmstudio-win": asyncio.create_task(dispatch("hermes-lmstudio-win", task)),
         }
     pending = set(racers.values())
     failures: Dict[str, str] = {}
@@ -636,7 +810,7 @@ async def _dispatch_race(task: str) -> Dict[str, Any]:
     # and direct-lmstudio-win is never itself a racer key, so this
     # condition only skips the redundant case, not the intended one.
     if "direct-lmstudio-win" not in failures:
-        direct = await _dispatch_lmstudio(LMS_WIN_ENDPOINT, LMS_WIN_MODEL, task, win_gpu=True)
+        direct = await dispatch("lmstudio-win", task, model=LMS_WIN_MODEL)
         if direct.get("ok"):
             direct["elapsed"] = time.time() - t0
             direct["output"] = "[RACE FALLBACK: direct-lmstudio-win]\n" + direct["output"]
@@ -652,17 +826,58 @@ async def _dispatch_race(task: str) -> Dict[str, Any]:
     }
 
 
-async def dispatch_race(task: str) -> Dict[str, Any]:
+async def dispatch_race(task: str, *, scope: Optional[str] = None) -> Dict[str, Any]:
     """Public wrapper around _dispatch_race for test importability.
 
     Returns the same dict as _dispatch_race: {ok, output, elapsed, winner}.
     """
-    return await _dispatch_race(task)
+    return await dispatch("race", task, scope=scope)
 
 
 # ── Orchestration ─────────────────────────────────────────────────────────────
 
-async def dispatch(agent_name: str, task: str, model: Optional[str] = None) -> Dict[str, Any]:
+async def dispatch(agent_name: str, task: str, model: Optional[str] = None, *, scope: Optional[str] = None) -> Dict[str, Any]:
+    """Use PT's durable policy authority before starting a legacy dispatch.
+
+    A repeated goal in the same repository scope is blocked after any attempt.
+    Pass an explicit scope for intentional independent work. No approvals are
+    inferred from the prompt, environment or caller flags. PT must be installed
+    or discoverable through PERPETUATOOLSROOT; missing authority fails closed.
+    """
+    DispatchGuard, DispatchRequest, resolve_default_state_dir = _pt_dispatch_authority()
+
+    provider = agent_name.lower().strip()
+    if provider in {"codex", "gemini", "gemini-review", "cursor", "ollama-mac"} and model is not None:
+        raise ValueError("model override is not supported by this worker")
+    effective_model = model
+    if provider in {"lmstudio-mac", "lmstudio-win"} and not effective_model:
+        effective_model = await _get_lmstudio_model(LMS_MAC_ENDPOINT if provider == "lmstudio-mac" else LMS_WIN_ENDPOINT)
+    elif provider == "ollama-mac":
+        if not MANAGER_MODEL or not MANAGER_MODEL.strip():
+            raise ValueError("Ollama model configuration is empty")
+        effective_model = MANAGER_MODEL
+    elif provider == "hermes-lmstudio-win":
+        effective_model = LMS_WIN_MODEL
+    elif provider == "cursor":
+        effective_model = CURSOR_MODEL
+    effective_scope = scope or _DISPATCH_SCOPE.get() or str(REPO_ROOT)
+    request = DispatchRequest(
+        scope=effective_scope,
+        provider=provider,
+        model=effective_model or "provider-default",
+        goal="spawn-agent",
+        prompt=task,
+    )
+    token = _DISPATCH_SCOPE.set(effective_scope)
+    try:
+        return await DispatchGuard(resolve_default_state_dir()).execute(
+            request, lambda: _dispatch_unchecked(agent_name, task, effective_model)
+        )
+    finally:
+        _DISPATCH_SCOPE.reset(token)
+
+
+async def _dispatch_unchecked(agent_name: str, task: str, model: Optional[str] = None) -> Dict[str, Any]:
     """Dispatch a task to a named agent. Returns result dict."""
     agent_name = agent_name.lower().strip()
 
@@ -699,11 +914,11 @@ async def dispatch(agent_name: str, task: str, model: Optional[str] = None) -> D
         # Parallel: Codex + Gemini + Ollama Mac + LM Studio Mac (non-GPU-bound)
         # Sequential: LM Studio Win (GPU-bound, serialized by lock)
         results = await asyncio.gather(
-            _dispatch_codex(task),
-            _dispatch_gemini(task),
-            _dispatch_ollama_mac(task),
-            _dispatch_lmstudio(LMS_MAC_ENDPOINT, model or await _get_lmstudio_model(LMS_MAC_ENDPOINT), task),
-            _dispatch_lmstudio(LMS_WIN_ENDPOINT, model or await _get_lmstudio_model(LMS_WIN_ENDPOINT), task, win_gpu=True),
+            dispatch("codex", task),
+            dispatch("gemini", task),
+            dispatch("ollama-mac", task),
+            dispatch("lmstudio-mac", task, model),
+            dispatch("lmstudio-win", task, model),
             return_exceptions=True,
         )
         agents_out = {}
@@ -722,6 +937,7 @@ async def dispatch(agent_name: str, task: str, model: Optional[str] = None) -> D
 # ── Status report ─────────────────────────────────────────────────────────────
 
 def print_status():
+    """Print discovered agent availability."""
     agents = discover_agents()
     print("\n  Agent Availability\n  " + "─" * 46)
     for key, ag in agents.items():
@@ -737,6 +953,7 @@ def print_status():
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 def status_payload() -> Dict[str, Any]:
+    """Return discovered agent availability as structured data."""
     agents = discover_agents()
     return {
         key: {
@@ -751,6 +968,7 @@ def status_payload() -> Dict[str, Any]:
 
 
 def main():
+    """Parse CLI arguments and dispatch the requested task or status query."""
     parser = argparse.ArgumentParser(
         description="Dispatch tasks to AI coding agents (Codex, Gemini, LM Studio).",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -764,6 +982,7 @@ def main():
         help="Agent to dispatch (default: codex)",
     )
     parser.add_argument("--model", "-m", help="Optional model override for LM Studio agents")
+    parser.add_argument("--scope", help="Explicit scope for reconciled independent work")
     parser.add_argument("--status", "-s", action="store_true", help="Show agent availability and exit")
     parser.add_argument("--json", dest="json_output", action="store_true", help="Output result as JSON")
     args = parser.parse_args()
@@ -779,7 +998,16 @@ def main():
         parser.error("--task is required (or use --status to probe agents)")
 
     async def _run():
-        result = await dispatch(args.agent, args.task, model=args.model)
+        """Dispatch once and print the result in the requested format."""
+        try:
+            result = await dispatch(args.agent, args.task, model=args.model, scope=args.scope)
+        except (ValueError, PermissionError) as exc:
+            parser.exit(2, f"dispatch refused: {exc}\n")
+        except RuntimeError as exc:
+            gov_err = ModelGovernanceError
+            if isinstance(exc, (duplicate_dispatch_error_type(), gov_err)) or exc.__class__.__name__ == "ModelGovernanceError":
+                parser.exit(2, f"dispatch refused: {exc}\n")
+            raise
         if args.json_output:
             print(json.dumps(result, indent=2))
         else:

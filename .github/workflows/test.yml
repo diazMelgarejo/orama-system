@@ -1,7 +1,7 @@
 name: Test Suite
 on:
   push:    { branches: [main, develop] }
-  pull_request: { branches: [main] }
+  pull_request: { branches: ["**"] }
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -12,8 +12,27 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      PERPETUATOOLSROOT: ${{ github.workspace }}/.ci/pt-dispatch
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Resolve PT dispatch test producer
+        id: pt-dispatch
+        run: |
+          ref=$(<.github/pt-dispatch-test-ref)
+          [[ "$ref" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid PT dispatch test SHA" >&2; exit 1; }
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+      - name: Checkout PT dispatch test producer
+        uses: actions/checkout@v5
+        with:
+          repository: diazMelgarejo/Perpetua-Tools
+          ref: ${{ steps.pt-dispatch.outputs.ref }}
+          path: .ci/pt-dispatch
+          persist-credentials: false
+      - name: Verify PT dispatch guard exists
+        run: test -f "$PERPETUATOOLSROOT/orchestrator/dispatch_guard.py"
       - uses: actions/setup-python@v6
         with: { python-version: "3.11" }
       - name: Install ripgrep
@@ -22,9 +41,21 @@ jobs:
         run: |
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install hatchling
-          python -m pip install -e ".[test]"
+          python -m pip install -e ".[test]" aiosqlite
+      - name: Set up Node for Markdown integration tests
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '20'
+      - name: Install pinned Markdown integration dependency
+        run: npm install --no-save --no-package-lock --ignore-scripts markdownlint-cli2@0.17.2
+      - name: Verify PT guarded dispatch with a mocked effect
+        run: |
+          PT_STATE_DIR="$(mktemp -d)" python -c 'import asyncio; from unittest.mock import AsyncMock, patch; from scripts import spawn_agents; effect = AsyncMock(return_value={"ok": True});
+          with patch.object(spawn_agents, "_dispatch_unchecked", effect):
+              assert asyncio.run(spawn_agents.dispatch("ci", "smoke test", scope="ci")) == {"ok": True}
+              assert effect.await_count == 1'
       - name: Run pytest
-        run: pytest tests/ -v --tb=short
+        run: python scripts/ci/run_with_subreaper.py pytest tests/ -v --tb=short
       - name: Verify isolated compatibility evidence
         run: python -m pytest docs/v2/references/loop-graph-compatibility-2026-10-09/evidence/test_evidence_scripts.py -q
       - run: bash scripts/verify-package.sh

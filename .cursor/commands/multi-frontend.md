@@ -6,7 +6,10 @@ description: Run a frontend-focused multi-model workflow for components, layouts
 
 Frontend-focused workflow (Research → Ideation → Plan → Execute → Optimize → Review), Gemini-led.
 
-> **Prerequisite:** Requires the external `ccg-workflow` runtime, which is **not** part of the base ECC install. Initialize it with `npx ccg-workflow` to provision `~/.claude/bin/codeagent-wrapper` and the `~/.claude/.ccg/prompts/*` role files this command depends on. Without that runtime, this command will not run correctly.
+> **Prerequisite:** Requires the external `ccg-workflow` runtime, which is **not** part of the base
+> ECC install. Initialize it with `npx ccg-workflow` to provision `~/.claude/bin/codeagent-wrapper`
+> and the `~/.claude/.ccg/prompts/*` role files this command depends on. Without that runtime, this
+> command will not run correctly.
 
 ## Usage
 
@@ -22,9 +25,11 @@ Frontend-focused workflow (Research → Ideation → Plan → Execute → Optimi
 
 ## Your Role
 
-You are the **Frontend Orchestrator**, coordinating multi-model collaboration for UI/UX tasks (Research → Ideation → Plan → Execute → Optimize → Review).
+You are the **Frontend Orchestrator**, coordinating multi-model collaboration for UI/UX tasks
+(Research → Ideation → Plan → Execute → Optimize → Review).
 
 **Collaborative Models**:
+
 - **Gemini** – Frontend UI/UX (**Frontend authority, trustworthy**)
 - **Codex** – Backend perspective (**Frontend opinions for reference only**)
 - **Claude (self)** – Orchestration, planning, execution, delivery
@@ -35,10 +40,10 @@ You are the **Frontend Orchestrator**, coordinating multi-model collaboration fo
 
 **Call Syntax**:
 
-```
+```text
 # New session call
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--backend gemini --gemini-model gemini-3-pro-preview - \"$PWD\" <<'EOF'
+  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--backend gemini --gemini-model gemini-3.8-flash - \"$PWD\" <<'EOF'
 ROLE_FILE: <role prompt path>
 <TASK>
 Requirement: <enhanced requirement (or $ARGUMENTS if not enhanced)>
@@ -53,7 +58,7 @@ EOF",
 
 # Resume session call
 Bash({
-  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--backend gemini --gemini-model gemini-3-pro-preview resume <SESSION_ID> - \"$PWD\" <<'EOF'
+  command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--backend gemini --gemini-model gemini-3.8-flash resume <SESSION_ID> - \"$PWD\" <<'EOF'
 ROLE_FILE: <role prompt path>
 <TASK>
 Requirement: <enhanced requirement (or $ARGUMENTS if not enhanced)>
@@ -75,7 +80,8 @@ EOF",
 | Planning | `~/.claude/.ccg/prompts/gemini/architect.md` |
 | Review | `~/.claude/.ccg/prompts/gemini/reviewer.md` |
 
-**Session Reuse**: Each call returns `SESSION_ID: xxx`, use `resume xxx` for subsequent phases. Save `GEMINI_SESSION` in Phase 2, use `resume` in Phases 3 and 5.
+**Session Reuse**: Each call returns `SESSION_ID: xxx`, use `resume xxx` for subsequent phases. Save
+`GEMINI_SESSION` in Phase 2, use `resume` in Phases 3 and 5.
 
 ---
 
@@ -91,13 +97,18 @@ EOF",
 
 ### Phase 0: Prompt Enhancement (Optional)
 
-`[Mode: Prepare]` - If ace-tool MCP available, call `mcp__ace-tool__enhance_prompt`, **replace original $ARGUMENTS with enhanced result for subsequent Gemini calls**. If unavailable, use `$ARGUMENTS` as-is.
+`[Mode: Prepare]` - If ace-tool MCP available, call `mcp__ace-tool__enhance_prompt`, **replace
+original $ARGUMENTS with enhanced result for subsequent Gemini calls**. If unavailable, use
+`$ARGUMENTS` as-is.
 
 ### Phase 1: Research
 
 `[Mode: Research]` - Understand requirements and gather context
 
-1. **Code Retrieval** (if ace-tool MCP available): Call `mcp__ace-tool__search_context` to retrieve existing components, styles, design system. If unavailable, use built-in tools: `Glob` for file discovery, `Grep` for component/style search, `Read` for context gathering, `Task` (Explore agent) for deeper exploration.
+1. **Code Retrieval** (if ace-tool MCP available): Call `mcp__ace-tool__search_context` to retrieve
+  existing components, styles, design system. If unavailable, use built-in tools: `Glob` for file
+  discovery, `Grep` for component/style search, `Read` for context gathering, `Task` (Explore agent)
+  for deeper exploration.
 2. Requirement completeness score (0-10): >=7 continue, <7 stop and supplement
 
 ### Phase 2: Ideation
@@ -105,6 +116,7 @@ EOF",
 `[Mode: Ideation]` - Gemini-led analysis
 
 **MUST call Gemini** (follow call specification above):
+
 - ROLE_FILE: `~/.claude/.ccg/prompts/gemini/analyzer.md`
 - Requirement: Enhanced requirement (or $ARGUMENTS if not enhanced)
 - Context: Project context from Phase 1
@@ -119,6 +131,7 @@ Output solutions (at least 2), wait for user selection.
 `[Mode: Plan]` - Gemini-led planning
 
 **MUST call Gemini** (use `resume <GEMINI_SESSION>` to reuse session):
+
 - ROLE_FILE: `~/.claude/.ccg/prompts/gemini/architect.md`
 - Requirement: User's selected solution
 - Context: Analysis results from Phase 2
@@ -139,6 +152,7 @@ Claude synthesizes plan, save to `.claude/plan/task-name.md` after user approval
 `[Mode: Optimize]` - Gemini-led review
 
 **MUST call Gemini** (follow call specification above):
+
 - ROLE_FILE: `~/.claude/.ccg/prompts/gemini/reviewer.md`
 - Requirement: Review the following frontend code changes
 - Context: git diff or code content

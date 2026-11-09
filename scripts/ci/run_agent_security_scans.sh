@@ -60,7 +60,8 @@ scan_aguara() {
         FAIL=1
         continue
       fi
-      # TOXIC_CROSS_002 false-positives on internal env+subprocess coordination scripts.
+      # Existing cross-file exception: internal env+subprocess coordination.
+      # This does not disable single-file toxic flows or credential rules.
       aguara_args+=(--baseline "$baseline" --disable-rule TOXIC_CROSS_002)
     fi
     run "aguara:$path" aguara "${aguara_args[@]}"
@@ -138,16 +139,38 @@ scan_mcp_scanner() {
   fi
 }
 
+# Exact version-token match: "ramparts 0.8.2" and "0.8.2" pass; 0.8.20, 0.8.2.1, 0.8.2-rc1 and
+# 1.0.8.2 do not. A restored cache must never let a longer or different version stand in for the pin.
+ramparts_version_ok() {
+  local want="$1" out
+  out="$(ramparts --version 2>/dev/null)" || return 1
+  local pattern="(^|[^0-9A-Za-z.+-])v?${want//./\\.}([^0-9A-Za-z.+-]|\$)"
+  [[ "$out" =~ $pattern ]]
+}
+
 scan_ramparts() {
-  if command -v ramparts >/dev/null 2>&1; then
-    :
-  elif command -v cargo >/dev/null 2>&1; then
-    RAMPARTS_VERSION="${RAMPARTS_VERSION:-0.8.2}"
+  RAMPARTS_VERSION="${RAMPARTS_VERSION:-0.8.2}"
+  local install=0
+  if ! command -v ramparts >/dev/null 2>&1; then
+    install=1
+  elif ! ramparts_version_ok "$RAMPARTS_VERSION"; then
+    log "WARN ramparts on PATH is not exactly ${RAMPARTS_VERSION} (a restored cache can hold a longer version such as 0.8.20); reinstalling the pinned version"
+    install=1
+  fi
+  if (( install )) && command -v cargo >/dev/null 2>&1; then
     log "Installing ramparts@${RAMPARTS_VERSION} via cargo (requires Rust >= 1.91)"
     export PATH="${CARGO_HOME:-$HOME/.cargo}/bin:${PATH}"
-    if ! cargo install "ramparts@${RAMPARTS_VERSION}" --locked; then
+    if ! cargo install "ramparts@${RAMPARTS_VERSION}" --locked --force; then
       log "WARN ramparts install failed"
     fi
+  fi
+  if command -v ramparts >/dev/null 2>&1 && ! ramparts_version_ok "$RAMPARTS_VERSION"; then
+    if [[ -n "${GITHUB_ACTIONS:-}" ]]; then
+      log "FAIL ramparts (installed version is not exactly ${RAMPARTS_VERSION}; refusing to scan with an unpinned binary)"
+      FAIL=1
+      return 0
+    fi
+    log "WARN ramparts version differs from the pinned ${RAMPARTS_VERSION}; local run continues"
   fi
 
   if command -v ramparts >/dev/null 2>&1; then

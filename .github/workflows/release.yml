@@ -14,13 +14,32 @@ permissions: {}
 jobs:
   release:
     runs-on: ubuntu-latest
+    env:
+      PERPETUATOOLSROOT: ${{ github.workspace }}/.ci/pt-dispatch
     permissions:
       contents: write   # required: create GitHub release + upload assets
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Resolve PT dispatch test producer
+        id: pt-dispatch
+        run: |
+          ref=$(<.github/pt-dispatch-test-ref)
+          [[ "$ref" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid PT dispatch test SHA" >&2; exit 1; }
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+      - name: Checkout PT dispatch test producer
+        uses: actions/checkout@v5
+        with:
+          repository: diazMelgarejo/Perpetua-Tools
+          ref: ${{ steps.pt-dispatch.outputs.ref }}
+          path: .ci/pt-dispatch
+          persist-credentials: false
+      - name: Verify PT dispatch guard exists
+        run: test -f "$PERPETUATOOLSROOT/orchestrator/dispatch_guard.py"
       - uses: actions/setup-python@v6
         with: { python-version: "3.11" }
-      - run: pip install -e ".[test]" && pytest tests/ -v
+      - run: pip install -e ".[test]" && python scripts/ci/run_with_subreaper.py pytest tests/ -v
       - run: bash scripts/verify-package.sh
       - name: Create ZIP
         run: |

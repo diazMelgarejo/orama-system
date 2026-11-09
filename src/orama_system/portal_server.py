@@ -104,9 +104,10 @@ from utils.control_plane_auth import (
 # Load .env so IPs are correct whether portal is run from start.sh or directly.
 try:
     from dotenv import load_dotenv as _load_dotenv
-    _repo_root = Path(__file__).resolve().parents[2]
-    _load_dotenv(_repo_root / ".env",       override=False)
-    _load_dotenv(_repo_root / ".env.local", override=True)
+    if os.getenv("PYTHON_DOTENV_DISABLED", "").casefold() not in {"1", "true", "t", "yes", "y"}:
+        _repo_root = Path(__file__).resolve().parents[2]
+        _load_dotenv(_repo_root / ".env",       override=False)
+        _load_dotenv(_repo_root / ".env.local", override=True)
 except ImportError:
     pass
 
@@ -3723,7 +3724,35 @@ async def api_spawn_agent(req: SpawnAgentRequest):
         log.warning("[portal] affinity warning for spawn: %s", _aff_exc)
         # Non-fatal: let dispatch proceed; agent_launcher will hard-gate
 
-    result = await _mod.dispatch(req.agent, req.task, model=req.model or None)
+    try:
+        result = await _mod.dispatch(req.agent, req.task, model=req.model or None)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        # The authority may load under an isolated name when another
+        # orchestrator package is cached; ask dispatch for its actual type.
+        duplicate_type = getattr(_mod, "duplicate_dispatch_error_type", None)
+        if duplicate_type is not None and isinstance(exc, duplicate_type()):
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        ModelGovernanceError = getattr(_mod, "ModelGovernanceError", None)
+        if (ModelGovernanceError is not None and isinstance(exc, ModelGovernanceError)) or exc.__class__.__name__ == "ModelGovernanceError":
+            reason = str(exc)
+            reason_lower = reason.lower()
+            if "config unavailable" in reason_lower:
+                raise HTTPException(status_code=503, detail=reason) from exc
+            if reason_lower in (
+                "non-medium effort requires an escalation token",
+                "fast mode requires an operator request plus a real escalation token",
+            ):
+                raise HTTPException(status_code=403, detail=reason) from exc
+            if "banned launch id" in reason_lower or "unlisted" in reason_lower or "default-deny" in reason_lower:
+                raise HTTPException(status_code=403, detail=reason) from exc
+            if "unsupported" in reason_lower or "unknown harness path" in reason_lower or "effort" in reason_lower:
+                raise HTTPException(status_code=422, detail=reason) from exc
+            raise HTTPException(status_code=500, detail=reason) from exc
+        raise
     return result
 
 

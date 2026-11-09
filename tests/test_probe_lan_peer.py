@@ -196,6 +196,9 @@ def test_main_json_exit_zero_when_lmstudio_ok(peer_mod, monkeypatch, capsys, tmp
     )
     monkeypatch.setattr(peer_mod, "discovery_path", lambda: disc)
     monkeypatch.setattr(peer_mod, "local_role", lambda: "mac")
+    monkeypatch.setattr(peer_mod, "load_repo_env", lambda *_: None)
+    monkeypatch.setattr(peer_mod, "outbound_control_plane_tokens", lambda: [])
+    monkeypatch.setattr(peer_mod, "_peer_portal_tls_enabled", lambda: False)
     result_file = tmp_path / "last_lan_peer_probe.json"
     monkeypatch.setattr(peer_mod, "probe_result_path", lambda: result_file)
 

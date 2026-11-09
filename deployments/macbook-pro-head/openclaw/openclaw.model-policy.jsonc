@@ -8,11 +8,10 @@
         // OpenRouter free tier is listed before any Gemini entry.
         "fallbacks_to_merge": [
           "openrouter/openrouter/free",
-          "google/gemini-2.5-pro",
-          "google/gemini-2.5-flash"
+          "gemini-fallback/gemini-flash-latest"
         ]
       },
-      // Merged into agents.defaults.models; all keys must be openrouter/* prefixed.
+      // Merged into agents.defaults.models.
       "models_to_merge": {
         "openrouter/openrouter/free": {
           "id": "openrouter/openrouter/free",
@@ -20,6 +19,18 @@
           "contextWindow": 131072,
           "maxTokens": 4096,
           "cost": {"input": 0, "output": 0}
+        },
+        "gemini-main/gemini-3.8-flash": {
+          "id": "gemini-main/gemini-3.8-flash",
+          "name": "Gemini 3.8 Flash",
+          "contextWindow": 1048576,
+          "maxTokens": 65536
+        },
+        "gemini-fallback/gemini-flash-latest": {
+          "id": "gemini-fallback/gemini-flash-latest",
+          "name": "Gemini Flash Latest",
+          "contextWindow": 1048576,
+          "maxTokens": 65536
         }
       }
     }

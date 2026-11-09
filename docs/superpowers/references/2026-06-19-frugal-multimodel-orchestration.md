@@ -12,7 +12,7 @@ execute; the shell subprocesses never launch. The fix: call external models
 directly from the orchestrator's Bash. The orchestrator (Opus-4.8 or Sonnet-4.6)
 handles synthesis; external calls go via `subprocess`, `curl`, or direct CLI tools.
 
-```
+```text
 WRONG  (all lanes die when Anthropic cap hits):
   orchestrator:agent() → Claude:agent("use codex") → codex exec …
   orchestrator:agent() → Claude:agent("use ollama") → ollama http call …
@@ -41,7 +41,8 @@ Key structural decisions from that run:
 
 ## Adopted features from the frugal `.mjs` workflow
 
-The `.mjs` at `docs/superpowers/plans/2026-06-19-codex-openclaw-agent-frugal-multimodel-workflow.mjs`
+The `.mjs` at
+`docs/superpowers/plans/2026-06-19-codex-openclaw-agent-frugal-multimodel-workflow.mjs`
 had several design features worth keeping:
 
 - **Probe-first gate**: check that a lane is reachable before sending the full prompt
@@ -161,7 +162,7 @@ provider prefix:
 
 - `"ollama/qwen3.5:9b-nvfp4"` → Ollama backend
 - `"lmstudio-win/qwen3.5-27b-..."` → Win LM Studio backend
-- `"google/gemini-3.1-pro-preview"` → Gemini backend
+- `"google/gemini-3.8-flash"` → Gemini backend
 
 Stage 4 verify can parse the model string from the completion response. If the
 model prefix matches the Codex provider key (e.g., `"codex/"`), Codex is active.

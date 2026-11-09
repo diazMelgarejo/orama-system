@@ -43,7 +43,7 @@ sub_skills:
   - path: skills/first-run-setup/SKILL.md
     trigger: "first-run install, bootstrap orama, setup new machine, first run, §0 checklist, first-run-install.sh"
   - path: skills/code-review/SKILL.md
-    trigger: "code review, review the code, blast-radius, code-review-graph, detect_changes, get_review_context, semantic_search_nodes, code-reviewer, multi-lens PR review, /review, recursive code review"
+    trigger: "code review, review the code, blast-radius, code-review-graph, detect_changes, get_review_context, semantic_search_nodes, code-reviewer, multi-lens PR review, /review, recursive code review, post-review micro-remediation, review remediation, finding matrix"
   - path: skills/openclaw-skills/SKILL.md
     trigger: "openclaw config, /openclaw-new-agent, /openclaw-add-channel, /openclaw-add-cron, /openclaw-dream-setup, /openclaw-add-script, /openclaw-add-secret, /openclaw-status, /openclaw-restart, /openclaw-stow, spawn openclaw, recursive openclaw spawn, openclaw secrets pipeline, new openclaw agent, openclaw orchestration, jobs.json, dream routine, the nine skills"
   - path: skills/openclaw-skills/codex-openclaw-agent/SKILL.md
@@ -380,11 +380,34 @@ New machine or fresh checkout: run `bash bin/orama-system/scripts/first-run-inst
 `install`. Commands and full steps: [`references/first-run-install.md`](references/first-run-install.md)
 (Appendix B) · agent workflow: [`skills/first-run-setup/SKILL.md`](skills/first-run-setup/SKILL.md).
 
+## Review and Remediation Workflows
+
+Addressing review comments (CodeRabbit, automated bots, and peer reviewers) follows the canonical
+7-phase post-review micro-remediation doctrine:
+[`references/post-review-micro-remediation.md`](references/post-review-micro-remediation.md).
+
+Key review protocol invariants:
+- **Phase 0 (Freeze):** No changes to `main`; work exclusively on the PR branch under push hold.
+- **Phase 1 (Root-Cause Clustering):** Enforce the **Finding Matrix Protocol** (tabulate findings
+  before editing) and the **Single-Edit Rule** (touch each affected file exactly once per cycle across
+  all findings).
+- **Phase 2 (Branch Discipline):** Group commits by failure class; append-only updates for PR body.
+- **Phase 3 (Integration):** Clean reset or integrative merge with safety refs; rebase only when necessary.
+- **Phase 4 (Verification):** Run authoritative tools directly (real linters, tests, and mutants).
+- **Phase 5 (Closure):** Execute the **Mandatory Bot Inline Thread Reply Protocol** (`@{BotName} we fixed
+  this in commit {SHA}` or evidence-backed decline).
+- **Phase 6 (Cross-Repo Synchronization):** Where affected files are covered by an established
+  sync policy, mirror applicable structural and byte-identical fixes across sibling repos before pushing.
+
+Pairs with [`skills/code-review/SKILL.md`](skills/code-review/SKILL.md) and
+[`references/integration-synthesis-and-verification.md`](references/integration-synthesis-and-verification.md).
+
 ## References (Progressive Disclosure)
 
 Load on demand for deeper context:
 
 - `references/first-run-install.md` — §0 install checklist (canonical; CLAUDE-instru.md is navigator-only)
+- `references/post-review-micro-remediation.md` — 7-phase post-review micro-remediation pattern (finding matrix, single-edit rule, bot inline reply protocol, cross-repo sync)
 - `afrp/SKILL.md` — Audience-First Response Protocol (pre-router gate)
 - `cidf/SKILL.md` — Content Insertion Decision Framework v1.2
 - `references/amplifier-principle.md` — foundational essay on intent-driven development

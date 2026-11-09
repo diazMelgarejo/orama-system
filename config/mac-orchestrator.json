@@ -8,15 +8,11 @@
         "primary": "ollama/qwen3.5:9b-mlx"
       },
       "models": {
-        "google/gemini-2.5-flash-FALL": {},
-        "google/gemini-2.5-flash-lite-FALL": {},
-        "google/gemini-2.5-pro": {},
-        "google/gemini-3-flash-preview": {},
-        "google/gemini-3-flash-preview-FALL": {},
-        "google/gemini-3.1-flash-lite-preview": {},
-        "google/gemini-3.1-flash-lite-preview-FALL": {},
-        "google/gemini-3.1-pro-preview": {},
-        "google/gemini-3.1-pro-preview-FALL": {},
+        "gemini-main/gemini-3.8-flash": {},
+        "gemini-main/gemini-3.5-flash-lite": {},
+        "gemini-fallback/gemini-flash-latest": {},
+        "gemini-main/gemini-pro-latest": {},
+        "openrouter/google/gemini-4-argon": {},
         "bigmodel/glm-5.3-flash": {}
       },
       "thinkingDefault": "off",
@@ -29,13 +25,8 @@
         "id": "main",
         "model": {
           "fallbacks": [
-            "google/gemini-3.1-pro-preview",
-            "google/gemini-3-flash-preview",
-            "google/gemini-3.1-flash-lite-preview",
-            "google/gemini-3.1-flash-lite-preview-FALL",
-            "google/gemini-2.5-pro",
-            "google/gemini-2.5-flash-FALL",
-            "google/gemini-2.5-flash-lite-FALL"
+            "gemini-fallback/gemini-flash-latest",
+            "bigmodel/glm-5.3-flash"
           ],
           "primary": "lmstudio-mac/qwen3.5-9b-mlx"
         },
@@ -181,7 +172,7 @@
   "models": {
     "providers": {
       "gemini-fallback": {
-        "api": "openai-completions",
+        "api": "google-generative-ai",
         "apiKey": "${env:OPENCLAW_MODELS_PROVIDERS_GEMINI_FALLBACK_APIKEY}",
         "baseUrl": "https://generativelanguage.googleapis.com/v1beta",
         "models": [
@@ -191,116 +182,46 @@
               "input": 0,
               "output": 0
             },
-            "id": "google/gemini-3.1-pro-preview-FALL",
+            "id": "gemini-flash-latest",
             "maxTokens": 32768,
-            "name": "Gemini 3.1 PRO Preview-FALL"
-          },
-          {
-            "contextWindow": 65536,
-            "cost": {
-              "input": 0,
-              "output": 0
-            },
-            "id": "google/gemini-3-flash-preview-FALL",
-            "maxTokens": 32768,
-            "name": "Gemini 3 Flash Preview-FALL"
-          },
-          {
-            "contextWindow": 65536,
-            "cost": {
-              "input": 0,
-              "output": 0
-            },
-            "id": "google/gemini-3.1-flash-lite-preview-FALL",
-            "maxTokens": 32768,
-            "name": "Gemini 3.1 Flash Lite Preview-FALL"
-          },
-          {
-            "contextWindow": 65536,
-            "cost": {
-              "input": 0,
-              "output": 0
-            },
-            "id": "google/gemini-2.5-flash-FALL",
-            "maxTokens": 32768,
-            "name": "Gemini 2.5 Flash-FALL"
-          },
-          {
-            "contextWindow": 65536,
-            "cost": {
-              "input": 0,
-              "output": 0
-            },
-            "id": "google/gemini-2.5-flash-lite-FALL",
-            "maxTokens": 32768,
-            "name": "Gemini 2.5 Flash Lite-FALL"
+            "name": "Gemini Flash Latest (Dynamic Stable Alias)"
           }
         ]
       },
       "gemini-main": {
-        "api": "openai-completions",
+        "api": "google-generative-ai",
         "apiKey": "${env:OPENCLAW_MODELS_PROVIDERS_GEMINI_MAIN_APIKEY}",
         "baseUrl": "https://generativelanguage.googleapis.com/v1beta",
         "models": [
           {
-            "contextWindow": 131072,
+            "contextWindow": 1048576,
             "cost": {
-              "input": 0,
-              "output": 0
+              "input": 0.75,
+              "output": 3.75
             },
-            "id": "google/gemini-3.1-pro-preview",
-            "maxTokens": 32768,
-            "name": "Gemini 3.1 PRO Preview"
+            "id": "gemini-3.8-flash",
+            "maxTokens": 65536,
+            "name": "Gemini 3.8 Flash (General Default Use)"
           },
           {
-            "contextWindow": 65536,
+            "contextWindow": 1048576,
             "cost": {
-              "input": 0,
-              "output": 0
+              "input": 0.15,
+              "output": 1.00
             },
-            "id": "google/gemini-3-flash-preview",
-            "maxTokens": 32768,
-            "name": "Gemini 3 Flash Preview"
+            "id": "gemini-3.5-flash-lite",
+            "maxTokens": 65536,
+            "name": "Gemini 3.5 Flash-Lite (Fast Economical Subagents)"
           },
           {
-            "contextWindow": 65536,
+            "contextWindow": 2097152,
             "cost": {
-              "input": 0,
-              "output": 0
+              "input": 1.25,
+              "output": 5.00
             },
-            "id": "google/gemini-3.1-flash-lite-preview",
-            "maxTokens": 32768,
-            "name": "Gemini 3.1 Flash Lite Preview"
-          },
-          {
-            "contextWindow": 131072,
-            "cost": {
-              "input": 0,
-              "output": 0
-            },
-            "id": "google/gemini-2.5-pro",
-            "maxTokens": 32768,
-            "name": "Gemini 2.5 PRO"
-          },
-          {
-            "contextWindow": 65536,
-            "cost": {
-              "input": 0,
-              "output": 0
-            },
-            "id": "google/gemini-2.5-flash",
-            "maxTokens": 32768,
-            "name": "Gemini 2.5 Flash"
-          },
-          {
-            "contextWindow": 65536,
-            "cost": {
-              "input": 0,
-              "output": 0
-            },
-            "id": "google/gemini-2.5-flash-lite",
-            "maxTokens": 32768,
-            "name": "Gemini 2.5 Flash Lite"
+            "id": "gemini-pro-latest",
+            "maxTokens": 65536,
+            "name": "Gemini Pro Latest (HITL Escalation, Opus 5.5 class)"
           }
         ]
       },

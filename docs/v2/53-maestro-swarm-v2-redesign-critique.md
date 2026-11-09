@@ -414,28 +414,51 @@ preserving the framework's valid structural foundation.[^11][^6][^20][^16][^19][
 <!-- markdownlint-disable MD013 MD032 -->
 
 [^1]: [Anthropic Wall Street agents — Fortune](https://fortune.com/2026/05/05/anthropic-wall-street-financial-services-agents-jamie-dimon/)
+
 [^2]: [Agentic AI for Finance — CFA Institute](https://rpc.cfainstitute.org/research/the-automation-ahead-content-series/agentic-ai-for-finance)
+
 [^3]: [LangGraph Agents in Production — AlphaBOLD](https://www.alphabold.com/langgraph-agents-in-production/)
+
 [^4]: [Measuring AI agent autonomy — Anthropic](https://www.anthropic.com/news/measuring-agent-autonomy)
+
 [^5]: [LLM Hallucinations in financial institutions — BizTech](https://biztechmagazine.com/article/2025/08/llm-hallucinations-what-are-implications-financial-institutions)
+
 [^6]: [Production-Ready AI Agents — LangChain guide](https://dev.to/shreyas1009/building-production-ready-ai-agents-a-langchain-orchestration-guide-6hj)
+
 [^7]: [MCP Security Risks — Veeam](https://www.veeam.com/blog/model-context-protocol-security-risks.html)
+
 [^8]: [MCP Security Risks — Pillar Security](https://www.pillar.security/blog/the-security-risks-of-model-context-protocol-mcp)
+
 [^9]: [Top 10 MCP Security Risks — Akto](https://www.akto.io/blog/mcp-security-risks)
+
 [^10]: [AI hallucinations in M&A due diligence — Deloitte](https://www.deloitte.com/ch/en/services/consulting/perspectives/ai-hallucinations-new-risk-m-a.html)
+
 [^11]: [RAG for Finance — CFA Institute](https://rpc.cfainstitute.org/research/the-automation-ahead-content-series/retrieval-augmented-generation)
+
 [^12]: [Bayesian RAG for financial documents — PMC](https://pmc.ncbi.nlm.nih.gov/articles/PMC12886353/)
+
 [^13]: [RAG system limitations — TechTarget](https://www.techtarget.com/searchenterpriseai/tip/Understanding-the-limitations-and-challenges-of-RAG-systems)
+
 [^14]: [AI hallucinations in financial crime — Tookitaki](https://www.tookitaki.com/blog/ai-hallucinations-financial-crime-governance)
+
 [^15]: [EU AI Act compliance for financial services — Matproof](https://matproof.com/blog/eu-ai-act-compliance-financial-services)
+
 [^16]: [EU AI Act August 2026 deadline — Supra Wall](https://www.supra-wall.com/en/learn/eu-ai-act-august-2026-deadline)
+
 [^17]: [LangGraph multi-agent orchestration — Latenode](https://latenode.com/blog/ai-frameworks-technical-infrastructure/langgraph-multi-agent-orchestration/langgraph-multi-agent-orchestration-complete-framework-guide-architecture-analysis-2025)
+
 [^18]: [AI hallucinations in financial services — Aveni](https://aveni.ai/blog/ai-hallucinations-in-financial-services/)
+
 [^19]: [EU AI Act compliance deadline — CompleteFlow](https://completeflow.ai/blog/eu-ai-act-compliance-deadline-august-2026/)
+
 [^20]: Bora, S.R. & Anapu, S.K., ["Security Threats in the Model Context Protocol: A Comprehensive Survey and Trust Boundary Mitigation Framework for Agentic AI Systems"](https://www.ijsr.net/archive/v15i3/SR26316110418.pdf), IJSR Vol. 15 Issue 3, March 2026, pp. 990-998, DOI: [10.21275/SR26316110418](https://dx.doi.org/10.21275/SR26316110418). A ten-class MCP threat taxonomy (tool poisoning, indirect prompt injection, cross-server data exfiltration, tool shadowing, supply-chain attacks, rug-pull exploits, credential theft, sampling abuse, terminal deception, inter-agent trust exploitation) with a proposed Trust Boundary Mitigation Framework -- covers MCP technical security, not FINRA or US financial regulation; cited here for the MCP/agent-security portion of adjacent claims, not the regulatory portion (see [^24] for FINRA's own report).
+
 [^21]: [EU AI Act summary for financial services — EY React](https://eyreact.com/eu-ai-act-summary-financial-services/)
+
 [^22]: [Regulation (EU) 2024/1689 (the EU AI Act), consolidated with the Digital Omnibus amendments — EUR-Lex](https://eur-lex.europa.eu/eli/reg/2024/1689/oj?locale=en). Primary source for Article 6(1)/6(2)/Annex I/III high-risk applicability dates (2 August 2028 / 2 December 2027) and the general 2 August 2026 date of application; see also Regulation (EU) 2026/1744 (Digital Omnibus on AI), Recital 40.
+
 [^23]: [Transparency obligations under Article 50 AI Act — European Commission FAQ](https://digital-strategy.ec.europa.eu/en/faqs/transparency-obligations-under-article-50-ai-act). Primary source distinguishing Article 50's transparency/disclosure obligations (2 August 2026) from the separate high-risk classification and applicability rules in [^22] -- these are two different obligation types with two different legal bases, not one deadline.
+
 [^24]: [2026 FINRA Annual Regulatory Oversight Report — Generative AI section](https://www.finra.org/rules-guidance/guidance/reports/2026-finra-annual-regulatory-oversight-report/gen-ai). FINRA's own official report (not a secondary summary), covering broker-dealer supervision (Rule 3110), customer communications (Rule 2210), and AI-agent governance expectations -- distinct from and not a source for MCP protocol-level security findings (see [^20] for that).
 
 <!-- markdownlint-enable MD013 MD032 -->

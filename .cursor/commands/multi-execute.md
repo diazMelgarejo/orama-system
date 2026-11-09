@@ -4,9 +4,13 @@ description: Execute a multi-model implementation plan while preserving Claude a
 
 # Execute - Multi-Model Collaborative Execution
 
-Multi-model collaborative execution - Get prototype from plan → Claude refactors and implements → Multi-model audit and delivery.
+Multi-model collaborative execution - Get prototype from plan → Claude refactors and implements →
+Multi-model audit and delivery.
 
-> **Prerequisite:** Requires the external `ccg-workflow` runtime, which is **not** part of the base ECC install. Initialize it with `npx ccg-workflow` to provision `~/.claude/bin/codeagent-wrapper` and the `~/.claude/.ccg/prompts/*` role files this command depends on. Without that runtime, this command will not run correctly.
+> **Prerequisite:** Requires the external `ccg-workflow` runtime, which is **not** part of the base
+> ECC install. Initialize it with `npx ccg-workflow` to provision `~/.claude/bin/codeagent-wrapper`
+> and the `~/.claude/.ccg/prompts/*` role files this command depends on. Without that runtime, this
+> command will not run correctly.
 
 $ARGUMENTS
 
@@ -14,11 +18,14 @@ $ARGUMENTS
 
 ## Core Protocols
 
-- **Language Protocol**: Use **English** when interacting with tools/models, communicate with user in their language
+- **Language Protocol**: Use **English** when interacting with tools/models, communicate with user
+  in their language
 - **Code Sovereignty**: External models have **zero filesystem write access**, all modifications by Claude
-- **Dirty Prototype Refactoring**: Treat Codex/Gemini Unified Diff as "dirty prototype", must refactor to production-grade code
+- **Dirty Prototype Refactoring**: Treat Codex/Gemini Unified Diff as "dirty prototype", must
+  refactor to production-grade code
 - **Stop-Loss Mechanism**: Do not proceed to next phase until current phase output is validated
-- **Prerequisite**: Only execute after user explicitly replies "Y" to `/ccg:plan` output (if missing, must confirm first)
+- **Prerequisite**: Only execute after user explicitly replies "Y" to `/ccg:plan` output (if
+  missing, must confirm first)
 
 ---
 
@@ -26,7 +33,7 @@ $ARGUMENTS
 
 **Call Syntax** (parallel: use `run_in_background: true`):
 
-```
+```text
 # Resume session call (recommended) - Implementation Prototype
 Bash({
   command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--backend <codex|gemini> {{GEMINI_MODEL_FLAG}}resume <SESSION_ID> - \"$PWD\" <<'EOF'
@@ -60,7 +67,7 @@ EOF",
 
 **Audit Call Syntax** (Code Review / Audit):
 
-```
+```text
 Bash({
   command: "~/.claude/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--backend <codex|gemini> {{GEMINI_MODEL_FLAG}}resume <SESSION_ID> - \"$PWD\" <<'EOF'
 ROLE_FILE: <role prompt path>
@@ -84,7 +91,9 @@ EOF",
 ```
 
 **Model Parameter Notes**:
-- `{{GEMINI_MODEL_FLAG}}`: When using `--backend gemini`, replace with `--gemini-model gemini-3-pro-preview` (note trailing space); use empty string for codex
+
+- `{{GEMINI_MODEL_FLAG}}`: When using `--backend gemini`, replace with `--gemini-model
+  gemini-3.8-flash` (note trailing space); use empty string for codex
 
 **Role Prompts**:
 
@@ -97,14 +106,16 @@ EOF",
 
 **Wait for Background Tasks** (max timeout 600000ms = 10 minutes):
 
-```
+```text
 TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 ```
 
 **IMPORTANT**:
+
 - Must specify `timeout: 600000`, otherwise default 30 seconds will cause premature timeout
 - If still incomplete after 10 minutes, continue polling with `TaskOutput`, **NEVER kill the process**
-- If waiting is skipped due to timeout, **MUST call `AskUserQuestion` to ask user whether to continue waiting or kill task**
+- If waiting is skipped due to timeout, **MUST call `AskUserQuestion` to ask user whether to
+  continue waiting or kill task**
 
 ---
 
@@ -125,7 +136,8 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
    - Extract: task type, implementation steps, key files, SESSION_ID
 
 3. **Pre-Execution Confirmation**:
-   - If input is "direct task description" or plan missing `SESSION_ID` / key files: confirm with user first
+   - If input is "direct task description" or plan missing `SESSION_ID` / key files: confirm with
+     user first
    - If cannot confirm user replied "Y" to plan: must confirm again before proceeding
 
 4. **Task Type Routing**:
@@ -146,7 +158,7 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 
 Based on "Key Files" list in plan, call `mcp__ace-tool__search_context`:
 
-```
+```text
 mcp__ace-tool__search_context({
   query: "<semantic query based on plan content, including key files, modules, function names>",
   project_root_path: "$PWD"
@@ -154,17 +166,20 @@ mcp__ace-tool__search_context({
 ```
 
 **Retrieval Strategy**:
+
 - Extract target paths from plan's "Key Files" table
 - Build semantic query covering: entry files, dependency modules, related type definitions
 - If results insufficient, add 1-2 recursive retrievals
 
 **If ace-tool MCP is NOT available**, use Claude Code built-in tools as fallback:
+
 1. **Glob**: Find target files from plan's "Key Files" table (e.g., `Glob("src/components/**/*.tsx")`)
 2. **Grep**: Search for key symbols, function names, type definitions across the codebase
 3. **Read**: Read the discovered files to gather complete context
 4. **Task (Explore agent)**: For broader exploration, use `Task` with `subagent_type: "Explore"`
 
 **After Retrieval**:
+
 - Organize retrieved code snippets
 - Confirm complete context for implementation
 - Proceed to Phase 3
@@ -260,7 +275,8 @@ mcp__ace-tool__search_context({
    - Input: Changed Diff + target files
    - Focus: Accessibility, design consistency, user experience
 
-Wait for both models' complete review results with `TaskOutput`. Prefer reusing Phase 3 sessions (`resume <SESSION_ID>`) for context consistency.
+Wait for both models' complete review results with `TaskOutput`. Prefer reusing Phase 3 sessions
+(`resume <SESSION_ID>`) for context consistency.
 
 #### 5.2 Integrate and Fix
 

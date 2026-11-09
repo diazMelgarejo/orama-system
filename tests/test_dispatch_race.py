@@ -52,6 +52,12 @@ def _cursor_race_leg_deferred() -> str | None:
 _CURSOR_RACE_SKIP = _cursor_race_leg_deferred()
 
 
+@pytest.fixture(autouse=True)
+def _isolated_dispatch_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep durable runtime claims isolated between independent race tests."""
+    monkeypatch.setenv("PT_STATE_DIR", str(tmp_path))
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _run(coro):
@@ -60,10 +66,12 @@ def _run(coro):
 
 
 def _ok(output: str, elapsed: float = 0.1) -> dict:
+    """Return a successful race-leg result."""
     return {"ok": True, "output": output, "elapsed": elapsed}
 
 
 def _fail(output: str, elapsed: float = 0.1) -> dict:
+    """Return a failed race-leg result."""
     return {"ok": False, "output": output, "elapsed": elapsed}
 
 
@@ -170,19 +178,25 @@ def test_hermes_timeout_fails_cleanly_without_internal_fallback():
          patch.object(spawn_agents, "_dispatch_lmstudio", new_callable=AsyncMock) as mock_direct:
 
         async def _fake_communicate():
+            """Simulate a timed-out subprocess."""
             raise asyncio.TimeoutError()
 
         class _FakeProc:
+            """Minimal process for testing timeout cleanup."""
             def __init__(self):
+                """Start with a running process."""
                 self.returncode = None
 
             def kill(self):
+                """Mark the process killed."""
                 self.returncode = -9
 
             async def wait(self):
+                """Return the process exit code."""
                 return self.returncode
 
         async def _fake_subprocess_exec(*args, **kwargs):
+            """Return the simulated timed-out process."""
             proc = _FakeProc()
             proc.communicate = _fake_communicate
             return proc
@@ -205,18 +219,23 @@ def test_hermes_nonzero_exit_with_output_is_failure() -> None:
          patch.object(spawn_agents, "_dispatch_lmstudio", new_callable=AsyncMock) as mock_direct:
 
         class _FakeProc:
+            """Minimal process with a failed exit and output."""
             returncode = 1
 
             async def communicate(self):
+                """Return the simulated process output."""
                 return (b"stderr-ish output", b"")
 
             async def kill(self):
+                """Mark the process killed."""
                 self.returncode = -9
 
             async def wait(self):
+                """Return the process exit code."""
                 return self.returncode
 
         async def _fake_subprocess_exec(*args, **kwargs):
+            """Return the simulated failed process."""
             return _FakeProc()
 
         with patch.object(spawn_agents.asyncio, "create_subprocess_exec", side_effect=_fake_subprocess_exec):
@@ -236,12 +255,15 @@ def test_hermes_uses_win_coder_endpoint_pool(monkeypatch: pytest.MonkeyPatch) ->
     with patch.object(spawn_agents, "_find_hermes", return_value="/fake/hermes"):
 
         class _FakeProc:
+            """Minimal successful process for endpoint environment testing."""
             returncode = 0
 
             async def communicate(self):
+                """Return the successful process output."""
                 return (b"HERMES_OK", b"")
 
         async def _fake_subprocess_exec(*args, **kwargs):
+            """Capture the environment passed to the process."""
             captured["env"] = kwargs.get("env", {})
             return _FakeProc()
 

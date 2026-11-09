@@ -71,12 +71,13 @@ def find_lessons_file(
     *,
     configured_path: Path | None = None,
     home_dir: Path | None = None,
+    migrate: bool = True,
 ) -> Path | None:
-    """Return an initialized legacy log, migrating an old task log if necessary.
+    """Return an initialized legacy log, optionally migrating an old task log.
 
-    The absence of an old task log is not a request to create one.  The caller
-    invokes this only for the explicit legacy backend, so normal PT and runtime
-    selection remains read-only with respect to historical task directories.
+    The absence of an old task log is not a request to create one. Runtime
+    review/stats pass migrate=False to read historical task logs in place;
+    explicit development compatibility retains the home-level migration.
     """
     if configured_path is not None:
         if configured_path.is_file():
@@ -93,6 +94,8 @@ def find_lessons_file(
     while True:
         candidate = current / "tasks" / "lessons.md"
         if candidate.is_file():
+            if not migrate:
+                return candidate
             if destination.exists():
                 raise LessonBackendUnavailable(
                     "ORAMASYS_LESSON_E_LEGACY_MIGRATION_CONFLICT",
@@ -274,10 +277,12 @@ def show_stats(lessons_path: Path) -> None:
 
 
 def pt_memory_path(pt_root: Path) -> Path:
+    """Locate PT's generated semantic lesson view without modifying it."""
     return pt_root / ".agent" / "memory" / "semantic" / "LESSONS.md"
 
 
 def review_pt_memory(pt_root: Path) -> None:
+    """Display the existing PT lesson view or report its absence."""
     path = pt_memory_path(pt_root)
     if not path.exists():
         print(f"  {YELLOW}No PT semantic lesson view found at {path}{RESET}")
@@ -287,6 +292,7 @@ def review_pt_memory(pt_root: Path) -> None:
 
 
 def show_pt_stats(pt_root: Path) -> None:
+    """Report accepted and provisional lesson counts from the PT view."""
     path = pt_memory_path(pt_root)
     if not path.exists():
         print(f"  {YELLOW}No PT semantic lesson view found at {path}{RESET}")
@@ -300,6 +306,7 @@ def show_pt_stats(pt_root: Path) -> None:
 # ─── CLI ──────────────────────────────────────────────────────────────────────
 
 def main() -> None:
+    """Dispatch capture or display, keeping runtime legacy discovery read-only."""
     parser = argparse.ArgumentParser(
         description="OramaSys lesson capture — stable frontend, configurable backend"
     )
@@ -332,7 +339,9 @@ def main() -> None:
         )
         legacy_path = (
             find_lessons_file(
-                project_dir, configured_path=configured_legacy_path
+                project_dir,
+                configured_path=configured_legacy_path,
+                migrate=not (args.mode == "runtime" and (args.review or args.stats)),
             )
             if needs_legacy_compatibility
             else None

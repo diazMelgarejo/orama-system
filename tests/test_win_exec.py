@@ -2,19 +2,32 @@
 from __future__ import annotations
 
 import os
+import errno
+import signal
 import subprocess
 import sys
 import textwrap
+import threading
 import time
 from pathlib import Path
+from typing import Any, Optional
 from unittest.mock import MagicMock
 
 import pytest
 
 from utils import win_exec
 
+pytest_plugins = ("posix_containment_fixtures",)
+
 WIN = sys.platform == "win32"
 windows_only = pytest.mark.skipif(not WIN, reason="Windows-specific behaviour")
+POSIX_IDENTITY_AVAILABLE = all(
+    hasattr(os, name) for name in ("waitid", "P_PID", "WEXITED", "WNOWAIT", "WNOHANG")
+)
+native_group_containment = pytest.mark.skipif(
+    not WIN and not POSIX_IDENTITY_AVAILABLE,
+    reason="This interpreter lacks non-reaping POSIX ownership observation",
+)
 
 GRANDCHILD = "import time; time.sleep(120)"
 CHILD = textwrap.dedent(
@@ -144,6 +157,7 @@ def _spawn_tree():
     return proc, int(proc.stdout.readline().strip())
 
 
+@native_group_containment
 def test_terminate_tree_kills_grandchild():
     """terminate_tree kills the grandchild too and reports containment."""
     proc, gpid = _spawn_tree()
@@ -184,6 +198,7 @@ MID = textwrap.dedent(
 ) % GRANDCHILD
 
 
+@native_group_containment
 def test_reparented_orphan_is_killed_and_contained():
     """root->mid->leaf where mid exits right after spawning leaf: leaf must die, status contained."""
     root_code = textwrap.dedent(
@@ -211,6 +226,7 @@ def test_reparented_orphan_is_killed_and_contained():
         proc.stdout.close()
 
 
+@native_group_containment
 def test_orphan_after_root_exit_is_contained_by_the_job():
     """The root itself exits first; its orphaned leaf is still in the job and is killed."""
     root_code = textwrap.dedent(
@@ -222,7 +238,13 @@ def test_orphan_after_root_exit_is_contained_by_the_job():
     ) % GRANDCHILD
     proc = win_exec.launch_tree([sys.executable, "-c", root_code], stdout=subprocess.PIPE, text=True)
     leaf = int(proc.stdout.readline().strip())
-    proc.wait()
+    if WIN:
+        proc.wait()
+    else:
+        deadline = time.monotonic() + 10
+        while not win_exec.exited(proc) and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert win_exec.exited(proc)
     try:
         assert _pid_alive(leaf)
         assert win_exec.terminate_tree(proc) == "contained"
@@ -454,6 +476,8 @@ class _MockPosixProc:
         self.pid = pid
         self._running = running
         self._killed = False
+        self.returncode = None if running else 0
+        self._waitpid_lock = threading.Lock()
 
     def poll(self) -> Optional[int]:
         """Return process exit code or None if still running."""
@@ -467,10 +491,11 @@ class _MockPosixProc:
     def wait(self, timeout: Optional[float] = None) -> int:
         """Simulate waiting for process exit."""
         self._running = False
+        self.returncode = 0
         return 0
 
 
-def test_posix_plain_popen_group_leader_accident_reports_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_posix_plain_popen_group_leader_accident_reports_unknown(monkeypatch: pytest.MonkeyPatch, posix_process_mocks: None) -> None:
     """An untracked PID is killed directly and never treated as a process group."""
     monkeypatch.setattr(win_exec.sys, "platform", "linux")
     monkeypatch.setattr(
@@ -484,10 +509,11 @@ def test_posix_plain_popen_group_leader_accident_reports_unknown(monkeypatch: py
     assert not proc._running
 
 
-def test_posix_launch_tree_reports_contained_when_group_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_posix_launch_tree_reports_contained_when_group_empty(monkeypatch: pytest.MonkeyPatch, posix_process_mocks: None) -> None:
     """A process launched via launch_tree on POSIX reports contained when the group is empty."""
     monkeypatch.setattr(win_exec.sys, "platform", "linux")
     monkeypatch.setattr(win_exec.os, "getpgid", lambda pid: pid, raising=False)
+    monkeypatch.setattr(win_exec.os, "waitid", lambda *args: None, raising=False)
 
     def _killpg(pid: int, sig: int) -> None:
         """Simulate group signal, raising ProcessLookupError when probing dead group."""
@@ -501,10 +527,11 @@ def test_posix_launch_tree_reports_contained_when_group_empty(monkeypatch: pytes
     assert getattr(proc, "_win_exec_result", None) == "contained"
 
 
-def test_posix_launch_tree_reports_unknown_on_permission_error(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_posix_launch_tree_reports_unknown_on_permission_error(monkeypatch: pytest.MonkeyPatch, posix_process_mocks: None) -> None:
     """A launch_tree process on POSIX reports unknown if killpg raises PermissionError."""
     monkeypatch.setattr(win_exec.sys, "platform", "linux")
     monkeypatch.setattr(win_exec.os, "getpgid", lambda pid: pid, raising=False)
+    monkeypatch.setattr(win_exec.os, "waitid", lambda *args: None, raising=False)
 
     def _killpg(pid: int, sig: int) -> None:
         """Raise PermissionError on killpg to simulate unprivileged signal failure."""
@@ -516,14 +543,201 @@ def test_posix_launch_tree_reports_unknown_on_permission_error(monkeypatch: pyte
     assert win_exec.terminate_tree(proc) == "unknown"
 
 
-def test_posix_launch_tree_reports_escaped_on_surviving_members(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A launch_tree process on POSIX reports escaped:1 if members survive the grace period."""
+def test_posix_launch_tree_reports_unknown_on_unverified_group(monkeypatch: pytest.MonkeyPatch, posix_process_mocks: None) -> None:
+    """A group still present after reaping cannot be attributed to the old leader."""
     monkeypatch.setattr(win_exec.sys, "platform", "linux")
     monkeypatch.setattr(win_exec.os, "getpgid", lambda pid: pid, raising=False)
+    monkeypatch.setattr(win_exec.os, "waitid", lambda *args: None, raising=False)
     monkeypatch.setattr(win_exec.os, "killpg", lambda pid, sig: None, raising=False)
     proc = _MockPosixProc(4567, running=True)
     proc._win_exec_group = 4567
-    assert win_exec.terminate_tree(proc, grace=0.1) == "escaped:1"
+    assert win_exec.terminate_tree(proc, grace=0.1) == "unknown"
+
+
+def test_posix_caller_reaped_root_never_signals_group(monkeypatch: pytest.MonkeyPatch, posix_process_mocks: None) -> None:
+    """An already reaped leader cannot authorize any signal to its old PGID."""
+    proc = MagicMock(pid=4568, returncode=0)
+    proc._waitpid_lock = threading.Lock()
+    proc._win_exec_group = proc.pid
+    calls = []
+    monkeypatch.setattr(win_exec.os, "killpg", lambda pid, sig: calls.append(sig))
+    assert win_exec.terminate_tree(proc, grace=0) == "unknown"
+    assert not calls
+
+
+def test_posix_missing_waitid_kills_only_direct_child(monkeypatch: pytest.MonkeyPatch, posix_process_mocks: None) -> None:
+    """Without WNOWAIT, clean up the direct child and never signal its group."""
+    proc = MagicMock(pid=4573, returncode=None)
+    proc._win_exec_group = proc.pid
+    proc._waitpid_lock = threading.Lock()
+    proc.poll.return_value = None
+    monkeypatch.delattr(win_exec.os, "waitid")
+    assert win_exec.terminate_tree(proc, grace=0) == "unknown"
+    proc.kill.assert_called_once_with()
+    proc.wait.assert_called_once_with(timeout=2.0)
+
+
+@pytest.mark.parametrize("error", [errno.ENOSYS, errno.EINVAL])
+def test_posix_unsupported_waitid_kills_only_direct_child(
+    monkeypatch: pytest.MonkeyPatch, posix_process_mocks: None, error: int
+) -> None:
+    """An unsupported waitid implementation falls back without group signals."""
+    proc = MagicMock(pid=4574, returncode=None)
+    proc._win_exec_group = proc.pid
+    proc._waitpid_lock = threading.Lock()
+    proc.poll.return_value = None
+
+    def waitid(*args: Any) -> None:
+        """Simulate an unavailable kernel operation or unsupported flags."""
+        raise OSError(error, "unsupported")
+
+    monkeypatch.setattr(win_exec.os, "waitid", waitid)
+    assert win_exec.terminate_tree(proc, grace=0) == "unknown"
+    proc.kill.assert_called_once_with()
+    proc.wait.assert_called_once_with(timeout=2.0)
+
+
+def test_posix_probe_eperm_still_escalates_after_revalidation(
+    monkeypatch: pytest.MonkeyPatch, posix_process_mocks: None
+) -> None:
+    """An inconclusive probe cannot prevent KILL of the still-owned group."""
+    proc = MagicMock(pid=4575, returncode=None)
+    proc._win_exec_group = proc.pid
+    proc._waitpid_lock = threading.Lock()
+    calls: list[int] = []
+    ownership: list[int] = []
+
+    def waitid(*args: Any) -> None:
+        """Record each non-reaping ownership check."""
+        ownership.append(len(calls))
+
+    def killpg(pid: int, sig: int) -> None:
+        """Permit group signals but deny all membership probes."""
+        calls.append(sig)
+        if sig == 0:
+            raise PermissionError
+
+    monkeypatch.setattr(win_exec.os, "waitid", waitid)
+    monkeypatch.setattr(win_exec.os, "killpg", killpg)
+    assert win_exec.terminate_tree(proc, grace=0.1) == "unknown"
+    assert calls[:3] == [signal.SIGTERM, 0, getattr(signal, "SIGKILL", 9)]
+    assert ownership[:2] == [0, 2]
+
+
+def test_posix_identity_loss_prevents_further_group_signals(monkeypatch: pytest.MonkeyPatch, posix_process_mocks: None) -> None:
+    """If another waiter reaps the leader, do not escalate against its old PGID."""
+    proc = MagicMock(pid=4569, returncode=None)
+    proc._waitpid_lock = threading.Lock()
+    proc._win_exec_group = proc.pid
+    calls = []
+    states = iter([None, ChildProcessError()])
+
+    def waitid(*args: Any) -> object:
+        """Return one owned-child observation, then simulate external reaping."""
+        result = next(states)
+        if isinstance(result, Exception):
+            raise result
+        return result
+
+    monkeypatch.setattr(win_exec.os, "waitid", waitid)
+    monkeypatch.setattr(win_exec.os, "killpg", lambda pid, sig: calls.append(sig))
+    assert win_exec.terminate_tree(proc, grace=0) == "unknown"
+    assert calls == [signal.SIGTERM]
+
+
+def test_posix_eperm_and_reaped_probe_eperm_stays_unknown(monkeypatch: pytest.MonkeyPatch, posix_process_mocks: None) -> None:
+    """Permission denial cannot establish containment, even after reaping."""
+    proc = MagicMock(pid=4570, returncode=None)
+    proc._waitpid_lock = threading.Lock()
+    proc._win_exec_group = proc.pid
+    monkeypatch.setattr(win_exec.os, "waitid", lambda *args: object())
+    monkeypatch.setattr(win_exec.os, "killpg", lambda *args: (_ for _ in ()).throw(PermissionError()))
+    assert win_exec.terminate_tree(proc, grace=0) == "unknown"
+    proc.wait.assert_called()
+
+
+def test_posix_eperm_requires_post_reap_absence_proof(monkeypatch: pytest.MonkeyPatch, posix_process_mocks: None) -> None:
+    """A later ESRCH, not the preceding EPERM, proves the group is absent."""
+    proc = MagicMock(pid=4572, returncode=None)
+    proc._waitpid_lock = threading.Lock()
+    proc._win_exec_group = proc.pid
+    calls = []
+
+    def killpg(pid: int, sig: int) -> None:
+        """Deny the signal and report absence on the read-only final probe."""
+        calls.append(sig)
+        if sig:
+            raise PermissionError
+        proc.wait.assert_called_once()
+        raise ProcessLookupError
+
+    monkeypatch.setattr(win_exec.os, "waitid", lambda *args: object())
+    monkeypatch.setattr(win_exec.os, "killpg", killpg)
+    assert win_exec.terminate_tree(proc, grace=0) == "contained"
+    assert calls == [signal.SIGTERM, 0]
+
+
+def test_posix_never_sends_signal_after_reaping(monkeypatch: pytest.MonkeyPatch, posix_process_mocks: None) -> None:
+    """Escalation precedes wait; only a signal-zero probe may follow reaping."""
+    proc = MagicMock(pid=4571, returncode=None)
+    proc._waitpid_lock = threading.Lock()
+    proc._win_exec_group = proc.pid
+    reaped = False
+    calls = []
+
+    def wait(*args: Any, **kwargs: Any) -> int:
+        """Record the point at which the leader is reaped."""
+        nonlocal reaped
+        reaped = True
+        return 0
+
+    def killpg(pid: int, sig: int) -> None:
+        """Record signals and simulate an empty group after wait."""
+        calls.append((sig, reaped))
+        if reaped and sig == 0:
+            raise ProcessLookupError
+        if sig:
+            assert proc._waitpid_lock.locked()
+        assert not reaped
+
+    proc.wait.side_effect = wait
+    monkeypatch.setattr(win_exec.os, "waitid", lambda *args: None)
+    monkeypatch.setattr(win_exec.os, "killpg", killpg)
+    assert win_exec.terminate_tree(proc, grace=0) == "contained"
+    assert (signal.SIGTERM, False) in calls and (getattr(signal, "SIGKILL", 9), False) in calls
+
+
+@pytest.mark.skipif(WIN, reason="POSIX process-group semantics")
+def test_posix_sigterm_resistant_root_is_killed_before_reaping() -> None:
+    """An owned TERM-resistant root requires group KILL before bounded reaping."""
+    code = (
+        "import signal,time; "
+        "signal.signal(signal.SIGTERM, signal.SIG_IGN); "
+        "print('ready',flush=True); time.sleep(60)"
+    )
+    proc = win_exec.launch_tree([sys.executable, "-c", code], stdout=subprocess.PIPE, text=True)
+    try:
+        assert proc.stdout.readline().strip() == "ready"
+        expected = "contained" if POSIX_IDENTITY_AVAILABLE else "unknown"
+        assert win_exec.terminate_tree(proc, grace=0.3) == expected
+        assert proc.returncode == -signal.SIGKILL
+    finally:
+        if proc.returncode is None:
+            proc.kill()
+            proc.wait(timeout=2)
+        proc.stdout.close()
+
+
+@pytest.mark.parametrize("missing", ["P_PID", "WEXITED", "WNOWAIT", "WNOHANG"])
+def test_exited_falls_back_when_waitid_api_is_partial(
+    monkeypatch: pytest.MonkeyPatch, posix_process_mocks: None, missing: str,
+) -> None:
+    """Partial POSIX APIs cannot cause AttributeError in exit observation."""
+    proc = MagicMock(pid=4575, returncode=None)
+    proc.poll.return_value = 0
+    monkeypatch.delattr(win_exec.os, missing)
+    assert win_exec.exited(proc) is True
+    proc.poll.assert_called_once()
 
 
 def test_effective_platform_path_module_selection(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -605,7 +819,24 @@ def test_exited_observes_exit_without_reaping(monkeypatch: pytest.MonkeyPatch) -
     assert calls and calls[0][1] == 4321 and calls[0][2] & win_exec.os.WNOWAIT
 
 
-@pytest.mark.skipif(WIN, reason="POSIX process-group semantics")
+@pytest.mark.parametrize("error", [errno.ENOSYS, errno.EINVAL])
+def test_exited_falls_back_when_waitid_is_unsupported(
+    monkeypatch: pytest.MonkeyPatch, posix_process_mocks: None, error: int
+) -> None:
+    """Unsupported WNOWAIT observes the child through Popen's fallback."""
+    proc = MagicMock(pid=4322, returncode=None)
+    proc.poll.return_value = None
+
+    def waitid(*args: Any) -> None:
+        """Simulate a platform without a usable WNOWAIT operation."""
+        raise OSError(error, "unsupported")
+
+    monkeypatch.setattr(win_exec.os, "waitid", waitid)
+    assert win_exec.exited(proc) is False
+    proc.poll.assert_called_once_with()
+
+
+@pytest.mark.skipif(WIN or not POSIX_IDENTITY_AVAILABLE, reason="Requires POSIX WNOWAIT ownership")
 def test_exited_leaves_posix_root_unreaped_until_terminate() -> None:
     """The exited root stays a zombie (group id reserved) until terminate_tree reaps it."""
     proc = win_exec.launch_tree([sys.executable, "-c", "pass"])
@@ -618,6 +849,7 @@ def test_exited_leaves_posix_root_unreaped_until_terminate() -> None:
     assert proc.returncode == 0
 
 
+@native_group_containment
 def test_run_tree_returns_when_a_descendant_keeps_the_pipe_open() -> None:
     """An exited root whose child still holds stdout cannot hang the caller."""
     start = time.monotonic()
@@ -628,13 +860,33 @@ def test_run_tree_returns_when_a_descendant_keeps_the_pipe_open() -> None:
     assert run.containment == "contained"
 
 
-def test_run_tree_timeout_is_bounded_and_contained() -> None:
-    """A root that outlives the timeout is tree-killed and reported as timed out."""
+def test_run_tree_timeout_is_bounded_and_contained(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Timeout cleanup stops the owned root and reports only available proof."""
+    launch = win_exec.launch_tree
+    started: list[subprocess.Popen] = []
+
+    def capture_launch(*args: Any, **kwargs: Any) -> subprocess.Popen:
+        """Retain the real owned process so timeout metadata cannot mask a leak."""
+        proc = launch(*args, **kwargs)
+        started.append(proc)
+        return proc
+
+    monkeypatch.setattr(win_exec, "launch_tree", capture_launch)
     start = time.monotonic()
     run = win_exec.run_tree([sys.executable, "-c", "import time; time.sleep(60)"], timeout=1, grace=3)
-    assert run.timed_out and run.returncode is None
-    assert run.containment == "contained"
-    assert time.monotonic() - start < 15
+    try:
+        assert run.timed_out and run.returncode is None
+        expected = "contained" if WIN or POSIX_IDENTITY_AVAILABLE else "unknown"
+        assert run.containment == expected
+        assert len(started) == 1 and started[0].returncode is not None
+        if not WIN and not POSIX_IDENTITY_AVAILABLE:
+            assert started[0].returncode == -signal.SIGKILL
+        assert time.monotonic() - start < 15
+    finally:
+        for proc in started:
+            if proc.returncode is None:
+                proc.kill()
+                proc.wait(timeout=2)
 
 
 def test_resolved_unc_target_refused_unless_allowed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

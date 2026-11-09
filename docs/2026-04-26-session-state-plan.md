@@ -3,7 +3,9 @@
 
 # Twin System Session State — April 26, 2026
 
-> **Purpose:** Posterity record of what changed, what stayed the same, and what must happen next. Read this at the start of the next session. Both AlphaClaw and orama-system developers should read §3 (Immediate Next Steps) before touching anything.
+> **Purpose:** Posterity record of what changed, what stayed the same, and what must happen next.
+> Read this at the start of the next session. Both AlphaClaw and orama-system developers should read
+> §3 (Immediate Next Steps) before touching anything.
 
 ---
 
@@ -11,7 +13,7 @@
 
 ### Three-Repo Architecture — Current State
 
-```
+```text
 AlphaClaw (Layer 1 — infrastructure)
   Branch: feature/MacOS-post-install (unchanged)
   State:  ✅ Stable — no changes this session
@@ -37,7 +39,9 @@ orama-system (Layer 3 — meta-intelligence)
 | Win RTX 3080 (LM Studio) | `localhost:1234` | `192.168.254.103:1234` | ✅ Live |
 | OpenClaw Gateway | `localhost:18789` | loopback only | ✅ Live |
 
-> **Critical rule**: On Mac, always use `localhost:1234` for self-access. The `.105` IP is only for inbound connections from the Windows machine. This matches how the Win node uses its own `localhost` and exports `.103` for the Mac.
+> **Critical rule**: On Mac, always use `localhost:1234` for self-access. The `.105` IP is only for
+> inbound connections from the Windows machine. This matches how the Win node uses its own
+> `localhost` and exports `.103` for the Mac.
 
 ### Discovery Tier (current)
 
@@ -52,7 +56,9 @@ orama-system (Layer 3 — meta-intelligence)
 
 ### 2a. IP Configuration (Critical Fix)
 
-All configs were pointing to wrong Win IP (`192.168.254.101`, `.107`, `.109`). Win RTX 3080 was confirmed at `.103`.
+All configs were pointing to wrong Win IP (subnet `192.168.254.*`; hosts `.101`,
+`.107`, `.109`). Win RTX 3080 was
+confirmed at `.103`.
 
 | File | What changed |
 |------|-------------|
@@ -64,7 +70,8 @@ All configs were pointing to wrong Win IP (`192.168.254.101`, `.107`, `.109`). W
 
 ### 2b. openclaw.json Model List Expansion
 
-After IP fix + `discover.py --force`, model lists grew from 1 stub each to 4 real models per provider node.
+After IP fix + `discover.py --force`, model lists grew from 1 stub each to 4 real models per
+provider node.
 
 ### 2c. Perpetua-Tools Cleanup (9 commits on recovery branch)
 
@@ -145,9 +152,15 @@ git commit -m "feat(rename): ultrathink-system skill dir → orama"
 
 ### P2 — Fix Model ID Case Mismatch in openclaw.json
 
-**Problem**: `discover.py` wrote lowercase model IDs to providers (e.g., `qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2`). But `openclaw.json` agent configs reference the original mixed-case ID (e.g., `lmstudio-win/Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-v2`). Unknown if OpenClaw does case-insensitive match.
+**Problem**: `discover.py` wrote lowercase model IDs to providers (e.g.,
+`qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2`). But `openclaw.json` agent configs reference
+the original mixed-case ID (e.g.,
+`lmstudio-win/Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-v2`). Unknown if OpenClaw does
+case-insensitive match.
 
-**Fix needed**: Verify by running OpenClaw and checking agent model resolution, or align cases. Update `~/.openclaw/openclaw.json` agent `model.primary` to match the lowercase IDs written by `discover.py`.
+**Fix needed**: Verify by running OpenClaw and checking agent model resolution, or align cases.
+Update `~/.openclaw/openclaw.json` agent `model.primary` to match the lowercase IDs written by
+`discover.py`.
 
 ### P3 — alphaclaw-session v1.1 (DO's & DON'Ts + Self-Healing)
 
@@ -191,13 +204,15 @@ Update `.claude/skills/alphaclaw-session/SKILL.md` with:
 ### P4 — Create Agent Definition Files
 
 **Gemini-coder agent** (`.claude/agents/gemini-analyzer.md` in Perpetua-Tools):
+
 - Role: Reader / large-context analyst
 - API type: `google-generative-ai` (NOT `openai-completions` — gateway crashes)
-- Model: `google/gemini-2.5-flash` or `google/gemini-3.1-pro-preview`
+- Model: `google/gemini-3.8-flash`
 - MCP enabled: `gemini-cli`
 - Use for: reading large codebases, cross-repo analysis, design review
 
 **Codex/GPT-5.5 coder agent** (`.claude/agents/codex-coder.md`):
+
 - Prompting pattern: outcome-first, short prompts, `low/medium` effort first
 - Validate changes after each step
 - Route through `ai-cli-mcp` in OpenClaw
@@ -205,6 +220,7 @@ Update `.claude/skills/alphaclaw-session/SKILL.md` with:
 ### P5 — Self-Improve Skill (Idempotent)
 
 Create `.claude/skills/self-improve/SKILL.md` in both PT and orama-system:
+
 - Reads `docs/LESSONS.md` + instincts YAML
 - Proposes minimal additive updates to skill files
 - Version-guards against overwriting newer installed versions
@@ -213,6 +229,7 @@ Create `.claude/skills/self-improve/SKILL.md` in both PT and orama-system:
 ### P6 — Save Session to orama-system LESSONS.md
 
 Append dated entry capturing:
+
 - IP fix methodology (cross-config audit, `--force` discovery)
 - Gemini commit rejection pattern (bad author identity → discard + rescue content)
 - Unmerged external commits: rescue content into LESSONS.md, then land under approved git identity
@@ -234,51 +251,70 @@ Append dated entry capturing:
 
 ## 6. Session Lessons (Key Takeaways)
 
-1. **Always audit IPs across ALL config files simultaneously** — they drift. Use `grep -r "192.168.254" .` across all three repos after any hardware change.
+1. **Always audit IPs across ALL config files simultaneously** — they drift. After any hardware
+   change, use `grep -r "192.168.254" .` across all three repos.
 
-2. **`discover.py --force` after any IP change** — the 5-min TTL caches stale state and hides connectivity problems.
+2. **`discover.py --force` after any IP change** — the 5-min TTL caches stale state and hides
+   connectivity problems.
 
-3. **Merge only commits that pass the repo identity gate** — run `bash scripts/git/check_identity.sh` before committing; rescue useful unmerged work into LESSONS.md and recommit under approved identity. Historical note: Gemini-authored commits with forbidden identities were not merged as-is; content was rescued manually.
+3. **Merge only commits that pass the repo identity gate** — run `bash
+   scripts/git/check_identity.sh` before committing; rescue useful unmerged work into LESSONS.md and
+   recommit under approved identity. Historical note: Gemini-authored commits with forbidden
+   identities were not merged as-is; content was rescued manually.
 
-4. **`git fsck --unreachable` is the truth oracle** — 8 objects, all explained. Nothing lost. Run this before panicking about missing commits.
+4. **`git fsck --unreachable` is the truth oracle** — 8 objects, all explained. Nothing lost. Run
+   this before panicking about missing commits.
 
-5. **Python bridge file renames require test file renames too** — `ultrathink_bridge.py` had matching `test_ultrathink_bridge.py`, `test_ultrathink_mcp_client.py`, etc. Both layers must move together.
+5. **Python bridge file renames require test file renames too** — `ultrathink_bridge.py` had
+   matching `test_ultrathink_bridge.py`, `test_ultrathink_mcp_client.py`, etc. Both layers must move
+   together.
 
-6. **Skill version guards prevent overwrite** — the `BUNDLED` pattern in alphaclaw-session ensures future automation doesn't regress an already-upgraded skill file.
+6. **Skill version guards prevent overwrite** — the `BUNDLED` pattern in alphaclaw-session ensures
+   future automation doesn't regress an already-upgraded skill file.
 
-7. **`localhost` is always right on the home node** — don't use LAN IPs for self-referencing. Mac uses `localhost:1234`, Win uses its own `localhost:1234`. LAN IPs are for cross-node calls only.
+7. **`localhost` is always right on the home node** — don't use LAN IPs for self-referencing. Mac
+   uses `localhost:1234`, Win uses its own `localhost:1234`. LAN IPs are for cross-node calls only.
 
 ---
 
 ## 7. Session Continuation — Answers & Execution Status
 
-*Updated: 2026-04-26 (same session, second context window)*
+Updated: 2026-04-26 (same session, second context window)
 
 ### Q1 Answer — Gbrain Identity
 
 > **Gbrain = `mcp__gbrain__*` tools**, consumed by Gstack commands.  
 > Gstack v1.12.2.0 is installed at `~/.claude/skills/gstack` (global-git).  
-> Invoke the Gstack skill first (`Skill tool → gstack`), then use `mcp__gbrain__query/put_page/search` etc. for persistent memory.  
-> Bidirectional Codex ↔ Gbrain test: documented in `.claude/agents/codex-coder.md` under "Gbrain Integration".
+> Invoke the Gstack skill first (`Skill tool → gstack`), then use
+> `mcp__gbrain__query/put_page/search` etc. for persistent memory.
+> Bidirectional Codex ↔ Gbrain test: documented in `.claude/agents/codex-coder.md` under "Gbrain
+> Integration".
 
 ### Q2 Answer — Self-Improve Trigger
 
 > **Option C selected**: Auto-suggest at session end + commit only when user approves.  
-> Implementation: `.claude/skills/self-improve/SKILL.md` v1.0.0 created in both PT and orama-system.  
-> Trigger: Claude invokes at natural session end. Gate: hard STOP before any write — user must type A/B/C.
+> Implementation: `.claude/skills/self-improve/SKILL.md` v1.0.0 created in both PT
+> and orama-system.
+> Trigger: Claude invokes at natural session end. Gate: hard STOP before any write — user must type
+> A/B/C.
 
 ### Q3 Answer — Model ID Case Resolution
 
 > **Try mixed-case first (keep current openclaw.json agent refs).**  
-> If `coder` or `win-researcher` agents fail with a model-not-found error when OpenClaw is live, run the lowercase fix script documented in `alphaclaw-session v1.1 → Self-Healing → Model ID mismatch`.  
-> Test was blocked this session: gateway was offline (OpenClaw process not running). Retry next session.  
-> **Document the result in LESSONS.md after testing.** Whichever works becomes the canonical default.
+> If `coder` or `win-researcher` agents fail with a model-not-found error when OpenClaw is live, run
+> the lowercase fix script documented in `alphaclaw-session v1.1 → Self-Healing → Model ID
+> mismatch`.
+> Test was blocked this session: gateway was offline (OpenClaw process not running). Retry next
+> session.
+> **Document the result in LESSONS.md after testing.** Whichever works becomes the canonical
+> default.
 
 ### GPT-5.5 / Codex Model Fallback Rule (added during execution)
 
 > Try `gpt-5.5` first.  
 > Downgrade to `gpt-5.4` **only** when this exact error is received:  
-> `{"type":"invalid_request_error","message":"The 'gpt-5.5' model is not supported when using Codex with a ChatGPT account."}`  
+> `{"type":"invalid_request_error","message":"The 'gpt-5.5' model is not supported when using Codex
+> with a ChatGPT account."}`
 > Do NOT preemptively downgrade. Documented in `.claude/agents/codex-coder.md`.
 
 ---
@@ -306,7 +342,8 @@ Append dated entry capturing:
 
 ---
 
-*Generated: 2026-04-26 | Branch: 2026-04-24-001-orama-salvage | Author: Claude (session recovery)*
-*Next session: start with §4 Immediate Next Steps, P0 first.*
-*Continuation: 2026-04-26 second context window — see §7 for Q1–Q3 answers and execution status.*
-*Integrative merge note: 2026-06-28 — harmonized branch + main session-state records (additive, chronological).*
+Generated: 2026-04-26 | Branch: 2026-04-24-001-orama-salvage | Author: Claude (session recovery)
+Next session: start with §4 Immediate Next Steps, P0 first.
+Continuation: 2026-04-26 second context window — see §7 for Q1–Q3 answers and execution status.
+Integrative merge note: 2026-06-28 — harmonized branch + main session-state records (additive,
+chronological).
