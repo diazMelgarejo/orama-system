@@ -3,6 +3,7 @@
 from collections.abc import Iterator
 from contextlib import contextmanager
 import importlib
+import importlib.util
 import importlib.metadata
 from pathlib import Path
 from types import ModuleType
@@ -179,6 +180,10 @@ def test_candidate_precedence_and_class_identity(
     assert spawn._pt_dispatch_authority()[0] is first[0]
     assert spawn.duplicate_dispatch_error_type().__module__ == first[0].__module__
     monkeypatch.delenv("PERPETUATOOLSROOT")
+    # A process binds one policy authority; the first load cached its policy modules, so drop
+    # them before simulating a different selection in the same test process.
+    for cached in ("perpetua_tools", "perpetua_tools.model_governance"):
+        monkeypatch.delitem(sys.modules, cached, raising=False)
     assert spawn._pt_dispatch_authority()[2]() == str(roots[1])
 
 
@@ -264,4 +269,31 @@ def test_selected_policy_precedes_foreign_search_path_entry(
     spawn._pt_dispatch_authority()
     loaded = Path(sys.modules["perpetua_tools.model_governance"].__file__).resolve()
     assert loaded == (selected / "src/perpetua_tools/model_governance.py").resolve()
-    assert sys.path.index(str(selected / "src")) < sys.path.index(str(foreign / "src"))
+
+
+def test_selected_directories_do_not_stay_on_sys_path(
+    spawn: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Loading restores sys.path exactly, so nothing beside the authority can shadow later imports."""
+    selected = _checkout(tmp_path / "selected")
+    for directory in (selected, selected / "src"):
+        (directory / "shadow_probe_mod.py").write_text("SHADOW = True\n")
+    monkeypatch.setenv("PERPETUATOOLSROOT", str(selected))
+    before = list(sys.path)
+    spawn._pt_dispatch_authority()
+    assert sys.path == before
+    assert importlib.util.find_spec("shadow_probe_mod") is None
+    assert "perpetua_tools.model_governance" in sys.modules  # cached, so no path entry is needed later
+
+
+def test_sys_path_is_restored_when_loading_fails(
+    spawn: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A selected authority that raises while loading still leaves sys.path unchanged."""
+    root = _checkout(tmp_path / "broken")
+    (root / "orchestrator/state_dir.py").write_text('raise RuntimeError("broken authority")\n')
+    monkeypatch.setenv("PERPETUATOOLSROOT", str(root))
+    before = list(sys.path)
+    with pytest.raises(RuntimeError, match="broken authority"):
+        spawn._pt_dispatch_authority()
+    assert sys.path == before

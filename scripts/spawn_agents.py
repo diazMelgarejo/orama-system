@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import contextvars
 import datetime
 import hashlib
@@ -100,31 +101,44 @@ def _assert_pt_governance_origin(policy_dir: Path) -> None:
                 raise ImportError("PT governance origin does not match selected authority")
 
 
+@contextlib.contextmanager
+def _selected_import_paths(*paths: Path) -> Any:
+    """Give the selected authority directories import precedence only while it loads.
+
+    sys.path is restored exactly afterwards, so a module living beside the selected
+    authority (an httpx-like name, a ``utils`` package) can never shadow unrelated
+    imports for the rest of the process. Path changes made during the load are discarded.
+    """
+    saved = list(sys.path)
+    entries = [str(path) for path in dict.fromkeys(paths)]
+    try:
+        sys.path[:] = [*entries, *(entry for entry in saved if entry not in entries)]
+        yield
+    finally:
+        sys.path[:] = saved
+
+
 def _load_pt_authority(package_dir: Path, policy_dir: Path) -> tuple[Any, Any, Any]:
     """Bind guard/state modules to validated paths and preserve exception identity."""
     _assert_pt_governance_origin(policy_dir)
-    # Selected authority wins even when both checkout paths are already on sys.path:
-    # move each selected directory to the front (priority: policy dir, then package dir).
-    for path in (package_dir.parent, policy_dir.parent):
-        entry = str(path)
-        while entry in sys.path:
-            sys.path.remove(entry)
-    for path in (package_dir.parent, policy_dir.parent):
-        sys.path.insert(0, str(path))
     name = "_pt_dispatch_" + hashlib.sha256(str(package_dir).encode()).hexdigest()[:16]
-    if name not in sys.modules:
-        spec = importlib.util.spec_from_file_location(name, package_dir / "__init__.py", submodule_search_locations=[str(package_dir)])
-        if spec is None or spec.loader is None:
-            raise ImportError("PT dispatch authority is unavailable")
-        module = importlib.util.module_from_spec(spec)
-        sys.modules[name] = module
-        try:
-            spec.loader.exec_module(module)
-        except BaseException:
-            del sys.modules[name]
-            raise
-    guard = importlib.import_module(f"{name}.dispatch_guard")
-    state = importlib.import_module(f"{name}.state_dir")
+    with _selected_import_paths(policy_dir.parent, package_dir.parent):
+        if name not in sys.modules:
+            spec = importlib.util.spec_from_file_location(name, package_dir / "__init__.py", submodule_search_locations=[str(package_dir)])
+            if spec is None or spec.loader is None:
+                raise ImportError("PT dispatch authority is unavailable")
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[name] = module
+            try:
+                spec.loader.exec_module(module)
+            except BaseException:
+                del sys.modules[name]
+                raise
+        guard = importlib.import_module(f"{name}.dispatch_guard")
+        state = importlib.import_module(f"{name}.state_dir")
+        # The guard imports the policy module lazily at execute time. Import it now, while the
+        # selected directories lead sys.path, so it is cached and needs no permanent path entry.
+        importlib.import_module("perpetua_tools.model_governance")
     _assert_pt_governance_origin(policy_dir)
     return guard.DispatchGuard, guard.DispatchRequest, state.resolve_default_state_dir
 
