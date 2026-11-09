@@ -12,7 +12,7 @@
           "google/gemini-flash-latest"
         ]
       },
-      // Merged into agents.defaults.models; all keys must be openrouter/* prefixed.
+      // Merged into agents.defaults.models.
       "models_to_merge": {
         "openrouter/openrouter/free": {
           "id": "openrouter/openrouter/free",
@@ -20,6 +20,18 @@
           "contextWindow": 131072,
           "maxTokens": 4096,
           "cost": {"input": 0, "output": 0}
+        },
+        "google/gemini-3.8-flash": {
+          "id": "google/gemini-3.8-flash",
+          "name": "Gemini 3.8 Flash",
+          "contextWindow": 1048576,
+          "maxTokens": 65536
+        },
+        "google/gemini-flash-latest": {
+          "id": "google/gemini-flash-latest",
+          "name": "Gemini Flash Latest",
+          "contextWindow": 1048576,
+          "maxTokens": 65536
         }
       }
     }
