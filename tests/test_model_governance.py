@@ -1005,6 +1005,7 @@ def test_cline_pass_refuses_an_unlisted_model() -> None:
 
 
 def test_cline_pass_refuses_fast_mode_without_escalation() -> None:
+    """Reject fast mode for the closed ClinePass policy."""
     spec = LaunchSpec(
         path="cline_pass",
         launch_id="muse-spark-1.3-contributor",
