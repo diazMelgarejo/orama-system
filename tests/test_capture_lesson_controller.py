@@ -160,10 +160,10 @@ def test_quick_capture_collects_only_a_rule_and_delegates(monkeypatch) -> None:
     assert captured[0].prevention_rule.startswith("Always inspect")
 
 
-def test_development_legacy_review_without_initialized_log(monkeypatch, capsys) -> None:
+def test_development_legacy_review_without_initialized_log(monkeypatch, capsys, tmp_path) -> None:
     import capture_lesson
 
-    monkeypatch.setenv("HOME", "/definitely-empty")
+    monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(
         capture_lesson.sys,
         "argv",
@@ -173,7 +173,7 @@ def test_development_legacy_review_without_initialized_log(monkeypatch, capsys) 
             "legacy",
             "--review",
             "--dir",
-            "/definitely-empty",
+            str(tmp_path / "empty"),
         ],
     )
 
@@ -183,9 +183,10 @@ def test_development_legacy_review_without_initialized_log(monkeypatch, capsys) 
     assert "No lessons file found" in output
 
 
-def test_development_legacy_stats_without_initialized_log(monkeypatch, capsys) -> None:
+def test_development_legacy_stats_without_initialized_log(monkeypatch, capsys, tmp_path) -> None:
     import capture_lesson
 
+    monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(
         capture_lesson.sys,
         "argv",
@@ -195,7 +196,7 @@ def test_development_legacy_stats_without_initialized_log(monkeypatch, capsys) -
             "legacy",
             "--stats",
             "--dir",
-            "/definitely-empty",
+            str(tmp_path / "empty"),
         ],
     )
 
@@ -206,14 +207,14 @@ def test_development_legacy_stats_without_initialized_log(monkeypatch, capsys) -
 
 
 @pytest.mark.parametrize("action", ["--review", "--stats"])
-def test_runtime_review_and_stats_fail_closed(action: str, monkeypatch) -> None:
+def test_runtime_review_and_stats_fail_closed(action: str, monkeypatch, tmp_path) -> None:
     import capture_lesson
 
-    monkeypatch.setenv("HOME", "/definitely-empty")
+    monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(
         capture_lesson.sys,
         "argv",
-        ["capture_lesson.py", "--mode", "runtime", action, "--dir", "/definitely-empty"],
+        ["capture_lesson.py", "--mode", "runtime", action, "--dir", str(tmp_path / "empty")],
     )
 
     with pytest.raises(SystemExit) as excinfo:
