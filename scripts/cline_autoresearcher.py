@@ -29,9 +29,12 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+import autoresearcher_lock as _arl  # noqa: E402
 
 for _stream in (sys.stdout, sys.stderr):
     if hasattr(_stream, "reconfigure"):
@@ -53,6 +56,10 @@ WIN_PULSE_LOCK = Path.home() / ".openclaw" / "state" / "lan_peer" / "win_pulse.l
 WIN_COORD_PAUSE_FILE = Path.home() / ".openclaw" / "state" / "lan_peer" / "coord_pulse_pause.json"
 MAC_PULSE_LOCK = Path.home() / ".openclaw" / "state" / "lan_peer" / "mac_pulse.lock"
 MAC_GATEWAY_PAUSE_FILE = Path.home() / ".openclaw" / "state" / "lan_peer" / "openclaw_gateway_pause.json"
+
+# Single-owner backend locks (AR-WIN-1). An OS-held lock is the authority; see scripts/autoresearcher_lock.py.
+BACKEND_LOCK_WIN = Path.home() / ".openclaw" / "state" / "lan_peer" / "autoresearcher_backend_win.lock"
+BACKEND_LOCK_MAC = Path.home() / ".openclaw" / "state" / "lan_peer" / "autoresearcher_backend_mac.lock"
 
 _LAN_PEER_SESSION = (
     REPO_ROOT
@@ -276,6 +283,9 @@ def local_backend_idle(plat: Optional[str] = None) -> Dict[str, Any]:
             return {"idle": False, "reachable": False, "reason": "LM Studio Win not reachable"}
         if lock_is_held(WIN_PULSE_LOCK):
             return {"idle": False, "reachable": True, "reason": "GPU lock held (win_pulse.lock)"}
+        own = _arl.inspect(BACKEND_LOCK_WIN)
+        if own.state != _arl.FREE:
+            return {"idle": False, "reachable": True, "reason": f"backend lock {own.state}: {own.reason}"}
         return {"idle": True, "reachable": True, "reason": "LM Studio Win idle"}
 
     reachable = _probe_http_ok(f"{OLLAMA_MAC_ENDPOINT}/api/tags")
@@ -283,6 +293,9 @@ def local_backend_idle(plat: Optional[str] = None) -> Dict[str, Any]:
         return {"idle": False, "reachable": False, "reason": "ollama not reachable"}
     if lock_is_held(MAC_PULSE_LOCK):
         return {"idle": False, "reachable": True, "reason": "coder lock held (mac_pulse.lock)"}
+    own = _arl.inspect(BACKEND_LOCK_MAC)
+    if own.state != _arl.FREE:
+        return {"idle": False, "reachable": True, "reason": f"backend lock {own.state}: {own.reason}"}
     return {"idle": True, "reachable": True, "reason": "ollama idle"}
 
 
@@ -330,10 +343,15 @@ def should_fallback_to_cline(plat: Optional[str] = None) -> Dict[str, Any]:
 # ── Dispatch ──────────────────────────────────────────────────────────────────
 
 def dispatch_cline(task: str, plat: Optional[str] = None) -> Dict[str, Any]:
-    """Run the `cline` CLI directly (ClinePass credits tier)."""
+    """Run the `cline` CLI directly (ClinePass credits tier) and classify the outcome.
+
+    ``outcome`` is ``completed``, ``not-sent`` (the request provably never left this process: CLI missing or
+    could not be started) or ``unknown`` (a timeout, or a nonzero exit after the CLI started). An unknown outcome
+    must be held for reconciliation and never retried automatically.
+    """
     cline = cline_available()
     if not cline.get("available"):
-        return {"ok": False, "output": cline.get("reason", "cline unavailable"), "elapsed": 0}
+        return {"ok": False, "output": cline.get("reason", "cline unavailable"), "elapsed": 0, "outcome": "not-sent"}
     t0 = time.time()
     try:
         proc = subprocess.run(
@@ -342,24 +360,36 @@ def dispatch_cline(task: str, plat: Optional[str] = None) -> Dict[str, Any]:
         )
         elapsed = time.time() - t0
         output = (proc.stdout or "") + (proc.stderr or "")
-        return {"ok": proc.returncode == 0, "output": output, "elapsed": elapsed}
+        ok = proc.returncode == 0
+        return {"ok": ok, "output": output, "elapsed": elapsed, "outcome": "completed" if ok else "unknown"}
     except subprocess.TimeoutExpired:
-        return {"ok": False, "output": "cline task timed out (5min)", "elapsed": time.time() - t0}
+        return {"ok": False, "output": "cline task timed out (5min)", "elapsed": time.time() - t0, "outcome": "unknown"}
+    except OSError as exc:  # the process could not be started: nothing was sent
+        return {"ok": False, "output": str(exc), "elapsed": time.time() - t0, "outcome": "not-sent"}
     except Exception as exc:
-        return {"ok": False, "output": str(exc), "elapsed": time.time() - t0}
+        return {"ok": False, "output": str(exc), "elapsed": time.time() - t0, "outcome": "unknown"}
+
+
+def _effect_boundary_ok(plat: str) -> Tuple[bool, str]:
+    """Re-read the gateway and Cline inputs right before the send (never reuse the earlier decision)."""
+    gw = gateway_status(plat)
+    gateway_down = bool(gw.get("paused")) or (not gw.get("running")) or bool(gw.get("rate_limited"))
+    if not gateway_down:
+        return False, "gateway recovered"
+    cline = cline_available()
+    if not cline.get("available", False):
+        return False, f"Cline unavailable: {cline.get('reason', '')}"
+    return True, "gateway still down and Cline available"
 
 
 def dispatch_autoresearcher(plat: str, task: str) -> Dict[str, Any]:
-    """Two-tier ClinePass AutoResearcher dispatch.
+    """Single-attempt ClinePass AutoResearcher dispatch under the backend lock.
 
-    Tier 1 ("local-backend"): Cline is configured with the local coder backend
-    (LM Studio Win / Ollama Mac) as its preferred provider — a first
-    successful dispatch_cline() call means Cline resolved the task against
-    the local model, not paid credits.
-    Tier 2 ("cline-pass-credits"): if the first attempt fails (local backend
-    dropped, model unloaded mid-task, etc.), retry once — Cline's own
-    provider fallback chain (cline-workspace.json) may route the retry to
-    ClinePass-hosted credits instead.
+    The fallback decision is advisory. The dispatcher takes the single-owner backend lock, re-reads the gateway
+    and Cline inputs at the effect boundary, flushes an in-flight marker and sends exactly once. A failure after
+    the request was written is an *unknown* outcome: it is recorded as such, the lock record stays ambiguous and
+    nothing is retried or re-routed (a provably unsent request frees the lock). Operators clear an ambiguous
+    record with ``autoresearcher_lock.reconcile``.
     """
     check = should_fallback_to_cline(plat)
     if not check["should_fallback"]:
@@ -369,24 +399,31 @@ def dispatch_autoresearcher(plat: str, task: str) -> Dict[str, Any]:
             "output": f"ClinePass AutoResearcher fallback is not active: {check['reason']}",
         }
 
-    local_attempt = dispatch_cline(task, plat)
-    if local_attempt.get("ok"):
-        return {
-            "ok": True,
-            "fallback_active": True,
-            "fallback_tier": "local-backend",
-            "output": local_attempt.get("output", ""),
-            "elapsed": local_attempt.get("elapsed"),
-        }
+    lock = _arl.BackendLock(BACKEND_LOCK_WIN if _is_windows(plat) else BACKEND_LOCK_MAC, resource="local-backend")
+    try:
+        lock.acquire()
+    except _arl.LockRefused as exc:
+        return {"ok": False, "fallback_active": True, "lock_state": exc.state,
+                "output": f"backend lock {exc.state}: {exc.reason}"}
 
-    cline_attempt = dispatch_cline(task, plat)
+    try:
+        lock.recheck(lambda: _effect_boundary_ok(plat))
+    except _arl.LockRefused as exc:
+        lock.release("not-sent")
+        return {"ok": False, "fallback_active": True, "lock_state": exc.state,
+                "output": f"effect-boundary recheck refused the send: {exc.reason}"}
+
+    lock.mark_inflight()
+    attempt = dispatch_cline(task, plat)
+    outcome = attempt.get("outcome") or ("completed" if attempt.get("ok") else "unknown")
+    lock.release(outcome if outcome in ("completed", "not-sent") else "unknown")
     return {
-        "ok": bool(cline_attempt.get("ok")),
+        "ok": bool(attempt.get("ok")),
         "fallback_active": True,
-        "fallback_tier": "cline-pass-credits",
-        "output": cline_attempt.get("output", ""),
-        "elapsed": cline_attempt.get("elapsed"),
-        "local_backend_attempt": local_attempt,
+        "fallback_tier": "local-backend",
+        "outcome": outcome,
+        "output": attempt.get("output", ""),
+        "elapsed": attempt.get("elapsed"),
     }
 
 

@@ -184,8 +184,18 @@ class TestShouldFallback:
 
 # ── Dispatch AutoResearcher ───────────────────────────────────────────────────
 
+@pytest.fixture(autouse=True)
+def _isolated_backend_lock(tmp_path, monkeypatch):
+    """Keep every test's backend lock and effect-boundary recheck away from the real per-user state."""
+    import cline_autoresearcher as car
+
+    monkeypatch.setattr(car, "BACKEND_LOCK_WIN", tmp_path / "backend_win.lock")
+    monkeypatch.setattr(car, "BACKEND_LOCK_MAC", tmp_path / "backend_mac.lock")
+    monkeypatch.setattr(car, "_effect_boundary_ok", lambda plat: (True, "ok"))
+
+
 class TestDispatchAutoResearcher:
-    """Dispatching a task through the local backend or ClinePass."""
+    """Dispatching a task through the local backend, once, under the backend lock."""
     @patch("cline_autoresearcher.should_fallback_to_cline")
     def test_dispatch_when_fallback_inactive(self, mock_check):
         """Dispatch uses the local backend when the fallback is inactive."""
@@ -216,20 +226,16 @@ class TestDispatchAutoResearcher:
 
     @patch("cline_autoresearcher.dispatch_cline")
     @patch("cline_autoresearcher.should_fallback_to_cline")
-    def test_dispatch_fallback_to_cline_pass(self, mock_check, mock_dispatch):
-        """A failed local dispatch falls back to ClinePass."""
+    def test_a_failed_local_dispatch_is_not_retried(self, mock_check, mock_dispatch):
+        """A failed local dispatch is never retried: the outcome may be unknown, so it is held for reconciliation."""
         mock_check.return_value = {"should_fallback": True, "reason": "gateway down"}
-        # First call (local backend) fails, second call (ClinePass) succeeds
-        mock_dispatch.side_effect = [
-            {"ok": False, "output": "local backend failed", "elapsed": 1.0},
-            {"ok": True, "output": "cline-pass completed", "elapsed": 10.0},
-        ]
+        mock_dispatch.return_value = {"ok": False, "output": "local backend failed", "elapsed": 1.0, "outcome": "unknown"}
 
         result = dispatch_autoresearcher("macos", "test task")
-        assert result["ok"] is True
-        assert result["fallback_tier"] == "cline-pass-credits"
+        assert result["ok"] is False
         assert result["fallback_active"] is True
-        assert result["local_backend_attempt"]["ok"] is False
+        assert result["outcome"] == "unknown"
+        assert mock_dispatch.call_count == 1
 
 
 # ── Full status ───────────────────────────────────────────────────────────────
