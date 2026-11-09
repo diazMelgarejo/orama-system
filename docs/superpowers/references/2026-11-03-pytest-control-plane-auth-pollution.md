@@ -1,28 +1,23 @@
 # Pytest Control-Plane Auth Pollution — Reference
 
-> Rule: inside a pytest session, importing `orama_system.portal_server` silently turns
-> control-plane auth **on** for the rest of that process. Every later auth-gated request
-> returns `401`, and the failures land in test modules that have nothing to do with auth.
+> Current rule (2026-11-09): collection-time LAN-bind pollution previously enabled auth
+> in unrelated tests. The autouse fixture now clears the bind flags before each test.
+> Portal import was not established as the writer; that original attribution is withdrawn.
 
 ## Why this matters
 
-`tests/conftest.py` deliberately starts each session unauthenticated so legacy tests can
-call routes without bearer tokens. That intent is undone by an import-time side effect in
-production code, so whether the suite passes depends on **which test module gets imported
-first**. The symptoms are misleading — `assert 401 == 200`, `KeyError: 'privacy'`, or a
-missing `receipt` key — and read as per-module bugs rather than one process-global flag.
+`tests/conftest.py` provides per-test insecure-development defaults so legacy tests can
+call routes without bearer tokens. Before the fixture repair, collection-time environment
+pollution made results depend on **which test module got imported first**. The misleading
+symptoms included `assert 401 == 200`, `KeyError: 'privacy'`, and a missing `receipt` key.
+Tests may still explicitly enable LAN binding to exercise production authentication.
 
-Two practical consequences:
+## Historical mechanism (before the fixture repair)
 
-- A single file run passes while the same file fails inside the full suite (or the reverse).
-- The failure set changes between environments, so "it passes on my machine" is expected.
-
-## Mechanism
-
-The whole chain is deterministic; each step was verified at the cited line.
+These observations describe the original failing snapshot; line numbers are historical.
 
 1. `tests/conftest.py:17` sets `PYTHON_DOTENV_DISABLED=1`, then pops
-   `ORAMA_CONTROL_PLANE_TOKEN*` and the LAN bind flags (`ORAMA_BIND_LAN`,
+   `ORAMA_CONTROL_PLANE_TOKEN` and the LAN bind flags (`ORAMA_BIND_LAN`,
    `PT_BIND_LAN`, `PORTAL_BIND_LAN`) at lines 19-24.
 2. `tests/conftest.py:29` installs the autouse fixture `_orama_insecure_dev_for_tests`,
    which sets `ORAMA_INSECURE_DEV=1` for every test.
@@ -49,6 +44,11 @@ The whole chain is deterministic; each step was verified at the cited line.
 
 The trigger is a collection-time env leak, not any test's own behaviour: the failure
 appears in whichever modules run after the leaking module gets imported.
+
+The current autouse fixture also clears those three bind flags and
+`ORAMA_CONTROL_PLANE_TOKEN` before each test. Neither session setup nor that fixture clears
+`ORAMA_CONTROL_PLANE_TOKEN_LOCAL` or `ORAMA_CONTROL_PLANE_TOKEN_PEER`; no wildcard token
+isolation is claimed.
 
 ## Proof
 
@@ -134,16 +134,17 @@ for _name in ("ORAMA_BIND_LAN", "PORTAL_BIND_LAN", "PT_BIND_LAN"):
 `test_http_get_retries_next_token_on_401` and `test_http_get_returns_none_when_all_candidates_rejected`
 mocked `urlopen` with `def fake_urlopen(req, timeout=2)`. When `peer_tls.urlopen_kwargs`
 forwarded `context=<SSLContext>`, Python raised `TypeError: unexpected keyword argument 'context'`,
-which was caught by `_http_get`'s general handler and returned `None`. Adding `**kwargs: Any`
-to `fake_urlopen` resolved both tests, achieving 69/69 passed across all three modules.
+which was caught by `_http_get`'s general handler and returned `None`. Accepting TLS kwargs
+resolved both tests (69/69 across three modules). The follow-up regressions also assert
+that every retry receives the configured SSL context, rather than merely accepting it.
 
-**R3 — stop import-time env mutation in production code.** `portal_server.py:106-109` runs
-`load_dotenv` at module import. Move it into an explicit `load_env()` called from the
-`__main__` entry point and the app lifespan, so importing the server can never mutate a
-caller's environment. Do this after R1 lands; R1 is the cheap unblock.
+**R3 — explicit dotenv disable handling (applied).** Portal loading now explicitly honours
+`PYTHON_DOTENV_DISABLED`, including dependency versions that did not honour it themselves.
+Regression tests verify both full requested paths and override order using isolated dotenv
+fixtures. Moving production environment loading into a lifespan is not part of this repair.
 
-**R4 — make the leak loud instead of silent.** A session-start guard turns a 57-failure
-cascade into one actionable failure naming the leaked variables:
+**R4 — optional collection diagnostic (not applied).** A collection-finish probe can expose
+leaked variables before the repaired fixture clears them; it is not a production auth rule:
 
 ```python
 def pytest_collection_finish(session):
@@ -153,12 +154,11 @@ def pytest_collection_finish(session):
 
 **R5 — identify the writer (open).** Still unknown; the flip is bracketed to
 `tests/test_fleet_topology_real_schema_regression.py`. Re-run the `pytest_collectstart`
-probe from `## Proof` with `--collect-only` on shrinking file sets to pin the exact import
-before attempting R3.
+probe from `## Proof` with `--collect-only` on shrinking file sets to pin the exact import.
 
 **Not recommended:** teaching `auth_enforced()` about `PYTEST_CURRENT_TEST`. It would make
 tests immune to arbitrary environment leaks and hide the production-relevant question of
-why a server import mutates global state.
+why collection changed global state.
 
 ## Symptom map
 
@@ -181,23 +181,12 @@ run.
 3. Bisect the import order with `pytest <file-a> <file-b> -q` to find the poisoning module.
 4. Confirm with the probe above; `auth_enforced()` flipping to `True` is conclusive.
 
-## Fix options (owner decision — none applied here)
-
-- Make the `.env` / `.env.local` load in `portal_server` honour `PYTHON_DOTENV_DISABLED`,
-  or skip the `override=True` load when running under test. Fixes the cause.
-- Have `conftest` re-assert the inert values in a fixture that runs after collection
-  imports, not only at module import. Contains the damage, leaves the trap in place.
-- Make `auth_enforced()` ignore `lan_bind_configured()` under an explicit test-mode flag.
-  Narrowest, but adds a test-only branch to a security decision path.
-
-Any of these is a security-semantic change on an auth path and needs its own targeted
-tests plus review; it must not ride along with unrelated model-governance work.
-
 ## Boundaries
 
 - This documents one mechanism and its evidence. It does **not** establish that all 150
   failures in that run share this cause; only the sampled clusters were tied to it.
-- No source, test, config, or `.env` file was changed while establishing this.
+- The original investigation changed no source, tests, config or `.env`; later applied
+  repairs are explicitly identified above. Local dotenv files remain outside test inputs.
 - Nothing here is a qualification approval, freeze, evidence acceptance, or merge
   authorization.
 
