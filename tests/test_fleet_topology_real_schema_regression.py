@@ -76,6 +76,8 @@ _requires_orchestrator = pytest.mark.skipif(
     ),
 )
 
+PEER_TOPOLOGY_URL = "https://192.0.2.50:8002/api/fleet-topology"
+
 
 # ── D9: _http_get retries across token candidates on 401 ────────────────
 # Covered end-to-end for probe_lan_peer.py's relay_probe() in
@@ -132,13 +134,13 @@ def test_http_get_retries_next_token_on_401(monkeypatch: pytest.MonkeyPatch) -> 
     # authenticated transport (see _is_authenticated_transport); this test
     # exercises the retry-across-candidates logic specifically, which is
     # still valid and still runs once that precondition is satisfied.
-    result = qpt._http_get("https://10.0.0.50:8002/api/fleet-topology")
+    result = qpt._http_get(PEER_TOPOLOGY_URL)
 
     assert result == {"ok": True}
     assert calls == ["bad", "good"]  # tried the rejected candidate first, then the working one
     assert len(calls) == 2  # ALL candidates were attempted, not short-circuited
     assert contexts == [context, context]
-    assert urls == ["https://10.0.0.50:8002/api/fleet-topology"] * 2
+    assert urls == [PEER_TOPOLOGY_URL] * 2
 
 
 @pytest.mark.unit
@@ -165,11 +167,11 @@ def test_http_get_returns_none_when_all_candidates_rejected(monkeypatch: pytest.
     monkeypatch.setattr(qpt.peer_tls, "urlopen_kwargs", tls_kwargs)
     monkeypatch.setattr(qpt.urllib.request, "urlopen", fake_urlopen)
 
-    assert qpt._http_get("https://10.0.0.50:8002/api/fleet-topology") is None
+    assert qpt._http_get(PEER_TOPOLOGY_URL) is None
     assert len(calls) == 2  # both candidates exhausted before giving up
     assert calls == ["bad1", "bad2"]
     assert contexts == [context, context]
-    assert urls == ["https://10.0.0.50:8002/api/fleet-topology"] * 2
+    assert urls == [PEER_TOPOLOGY_URL] * 2
 
 
 @pytest.mark.unit
