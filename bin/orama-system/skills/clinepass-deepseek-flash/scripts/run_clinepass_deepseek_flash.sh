@@ -77,8 +77,8 @@ if ! help_text="$("$cline_bin" --help 2>&1)"; then
   echo "cannot inspect cline CLI help" >&2
   exit 1
 fi
-if ! grep -q -- '--provider' <<<"$help_text" || ! grep -q -- '--thinking' <<<"$help_text"; then
-  echo "cline CLI lacks explicit provider or thinking support" >&2
+if ! grep -q -- '--provider' <<<"$help_text" || ! grep -q -- '--thinking' <<<"$help_text" || ! grep -qw -- 'medium' <<<"$help_text"; then
+  echo "cline CLI lacks explicit provider or medium thinking support" >&2
   exit 1
 fi
 
@@ -87,6 +87,9 @@ if grep -q -- '--auto-approve-all' <<<"$help_text"; then
   auto_args=(--auto-approve-all)
 elif grep -q -- '--auto-approve ' <<<"$help_text"; then
   auto_args=(--auto-approve true)
+else
+  echo "cline CLI lacks a supported auto-approval flag" >&2
+  exit 1
 fi
 
 cmd=("$cline_bin" --json)

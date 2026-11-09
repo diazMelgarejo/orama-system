@@ -89,7 +89,12 @@ bin/orama-system/skills/clinepass-deepseek-flash/scripts/run_clinepass_deepseek_
 ```
 
 The wrapper pins provider `cline-pass`, `cline-pass/deepseek-v4.1-flash-1017`, medium reasoning, JSON output,
-and the current Cline auto-approval flag shape.
+and a supported Cline auto-approval flag shape. It refuses to run when CLI help
+does not advertise provider selection, medium thinking, or a supported approval flag.
+This standalone wrapper is not a governance authorization gate. The governance
+configuration in this checkout still specifies low rather than medium for this
+route; reconcile the policy with the approved medium default before relying on
+governed dispatch. Do not bypass a governance refusal.
 
 ## Verify Current CLI Shape
 

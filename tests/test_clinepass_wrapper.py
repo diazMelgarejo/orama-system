@@ -12,7 +12,7 @@ def test_wrapper_pins_provider_model_and_effort(tmp_path: Path) -> None:
     cli = tmp_path / "cline"
     args_file = tmp_path / "args"
     cli.write_text(
-        '#!/bin/sh\nif [ "$1" = "--help" ]; then echo "--auto-approve-all --provider --thinking"; '
+        '#!/bin/sh\nif [ "$1" = "--help" ]; then echo "--auto-approve-all --provider --thinking medium"; '
         'else printf "%s\\n" "$@" > "$ARGS_FILE"; fi\n',
         encoding="utf-8",
     )
@@ -51,3 +51,26 @@ def test_wrapper_refuses_cli_without_provider_support(tmp_path: Path) -> None:
     )
     assert result.returncode != 0
     assert not marker.exists()
+
+
+def test_wrapper_refuses_missing_medium_or_approval(tmp_path: Path) -> None:
+    """Incomplete capabilities must not fall through to a task invocation."""
+    cli = tmp_path / "cline"
+    marker = tmp_path / "dispatched"
+    wrapper = Path(__file__).resolve().parents[1] / (
+        "bin/orama-system/skills/clinepass-deepseek-flash/scripts/run_clinepass_deepseek_flash.sh"
+    )
+    for help_text in ("--provider --thinking low high --auto-approve-all", "--provider --thinking medium"):
+        cli.write_text(
+            '#!/bin/sh\nif [ "$1" = "--help" ]; then printf "%s\\n" "$HELP_TEXT"; '
+            'else touch "$MARKER"; fi\n', encoding="utf-8"
+        )
+        cli.chmod(0o755)
+        result = subprocess.run(
+            [str(wrapper), "test prompt"],
+            env={**os.environ, "CLINE_BIN": str(cli), "MARKER": str(marker), "HELP_TEXT": help_text},
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode != 0
+        assert not marker.exists()
