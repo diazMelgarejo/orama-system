@@ -251,6 +251,10 @@ invocation. If the profile is unavailable or authentication fails, stop and
 ask the operator to repair it through an approved interactive flow. Never pass
 keys in arguments or command substitutions.
 
+The operator may use Cline's supported interactive authentication flow; consult
+`cline auth --help` and stop if no secret-safe flow is available. Never supply
+secrets on the command line.
+
 Exact formats:
 
 - Cline CLI provider id for this route: `cline-pass` (not the legacy `clinepass`)

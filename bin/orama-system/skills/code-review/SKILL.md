@@ -167,7 +167,7 @@ PR is a branch-versus-base review.
   post-review summary, load and follow
   [`post-review-micro-remediation.md`](../../references/post-review-micro-remediation.md).
   Cluster findings by root cause, use one commit per failure class, and retain
-  the protocol's individual inline-thread reply requirement.
+  the protocol's individual inline-thread reply requirement; avoid revert chains.
 - Upstream contribution discipline (porting a fix to a vendored repo):
   [`references/upstream-contribution-discipline.md`](references/upstream-contribution-discipline.md)
 - Optional provider onboarding (Claude/Codex/Antigravity/Cline/BigModel/Perplexity):

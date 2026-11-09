@@ -922,7 +922,7 @@ def test_pin_document_and_config_name_the_same_alexandria_tip() -> None:
 
 
 def test_cline_pass_default_is_deepseek_v4_1_flash_1017_at_a_documented_effort() -> None:
-    """ClinePass pins the 1017 build at the approved medium default."""
+    """ClinePass pins the 1017 build at the operator-approved medium default."""
     spec = default_launch("cline_pass")
     assert spec.launch_id == "deepseek-v4.1-flash-1017"
     assert spec.effort == "medium"
@@ -1066,3 +1066,18 @@ def test_cline_pass_refuses_fast_mode_without_escalation() -> None:
     )
     with pytest.raises(ModelGovernanceError):
         assert_launch_allowed(spec)
+
+
+@pytest.mark.parametrize("operation", [plan_launch, assert_launch_allowed])
+@pytest.mark.parametrize("policy", [
+    {},
+    {"default": {"launch_id": "test", "effort": "medium"}, "allowed_ungated": [{}]},
+    {"default": {"launch_id": "test", "effort": "medium"}, "gated": {"test": {}}},
+    {"default": {"launch_id": "test", "effort": "medium"}, "planning": {"launch_id": "test", "effort": "medium"}},
+    {"default": {"launch_id": "test", "effort": "medium"}, "controller": {"launch_id": "test", "effort": "medium"}},
+])
+def test_cline_pass_malformed_or_gated_policy_fails_closed(operation, policy) -> None:
+    """Verify cline pass malformed or gated policy fails closed."""
+    spec = LaunchSpec(path="cline_pass", launch_id="test", effort="medium")
+    with pytest.raises(ModelGovernanceError, match="config unavailable"):
+        operation(spec, config={"cline_pass": policy})

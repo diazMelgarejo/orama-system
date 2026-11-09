@@ -14,12 +14,13 @@ object), `model`, `timeout`, and `reasoning`.
 | `openrouter` | `minimax/minimax-m2.5:free` | API key (`sk-or-v1-...`) | OpenRouter | `openrouter.ai` |
 | `openai-compatible` | `gemini-3.8-flash` | API key | Google AI | `generativelanguage.googleapis.com` |
 | `openai-codex` | — | OAuth | OpenAI | `api.openai.com` |
-| `gemini` | saved model | API key | Google AI | `generativelanguage.googleapis.com` |
+| `gemini` | Saved model (host-specific) | API key | Google AI | `generativelanguage.googleapis.com` |
 | `sapaicore` | `gpt-5.5` | SAP AI Core | SAP | — |
 
-Selecting the `gemini` profile without an override can retain a different saved model.
-
 ## `cline` vs `cline-pass`
+
+Selecting the `gemini` profile without a model override can retain its saved model;
+inspect the active configuration before assuming a specific model.
 
 Both carry the **identical** WorkOS OAuth token (`accessToken`, `refreshToken`,
 `expiresAt`, `accountId` all match). They hit the same backend

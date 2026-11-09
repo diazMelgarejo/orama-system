@@ -139,7 +139,7 @@ Run the kanban app.
 | `openrouter` | `minimax/minimax-m2.5:free` | API key | — |
 | `openai-compatible` | `gemini-3.8-flash` | API key | Custom baseUrl |
 | `openai-codex` | — | OAuth | — |
-| `gemini` | saved model | API key | Selecting the profile without an override can retain a different model |
+| `gemini` | Saved model (host-specific) | API key | Selecting without an override can retain a different saved model |
 | `sapaicore` | `gpt-5.5` | — | SAP AI Core |
 
 ## Upstream Endpoint
