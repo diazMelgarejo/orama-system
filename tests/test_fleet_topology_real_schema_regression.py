@@ -88,9 +88,11 @@ _requires_orchestrator = pytest.mark.skipif(
 
 @pytest.mark.unit
 def test_http_get_retries_next_token_on_401(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Retry a rejected bearer token with the next candidate."""
     calls: list[str] = []
 
     def fake_urlopen(req: urllib.request.Request, timeout: float = 2):
+        """Reject the first token and return JSON for the next one."""
         token = req.headers.get("Authorization", "").removeprefix("Bearer ").strip()
         calls.append(token)
         if token == "bad":
@@ -100,13 +102,17 @@ def test_http_get_retries_next_token_on_401(monkeypatch: pytest.MonkeyPatch) -> 
         body = json.dumps({"ok": True}).encode("utf-8")
 
         class _Resp:
+            """Provide a context-managed JSON response."""
             def read(self) -> bytes:
+                """Return the response body."""
                 return body
 
             def __enter__(self):
+                """Return the response when entering the context."""
                 return self
 
             def __exit__(self, *args: Any) -> bool:
+                """Propagate any exception from the response context."""
                 return False
 
         return _Resp()
@@ -127,9 +133,11 @@ def test_http_get_retries_next_token_on_401(monkeypatch: pytest.MonkeyPatch) -> 
 
 @pytest.mark.unit
 def test_http_get_returns_none_when_all_candidates_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Return no response after every bearer token is rejected."""
     calls: list[str] = []
 
     def fake_urlopen(req: urllib.request.Request, timeout: float = 2):
+        """Record and reject each attempted bearer token."""
         token = req.headers.get("Authorization", "").removeprefix("Bearer ").strip()
         calls.append(token)
         raise qpt.urllib.error.HTTPError(req.full_url, 401, "Unauthorized", hdrs=None, fp=None)
@@ -149,6 +157,7 @@ def test_http_get_refuses_bearer_token_over_unauthenticated_http(monkeypatch: py
     called = {"n": 0}
 
     def fake_urlopen(req: urllib.request.Request, timeout: float = 2):
+        """Fail if the prohibited HTTP request is attempted."""
         called["n"] += 1
         raise AssertionError("urlopen must never be called over unauthenticated transport")
 
@@ -169,16 +178,21 @@ def test_http_get_allows_no_token_over_http(monkeypatch: pytest.MonkeyPatch) -> 
     body = json.dumps({"ok": True}).encode("utf-8")
 
     class _Resp:
+        """Provide a context-managed response for the unauthenticated request."""
         def read(self) -> bytes:
+            """Return the JSON response body."""
             return body
 
         def __enter__(self):
+            """Return the response when entering the context."""
             return self
 
         def __exit__(self, *args: Any) -> bool:
+            """Propagate any exception from the response context."""
             return False
 
     def _fake_urlopen_no_token(req: urllib.request.Request, timeout: float = 2):
+        """Return a successful response for the token-free request."""
         return _Resp()
 
     monkeypatch.setattr(qpt.probe, "outbound_control_plane_tokens", lambda: [])
@@ -252,6 +266,7 @@ def test_merge_second_call_preserves_seeded_local_node():
 
 
 def _write_topology(tmp_path: Path, **overrides) -> Path:
+    """Write a topology fixture with optional field overrides."""
     data = {
         "local_node": "Mac-Studio.local",
         "fleet_mode": "PAIR",

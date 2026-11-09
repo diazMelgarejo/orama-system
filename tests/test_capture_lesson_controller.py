@@ -16,6 +16,7 @@ if str(SCRIPTS) not in sys.path:
 
 
 def _payload(controller):
+    """Build a representative lesson payload for controller tests."""
     return controller.LessonPayload(
         pattern="Verification Skipped",
         what_went_wrong="A branch was published without inspecting its final file scope.",
@@ -29,6 +30,7 @@ def _payload(controller):
 
 
 def test_development_mode_delegates_to_pt_agent_stack(tmp_path: Path, monkeypatch) -> None:
+    """Development capture delegates the lesson to the PT agent backend."""
     import lesson_controller as controller
 
     pt_root = tmp_path / "Perpetua-Tools"
@@ -38,6 +40,7 @@ def test_development_mode_delegates_to_pt_agent_stack(tmp_path: Path, monkeypatc
     calls: list[list[str]] = []
 
     def fake_run(argv, **_kwargs):
+        """Record the delegated command and simulate successful graduation."""
         calls.append([str(arg) for arg in argv])
         return subprocess.CompletedProcess(argv, 0, stdout="graduated\n", stderr="")
 
@@ -54,6 +57,7 @@ def test_development_mode_delegates_to_pt_agent_stack(tmp_path: Path, monkeypatc
 
 
 def test_runtime_mode_fails_closed_until_anamnesis_is_provisioned() -> None:
+    """Runtime capture fails closed when the Anamnesis backend is unavailable."""
     import lesson_controller as controller
 
     backend = controller.resolve_backend(mode="runtime", backend_name="auto", pt_root=None)
@@ -65,6 +69,7 @@ def test_runtime_mode_fails_closed_until_anamnesis_is_provisioned() -> None:
 
 
 def test_legacy_backend_remains_an_explicit_compatibility_escape_hatch(tmp_path: Path) -> None:
+    """The explicitly selected legacy backend writes to an initialized log."""
     import lesson_controller as controller
 
     target = tmp_path / "tasks" / "lessons.md"
@@ -84,6 +89,7 @@ def test_legacy_backend_remains_an_explicit_compatibility_escape_hatch(tmp_path:
 def test_legacy_task_log_migrates_to_home_without_creating_new_task_log(
     tmp_path: Path,
 ) -> None:
+    """Move an existing project lesson log to the home-level location."""
     import capture_lesson
 
     project = tmp_path / "project"
@@ -103,6 +109,7 @@ def test_legacy_task_log_migrates_to_home_without_creating_new_task_log(
 def test_legacy_default_is_home_level_and_does_not_create_missing_task_log(
     tmp_path: Path,
 ) -> None:
+    """Do not create a home lesson log when none exists."""
     import capture_lesson
 
     home = tmp_path / "home"
@@ -115,6 +122,7 @@ def test_legacy_default_is_home_level_and_does_not_create_missing_task_log(
 
 
 def test_task_plan_does_not_create_a_legacy_lesson_log(tmp_path: Path) -> None:
+    """Creating a task plan does not create a legacy lesson log."""
     project = tmp_path / "project"
     task_plan = ROOT / "bin" / "orama-system" / "scripts" / "create_task_plan.sh"
 
@@ -130,6 +138,7 @@ def test_task_plan_does_not_create_a_legacy_lesson_log(tmp_path: Path) -> None:
 
 
 def test_auto_development_requires_pt_instead_of_silently_fragmenting_memory() -> None:
+    """Automatic development mode requires the PT agent backend."""
     import lesson_controller as controller
 
     with pytest.raises(controller.LessonBackendUnavailable) as excinfo:
@@ -139,6 +148,7 @@ def test_auto_development_requires_pt_instead_of_silently_fragmenting_memory() -
 
 
 def test_quick_capture_collects_only_a_rule_and_delegates(monkeypatch) -> None:
+    """Quick capture collects a prevention rule and delegates the payload."""
     import capture_lesson
     import lesson_controller as controller
 
@@ -146,7 +156,9 @@ def test_quick_capture_collects_only_a_rule_and_delegates(monkeypatch) -> None:
     answers = iter(["Always inspect final name-status before publication."])
 
     class Backend:
+        """Record payloads passed to the capture backend."""
         def capture(self, payload) -> None:
+            """Append the captured lesson to the test record."""
             captured.append(payload)
 
     monkeypatch.setattr(capture_lesson, "prompt", lambda *_args, **_kwargs: next(answers))
@@ -161,6 +173,7 @@ def test_quick_capture_collects_only_a_rule_and_delegates(monkeypatch) -> None:
 
 
 def test_development_legacy_review_without_initialized_log(monkeypatch, capsys) -> None:
+    """Legacy review reports a missing uninitialized lesson log."""
     import capture_lesson
 
     monkeypatch.setattr(
@@ -183,6 +196,7 @@ def test_development_legacy_review_without_initialized_log(monkeypatch, capsys) 
 
 
 def test_development_legacy_stats_without_initialized_log(monkeypatch, capsys) -> None:
+    """Legacy stats report zero lessons without an initialized log."""
     import capture_lesson
 
     monkeypatch.setattr(
@@ -206,6 +220,7 @@ def test_development_legacy_stats_without_initialized_log(monkeypatch, capsys) -
 
 @pytest.mark.parametrize("action", ["--review", "--stats"])
 def test_runtime_review_and_stats_fail_closed(action: str, monkeypatch) -> None:
+    """Runtime review and stats fail closed without an initialized log."""
     import capture_lesson
 
     monkeypatch.setattr(
@@ -224,6 +239,7 @@ def test_runtime_review_and_stats_fail_closed(action: str, monkeypatch) -> None:
 def test_runtime_review_and_stats_read_an_initialized_legacy_log(
     action: str, tmp_path: Path, monkeypatch, capsys
 ) -> None:
+    """Runtime review and stats read an explicitly initialized legacy log."""
     import capture_lesson
 
     legacy_log = tmp_path / "home" / "tasks" / "lessons.md"
@@ -244,6 +260,7 @@ def test_runtime_review_and_stats_read_an_initialized_legacy_log(
 
 
 def test_legacy_capture_never_creates_a_new_user_level_log(tmp_path: Path) -> None:
+    """Legacy capture refuses to create an uninitialized user-level log."""
     import lesson_controller as controller
 
     target = tmp_path / "home" / "tasks" / "lessons.md"
@@ -261,6 +278,7 @@ def test_legacy_capture_never_creates_a_new_user_level_log(tmp_path: Path) -> No
 def test_legacy_review_without_initialized_log_exits_zero(
     tmp_path: Path, monkeypatch, capsys
 ) -> None:
+    """Legacy review returns normally when no lesson log exists."""
     import capture_lesson
 
     monkeypatch.setattr(
