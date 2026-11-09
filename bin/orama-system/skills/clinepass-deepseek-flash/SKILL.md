@@ -92,9 +92,9 @@ The wrapper pins provider `cline-pass`, `cline-pass/deepseek-v4.1-flash-1017`, m
 and a supported Cline auto-approval flag shape. It refuses to run when CLI help
 does not advertise provider selection, medium thinking, or a supported approval flag.
 This standalone wrapper is not a governance authorization gate. The governance
-configuration in this checkout still specifies low rather than medium for this
-route; reconcile the policy with the approved medium default before relying on
-governed dispatch. Do not bypass a governance refusal.
+configuration uses the operator-approved medium default while retaining the
+previous low option. Installed CLI support alone does not authorize a different
+effort or model. Do not bypass a governance refusal.
 
 ## Verify Current CLI Shape
 
@@ -193,6 +193,10 @@ pass a key. The wrapper binds `-P cline-pass` and the pinned model on every
 invocation. If the profile is unavailable or authentication fails, stop and
 ask the operator to repair it through an approved interactive flow. Never pass
 keys in arguments or command substitutions.
+
+The operator may use Cline's supported interactive authentication flow; consult
+`cline auth --help` and stop if no secret-safe flow is available. Never supply
+secrets on the command line.
 
 Exact formats:
 

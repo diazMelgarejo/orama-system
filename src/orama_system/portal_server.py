@@ -3741,9 +3741,14 @@ async def api_spawn_agent(req: SpawnAgentRequest):
             reason_lower = reason.lower()
             if "config unavailable" in reason_lower:
                 raise HTTPException(status_code=503, detail=reason) from exc
-            if "banned launch id" in reason_lower or "unlisted" in reason_lower:
+            if reason_lower in (
+                "non-medium effort requires an escalation token",
+                "fast mode requires an operator request plus a real escalation token",
+            ):
                 raise HTTPException(status_code=403, detail=reason) from exc
-            if "unsupported" in reason_lower or "unknown harness path" in reason_lower:
+            if "banned launch id" in reason_lower or "unlisted" in reason_lower or "default-deny" in reason_lower:
+                raise HTTPException(status_code=403, detail=reason) from exc
+            if "unsupported" in reason_lower or "unknown harness path" in reason_lower or "effort" in reason_lower:
                 raise HTTPException(status_code=422, detail=reason) from exc
             raise HTTPException(status_code=500, detail=reason) from exc
         raise

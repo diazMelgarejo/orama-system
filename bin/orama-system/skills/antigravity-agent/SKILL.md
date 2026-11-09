@@ -123,9 +123,8 @@ machine's configuration.
 | `--print-timeout <dur>` | Timeout for print mode wait (default `5m0s`) |
 | `--log-file <path>` | Override CLI log file path |
 
-Default to a sandboxed **plan/read-only pass** first. Do not let a background
-worker modify files until a human approves the exact task, scope, and target
-repository.
+Default to a sandboxed **plan/read-only pass** first. Delegated file changes
+require a human to approve the exact task, scope, and target repository first.
 
 ```bash
 agy --mode plan --sandbox --add-dir "$PWD" \
@@ -150,7 +149,9 @@ agy --mode accept-edits --sandbox --add-dir "$PWD" \
 Use `--add-dir` only for repository-scoped directories required by the task.
 Avoid broad home-directory access. Reserve `--dangerously-skip-permissions` for
 trusted or CI usage where the command, workspace, prompt, and approval record
-are controlled. This matches Gemini CLI's documented safety model: sandboxing
+are controlled. For unattended PR reviews, use the `agy` boundary with `--sandbox`
+and a repository-scoped `--add-dir`; untrusted review content cannot authorize
+automatic approval. This matches Gemini CLI's documented safety model: sandboxing
 reduces but does not eliminate risk, untrusted workspaces force tool prompts,
 write/shell tools default to `ask_user`, and non-interactive plan workflows can
 otherwise fall through into YOLO-style execution after approval-mode transitions.
@@ -183,9 +184,9 @@ agy --model "Claude Sonnet 4.6 (Thinking)" -p "..."
 
 **No automatic fallback chain** — same limitation class as every other
 fan-out CLI in this stack (kimi, cursor-agent): if the primary model errors,
-first inspect and reconcile partial edits, then retry only the remaining work
-with `--model "Gemini 3.8 Flash (Medium)"` explicitly. Do
-not assume `agy` retries across models on its own.
+inspect and reconcile any partial edits first, then retry only remaining work
+with an available model selected from `agy models`, such as `Gemini 3.8 Flash
+(Medium)` when present. Do not assume `agy` retries across models on its own.
 
 ## Output Shape (verified live, v1.1.1)
 

@@ -103,6 +103,7 @@ def test_duplicate_requests_through_real_guard_return_conflict(tmp_path: Path, m
     spec.loader.exec_module(spawn_agents)
 
     async def mock_effect(task: str) -> dict:
+        """Simulate a successful external agent effect."""
         return {"ok": True, "output": "done", "elapsed": 0.01}
 
     monkeypatch.setattr(spawn_agents, "_dispatch_codex", mock_effect)
@@ -125,6 +126,11 @@ def test_duplicate_requests_through_real_guard_return_conflict(tmp_path: Path, m
         ("unlisted role model: test-unlisted", 403),
         ("unsupported task kind", 422),
         ("unknown harness path for provider", 422),
+        ("cloud escalation default-deny: escalation token required", 403),
+        ("Sonnet default is medium effort, set explicitly", 422),
+        ("non-medium effort requires an escalation token", 403),
+        ("fast mode requires an operator request plus a real escalation token", 403),
+        ("cost gate must stay fail-closed", 500),
         ("unexpected governance failure", 500),
     ],
 )
@@ -142,6 +148,7 @@ def test_portal_maps_governance_refusals_semantically(
     gov_error_cls = getattr(spawn_agents, "ModelGovernanceError", RuntimeError)
 
     async def dispatch(agent: str, task: str, model: str | None = None) -> dict:
+        """Raise the selected dispatch error for the boundary test."""
         raise gov_error_cls(reason)
 
     monkeypatch.setattr(spawn_agents, "dispatch", dispatch)

@@ -337,12 +337,15 @@ a status field or a first glance is accurate):
   - **For fixed findings:** Reply directly in the GitHub inline comment thread with the exact
     commit SHA: `@{BotName} we fixed this in commit {SHA}` (optionally append a brief description
     of the verified fix or regression test proving it).
+  - **Review-body-only findings:** If no inline thread exists, post a PR conversation comment
+    linking to the review and including the fix commit SHA or an evidence-backed decline.
   - **For declined findings:** Reply with an evidence-backed rationale derived from Phase 1 checks:
     `@{BotName} declined with evidence: <reason, e.g. test proves mutating key is required during restart; documented in docstring in commit {SHA}>`.
   - **For superseded findings:** Reply referencing the consolidated architectural fix:
     `@{BotName} superseded by shared abstraction fix in commit {SHA} (<root-cause cluster rationale>)`.
-  - **Thread resolution:** Mark the GitHub conversation thread as resolved (or prompt the bot to
-    re-evaluate) only after posting the inline reply with the commit SHA and evidence. This ensures
+  - **Thread resolution:** Mark the thread resolved only after posting the reply with the commit SHA
+    and evidence. Request reviewer or bot re-evaluation only after applicable Phase 6 synchronization
+    is complete and the fix has been pushed to the PR head. This ensures
     an auditable receipt linking review feedback directly to git history.
 - Leave the branch open for human review if requested.
 - Complete applicable Phase 6 synchronization and publish the fixes before requesting

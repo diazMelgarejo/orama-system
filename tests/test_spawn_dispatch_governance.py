@@ -89,7 +89,7 @@ def test_cursor_fixed_model_must_pass_governance(tmp_path: Path, monkeypatch: py
         return {"ok": True}
 
     monkeypatch.setattr(module, "_dispatch_cursor", effect)
-    with pytest.raises(RuntimeError):
+    with pytest.raises(module.ModelGovernanceError, match="unlisted Anthropic model"):
         asyncio.run(module.dispatch("cursor", "review"))
     assert effects == []
 
@@ -135,6 +135,7 @@ def test_cli_refusal_exits_with_code_2(
     module = _load_spawn()
 
     async def dispatch(agent: str, task: str, model: str | None = None, *, scope: str | None = None) -> dict:
+        """Raise the selected dispatch error for the boundary test."""
         raise refusal_exc
 
     monkeypatch.setattr(module, "dispatch", dispatch)
@@ -185,6 +186,7 @@ def test_cli_governance_refusal_exits_with_code_2(
     gov_err_type = getattr(module, "ModelGovernanceError", RuntimeError)
 
     async def dispatch(agent: str, task: str, model: str | None = None, *, scope: str | None = None) -> dict:
+        """Raise the selected dispatch error for the boundary test."""
         raise gov_err_type("banned launch id: test-banned")
 
     monkeypatch.setattr(module, "dispatch", dispatch)

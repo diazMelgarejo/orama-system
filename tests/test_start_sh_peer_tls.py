@@ -353,7 +353,7 @@ def test_frontend_without_admin_directive_validates_and_starts(tmp_path: Path) -
     bindir, log = _fake_caddy(tmp_path)
     cfg = _config_dir(tmp_path)
     (cfg / "Caddyfile").write_text(
-        "https://:8443 {\n\treverse_proxy localhost:8002\n}\n", encoding="utf-8"
+        "https://:9443 {\n\treverse_proxy localhost:8002\n}\n", encoding="utf-8"
     )
     result = _bash(
         tmp_path,

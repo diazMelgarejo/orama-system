@@ -125,7 +125,8 @@ In all cases, the reviewer must return the same structured JSON verdict as Revie
 
 ### Step 4: Verdict Gate
 
-- **Both PASS on distinct models** → **NICE** — proceed to Step 6 (push)
+- **Both PASS with distinct models** → **NICE** — proceed to Step 6 (push)
+- **Both PASS with the Claude-only fallback** → stop and obtain a distinct-model review; do not push.
 - **Either FAIL** → **NAUGHTY** — merge all critical issues from both reviewers, deduplicate,
   proceed to Step 5
 
