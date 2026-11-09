@@ -1,3 +1,5 @@
+"""Keep local environment isolation and scanner refusal regressions explicit."""
+
 import json
 import os
 from pathlib import Path
@@ -14,6 +16,7 @@ AGUARA = shutil.which("aguara")
 
 @pytest.mark.parametrize("value,enabled", [(None, True), ("0", True), ("false", True), ("1", False), ("TRUE", False)])
 def test_portal_dotenv_flag(value, enabled, tmp_path):
+    """Only truthy disable values suppress both isolated dotenv loads."""
     (tmp_path / ".env").write_text("ORAMA_PR483_DOTENV_TEST=base\n")
     (tmp_path / ".env.local").write_text("ORAMA_PR483_DOTENV_TEST=local\n")
     env = os.environ.copy()
@@ -47,6 +50,7 @@ print(json.dumps([calls, os.getenv("ORAMA_PR483_DOTENV_TEST")]))
 
 
 def test_lan_override_after_autouse_fixture(monkeypatch):
+    """An explicit LAN bind still requires authentication in development mode."""
     from utils.control_plane_auth import auth_enforced
 
     monkeypatch.setattr("utils.control_plane_auth.persisted_control_plane_token", lambda: "")
@@ -57,6 +61,7 @@ def test_lan_override_after_autouse_fixture(monkeypatch):
 
 @pytest.mark.skipif(AGUARA is None, reason="aguara must be installed; no installation is attempted")
 def test_aguara_wrapper_rules_and_baseline_identity(tmp_path):
+    """Restored rules refuse new findings and baseline identities bind paths."""
     script = tmp_path / "scripts/ci/run_agent_security_scans.sh"
     script.parent.mkdir(parents=True)
     shutil.copy(ROOT / "scripts/ci/run_agent_security_scans.sh", script)
@@ -71,6 +76,7 @@ def test_aguara_wrapper_rules_and_baseline_identity(tmp_path):
     env["RUNNER_TEMP"] = str(tmp_path)
 
     def gate():
+        """Run the scanner wrapper against only the isolated fixture surface."""
         return subprocess.run(["bash", str(script), "aguara"], env=env,
                               capture_output=True, text=True)
 
