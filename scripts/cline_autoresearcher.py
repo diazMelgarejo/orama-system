@@ -97,6 +97,10 @@ def _find_cline() -> Optional[str]:
     found = shutil.which(bin_name)
     if found:
         return found
+    if _is_windows():  # the npm global install layout ships a cmd shim, not an exe (never given a prompt, see _cline_launcher)
+        found = shutil.which("cline.cmd")
+        if found:
+            return found
     if not _is_windows():
         found = shutil.which("cline")
         if found:
@@ -120,7 +124,27 @@ def cline_available() -> Dict[str, Any]:
     cline_bin = _find_cline()
     if not cline_bin:
         return {"available": False, "bin": None, "reason": "cline CLI not found on PATH or known install dirs"}
+    if _cline_launcher(cline_bin) is None:
+        return {"available": False, "bin": None,
+                "reason": "cline is a cmd/ps1 shim whose node entry could not be resolved; refusing to pass prompts through a shell shim"}
     return {"available": True, "bin": cline_bin, "reason": "cline CLI found"}
+
+
+def _cline_launcher(cline_bin: str) -> Optional[list]:
+    """Return the argv prefix that launches Cline, or None when it cannot be launched safely.
+
+    A normal executable is its own launcher. An npm ``.cmd``/``.bat``/``.ps1`` shim is never used to carry a
+    prompt (cmd.exe re-parses metacharacters in arguments); the node entry script next to it is launched with node.
+    """
+    if Path(cline_bin).suffix.lower() not in (".cmd", ".bat", ".ps1"):
+        return [cline_bin]
+    base = Path(cline_bin).parent
+    entry = base / "node_modules" / "cline" / "bin" / "cline"
+    node = base / "node.exe"
+    node_path = str(node) if node.is_file() else shutil.which("node")
+    if entry.is_file() and node_path:
+        return [node_path, str(entry)]
+    return None
 
 
 # ── Hermes CLI discovery (Windows gateway) ────────────────────────────────────
@@ -361,7 +385,7 @@ def _cline_argv(cline_bin: str, task: str) -> list:
     Cline is not installed on the Windows host, so the Windows CLI version is unverified.
     """
     prompt = task if len(task.split()) >= 2 else f"Task: {task}"
-    argv = [cline_bin]
+    argv = list(_cline_launcher(cline_bin) or [cline_bin])
     provider = os.getenv("CLINE_PROVIDER", "").strip()
     model = os.getenv("CLINE_MODEL", "").strip()
     if provider:

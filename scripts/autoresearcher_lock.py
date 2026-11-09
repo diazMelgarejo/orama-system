@@ -169,8 +169,10 @@ def _try_lock(fd: int) -> bool:
     try:
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         return True
-    except (BlockingIOError, PermissionError):  # fail closed: EACCES and EAGAIN both read as another owner
+    except BlockingIOError:
         return False
+    except PermissionError as exc:  # a permission problem is not another owner: refuse with its own reason
+        raise LockRefused("refused", f"permission denied taking the lock: {exc}") from exc
 
 
 def _unlock(fd: int) -> None:
@@ -251,7 +253,11 @@ def inspect(path: Any, resource: str = "local-backend") -> Inspection:
     except FileNotFoundError:
         return Inspection(FREE, "no lock file")
     try:
-        if not _try_lock(fd):
+        try:
+            locked = _try_lock(fd)
+        except LockRefused as exc:
+            return Inspection(AMBIGUOUS, exc.reason)
+        if not locked:
             kind, record = _read_record(path)
             owner = dict(record, identity=_identity(record)) if kind == "ok" and record else None
             pid = owner.get("pid") if owner else "unknown"
