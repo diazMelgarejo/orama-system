@@ -51,6 +51,18 @@ class PointerPeerTests(unittest.TestCase):
         self.assertNotIn("continue-on-error", step)
         self.assertIn("steps.pt-pointer-partner.outputs.ref", step)
 
+    def test_review_stack_has_explicit_published_partners(self) -> None:
+        """Every review-stack layer uses its matching immutable PT producer."""
+        path = Path(__file__).resolve().parents[1] / "config/docs-pointer-peers.json"
+        expected = {
+            "481": "594568eb56cf5e47c05f567754e3568ee1d070b3",
+            "482": "375517b77e732a6805bdd146ab7f3d936c45b44a",
+            "483": "375517b77e732a6805bdd146ab7f3d936c45b44a",
+        }
+        for number, sha in expected.items():
+            with self.subTest(pull=number):
+                self.assertEqual(MODULE.paired_ref(path, number), sha)
+
 
 if __name__ == "__main__":
     unittest.main()
