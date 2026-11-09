@@ -55,9 +55,9 @@ class PointerPeerTests(unittest.TestCase):
         """Every review-stack layer uses its matching immutable PT producer."""
         path = Path(__file__).resolve().parents[1] / "config/docs-pointer-peers.json"
         expected = {
-            "481": "594568eb56cf5e47c05f567754e3568ee1d070b3",
-            "482": "375517b77e732a6805bdd146ab7f3d936c45b44a",
-            "483": "375517b77e732a6805bdd146ab7f3d936c45b44a",
+            "481": "848208e8e505664f65c140f4f14a76a45ee35215",
+            "482": "f91bfd325e353a3ab3391b85c7b0e83b27b936fd",
+            "483": "f91bfd325e353a3ab3391b85c7b0e83b27b936fd",
         }
         for number, sha in expected.items():
             with self.subTest(pull=number):
