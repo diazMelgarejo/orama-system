@@ -137,3 +137,20 @@ class TestClineShimLaunch:
         with patch.object(car, "_is_windows", return_value=True), \
              patch.object(car.shutil, "which", side_effect=lambda name: str(shim) if name == "cline.cmd" else None):
             assert car._find_cline() == str(shim)
+
+
+class TestPlanModeByDefault:
+    """Cline defaults to act mode with auto-approve on; the controller must not."""
+
+    def test_default_argv_is_plan_mode_with_auto_approve_off(self, monkeypatch):
+        """Without an explicit opt-in the run is plan mode and tool auto-approval is off."""
+        monkeypatch.delenv("CLINE_ALLOW_ACT", raising=False)
+        argv = car._cline_argv("cline", "a two word prompt")
+        assert "--plan" in argv and argv[argv.index("--auto-approve") + 1] == "false"
+
+    def test_act_mode_needs_an_explicit_operator_opt_in(self, monkeypatch):
+        """CLINE_ALLOW_ACT=1 removes the plan flags; any other value keeps them."""
+        monkeypatch.setenv("CLINE_ALLOW_ACT", "1")
+        assert "--plan" not in car._cline_argv("cline", "a two word prompt")
+        monkeypatch.setenv("CLINE_ALLOW_ACT", "yes")
+        assert "--plan" in car._cline_argv("cline", "a two word prompt")

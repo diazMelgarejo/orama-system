@@ -79,7 +79,7 @@ class TestClineCommandLine:
         monkeypatch.delenv("CLINE_PROVIDER", raising=False)
         monkeypatch.delenv("CLINE_MODEL", raising=False)
         argv = car._cline_argv("cline", "summarise the lock design for review")
-        assert argv == ["cline", "summarise the lock design for review"]
+        assert argv == ["cline", "--plan", "--auto-approve", "false", "summarise the lock design for review"]
 
     def test_one_word_prompt_is_padded_so_it_is_not_read_as_a_subcommand(self, monkeypatch):
         """A one-word prompt would be rejected as a mistyped subcommand, so it is made multi-word."""
@@ -94,6 +94,7 @@ class TestClineCommandLine:
         argv = car._cline_argv("cline", "a two word prompt")
         assert argv[:5] == ["cline", "-P", "cline-pass", "-m", "some-model"]
         assert argv[-1] == "a two word prompt"
+        assert argv[5:8] == ["--plan", "--auto-approve", "false"]
 
     def test_dispatch_cline_uses_the_positional_form_and_a_scratch_directory(self, tmp_path, monkeypatch):
         """The subprocess gets no ``task`` argument and does not run in the repository root."""

@@ -382,6 +382,8 @@ def _cline_argv(cline_bin: str, task: str) -> list:
     "Unknown command or unquoted prompt". LIVE BEHAVIOUR (CLI 3.0.49 or later): the prompt is a bare positional
     argument to ``cline``; a one-word prompt is rejected as a mistyped subcommand, so one is padded here. Provider
     and model come from Cline's own configuration unless CLINE_PROVIDER / CLINE_MODEL pin them (``-P`` / ``-m``).
+    Cline's own default is act mode with tool auto-approval ON (verified in the 3.0.74 help text), so runs are plan
+    mode with auto-approve off unless CLINE_ALLOW_ACT=1 is set by the operator.
     Cline is not installed on the Windows host, so the Windows CLI version is unverified.
     """
     prompt = task if len(task.split()) >= 2 else f"Task: {task}"
@@ -392,6 +394,8 @@ def _cline_argv(cline_bin: str, task: str) -> list:
         argv += ["-P", provider]
     if model:
         argv += ["-m", model]
+    if os.getenv("CLINE_ALLOW_ACT", "").strip() != "1":  # Cline defaults to act mode with auto-approve ON; do not
+        argv += ["--plan", "--auto-approve", "false"]
     return argv + [prompt]
 
 
