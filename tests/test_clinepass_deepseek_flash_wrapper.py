@@ -56,6 +56,7 @@ def _stub(tmp_path: Path, help_text: str) -> dict[str, str]:
 
 
 def _run(tmp_path: Path, help_text: str, *args: str) -> subprocess.CompletedProcess:
+    """Run the wrapper against a stub without contacting a provider."""
     return subprocess.run(
         ["bash", str(SCRIPT), *args],
         env=_stub(tmp_path, help_text),
@@ -71,12 +72,9 @@ def test_dispatch_pins_provider_model_and_medium_reasoning(tmp_path: Path) -> No
     assert result.returncode == 0, result.stderr
 
     argv = json.loads(result.stdout)
-    assert argv[:2] == ["--json", "-P"]
-    assert argv[2] == "cline-pass"
-    assert argv[3:5] == ["--thinking", "medium"]
-    assert argv[5:7] == ["--auto-approve", "true"]
-    assert argv[7:9] == ["-m", "cline-pass/deepseek-v4.1-flash-1017"]
-    assert argv[9:] == ["-c", "/private/tmp", "-t", "42", "do the thing"]
+    assert argv == ["--json", "--auto-approve", "true", "-P", "cline-pass", "-m",
+                    "cline-pass/deepseek-v4.1-flash-1017", "--thinking", "medium",
+                    "-c", "/private/tmp", "-t", "42", "do the thing"]
     assert "--reasoning-effort" not in argv
 
 
@@ -91,15 +89,20 @@ def test_plan_mode_maps_to_plan_flag(tmp_path: Path) -> None:
     assert "--plan" not in json.loads(acted.stdout)
 
 
-def test_legacy_cli_uses_its_own_flag_shape(tmp_path: Path) -> None:
-    """An older CLI gets --auto-approve-all and --reasoning-effort, not --thinking."""
+def test_legacy_cli_refuses_automatic_high_escalation(tmp_path: Path) -> None:
+    """A legacy high-only CLI cannot receive a task or raise reasoning effort."""
     result = _run(tmp_path, LEGACY_HELP, "review")
-    assert result.returncode == 0, result.stderr
+    assert result.returncode == 1
+    assert "lacks --thinking" in result.stderr
+    assert not result.stdout
 
-    argv = json.loads(result.stdout)
-    assert "--auto-approve-all" in argv
-    assert argv[argv.index("--reasoning-effort") + 1] == "high"
-    assert "--thinking" not in argv
+
+def test_older_approval_flag_with_medium_thinking(tmp_path: Path) -> None:
+    """An older approval spelling remains supported when medium is advertised."""
+    help_text = MODERN_HELP.replace("--auto-approve <boolean>", "--auto-approve-all")
+    result = _run(tmp_path, help_text, "review")
+    assert result.returncode == 0, result.stderr
+    assert "--auto-approve-all" in json.loads(result.stdout)
 
 
 @pytest.mark.parametrize(

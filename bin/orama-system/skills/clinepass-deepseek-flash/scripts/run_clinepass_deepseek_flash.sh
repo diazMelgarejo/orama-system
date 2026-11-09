@@ -86,8 +86,16 @@ if ! help_text="$("$cline_bin" --help 2>&1)"; then
   echo "cannot inspect cline CLI help" >&2
   exit 1
 fi
-if ! grep -q -- '--provider' <<<"$help_text" || ! grep -q -- '--thinking' <<<"$help_text" || ! grep -qw -- 'medium' <<<"$help_text"; then
-  echo "cline CLI lacks explicit provider or medium thinking support" >&2
+if ! grep -q -- '--provider' <<<"$help_text"; then
+  echo "cline CLI lacks --provider support" >&2
+  exit 1
+fi
+if ! grep -q -- '--thinking' <<<"$help_text"; then
+  echo "cline CLI lacks --thinking support" >&2
+  exit 1
+fi
+if ! grep -qw -- 'medium' <<<"$help_text"; then
+  echo "cline CLI lacks medium thinking support" >&2
   exit 1
 fi
 
