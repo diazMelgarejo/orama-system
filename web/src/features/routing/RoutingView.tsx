@@ -22,7 +22,7 @@ const FALLBACK_CHAIN = [
   { model: "openrouter/nvidia/nemotron-3-super-120b-a12b:free", device: "cloud", status: "fallback-1" },
   { model: "openrouter/minimax/minimax-m2.5:free", device: "cloud", status: "fallback-2" },
   { model: "openrouter/deepseek/deepseek-v4-5:free", device: "cloud", status: "fallback-3" },
-  { model: "google/gemini-3.8-flash", device: "cloud", status: "fallback-4 (last)" },
+  { model: "gemini-fallback/gemini-flash-latest", device: "cloud", status: "fallback-4 (last)" },
 ];
 
 export function RoutingView({ state }: RoutingViewProps) {

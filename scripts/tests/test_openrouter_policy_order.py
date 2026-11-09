@@ -28,8 +28,9 @@ def test_policy_places_openrouter_before_gemini():
     fallbacks = policy["agents"]["defaults"]["model"]["fallbacks_to_merge"]
 
     assert "openrouter/openrouter/free" in fallbacks
-    assert "google/gemini-3.8-flash" in fallbacks
-    assert fallbacks.index("openrouter/openrouter/free") < fallbacks.index("google/gemini-3.8-flash")
+    assert "gemini-fallback/gemini-flash-latest" in fallbacks
+    assert "google/gemini-3.8-flash" not in fallbacks
+    assert fallbacks.index("openrouter/openrouter/free") < fallbacks.index("gemini-fallback/gemini-flash-latest")
 
 
 def test_policy_only_merges_openrouter_models_into_allowlist():

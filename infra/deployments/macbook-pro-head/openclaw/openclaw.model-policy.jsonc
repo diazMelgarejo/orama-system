@@ -38,8 +38,7 @@
           "openrouter/inclusionai/ling-2.6-flash:free",
           "openrouter/openrouter/free",
           // Gemini at end — Gemini-Analyzer use-cases only (3rd-choice)
-          "google/gemini-3.8-flash",
-          "google/gemini-flash-latest"
+          "gemini-fallback/gemini-flash-latest"
         ]
       },
 

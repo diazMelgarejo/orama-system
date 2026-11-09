@@ -8,8 +8,7 @@
         // OpenRouter free tier is listed before any Gemini entry.
         "fallbacks_to_merge": [
           "openrouter/openrouter/free",
-          "google/gemini-3.8-flash",
-          "google/gemini-flash-latest"
+          "gemini-fallback/gemini-flash-latest"
         ]
       },
       // Merged into agents.defaults.models; all keys must be openrouter/* prefixed.
