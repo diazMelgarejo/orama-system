@@ -32,6 +32,17 @@ def _executable(path: Path, body: str) -> None:
     path.chmod(path.stat().st_mode | stat.S_IXUSR)
 
 
+def _utility_dir(tmp_path: Path) -> Path:
+    """Expose only the plain utilities the scripts need, never a system cargo or ramparts."""
+    utilities = tmp_path / "utilbin"
+    utilities.mkdir()
+    for name in ("sh", "bash", "dirname", "mkdir", "chmod", "cat", "rm", "env", "uname", "tr", "sed", "grep", "head", "date"):
+        found = shutil.which(name, path="/usr/bin:/bin")
+        if found:
+            (utilities / name).symlink_to(found)
+    return utilities
+
+
 def _run(tmp_path: Path, version_out: str, *, cargo: bool, ci: bool = True) -> tuple[subprocess.CompletedProcess[str], str, str]:
     """Run only the ramparts scan in an isolated tree with fake binaries; return result, scan log, cargo log."""
     tree = tmp_path / "tree"
@@ -44,14 +55,17 @@ def _run(tmp_path: Path, version_out: str, *, cargo: bool, ci: bool = True) -> t
     _executable(fakebin / "ramparts", FAKE_RAMPARTS)
     if cargo:
         _executable(fakebin / "cargo", FAKE_CARGO)
+    path = f"{fakebin}:{_utility_dir(tmp_path)}"
+    found_cargo = shutil.which("cargo", path=path)
+    assert (found_cargo is not None) == cargo, "only the fake cargo may ever be reachable from the test PATH"
     env = {
-        "PATH": f"{fakebin}:/usr/bin:/bin", "HOME": str(tmp_path / "home"), "RUNNER_TEMP": str(tmp_path),
+        "PATH": path, "HOME": str(tmp_path / "home"), "RUNNER_TEMP": str(tmp_path),
         "CARGO_HOME": str(tmp_path / "cargohome"), "FAKE_VERSION_OUT": version_out, "PINNED": PIN,
         "RAMPARTS_LOG": str(tmp_path / "ramparts.log"), "CARGO_LOG": str(tmp_path / "cargo.log"),
     }
     if ci:
         env["GITHUB_ACTIONS"] = "true"
-    result = subprocess.run(["bash", str(script), "ramparts"], env=env, capture_output=True, text=True, timeout=60)
+    result = subprocess.run(["/bin/bash", str(script), "ramparts"], env=env, capture_output=True, text=True, timeout=60)
     scan = (tmp_path / "ramparts.log").read_text() if (tmp_path / "ramparts.log").exists() else ""
     installs = (tmp_path / "cargo.log").read_text() if (tmp_path / "cargo.log").exists() else ""
     return result, scan, installs
