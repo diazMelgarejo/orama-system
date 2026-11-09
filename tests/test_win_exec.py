@@ -21,6 +21,13 @@ pytest_plugins = ("posix_containment_fixtures",)
 
 WIN = sys.platform == "win32"
 windows_only = pytest.mark.skipif(not WIN, reason="Windows-specific behaviour")
+POSIX_IDENTITY_AVAILABLE = all(
+    hasattr(os, name) for name in ("waitid", "P_PID", "WEXITED", "WNOWAIT", "WNOHANG")
+)
+native_group_containment = pytest.mark.skipif(
+    not WIN and not POSIX_IDENTITY_AVAILABLE,
+    reason="This interpreter lacks non-reaping POSIX ownership observation",
+)
 
 GRANDCHILD = "import time; time.sleep(120)"
 CHILD = textwrap.dedent(
@@ -150,6 +157,7 @@ def _spawn_tree():
     return proc, int(proc.stdout.readline().strip())
 
 
+@native_group_containment
 def test_terminate_tree_kills_grandchild():
     """terminate_tree kills the grandchild too and reports containment."""
     proc, gpid = _spawn_tree()
@@ -190,6 +198,7 @@ MID = textwrap.dedent(
 ) % GRANDCHILD
 
 
+@native_group_containment
 def test_reparented_orphan_is_killed_and_contained():
     """root->mid->leaf where mid exits right after spawning leaf: leaf must die, status contained."""
     root_code = textwrap.dedent(
@@ -217,6 +226,7 @@ def test_reparented_orphan_is_killed_and_contained():
         proc.stdout.close()
 
 
+@native_group_containment
 def test_orphan_after_root_exit_is_contained_by_the_job():
     """The root itself exits first; its orphaned leaf is still in the job and is killed."""
     root_code = textwrap.dedent(
@@ -708,7 +718,8 @@ def test_posix_sigterm_resistant_root_is_killed_before_reaping() -> None:
     proc = win_exec.launch_tree([sys.executable, "-c", code], stdout=subprocess.PIPE, text=True)
     try:
         assert proc.stdout.readline().strip() == "ready"
-        assert win_exec.terminate_tree(proc, grace=0.3) == "contained"
+        expected = "contained" if POSIX_IDENTITY_AVAILABLE else "unknown"
+        assert win_exec.terminate_tree(proc, grace=0.3) == expected
         assert proc.returncode == -signal.SIGKILL
     finally:
         if proc.returncode is None:
@@ -825,7 +836,7 @@ def test_exited_falls_back_when_waitid_is_unsupported(
     proc.poll.assert_called_once_with()
 
 
-@pytest.mark.skipif(WIN, reason="POSIX process-group semantics")
+@pytest.mark.skipif(WIN or not POSIX_IDENTITY_AVAILABLE, reason="Requires POSIX WNOWAIT ownership")
 def test_exited_leaves_posix_root_unreaped_until_terminate() -> None:
     """The exited root stays a zombie (group id reserved) until terminate_tree reaps it."""
     proc = win_exec.launch_tree([sys.executable, "-c", "pass"])
@@ -838,6 +849,7 @@ def test_exited_leaves_posix_root_unreaped_until_terminate() -> None:
     assert proc.returncode == 0
 
 
+@native_group_containment
 def test_run_tree_returns_when_a_descendant_keeps_the_pipe_open() -> None:
     """An exited root whose child still holds stdout cannot hang the caller."""
     start = time.monotonic()
@@ -848,13 +860,33 @@ def test_run_tree_returns_when_a_descendant_keeps_the_pipe_open() -> None:
     assert run.containment == "contained"
 
 
-def test_run_tree_timeout_is_bounded_and_contained() -> None:
-    """A root that outlives the timeout is tree-killed and reported as timed out."""
+def test_run_tree_timeout_is_bounded_and_contained(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Timeout cleanup stops the owned root and reports only available proof."""
+    launch = win_exec.launch_tree
+    started: list[subprocess.Popen] = []
+
+    def capture_launch(*args: Any, **kwargs: Any) -> subprocess.Popen:
+        """Retain the real owned process so timeout metadata cannot mask a leak."""
+        proc = launch(*args, **kwargs)
+        started.append(proc)
+        return proc
+
+    monkeypatch.setattr(win_exec, "launch_tree", capture_launch)
     start = time.monotonic()
     run = win_exec.run_tree([sys.executable, "-c", "import time; time.sleep(60)"], timeout=1, grace=3)
-    assert run.timed_out and run.returncode is None
-    assert run.containment == "contained"
-    assert time.monotonic() - start < 15
+    try:
+        assert run.timed_out and run.returncode is None
+        expected = "contained" if WIN or POSIX_IDENTITY_AVAILABLE else "unknown"
+        assert run.containment == expected
+        assert len(started) == 1 and started[0].returncode is not None
+        if not WIN and not POSIX_IDENTITY_AVAILABLE:
+            assert started[0].returncode == -signal.SIGKILL
+        assert time.monotonic() - start < 15
+    finally:
+        for proc in started:
+            if proc.returncode is None:
+                proc.kill()
+                proc.wait(timeout=2)
 
 
 def test_resolved_unc_target_refused_unless_allowed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
