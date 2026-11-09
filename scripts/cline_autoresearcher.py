@@ -89,7 +89,10 @@ def _is_windows(plat: Optional[str] = None) -> bool:
 # ── Cline CLI discovery ───────────────────────────────────────────────────────
 
 def _find_cline() -> Optional[str]:
-    """Return the path of the cline CLI from PATH or known install folders, or None."""
+    """Return the path of the cline CLI: a configured CLINE_BIN first, then PATH, then known install folders."""
+    configured = os.getenv("CLINE_BIN", "").strip()
+    if configured and Path(configured).is_file():
+        return configured
     bin_name = "cline.exe" if _is_windows() else "cline"
     found = shutil.which(bin_name)
     if found:
@@ -342,12 +345,46 @@ def should_fallback_to_cline(plat: Optional[str] = None) -> Dict[str, Any]:
 
 # ── Dispatch ──────────────────────────────────────────────────────────────────
 
-def dispatch_cline(task: str, plat: Optional[str] = None) -> Dict[str, Any]:
-    """Run the `cline` CLI directly (ClinePass credits tier) and classify the outcome.
+# Cline output that proves it refused the command line before any request was made (verified on CLI 3.0.74).
+_CLINE_PRE_REQUEST_ERRORS = ("Unknown command or unquoted prompt", "Unknown or disabled provider")
 
-    ``outcome`` is ``completed``, ``not-sent`` (the request provably never left this process: CLI missing or
-    could not be started) or ``unknown`` (a timeout, or a nonzero exit after the CLI started). An unknown outcome
-    must be held for reconciliation and never retried automatically.
+
+def _cline_argv(cline_bin: str, task: str) -> list:
+    """Build the Cline command line for a one-shot prompt.
+
+    HISTORY (kept on purpose): this controller originally called ``cline task <prompt>`` (2026-07-01). A ``task``
+    subcommand existed on the Cline CLI of that period, so the call worked then (exact version unverified). It was
+    verified absent on CLI 3.0.49 (2026-08-05) and 3.0.74 (2026-11-10, by the Mac peer), where it exits at once with
+    "Unknown command or unquoted prompt". LIVE BEHAVIOUR (CLI 3.0.49 or later): the prompt is a bare positional
+    argument to ``cline``; a one-word prompt is rejected as a mistyped subcommand, so one is padded here. Provider
+    and model come from Cline's own configuration unless CLINE_PROVIDER / CLINE_MODEL pin them (``-P`` / ``-m``).
+    Cline is not installed on the Windows host, so the Windows CLI version is unverified.
+    """
+    prompt = task if len(task.split()) >= 2 else f"Task: {task}"
+    argv = [cline_bin]
+    provider = os.getenv("CLINE_PROVIDER", "").strip()
+    model = os.getenv("CLINE_MODEL", "").strip()
+    if provider:
+        argv += ["-P", provider]
+    if model:
+        argv += ["-m", model]
+    return argv + [prompt]
+
+
+def _cline_workdir() -> Path:
+    """Scratch working directory for Cline runs (CLINE_WORKDIR overrides), so repository hooks do not apply."""
+    configured = os.getenv("CLINE_WORKDIR", "").strip()
+    path = Path(configured) if configured else Path.home() / ".openclaw" / "state" / "autoresearcher_scratch"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def dispatch_cline(task: str, plat: Optional[str] = None) -> Dict[str, Any]:
+    """Run the `cline` CLI once (ClinePass credits tier) and classify the outcome.
+
+    ``outcome`` is ``completed``, ``not-sent`` (the request provably never left this process: CLI missing, could
+    not be started, or it printed a known command-line usage error) or ``unknown`` (a timeout, or any other nonzero
+    exit after the CLI started). An unknown outcome must be held for reconciliation and never retried automatically.
     """
     cline = cline_available()
     if not cline.get("available"):
@@ -355,13 +392,15 @@ def dispatch_cline(task: str, plat: Optional[str] = None) -> Dict[str, Any]:
     t0 = time.time()
     try:
         proc = subprocess.run(
-            [cline["bin"], "task", task],
-            capture_output=True, text=True, timeout=300, cwd=str(REPO_ROOT),
+            _cline_argv(cline["bin"], task),
+            capture_output=True, text=True, timeout=300, cwd=str(_cline_workdir()),
         )
         elapsed = time.time() - t0
         output = (proc.stdout or "") + (proc.stderr or "")
-        ok = proc.returncode == 0
-        return {"ok": ok, "output": output, "elapsed": elapsed, "outcome": "completed" if ok else "unknown"}
+        if proc.returncode == 0:
+            return {"ok": True, "output": output, "elapsed": elapsed, "outcome": "completed"}
+        refused = any(marker in output for marker in _CLINE_PRE_REQUEST_ERRORS)
+        return {"ok": False, "output": output, "elapsed": elapsed, "outcome": "not-sent" if refused else "unknown"}
     except subprocess.TimeoutExpired:
         return {"ok": False, "output": "cline task timed out (5min)", "elapsed": time.time() - t0, "outcome": "unknown"}
     except OSError as exc:  # the process could not be started: nothing was sent
@@ -413,8 +452,18 @@ def dispatch_autoresearcher(plat: str, task: str) -> Dict[str, Any]:
         return {"ok": False, "fallback_active": True, "lock_state": exc.state,
                 "output": f"effect-boundary recheck refused the send: {exc.reason}"}
 
-    lock.mark_inflight()
-    attempt = dispatch_cline(task, plat)
+    try:
+        lock.mark_inflight()
+    except Exception as exc:  # the marker could not be written, so nothing was sent
+        lock.release("not-sent")
+        return {"ok": False, "fallback_active": True, "outcome": "not-sent",
+                "output": f"in-flight marker could not be written; nothing was sent: {exc}"}
+    try:
+        attempt = dispatch_cline(task, plat)
+    except Exception as exc:  # after the marker the request may have been sent: hold it, never free it
+        lock.release("unknown")
+        return {"ok": False, "fallback_active": True, "fallback_tier": "local-backend", "outcome": "unknown",
+                "output": f"dispatch raised after the in-flight marker: {exc}"}
     outcome = attempt.get("outcome") or ("completed" if attempt.get("ok") else "unknown")
     lock.release(outcome if outcome in ("completed", "not-sent") else "unknown")
     return {

@@ -109,11 +109,15 @@ def _win_start_id(pid: int) -> Optional[str]:
 
 
 def _identity(record: Dict[str, Any]) -> str:
-    """Diagnose a record's owner: ``match`` (same process), ``mismatch`` (PID reused) or ``dead``."""
+    """Diagnose a record's owner: ``match`` (same process), ``mismatch`` (PID reused) or ``unverified``.
+
+    ``unverified`` means the probe could not show a running process (it exited, or it could not be inspected);
+    it is never treated as proof of death. The OS lock stays the only authority.
+    """
     pid = record.get("pid")
     now = process_start_id(pid) if isinstance(pid, int) else None
     if now is None:
-        return "dead"
+        return "unverified"
     return "match" if now == record.get("start_id") else "mismatch"
 
 
@@ -165,7 +169,7 @@ def _try_lock(fd: int) -> bool:
     try:
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         return True
-    except (BlockingIOError, PermissionError):
+    except (BlockingIOError, PermissionError):  # fail closed: EACCES and EAGAIN both read as another owner
         return False
 
 
@@ -309,7 +313,15 @@ class BackendLock:
             raise LockRefused(state, reason)
         self._fd = fd
         self._nonce = uuid.uuid4().hex
-        self._write("acquired")
+        try:
+            self._write("acquired")
+        except BaseException:
+            self._fd = None
+            try:
+                _unlock(fd)
+            finally:
+                os.close(fd)
+            raise
         return self
 
     def _write(self, state: str) -> None:
