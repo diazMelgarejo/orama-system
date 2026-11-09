@@ -244,7 +244,9 @@ def test_development_legacy_review_without_initialized_log(
 
     output = capsys.readouterr().out
     assert "No lessons file found" in output
-    missing_legacy_log.assert_called_once_with(tmp_path / "empty", configured_path=None)
+    missing_legacy_log.assert_called_once_with(
+        tmp_path / "empty", configured_path=None, migrate=True
+    )
 
 
 def test_development_legacy_stats_without_initialized_log(
@@ -274,7 +276,9 @@ def test_development_legacy_stats_without_initialized_log(
 
     output = capsys.readouterr().out
     assert "Total lessons: 0" in output
-    missing_legacy_log.assert_called_once_with(tmp_path / "empty", configured_path=None)
+    missing_legacy_log.assert_called_once_with(
+        tmp_path / "empty", configured_path=None, migrate=True
+    )
 
 
 @pytest.mark.parametrize("action", ["--review", "--stats"])
@@ -298,7 +302,9 @@ def test_runtime_review_and_stats_fail_closed(
         capture_lesson.main()
 
     assert excinfo.value.code == 3
-    missing_legacy_log.assert_called_once_with(tmp_path / "empty", configured_path=None)
+    missing_legacy_log.assert_called_once_with(
+        tmp_path / "empty", configured_path=None, migrate=False
+    )
 
 
 @pytest.mark.parametrize("action", ["--review", "--stats"])
@@ -326,6 +332,83 @@ def test_runtime_review_and_stats_read_an_initialized_legacy_log(
     capture_lesson.main()
 
     assert "Verification Skipped" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("action", ["--review", "--stats"])
+@pytest.mark.parametrize("backend", ["auto", "legacy"])
+def test_runtime_cli_displays_checkout_lessons_without_migration(
+    action: str,
+    backend: str,
+    tmp_path: Path,
+    isolated_legacy_home: Path,
+) -> None:
+    """Runtime display reads an ancestor checkout log without moving or editing it."""
+    checkout = tmp_path / "checkout"
+    source = checkout / "tasks" / "lessons.md"
+    source.parent.mkdir(parents=True)
+    content = "# Lessons Learned\n\n## 2026-08-25 \u2014 Verification Skipped\n"
+    source.write_text(content, encoding="utf-8")
+    original = source.read_bytes()
+    project = checkout / "nested" / "project"
+    project.mkdir(parents=True)
+
+    result = subprocess.run(
+        [
+            sys.executable, str(SCRIPTS / "capture_lesson.py"),
+            "--mode", "runtime", "--backend", backend, action,
+            "--dir", str(project),
+        ],
+        cwd=project,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+        timeout=30,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "Verification Skipped" in result.stdout
+    if action == "--stats":
+        assert "Total lessons: 1" in result.stdout
+    assert source.is_file(), "Runtime display relocated the checkout lesson log"
+    assert source.read_bytes() == original
+    assert not (isolated_legacy_home / "tasks").exists()
+
+
+def test_development_legacy_cli_still_migrates_and_captures(
+    tmp_path: Path,
+    isolated_legacy_home: Path,
+) -> None:
+    """Explicit development capture migrates the old log and appends a lesson."""
+    project = tmp_path / "checkout"
+    source = project / "tasks" / "lessons.md"
+    source.parent.mkdir(parents=True)
+    content = "# Lessons Learned\n\n---\n"
+    source.write_text(content, encoding="utf-8")
+    rule = "Preserve existing lessons before appending new evidence."
+
+    result = subprocess.run(
+        [
+            sys.executable, str(SCRIPTS / "capture_lesson.py"),
+            "--mode", "development", "--backend", "legacy", "--quick",
+            "--pattern", "Verification Skipped", "--dir", str(project),
+        ],
+        cwd=project,
+        input=rule + "\n",
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+        timeout=30,
+    )
+
+    assert result.returncode == 0, result.stderr
+    destination = isolated_legacy_home / "tasks" / "lessons.md"
+    captured = destination.read_text(encoding="utf-8")
+    assert captured.startswith(content)
+    assert rule in captured
+    assert "Verification Skipped" in captured
+    assert not source.exists()
 
 
 def test_legacy_capture_never_creates_a_new_user_level_log(tmp_path: Path) -> None:
@@ -372,7 +455,7 @@ def test_legacy_review_without_initialized_log_exits_zero(
     output = capsys.readouterr().out
     assert "No lessons file found" in output
     missing_legacy_log.assert_called_once_with(
-        tmp_path / "empty-project", configured_path=None
+        tmp_path / "empty-project", configured_path=None, migrate=True
     )
 
 
@@ -412,6 +495,8 @@ def test_negative_cli_cases_do_not_relocate_checkout_ancestor_lessons(
         expected = "No lessons file found" if action == "--review" else "Total lessons: 0"
         assert expected in capsys.readouterr().out
 
-    missing_legacy_log.assert_called_once_with(project, configured_path=None)
+    missing_legacy_log.assert_called_once_with(
+        project, configured_path=None, migrate=mode != "runtime"
+    )
     assert source.read_text(encoding="utf-8") == content
     assert not (isolated_legacy_home / "tasks").exists()
