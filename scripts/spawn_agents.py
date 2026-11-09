@@ -84,56 +84,66 @@ _WIN_GPU_LOCK = asyncio.Lock()
 _DISPATCH_SCOPE: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("spawn_dispatch_scope", default=None)
 
 
+def _assert_pt_governance_origin(root: Path) -> None:
+    """Refuse cached policy modules from another checkout without evicting them."""
+    for name, relative in (
+        ("perpetua_tools", "src/perpetua_tools/__init__.py"),
+        ("perpetua_tools.model_governance", "src/perpetua_tools/model_governance.py"),
+    ):
+        cached = sys.modules.get(name)
+        if cached is not None:
+            origin = getattr(cached, "__file__", None)
+            if not origin or Path(origin).resolve() != root / relative:
+                raise ImportError("PT governance origin does not match selected checkout")
+
+
 def _pt_dispatch_authority() -> tuple[Any, Any, Any]:
-    """Load PT's authority without replacing a foreign cached orchestrator package."""
-    pt_root = os.environ.get("PERPETUATOOLSROOT", "").strip()
-    if not pt_root:
-        for key in ("PERPETUA_TOOLS_ROOT", "PERPETUA_TOOLS_PATH"):
-            val = os.environ.get(key, "").strip()
-            if val and Path(val).is_dir():
-                pt_root = val
-                break
-    if not pt_root:
-        for candidate in (
-            REPO_ROOT.parent / "perplexity-api" / "Perpetua-Tools",
-            REPO_ROOT.parent / "Perpetua-Tools",
-            REPO_ROOT.parent / "repos" / "Perpetua-Tools",
-        ):
-            if (candidate / "orchestrator" / "dispatch_guard.py").is_file():
-                pt_root = str(candidate)
-                break
-    if pt_root:
-        root = Path(pt_root).resolve()
+    """Load the first complete PT checkout, never an ambient orchestrator package.
+
+    Incomplete discovery candidates may be skipped; import or policy failures in
+    a selected complete checkout must remain visible rather than change authority.
+    A path-bound namespace preserves exception identity without evicting foreign
+    cached packages or combining modules from different checkouts.
+    """
+    candidates = [
+        Path(value) for key in ("PERPETUATOOLSROOT", "PERPETUA_TOOLS_ROOT", "PERPETUA_TOOLS_PATH")
+        if (value := os.environ.get(key, "").strip())
+    ]
+    candidates.extend((
+        REPO_ROOT.parent / "perplexity-api" / "Perpetua-Tools",
+        REPO_ROOT.parent / "Perpetua-Tools",
+        REPO_ROOT.parent / "repos" / "Perpetua-Tools",
+    ))
+    for candidate in candidates:
+        root = candidate.resolve()
+        package_dir = root / "orchestrator"
+        if not all((package_dir / filename).is_file() for filename in (
+            "__init__.py", "dispatch_guard.py", "state_dir.py",
+        )) or not all((root / "src/perpetua_tools" / filename).is_file() for filename in (
+            "__init__.py", "model_governance.py",
+        )):
+            continue
+        _assert_pt_governance_origin(root)
         for path in (root, root / "src"):
             if str(path) not in sys.path:
                 sys.path.insert(0, str(path))
-        package_dir = root / "orchestrator"
-        cached = sys.modules.get("orchestrator")
-        cached_guard = sys.modules.get("orchestrator.dispatch_guard")
-        package_file = getattr(cached, "__file__", None)
-        guard_file = getattr(cached_guard, "__file__", None)
-        collision = (cached is not None and (not package_file or Path(package_file).resolve() != package_dir / "__init__.py")) or (
-            cached_guard is not None and (not guard_file or Path(guard_file).resolve() != package_dir / "dispatch_guard.py")
-        )
-        if collision:
-            name = "_pt_dispatch_" + hashlib.sha256(str(root).encode()).hexdigest()[:16]
-            if name not in sys.modules:
-                spec = importlib.util.spec_from_file_location(name, package_dir / "__init__.py", submodule_search_locations=[str(package_dir)])
-                if spec is None or spec.loader is None:
-                    raise ImportError("PT dispatch authority is unavailable")
-                module = importlib.util.module_from_spec(spec)
-                sys.modules[name] = module
-                try:
-                    spec.loader.exec_module(module)
-                except BaseException:
-                    del sys.modules[name]
-                    raise
-            guard = importlib.import_module(f"{name}.dispatch_guard")
-            state = importlib.import_module(f"{name}.state_dir")
-            return guard.DispatchGuard, guard.DispatchRequest, state.resolve_default_state_dir
-    from orchestrator.dispatch_guard import DispatchGuard, DispatchRequest
-    from orchestrator.state_dir import resolve_default_state_dir
-    return DispatchGuard, DispatchRequest, resolve_default_state_dir
+        name = "_pt_dispatch_" + hashlib.sha256(str(root).encode()).hexdigest()[:16]
+        if name not in sys.modules:
+            spec = importlib.util.spec_from_file_location(name, package_dir / "__init__.py", submodule_search_locations=[str(package_dir)])
+            if spec is None or spec.loader is None:
+                raise ImportError("PT dispatch authority is unavailable")
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[name] = module
+            try:
+                spec.loader.exec_module(module)
+            except BaseException:
+                del sys.modules[name]
+                raise
+        guard = importlib.import_module(f"{name}.dispatch_guard")
+        state = importlib.import_module(f"{name}.state_dir")
+        _assert_pt_governance_origin(root)
+        return guard.DispatchGuard, guard.DispatchRequest, state.resolve_default_state_dir
+    raise ImportError("PT dispatch authority is unavailable: no complete checkout found")
 
 
 def duplicate_dispatch_error_type() -> type[Exception]:

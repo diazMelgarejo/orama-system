@@ -30,13 +30,12 @@ from __future__ import annotations
 import importlib.util
 import json
 import socket
+import ssl
 import sys
-import tempfile
 import time
 import urllib.request
 from pathlib import Path
 from typing import Any
-from unittest.mock import patch
 
 import pytest
 
@@ -47,7 +46,6 @@ if str(_SRC) not in sys.path:
 
 from orama_system.display_fleet_status import (  # noqa: E402
     load_fleet_topology,
-    FleetPeer,
 )
 
 _QPT_PATH = (
@@ -90,11 +88,14 @@ _requires_orchestrator = pytest.mark.skipif(
 def test_http_get_retries_next_token_on_401(monkeypatch: pytest.MonkeyPatch) -> None:
     """Retry a rejected bearer token with the next candidate."""
     calls: list[str] = []
+    contexts: list[ssl.SSLContext | None] = []
+    context = ssl.create_default_context()
 
-    def fake_urlopen(req: urllib.request.Request, timeout: float = 2, **kwargs: Any):
+    def fake_urlopen(req: urllib.request.Request, timeout: float = 2, **kwargs: Any) -> Any:
         """Reject the first token and return JSON for the next one."""
         token = req.headers.get("Authorization", "").removeprefix("Bearer ").strip()
         calls.append(token)
+        contexts.append(kwargs.get("context"))
         if token == "bad":
             raise qpt.urllib.error.HTTPError(
                 req.full_url, 401, "Unauthorized", hdrs=None, fp=None
@@ -107,7 +108,7 @@ def test_http_get_retries_next_token_on_401(monkeypatch: pytest.MonkeyPatch) -> 
                 """Return the response body."""
                 return body
 
-            def __enter__(self):
+            def __enter__(self) -> Any:
                 """Return the response when entering the context."""
                 return self
 
@@ -118,6 +119,7 @@ def test_http_get_retries_next_token_on_401(monkeypatch: pytest.MonkeyPatch) -> 
         return _Resp()
 
     monkeypatch.setattr(qpt.probe, "outbound_control_plane_tokens", lambda: ["bad", "good"])
+    monkeypatch.setattr(qpt.peer_tls, "urlopen_kwargs", lambda url, timeout: {"context": context})
     monkeypatch.setattr(qpt.urllib.request, "urlopen", fake_urlopen)
 
     # https:// -- a real token candidate is only ever attempted over
@@ -129,24 +131,31 @@ def test_http_get_retries_next_token_on_401(monkeypatch: pytest.MonkeyPatch) -> 
     assert result == {"ok": True}
     assert calls == ["bad", "good"]  # tried the rejected candidate first, then the working one
     assert len(calls) == 2  # ALL candidates were attempted, not short-circuited
+    assert contexts == [context, context]
 
 
 @pytest.mark.unit
 def test_http_get_returns_none_when_all_candidates_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
     """Return no response after every bearer token is rejected."""
     calls: list[str] = []
+    contexts: list[ssl.SSLContext | None] = []
+    context = ssl.create_default_context()
 
-    def fake_urlopen(req: urllib.request.Request, timeout: float = 2, **kwargs: Any):
+    def fake_urlopen(req: urllib.request.Request, timeout: float = 2, **kwargs: Any) -> Any:
         """Record and reject each attempted bearer token."""
         token = req.headers.get("Authorization", "").removeprefix("Bearer ").strip()
         calls.append(token)
+        contexts.append(kwargs.get("context"))
         raise qpt.urllib.error.HTTPError(req.full_url, 401, "Unauthorized", hdrs=None, fp=None)
 
     monkeypatch.setattr(qpt.probe, "outbound_control_plane_tokens", lambda: ["bad1", "bad2"])
+    monkeypatch.setattr(qpt.peer_tls, "urlopen_kwargs", lambda url, timeout: {"context": context})
     monkeypatch.setattr(qpt.urllib.request, "urlopen", fake_urlopen)
 
     assert qpt._http_get("https://10.0.0.50:8002/api/fleet-topology") is None
     assert len(calls) == 2  # both candidates exhausted before giving up
+    assert calls == ["bad1", "bad2"]
+    assert contexts == [context, context]
 
 
 @pytest.mark.unit
@@ -156,7 +165,7 @@ def test_http_get_refuses_bearer_token_over_unauthenticated_http(monkeypatch: py
     first one. The whole retry loop must never call urlopen() at all."""
     called = {"n": 0}
 
-    def fake_urlopen(req: urllib.request.Request, timeout: float = 2):
+    def fake_urlopen(req: urllib.request.Request, timeout: float = 2) -> Any:
         """Fail if the prohibited HTTP request is attempted."""
         called["n"] += 1
         raise AssertionError("urlopen must never be called over unauthenticated transport")
@@ -183,7 +192,7 @@ def test_http_get_allows_no_token_over_http(monkeypatch: pytest.MonkeyPatch) -> 
             """Return the JSON response body."""
             return body
 
-        def __enter__(self):
+        def __enter__(self) -> Any:
             """Return the response when entering the context."""
             return self
 
@@ -191,7 +200,7 @@ def test_http_get_allows_no_token_over_http(monkeypatch: pytest.MonkeyPatch) -> 
             """Propagate any exception from the response context."""
             return False
 
-    def _fake_urlopen_no_token(req: urllib.request.Request, timeout: float = 2):
+    def _fake_urlopen_no_token(req: urllib.request.Request, timeout: float = 2) -> Any:
         """Return a successful response for the token-free request."""
         return _Resp()
 
@@ -207,7 +216,7 @@ def test_http_get_allows_no_token_over_http(monkeypatch: pytest.MonkeyPatch) -> 
 
 
 @_requires_orchestrator
-def test_merge_seed_uses_own_hostname_not_peers_self_report():
+def test_merge_seed_uses_own_hostname_not_peers_self_report() -> None:
     """First-ever merge (current=None) must seed local_node from THIS
     machine, never from the peer's payload -- and must count the peer as
     reachable, not zero."""
@@ -231,7 +240,7 @@ def test_merge_seed_uses_own_hostname_not_peers_self_report():
 
 
 @_requires_orchestrator
-def test_merge_seed_classifies_pair_not_solo():
+def test_merge_seed_classifies_pair_not_solo() -> None:
     """End-to-end: a single successful peer merge from a clean slate must
     classify PAIR, matching the mother plan's own SOLO/PAIR/FLEET
     definitions -- 1 peer reachable is PAIR, not SOLO."""
@@ -248,7 +257,7 @@ def test_merge_seed_classifies_pair_not_solo():
 
 
 @_requires_orchestrator
-def test_merge_second_call_preserves_seeded_local_node():
+def test_merge_second_call_preserves_seeded_local_node() -> None:
     """A subsequent merge (current already set) must keep reusing the
     correctly-seeded local_node, not re-derive or drift it."""
     peer_data = {"local_node": "win-studio", "fleet_mode": "SOLO", "peers": [],
@@ -265,7 +274,7 @@ def test_merge_second_call_preserves_seeded_local_node():
 # ── Bug 2 + 3: display_fleet_status real-schema parsing ─────────────────
 
 
-def _write_topology(tmp_path: Path, **overrides) -> Path:
+def _write_topology(tmp_path: Path, **overrides: Any) -> Path:
     """Write a topology fixture with optional field overrides."""
     data = {
         "local_node": "Mac-Studio.local",
@@ -280,7 +289,7 @@ def _write_topology(tmp_path: Path, **overrides) -> Path:
     return path
 
 
-def test_load_fleet_topology_accepts_real_flat_string_peers(tmp_path):
+def test_load_fleet_topology_accepts_real_flat_string_peers(tmp_path: Path) -> None:
     """Must not raise on the canonical writer's actual list[str] shape."""
     path = _write_topology(tmp_path)
     status = load_fleet_topology(path)
@@ -288,7 +297,7 @@ def test_load_fleet_topology_accepts_real_flat_string_peers(tmp_path):
     assert status.fleet_mode == "PAIR"
 
 
-def test_load_fleet_topology_excludes_local_node_from_peer_list(tmp_path):
+def test_load_fleet_topology_excludes_local_node_from_peer_list(tmp_path: Path) -> None:
     """The local node's own id (present in the raw peers list per the
     writer's own schema) must not appear in FleetStatus.peers, and must
     not be double-counted in peers_reachable."""
@@ -300,7 +309,7 @@ def test_load_fleet_topology_excludes_local_node_from_peer_list(tmp_path):
     assert status.peers_reachable == 1  # NOT 2 -- the exact double-count bug
 
 
-def test_load_fleet_topology_still_accepts_dict_shaped_peers(tmp_path):
+def test_load_fleet_topology_still_accepts_dict_shaped_peers(tmp_path: Path) -> None:
     """Backward compat: the mother plan's original richer per-peer dict
     schema (id/ip/port/reachable/models/last_seen) must still work,
     matching tests/fixtures/fleet_topology_fixtures.py's existing mocks."""
@@ -319,7 +328,7 @@ def test_load_fleet_topology_still_accepts_dict_shaped_peers(tmp_path):
     assert status.peers[0].models == ["gemma-4-26b"]
 
 
-def test_load_fleet_topology_mixed_shapes_do_not_crash(tmp_path):
+def test_load_fleet_topology_mixed_shapes_do_not_crash(tmp_path: Path) -> None:
     """A raw peers list mixing bare strings and dicts (shouldn't happen in
     practice, but must fail safe, never raise) is handled entry-by-entry."""
     path = _write_topology(tmp_path, peers=["Mac-Studio.local", {"id": "win-rtx5080", "ip": "1.2.3.4"}])

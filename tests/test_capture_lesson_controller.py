@@ -4,8 +4,14 @@ from __future__ import annotations
 import subprocess
 import sys
 from pathlib import Path
+from types import ModuleType
+from typing import TYPE_CHECKING
+from unittest.mock import Mock
 
 import pytest
+
+if TYPE_CHECKING:
+    from lesson_controller import LessonPayload
 
 pytestmark = pytest.mark.integration
 
@@ -32,7 +38,17 @@ def test_legacy_home_fixture_is_empty_and_private(isolated_legacy_home: Path) ->
     assert not (isolated_legacy_home / "tasks").exists()
 
 
-def _payload(controller):
+@pytest.fixture
+def missing_legacy_log(monkeypatch: pytest.MonkeyPatch) -> Mock:
+    """Model an absent log without walking into checkout ancestors."""
+    import capture_lesson
+
+    discovery = Mock(spec=capture_lesson.find_lessons_file, return_value=None)
+    monkeypatch.setattr(capture_lesson, "find_lessons_file", discovery)
+    return discovery
+
+
+def _payload(controller: ModuleType) -> LessonPayload:
     """Build a representative lesson payload for controller tests."""
     return controller.LessonPayload(
         pattern="Verification Skipped",
@@ -46,7 +62,9 @@ def _payload(controller):
     )
 
 
-def test_development_mode_delegates_to_pt_agent_stack(tmp_path: Path, monkeypatch) -> None:
+def test_development_mode_delegates_to_pt_agent_stack(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Development capture delegates the lesson to the PT agent backend."""
     import lesson_controller as controller
 
@@ -56,7 +74,7 @@ def test_development_mode_delegates_to_pt_agent_stack(tmp_path: Path, monkeypatc
     learn.write_text("# fixture\n", encoding="utf-8")
     calls: list[list[str]] = []
 
-    def fake_run(argv, **_kwargs):
+    def fake_run(argv: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
         """Record the delegated command and simulate successful graduation."""
         calls.append([str(arg) for arg in argv])
         return subprocess.CompletedProcess(argv, 0, stdout="graduated\n", stderr="")
@@ -125,12 +143,20 @@ def test_legacy_task_log_migrates_to_home_without_creating_new_task_log(
 
 def test_legacy_default_is_home_level_and_does_not_create_missing_task_log(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Do not create a home lesson log when none exists."""
     import capture_lesson
 
     home = tmp_path / "home"
     home.mkdir()
+    is_file = Path.is_file
+
+    def synthetic_is_file(path: Path) -> bool:
+        """Only inspect files inside this test's synthetic filesystem."""
+        return path.is_relative_to(tmp_path) and is_file(path)
+
+    monkeypatch.setattr(Path, "is_file", synthetic_is_file)
 
     destination = capture_lesson.find_lessons_file(tmp_path / "project", home_dir=home)
 
@@ -164,17 +190,19 @@ def test_auto_development_requires_pt_instead_of_silently_fragmenting_memory() -
     assert excinfo.value.code == "ORAMASYS_LESSON_E_PT_AGENT_UNAVAILABLE"
 
 
-def test_quick_capture_collects_only_a_rule_and_delegates(monkeypatch) -> None:
+def test_quick_capture_collects_only_a_rule_and_delegates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Quick capture collects a prevention rule and delegates the payload."""
     import capture_lesson
     import lesson_controller as controller
 
-    captured = []
+    captured: list[LessonPayload] = []
     answers = iter(["Always inspect final name-status before publication."])
 
     class Backend:
         """Record payloads passed to the capture backend."""
-        def capture(self, payload) -> None:
+        def capture(self, payload: LessonPayload) -> None:
             """Append the captured lesson to the test record."""
             captured.append(payload)
 
@@ -189,7 +217,12 @@ def test_quick_capture_collects_only_a_rule_and_delegates(monkeypatch) -> None:
     assert captured[0].prevention_rule.startswith("Always inspect")
 
 
-def test_development_legacy_review_without_initialized_log(monkeypatch, capsys, tmp_path) -> None:
+def test_development_legacy_review_without_initialized_log(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    missing_legacy_log: Mock,
+) -> None:
     """Legacy review reports a missing uninitialized lesson log."""
     import capture_lesson
 
@@ -211,9 +244,15 @@ def test_development_legacy_review_without_initialized_log(monkeypatch, capsys, 
 
     output = capsys.readouterr().out
     assert "No lessons file found" in output
+    missing_legacy_log.assert_called_once_with(tmp_path / "empty", configured_path=None)
 
 
-def test_development_legacy_stats_without_initialized_log(monkeypatch, capsys, tmp_path) -> None:
+def test_development_legacy_stats_without_initialized_log(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    missing_legacy_log: Mock,
+) -> None:
     """Legacy stats report zero lessons without an initialized log."""
     import capture_lesson
 
@@ -235,10 +274,16 @@ def test_development_legacy_stats_without_initialized_log(monkeypatch, capsys, t
 
     output = capsys.readouterr().out
     assert "Total lessons: 0" in output
+    missing_legacy_log.assert_called_once_with(tmp_path / "empty", configured_path=None)
 
 
 @pytest.mark.parametrize("action", ["--review", "--stats"])
-def test_runtime_review_and_stats_fail_closed(action: str, monkeypatch, tmp_path) -> None:
+def test_runtime_review_and_stats_fail_closed(
+    action: str,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    missing_legacy_log: Mock,
+) -> None:
     """Runtime review and stats fail closed without an initialized log."""
     import capture_lesson
 
@@ -253,11 +298,15 @@ def test_runtime_review_and_stats_fail_closed(action: str, monkeypatch, tmp_path
         capture_lesson.main()
 
     assert excinfo.value.code == 3
+    missing_legacy_log.assert_called_once_with(tmp_path / "empty", configured_path=None)
 
 
 @pytest.mark.parametrize("action", ["--review", "--stats"])
 def test_runtime_review_and_stats_read_an_initialized_legacy_log(
-    action: str, tmp_path: Path, monkeypatch, capsys
+    action: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Runtime review and stats read an explicitly initialized legacy log."""
     import capture_lesson
@@ -296,7 +345,10 @@ def test_legacy_capture_never_creates_a_new_user_level_log(tmp_path: Path) -> No
 
 
 def test_legacy_review_without_initialized_log_exits_zero(
-    tmp_path: Path, monkeypatch, capsys
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    missing_legacy_log: Mock,
 ) -> None:
     """Legacy review returns normally when no lesson log exists."""
     import capture_lesson
@@ -319,3 +371,47 @@ def test_legacy_review_without_initialized_log_exits_zero(
 
     output = capsys.readouterr().out
     assert "No lessons file found" in output
+    missing_legacy_log.assert_called_once_with(
+        tmp_path / "empty-project", configured_path=None
+    )
+
+
+@pytest.mark.parametrize("action", ["--review", "--stats"])
+@pytest.mark.parametrize("mode", ["development", "runtime"])
+def test_negative_cli_cases_do_not_relocate_checkout_ancestor_lessons(
+    action: str,
+    mode: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    isolated_legacy_home: Path,
+    missing_legacy_log: Mock,
+) -> None:
+    """Negative cases leave a synthetic checkout log above basetemp untouched."""
+    import capture_lesson
+
+    checkout = tmp_path / "checkout"
+    source = checkout / "tasks" / "lessons.md"
+    source.parent.mkdir(parents=True)
+    content = "# Synthetic checkout lesson\n"
+    source.write_text(content, encoding="utf-8")
+    project = checkout / "pytest-basetemp" / "negative-case" / "empty"
+    project.mkdir(parents=True)
+    argv = ["capture_lesson.py", "--mode", mode, action, "--dir", str(project)]
+    if mode == "development":
+        argv.extend(["--backend", "legacy"])
+    monkeypatch.setattr(capture_lesson.sys, "argv", argv)
+
+    if mode == "runtime":
+        with pytest.raises(SystemExit) as excinfo:
+            capture_lesson.main()
+        assert excinfo.value.code == 3
+        assert "ORAMASYS_LESSON_E_ANAMNESIS_UNAVAILABLE" in capsys.readouterr().err
+    else:
+        capture_lesson.main()
+        expected = "No lessons file found" if action == "--review" else "Total lessons: 0"
+        assert expected in capsys.readouterr().out
+
+    missing_legacy_log.assert_called_once_with(project, configured_path=None)
+    assert source.read_text(encoding="utf-8") == content
+    assert not (isolated_legacy_home / "tasks").exists()
