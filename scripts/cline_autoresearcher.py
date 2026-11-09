@@ -329,6 +329,20 @@ def should_fallback_to_cline(plat: Optional[str] = None) -> Dict[str, Any]:
 
 # ── Dispatch ──────────────────────────────────────────────────────────────────
 
+def _cline_argv(cline_bin: str, task: str) -> list:
+    """Build the Cline command line for a one-shot prompt.
+
+    HISTORY (kept on purpose): this controller originally called ``cline task <prompt>`` (2026-07-01). A ``task``
+    subcommand existed on the Cline CLI of that period, so the call worked then (exact version U). It no longer
+    exists: verified absent on CLI 3.0.49 (2026-08-05, see the clinepass-deepseek-flash skill) and on 3.0.74
+    (2026-11-10), where ``cline task <prompt>`` exits at once with "Unknown or unquoted prompt".
+    LIVE BEHAVIOUR (CLI >= 3.0.49): the prompt is a bare positional argument to ``cline`` itself. A one-word
+    prompt is rejected as a mistyped subcommand, so callers should pass a multi-word prompt. Provider and model
+    come from Cline's own configuration; pin them with ``-P`` and ``-m`` where a specific route matters.
+    """
+    return [cline_bin, task]
+
+
 def dispatch_cline(task: str, plat: Optional[str] = None) -> Dict[str, Any]:
     """Run the `cline` CLI directly (ClinePass credits tier)."""
     cline = cline_available()
@@ -337,7 +351,7 @@ def dispatch_cline(task: str, plat: Optional[str] = None) -> Dict[str, Any]:
     t0 = time.time()
     try:
         proc = subprocess.run(
-            [cline["bin"], "task", task],
+            _cline_argv(cline["bin"], task),
             capture_output=True, text=True, timeout=300, cwd=str(REPO_ROOT),
         )
         elapsed = time.time() - t0

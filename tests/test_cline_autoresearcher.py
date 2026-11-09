@@ -234,6 +234,31 @@ class TestDispatchAutoResearcher:
 
 # ── Full status ───────────────────────────────────────────────────────────────
 
+class TestClineArgv:
+    """`cline task <prompt>` only existed on old Cline CLIs; current CLIs (verified 3.0.49 and 3.0.74) have no
+    `task` subcommand and take the prompt as a bare positional argument."""
+
+    def test_prompt_is_positional_not_a_task_subcommand(self):
+        import cline_autoresearcher as car
+        argv = car._cline_argv("/bin/cline", "Summarise the open findings")
+        assert argv == ["/bin/cline", "Summarise the open findings"]
+        assert "task" not in argv[1:-1]
+
+    def test_dispatch_cline_does_not_pass_task_subcommand(self):
+        import cline_autoresearcher as car
+        captured = {}
+
+        def fake_run(argv, **kwargs):
+            captured["argv"] = argv
+            return MagicMock(returncode=0, stdout="ok", stderr="")
+
+        with patch("cline_autoresearcher.cline_available", return_value={"available": True, "bin": "/bin/cline"}), \
+             patch("cline_autoresearcher.subprocess.run", side_effect=fake_run):
+            result = car.dispatch_cline("Summarise the open findings")
+        assert result["ok"] is True
+        assert captured["argv"] == ["/bin/cline", "Summarise the open findings"]
+
+
 class TestFullStatus:
     """The combined status including the peer session."""
     @patch("cline_autoresearcher.peer_session_status")
