@@ -68,18 +68,21 @@ _LAN_PEER_SESSION = (
 # ── Platform detection ────────────────────────────────────────────────────────
 
 def detect_platform() -> str:
+    """Return 'windows' on a Windows host and 'macos' otherwise."""
     if os.name == "nt" or _platform_mod.system() == "Windows":
         return "windows"
     return "macos"
 
 
 def _is_windows(plat: Optional[str] = None) -> bool:
+    """True when *plat* (or the detected platform) is windows."""
     return (plat or detect_platform()) == "windows"
 
 
 # ── Cline CLI discovery ───────────────────────────────────────────────────────
 
 def _find_cline() -> Optional[str]:
+    """Return the path of the cline CLI from PATH or known install folders, or None."""
     bin_name = "cline.exe" if _is_windows() else "cline"
     found = shutil.which(bin_name)
     if found:
@@ -103,6 +106,7 @@ def _find_cline() -> Optional[str]:
 
 
 def cline_available() -> Dict[str, Any]:
+    """Return whether the cline CLI is available, with its path and a reason."""
     cline_bin = _find_cline()
     if not cline_bin:
         return {"available": False, "bin": None, "reason": "cline CLI not found on PATH or known install dirs"}
@@ -112,6 +116,7 @@ def cline_available() -> Dict[str, Any]:
 # ── Hermes CLI discovery (Windows gateway) ────────────────────────────────────
 
 def _find_hermes() -> Optional[str]:
+    """Return the path of the hermes CLI from PATH or known install folders, or None."""
     hermes_bin = shutil.which("hermes")
     if hermes_bin:
         return hermes_bin
@@ -137,6 +142,7 @@ def _find_hermes() -> Optional[str]:
 # ── Gateway status (per platform) ─────────────────────────────────────────────
 
 def _read_pause_file(path: Path) -> Dict[str, Any]:
+    """Read a gateway pause JSON file (BOM tolerant); a missing or unreadable file means not paused."""
     if not path.exists():
         return {"paused": False}
     try:
@@ -150,6 +156,7 @@ def _read_pause_file(path: Path) -> Dict[str, Any]:
 
 
 def _hermes_gateway_running() -> bool:
+    """True when `hermes gateway status` reports the Windows gateway as running."""
     hermes_bin = _find_hermes()
     if not hermes_bin:
         return False
@@ -202,6 +209,7 @@ def gateway_status(plat: Optional[str] = None) -> Dict[str, Any]:
 # ── Local backend idle probe (per platform) ───────────────────────────────────
 
 def _probe_http_ok(url: str, timeout: float = 3.0) -> bool:
+    """True when a GET on *url* returns a 2xx status within the timeout."""
     try:
         import urllib.request
         req = urllib.request.Request(url, method="GET")
@@ -211,6 +219,54 @@ def _probe_http_ok(url: str, timeout: float = 3.0) -> bool:
         return False
 
 
+# A coder lock older than this is stale even when its recorded PID was reused by an unrelated process.
+LOCK_MAX_AGE_SECONDS = float(os.getenv("AUTORESEARCHER_LOCK_MAX_AGE_SECONDS", str(6 * 3600)))
+
+
+def _pid_alive(pid: int) -> bool:
+    """True when a process with this PID exists (Windows via OpenProcess, POSIX via signal 0)."""
+    if pid <= 0:
+        return False
+    if os.name == "nt":
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32
+        kernel32.OpenProcess.restype = ctypes.c_void_p
+        handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            return False
+        code = ctypes.c_ulong()
+        ok = kernel32.GetExitCodeProcess(ctypes.c_void_p(handle), ctypes.byref(code))
+        kernel32.CloseHandle(ctypes.c_void_p(handle))
+        return bool(ok) and code.value == 259  # STILL_ACTIVE
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def lock_is_held(lock: Path, now: Optional[float] = None) -> bool:
+    """True when *lock* exists and is still plausibly held.
+
+    A missing file is not held. A file whose first token is a PID is held only while that process is alive and the
+    file is younger than LOCK_MAX_AGE_SECONDS (a dead owner or a very old file is stale, so a crashed job can no
+    longer block the AutoResearcher forever). A file we cannot read or parse is treated as held, because
+    staleness cannot be proven.
+    """
+    try:
+        age = (time.time() if now is None else now) - lock.stat().st_mtime
+    except OSError:
+        return False
+    try:
+        pid = int(lock.read_text(encoding="utf-8", errors="replace").split()[0])
+    except (OSError, ValueError, IndexError):
+        return True
+    return age < LOCK_MAX_AGE_SECONDS and _pid_alive(pid)
+
+
 def local_backend_idle(plat: Optional[str] = None) -> Dict[str, Any]:
     """Returns {idle, reachable, reason} for the platform's local coder backend."""
     plat = plat or detect_platform()
@@ -218,14 +274,14 @@ def local_backend_idle(plat: Optional[str] = None) -> Dict[str, Any]:
         reachable = _probe_http_ok(f"{LMS_WIN_ENDPOINT}/v1/models")
         if not reachable:
             return {"idle": False, "reachable": False, "reason": "LM Studio Win not reachable"}
-        if WIN_PULSE_LOCK.exists():
+        if lock_is_held(WIN_PULSE_LOCK):
             return {"idle": False, "reachable": True, "reason": "GPU lock held (win_pulse.lock)"}
         return {"idle": True, "reachable": True, "reason": "LM Studio Win idle"}
 
     reachable = _probe_http_ok(f"{OLLAMA_MAC_ENDPOINT}/api/tags")
     if not reachable:
         return {"idle": False, "reachable": False, "reason": "ollama not reachable"}
-    if MAC_PULSE_LOCK.exists():
+    if lock_is_held(MAC_PULSE_LOCK):
         return {"idle": False, "reachable": True, "reason": "coder lock held (mac_pulse.lock)"}
     return {"idle": True, "reachable": True, "reason": "ollama idle"}
 
@@ -235,6 +291,7 @@ def local_backend_idle(plat: Optional[str] = None) -> Dict[str, Any]:
 def _fallback_reason(
     gw: Dict[str, Any], backend: Dict[str, Any], cline: Dict[str, Any], should_fallback: bool
 ) -> str:
+    """Explain in one line why the ClinePass fallback is or is not active."""
     if not should_fallback:
         if gw.get("running") and not gw.get("paused") and not gw.get("rate_limited"):
             return "gateway running — no fallback needed"
@@ -251,6 +308,7 @@ def _fallback_reason(
 
 
 def should_fallback_to_cline(plat: Optional[str] = None) -> Dict[str, Any]:
+    """Decide whether the Cline fallback should take over: gateway down, local backend idle and cline available."""
     plat = plat or detect_platform()
     gw = gateway_status(plat)
     backend = local_backend_idle(plat)
@@ -335,6 +393,7 @@ def dispatch_autoresearcher(plat: str, task: str) -> Dict[str, Any]:
 # ── Peer session (co-orchestration resilience) ────────────────────────────────
 
 def peer_session_status() -> Dict[str, Any]:
+    """Return the LAN peer session state from lan_peer_session.py, or an unknown placeholder on any failure."""
     if not _LAN_PEER_SESSION.exists():
         return {"ok": False, "mode": "unknown", "failure_count": 0, "max_failures": 10}
     try:
@@ -350,6 +409,7 @@ def peer_session_status() -> Dict[str, Any]:
 # ── Full status ────────────────────────────────────────────────────────────────
 
 def full_status(plat: Optional[str] = None) -> Dict[str, Any]:
+    """Return the fallback decision, the peer session and solo-mode flags with a UTC timestamp."""
     plat = plat or detect_platform()
     check = should_fallback_to_cline(plat)
     peer = peer_session_status()
@@ -369,6 +429,7 @@ def full_status(plat: Optional[str] = None) -> Dict[str, Any]:
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 def main(argv: Optional[list] = None) -> int:
+    """Parse the command line, run the check, status or dispatch, print the result and return the exit code."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--platform", choices=["windows", "macos"], default=None)
     parser.add_argument("--check", action="store_true", help="Check whether fallback should be active")
