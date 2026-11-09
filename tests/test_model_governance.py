@@ -848,7 +848,7 @@ def test_differential_policy_outcomes_match_across_repositories() -> None:
 # --- Cross-repo config + pin parity (F1/F2): keep byte-identical in both v1 repositories. ---
 # The differential above compares launch outcomes only; these pin the governance
 # config and the shared pin-document sections so drift in either repo fails a test.
-_PARITY_CONFIG_DIGEST = "52310413e3ce88fddd357b41bfd160684d8383e7de0c0efedf5d0e73427e92df"
+_PARITY_CONFIG_DIGEST = "136ff256e212dbd8f393a47a8f4c6106f3d52fbf90916614444b7197abfcf1dd"
 _PARITY_PIN_DIGEST = "f03c1a17e78d065ca281c71f630163e149f2ac64ed49bc71ffe2a4d3fe5c08b4"
 _PARITY_PIN_SECTIONS = ("## Escalation approval regimes", "## Role selection contract")
 _PARITY_ALEXANDRIA_TIP = "d6da6781"
@@ -922,10 +922,10 @@ def test_pin_document_and_config_name_the_same_alexandria_tip() -> None:
 
 
 def test_cline_pass_default_is_deepseek_v4_1_flash_1017_at_a_documented_effort() -> None:
-    """ClinePass pins the 1017 build; medium is not a level Cline offers for it."""
+    """ClinePass pins the 1017 build at the approved medium default."""
     spec = default_launch("cline_pass")
     assert spec.launch_id == "deepseek-v4.1-flash-1017"
-    assert spec.effort == "low"
+    assert spec.effort == "medium"
     assert spec.fast is False
 
 
@@ -936,12 +936,62 @@ def test_cline_pass_default_needs_no_approval() -> None:
     assert plan.effective == plan.requested
 
 
+def test_cline_pass_deepseek_low_remains_allowed() -> None:
+    """The previously supported low effort remains compatible."""
+    assert_launch_allowed(LaunchSpec("cline_pass", "deepseek-v4.1-flash-1017", effort="low", fast=False))
+
+
+def test_google_fallback_is_selectable() -> None:
+    """The configured fallback is a selectable ungated role."""
+    spec = LaunchSpec("google", "gemini-flash-latest", effort="medium", fast=False)
+    assert plan_launch(spec).effective == spec
+    assert_launch_allowed(spec)
+
+
+@pytest.mark.parametrize("task_kind", [None, "planning", "execution"])
+def test_google_pro_requires_proof_even_for_planning(task_kind: str | None) -> None:
+    """Pro remains gated for every task kind, including planning."""
+    spec = LaunchSpec("google", "gemini-pro-latest", effort="medium", fast=False)
+    assert plan_launch(spec, task_kind=task_kind).requires_human_approval
+    with pytest.raises(ModelGovernanceError, match="token required"):
+        assert_launch_allowed(spec, task_kind=task_kind)
+    proof = EscalationProof("github_verified_signoff", "review", spec.launch_id,
+                            datetime.now(timezone.utc) + timedelta(hours=1), effort="medium", fast=False)
+    assert_launch_allowed(spec, task_kind=task_kind, proof=proof)
+
+
+@pytest.mark.parametrize("budget", [None, "", "   ", "max_tokens=8192"])
+def test_google_argon_requires_nonempty_budget(budget: str | None) -> None:
+    """Argon requires both a covering proof and a nonblank budget claim."""
+    spec = LaunchSpec("google", "gemini-4-argon", effort="medium")
+    proof = EscalationProof("github_verified_signoff", "review", spec.launch_id,
+                            datetime.now(timezone.utc) + timedelta(hours=1), effort="medium", budget_cap=budget)
+    if budget and budget.strip():
+        assert_launch_allowed(spec, proof=proof)
+    else:
+        with pytest.raises(ModelGovernanceError, match="budget cap"):
+            assert_launch_allowed(spec, proof=proof)
+
+
 @pytest.mark.parametrize("policy", [{}, {"default": {}}, {"default": {"launch_id": "x"}, "allowed_ungated": [{}]}])
 def test_cline_pass_malformed_policy_fails_closed(policy: dict) -> None:
     """Missing model identifiers raise the public policy error."""
     spec = LaunchSpec(path="cline_pass", launch_id="x", effort="medium")
     with pytest.raises(ModelGovernanceError):
         assert_launch_allowed(spec, config={"cline_pass": policy})
+
+
+@pytest.mark.parametrize("override", [
+    {"allowed_ungated": {}}, {"gated": {"x": {}}},
+    {"planning": {}}, {"controller": {}},
+])
+def test_cline_pass_invalid_roles_fail_for_default_and_dispatch(cfg: dict, override: dict) -> None:
+    """Match PT's closed-policy validation before default selection and dispatch."""
+    config = {**cfg, "cline_pass": {**cfg["cline_pass"], **override}}
+    with pytest.raises(ModelGovernanceError):
+        default_launch("cline_pass", config=config)
+    with pytest.raises(ModelGovernanceError):
+        assert_launch_allowed(LaunchSpec("cline_pass", "deepseek-v4.1-flash-1017", effort="medium", fast=False), config=config)
 
 
 def test_cline_pass_planner_rejects_unenforceable_gated_row(cfg: dict) -> None:
@@ -953,6 +1003,7 @@ def test_cline_pass_planner_rejects_unenforceable_gated_row(cfg: dict) -> None:
 
 
 def test_cline_pass_muse_spark_1_3_contributor_is_allowed_ungated() -> None:
+    """The configured Muse contributor remains ungated."""
     spec = LaunchSpec(
         path="cline_pass",
         launch_id="muse-spark-1.3-contributor",
@@ -987,10 +1038,11 @@ def test_cline_pass_glm_5_3_flash_refuses_efforts_other_than_medium(effort: str)
 
 
 def test_cline_pass_refuses_a_listed_id_at_an_unlisted_effort() -> None:
+    """The DeepSeek route rejects efforts outside its low and medium allowlist."""
     spec = LaunchSpec(
         path="cline_pass",
         launch_id="deepseek-v4.1-flash-1017",
-        effort="medium",
+        effort="high",
         fast=False,
     )
     with pytest.raises(ModelGovernanceError):
