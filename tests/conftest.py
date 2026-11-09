@@ -27,6 +27,7 @@ os.environ["ORAMA_SWARM_APPROVAL_SECRET"] = "pytest-swarm-approval-secret"
 
 @pytest.fixture(autouse=True)
 def _orama_insecure_dev_for_tests(monkeypatch):
+    """Provide insecure development defaults for each test."""
     monkeypatch.setenv("ORAMA_INSECURE_DEV", "1")
     monkeypatch.delenv("ORAMA_CONTROL_PLANE_TOKEN", raising=False)
     for _name in ("ORAMA_BIND_LAN", "PORTAL_BIND_LAN", "PT_BIND_LAN"):
@@ -35,6 +36,7 @@ def _orama_insecure_dev_for_tests(monkeypatch):
 
 @pytest.fixture(scope="session")
 def git_bin() -> str:
+    """Return the git executable or fail the test session."""
     git = shutil.which("git")
     if git is None:
         pytest.fail("git executable not found")
@@ -46,6 +48,7 @@ def git_bin() -> str:
 # is conditional so legacy tests keep working even before the package exists.
 
 def _try_import_oramaclaw():
+    """Return optional oramaclaw types when the package is available."""
     try:
         from oramaclaw.types import (  # noqa: PLC0415
             ConfigTarget, ControlManifest, MergePolicy, Resource, ResourceKind,
@@ -110,4 +113,5 @@ class NoResponseInteraction:
         timeout_seconds: int,
         resolution_id: str,
     ) -> str | None:
+        """Return no response for an interaction request."""
         return None
