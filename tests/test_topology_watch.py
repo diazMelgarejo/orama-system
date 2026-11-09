@@ -9,6 +9,9 @@ Tests for:
 """
 
 import json
+from contextlib import asynccontextmanager, contextmanager
+import tempfile
+from typing import Any, AsyncIterator, Iterator
 import pytest
 import os
 from pathlib import Path
@@ -306,27 +309,30 @@ class TestTopologyTransition:
         assert result.fleet_mode == FleetMode.PAIR
 
 
+@asynccontextmanager
+async def _isolated_topology_gossip_bus() -> AsyncIterator[Any]:
+    """Keep keyword-only topology tests independent of optional embedding I/O."""
+    try:
+        from orchestrator.gossip_bus import GossipBus, cancel_pending_embeddings_for_current_loop
+    except ImportError:
+        pytest.skip("orchestrator.gossip_bus not available")
+    with tempfile.TemporaryDirectory() as tmpdir:
+        bus = GossipBus(str(Path(tmpdir) / "test.db"))
+        await bus.init_db()
+        with patch.object(bus, "schedule_embedding"):
+            try:
+                yield bus
+            finally:
+                await cancel_pending_embeddings_for_current_loop()
+
+
 class TestGossipEventEmission:
     """Tests for gossip event emission on topology change."""
 
     @pytest.mark.asyncio
     async def test_gossip_event_fleet_topology_transition(self):
         """Emitting fleet_topology_transition event should work."""
-        try:
-            from orchestrator.gossip_bus import GossipBus, resolve_gossip_db_path
-        except ImportError:
-            pytest.skip("orchestrator.gossip_bus not available")
-
-        import tempfile
-        import asyncio
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            db_path = Path(tmpdir) / "test.db"
-            bus = GossipBus(str(db_path))
-
-            # Initialize DB
-            await bus.init_db()
-
+        async with _isolated_topology_gossip_bus() as bus:
             # Emit fleet_topology_transition event
             await bus.emit("fleet_topology_transition", {
                 "from": "SOLO",
@@ -346,20 +352,7 @@ class TestGossipEventEmission:
     @pytest.mark.asyncio
     async def test_gossip_search_fleet_topology_events(self):
         """Searching for topology events should work."""
-        try:
-            from orchestrator.gossip_bus import GossipBus
-        except ImportError:
-            pytest.skip("orchestrator.gossip_bus not available")
-
-        import tempfile
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            db_path = Path(tmpdir) / "test.db"
-            bus = GossipBus(str(db_path))
-
-            # Initialize DB
-            await bus.init_db()
-
+        async with _isolated_topology_gossip_bus() as bus:
             # Emit events
             await bus.emit("fleet_topology_transition", {
                 "from": "SOLO",
@@ -375,6 +368,55 @@ class TestGossipEventEmission:
             # Search for events
             results = await bus.search("topology", event_type="fleet_topology_transition")
             assert len(results) > 0
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("body_fails", [False, True])
+    async def test_background_work_drains_before_directory_cleanup(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, body_fails: bool,
+    ) -> None:
+        """Drain the owned loop before deleting files, even after assertions fail."""
+        drain = AsyncMock()
+        bus = MagicMock()
+        bus.init_db = AsyncMock()
+
+        @contextmanager
+        def checked_directory() -> Iterator[str]:
+            """Reject temporary-directory teardown while bus work is undrained."""
+            try:
+                yield str(tmp_path)
+            finally:
+                drain.assert_awaited_once()
+
+        monkeypatch.setattr(tempfile, "TemporaryDirectory", checked_directory)
+        monkeypatch.setattr("orchestrator.gossip_bus.GossipBus", lambda path: bus)
+        monkeypatch.setattr(
+            "orchestrator.gossip_bus.cancel_pending_embeddings_for_current_loop", drain,
+        )
+        if body_fails:
+            with pytest.raises(RuntimeError, match="test-body"):
+                async with _isolated_topology_gossip_bus():
+                    raise RuntimeError("test-body")
+        else:
+            async with _isolated_topology_gossip_bus() as active:
+                assert active is bus
+        drain.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_keyword_search_never_starts_optional_embedding_workers(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Keyword persistence/search does not start an unrelated model worker."""
+        from orchestrator.gossip_bus import GossipBus
+
+        worker = AsyncMock(side_effect=AssertionError("unexpected optional worker"))
+        monkeypatch.setattr(GossipBus, "_embed_and_store", worker)
+        async with _isolated_topology_gossip_bus() as bus:
+            parent = Path(bus.db_path).parent
+            await bus.emit("fleet_topology_transition", {"from": "SOLO", "to": "PAIR"})
+            assert await bus.search("topology", event_type="fleet_topology_transition")
+            bus.schedule_embedding.assert_called_once()
+            worker.assert_not_called()
+        assert not parent.exists()
 
 
 class TestPeerTopologyMerging:
