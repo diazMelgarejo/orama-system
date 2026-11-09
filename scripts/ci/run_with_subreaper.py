@@ -13,6 +13,7 @@ import sys
 import time
 
 logger = logging.getLogger("run_with_subreaper")
+_CLEANUP_SECONDS = 2.0
 if not logger.handlers:
     _handler = logging.StreamHandler(sys.stderr)
     _handler.setFormatter(logging.Formatter("%(message)s"))
@@ -43,17 +44,18 @@ def main(argv: list[str]) -> int:
         return 1
     proc = subprocess.Popen(argv)
     saved_exit_code: int | None = None
+    cleanup_deadline: float | None = None
     while True:
         try:
-            if saved_exit_code is None:
-                pid, status = os.waitpid(-1, os.WNOHANG)
-                if pid == 0:
-                    time.sleep(0.01)
-                    continue
-                if pid == proc.pid:
-                    saved_exit_code = _exitcode_from_status(status)
-            else:
-                pid, status = os.waitpid(-1, 0)
+            pid, status = os.waitpid(-1, os.WNOHANG)
+            if pid == 0:
+                if cleanup_deadline is not None and time.monotonic() >= cleanup_deadline:
+                    break
+                time.sleep(0.01)
+                continue
+            if pid == proc.pid:
+                saved_exit_code = _exitcode_from_status(status)
+                cleanup_deadline = time.monotonic() + _CLEANUP_SECONDS
         except ChildProcessError:
             break
         except OSError as exc:

@@ -930,9 +930,26 @@ def test_cline_pass_default_is_deepseek_v4_1_flash_1017_at_a_documented_effort()
 
 
 def test_cline_pass_default_needs_no_approval() -> None:
+    """The configured default remains available without an approval gate."""
     plan = plan_launch(default_launch("cline_pass"))
     assert plan.requires_human_approval is False
     assert plan.effective == plan.requested
+
+
+@pytest.mark.parametrize("policy", [{}, {"default": {}}, {"default": {"launch_id": "x"}, "allowed_ungated": [{}]}])
+def test_cline_pass_malformed_policy_fails_closed(policy: dict) -> None:
+    """Missing model identifiers raise the public policy error."""
+    spec = LaunchSpec(path="cline_pass", launch_id="x", effort="medium")
+    with pytest.raises(ModelGovernanceError):
+        assert_launch_allowed(spec, config={"cline_pass": policy})
+
+
+def test_cline_pass_planner_rejects_unenforceable_gated_row(cfg: dict) -> None:
+    """Planning cannot offer approval for a model the closed policy rejects."""
+    policy = {**cfg["cline_pass"], "gated": {"unlisted": {"effort": "medium"}}}
+    spec = LaunchSpec(path="cline_pass", launch_id="unlisted", effort="medium")
+    with pytest.raises(ModelGovernanceError):
+        plan_launch(spec, config={**cfg, "cline_pass": policy})
 
 
 def test_cline_pass_muse_spark_1_3_contributor_is_allowed_ungated() -> None:
@@ -988,6 +1005,7 @@ def test_cline_pass_refuses_an_unlisted_model() -> None:
 
 
 def test_cline_pass_refuses_fast_mode_without_escalation() -> None:
+    """Reject fast mode for the closed ClinePass policy."""
     spec = LaunchSpec(
         path="cline_pass",
         launch_id="muse-spark-1.3-contributor",

@@ -126,7 +126,6 @@ def test_cli_passes_explicit_scope(monkeypatch: pytest.MonkeyPatch) -> None:
     [
         ValueError("model override is not supported by this worker"),
         PermissionError("banned launch id"),
-        RuntimeError("dispatch claim conflict"),
     ],
 )
 def test_cli_refusal_exits_with_code_2(
@@ -139,8 +138,6 @@ def test_cli_refusal_exits_with_code_2(
         raise refusal_exc
 
     monkeypatch.setattr(module, "dispatch", dispatch)
-    if type(refusal_exc) is RuntimeError:
-        monkeypatch.setattr(module, "duplicate_dispatch_error_type", lambda: RuntimeError)
     monkeypatch.setattr(sys, "argv", ["spawn_agents.py", "--task", "review"])
     with pytest.raises(SystemExit) as exc:
         module.main()
@@ -148,6 +145,36 @@ def test_cli_refusal_exits_with_code_2(
     captured = capsys.readouterr()
     assert "dispatch refused:" in captured.err
     assert str(refusal_exc) in captured.err
+
+
+def test_cli_duplicate_dispatch_uses_real_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Only the actual dispatch guard exception is handled as a duplicate."""
+    module = _load_spawn()
+    duplicate_type = module.duplicate_dispatch_error_type()
+
+    async def dispatch(agent: str, task: str, model: str | None = None, *, scope: str | None = None) -> dict:
+        """Simulate a duplicate from the real guard type."""
+        raise duplicate_type("duplicate")
+
+    monkeypatch.setattr(module, "dispatch", dispatch)
+    monkeypatch.setattr(sys, "argv", ["spawn_agents.py", "--task", "review"])
+    with pytest.raises(SystemExit) as exc:
+        module.main()
+    assert exc.value.code == 2
+
+
+def test_cli_unrelated_runtime_error_propagates(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Unrelated runtime failures are not presented as dispatch refusals."""
+    module = _load_spawn()
+
+    async def dispatch(agent: str, task: str, model: str | None = None, *, scope: str | None = None) -> dict:
+        """Simulate an unrelated runtime failure."""
+        raise RuntimeError("unrelated")
+
+    monkeypatch.setattr(module, "dispatch", dispatch)
+    monkeypatch.setattr(sys, "argv", ["spawn_agents.py", "--task", "review"])
+    with pytest.raises(RuntimeError, match="unrelated"):
+        module.main()
 
 
 def test_cli_governance_refusal_exits_with_code_2(

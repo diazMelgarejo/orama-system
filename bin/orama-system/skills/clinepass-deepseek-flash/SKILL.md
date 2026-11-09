@@ -1,7 +1,7 @@
 ---
 name: clinepass-deepseek-flash
 description: Run Cline CLI as a non-interactive fan-out worker using the authenticated ClinePass DeepSeek V4.1 Flash (1017) route with medium reasoning. Use when the user asks for free/low-cost ClinePass-only bot dispatch, Cline bot fan-out, headless Cline review, EXA plus Firecrawl verification for Cline usage, or a parallel Cline route that does not replace the existing GLM ClinePass skill.
-version: 1.2.2
+version: 1.2.3
 license: Apache 2.0
 compatibility: cline, openclaw, macos
 parent_skill: orama-system
@@ -59,18 +59,14 @@ operator identity.
 ## Contract
 
 - Model: `cline-pass/deepseek-v4.1-flash-1017`
-- Reasoning: `medium` by default, `high` for deep review.
-- Flag: `--thinking <level>`. The installed CLI `3.0.74` documents
-  `none|low|medium|high|xhigh`, and a bare `--thinking` means `medium`. It has
-  no `--reasoning-effort` flag; the wrapper script adapts between the two
-  names. Earlier versions of this card claimed the DeepSeek V4.1 Flash family
-  had no `medium` — local help contradicts that, and local help wins for
-  execution.
-- Wrapper default: `scripts/run_clinepass_deepseek_flash.sh` still pins `high`
-  for its own conservative default. Invoke the CLI directly (see § Binary
-  Location) when the cheaper `medium` lane is wanted.
+- Reasoning: `medium` (`--thinking medium`)
 - History: repointed 2026-11-03 from the retired `cline-pass/deepseek-v4-flash`
-  (Cline retired it alongside GLM-5.2, Kimi K2.6, and Kimi K2.7 Code).
+  (Cline retired it alongside GLM-5.2, Kimi K2.6, and Kimi K2.7 Code). Cline
+  previously documented high effort. The installed CLI help lists `medium` as a
+  valid `--thinking` level; CLI support alone does not establish model-side
+  behavior. Do not pin a single CLI version as the supported one here: the
+  wrapper reads capabilities from `cline --help`, so a newer patch release such
+  as 3.0.74 stays usable without a doc change.
 - Access policy: ClinePass-only. Do not silently fall back to GLM, Pro, Kimi,
   OpenRouter, direct Cline API, or any provider key path.
 - Auth: rely on the already-authenticated Cline CLI/ClinePass account. Do not
@@ -150,7 +146,12 @@ The wrapper pins provider `cline-pass`, `cline-pass/deepseek-v4.1-flash-1017`,
 shape. Every one of those is fail-closed: it inspects `cline --help` and refuses
 to dispatch when the CLI cannot pin the provider, the reasoning level, or tool
 approval, because an unpinned provider is how this route silently landed on a
-provider that rejects the ClinePass slug.
+provider that rejects the ClinePass slug. Medium support must be advertised;
+the wrapper does not silently substitute a different reasoning effort.
+This standalone wrapper is not a governance authorization gate. The governance
+configuration uses the operator-approved medium default, retaining the prior
+low option. An installed CLI capability does not authorize an unlisted effort.
+Do not bypass a governance refusal.
 
 ## Verify Current CLI Shape
 
@@ -159,7 +160,6 @@ Start with local help because Cline CLI flags drift faster than docs:
 ```bash
 cline --version
 cline --help
-cline auth --help
 ```
 
 **Historical** — shape verified on Cline CLI `2.14.0`, an older version
@@ -184,13 +184,15 @@ cline \
 If `cline --help` does not list `--auto-approve-all` (confirmed absent
 in v3.0.49 — not verified against any other version; check `cline
 --version` and `cline --help` directly before assuming this applies),
-use the current documented equivalent instead:
+use a supported invocation instead. On the installed CLI (verified against
+3.0.74), select the provider explicitly:
 
 ```bash
 cline \
   --json \
   --auto-approve true \
-  --thinking high \
+  -P cline-pass \
+  --thinking medium \
   -m cline-pass/deepseek-v4.1-flash-1017 \
   -c /private/tmp \
   -t 180 \
@@ -199,9 +201,8 @@ cline \
 
 Do not use both variants in the same command.
 
-**Verified 2026-08-05 against installed CLI v3.0.49.** The "current
-documented equivalent" block above is the correct one on this version
-— confirmed live, along with two things worth knowing:
+**Historical verification 2026-08-05 against CLI v3.0.49.** Two things
+worth knowing from that version:
 
 - There is no `task` subcommand. Earlier drafts of this skill and its
   bundled wrapper script invoked `cline task ...`; that fails with
@@ -216,15 +217,14 @@ documented equivalent" block above is the correct one on this version
   affect the examples above, but matters if you improvise a shorter
   test prompt by hand.
 
-With the CLI-shape bugs fixed, the wrapper script now reaches real
-model dispatch. In the tested configuration (Cline CLI v3.0.49), this
-currently fails with
+Historically, in the tested CLI v3.0.49 configuration, dispatch failed with
 `cline-pass/deepseek-v4.1-flash-1017 is not a valid model ID`
 (`provider: openrouter`) — exactly the pre-existing "Observed failure
 mode" documented below: ClinePass isn't authenticated as the active
-route yet, so Cline falls back to another provider that doesn't
+route then, so Cline fell back to another provider that did not
 recognize the ClinePass model slug. That's the known auth/config gap,
-not a new bug.
+not a new bug. The current wrapper binds the provider explicitly; this has not
+been verified with a live dispatch in the present review.
 
 ## Provider Auth Gate
 
@@ -245,16 +245,15 @@ still routing the request through a non-ClinePass provider, which rejects the
 ClinePass model slug. That is an auth/config problem, not a reason to switch
 models.
 
-Configure auth explicitly through Cline's supported flow:
-
-```bash
-cline auth --help
-cline auth --provider clinepass --apikey "$CLINE_API_KEY" --modelid cline-pass/deepseek-v4.1-flash-1017
-```
+Use the existing authenticated `cline-pass` profile; do not reauthenticate or
+pass a key. The wrapper binds `-P cline-pass` and the pinned model on every
+invocation. If the profile is unavailable or authentication fails, stop and
+ask the operator to repair it through an approved interactive flow. Never pass
+keys in arguments or command substitutions.
 
 Exact formats:
 
-- Cline CLI provider id for this installed auth flow: `clinepass`
+- Cline CLI provider id for this route: `cline-pass` (not the legacy `clinepass`)
 - ClinePass model id: `cline-pass/deepseek-v4.1-flash-1017`
 - Direct DeepSeek provider ids are out of scope here: this skill only
   dispatches through the ClinePass route.
@@ -262,9 +261,7 @@ Exact formats:
   `clinepass/cline-pass/deepseek-v4.1-flash-1017`; do not use that in native
   Cline CLI.
 
-Use the API key from Cline's own dashboard/local secret surface. Keep it in an
-environment variable or ignored local config; never paste it into prompts,
-tracked files, command history that will be shared, or logs.
+Do not read, print, or pass API keys for this already-authenticated route.
 
 ## First-Class Fan-Out Pattern
 
@@ -287,27 +284,20 @@ or resolve policy disputes.
 Read-only review:
 
 ```bash
-cline \
-  --json \
-  --auto-approve-all \
-  --reasoning-effort high \
-  -m cline-pass/deepseek-v4.1-flash-1017 \
-  -c /private/tmp \
-  -t 300 \
+bin/orama-system/skills/clinepass-deepseek-flash/scripts/run_clinepass_deepseek_flash.sh \
+  --cwd /private/tmp \
+  --timeout 300 \
+  --act \
   "Review this sanitized summary. Do not access files. Return risks and tests."
 ```
 
 Plan-first review:
 
 ```bash
-cline \
-  -p \
-  --json \
-  --auto-approve-all \
-  --reasoning-effort high \
-  -m cline-pass/deepseek-v4.1-flash-1017 \
-  -c /private/tmp \
-  -t 300 \
+bin/orama-system/skills/clinepass-deepseek-flash/scripts/run_clinepass_deepseek_flash.sh \
+  --cwd /private/tmp \
+  --timeout 300 \
+  --plan \
   "Create a concise implementation plan from this sanitized summary."
 ```
 
@@ -315,14 +305,10 @@ Repo-bound implementation, only on a clean branch:
 
 ```bash
 git status --short --branch
-cline \
-  -a \
-  --json \
-  --auto-approve-all \
-  --reasoning-effort high \
-  -m cline-pass/deepseek-v4.1-flash-1017 \
-  -c "$PWD" \
-  -t 900 \
+bin/orama-system/skills/clinepass-deepseek-flash/scripts/run_clinepass_deepseek_flash.sh \
+  --cwd "$PWD" \
+  --timeout 900 \
+  --act \
   "Implement the requested scoped change. Preserve unrelated local changes."
 ```
 
@@ -372,8 +358,8 @@ doc variant as a compatibility note.
 Check liveness without dumping prompts or logs:
 
 ```bash
-pgrep -af 'cline|cline-pass|deepseek-v4.1-flash'
-ps -p <pid> -o pid,ppid,stat,lstart,etime,command
+pgrep -f 'cline|cline-pass|deepseek-v4.1-flash'
+ps -p <pid> -o pid,ppid,stat,lstart,etime
 ```
 
 For JSON output, parse only final non-partial `say` text. Do not assume every
