@@ -10,6 +10,11 @@ WORKFLOW = ROOT / ".github/workflows/agent-security.yml"
 SCANNER = ROOT / "scripts/ci/run_agent_security_scans.sh"
 
 
+def _not_suppressed(value: object) -> bool:
+    """Accept only an absent or explicit YAML false suppression value."""
+    return value is None or value is False or (isinstance(value, str) and value.lower() == "false")
+
+
 def test_stacked_pull_requests_trigger_without_changing_push_scope() -> None:
     """Run security for every PR base while retaining the existing push scope."""
     workflow = yaml.load(WORKFLOW.read_text(), Loader=yaml.BaseLoader)
@@ -17,6 +22,9 @@ def test_stacked_pull_requests_trigger_without_changing_push_scope() -> None:
     assert events["pull_request"] == {"branches": ["**"]}
     assert events["push"] == {"branches": ["main", "develop"]}
     assert "pull_request_target" not in events
+    for job in workflow["jobs"].values():
+        assert _not_suppressed(job.get("continue-on-error"))
+        assert all(_not_suppressed(step.get("continue-on-error")) for step in job["steps"])
     for name in ("aguara", "agent-audit", "skill-scanner", "mcp-scanner", "ramparts"):
         job = workflow["jobs"][name]
         assert "if" not in job and "needs" not in job
@@ -66,4 +74,5 @@ def test_security_workflow_retains_pinned_actions_and_scanners() -> None:
                   paths[name] in step.get("with", {}).get("path", "").splitlines()]
         assert len(caches) == 1
         assert caches[0]["with"]["key"] == f"{name}-${{{{ runner.os }}}}-{pin}"
+        assert not caches[0]["with"].get("restore-keys", "").strip()
         assert "if" not in caches[0]
