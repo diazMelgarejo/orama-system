@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, develop]
   pull_request:
-    branches: [main, develop]
+    branches: ["**"]
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -126,6 +126,14 @@ jobs:
         run: |
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install ".[test]" build aiosqlite
+
+      - name: Set up Node for Markdown gate regressions
+        uses: actions/setup-node@49933edd5288caeca8642d1e84afbd3f7d682002 # v4
+        with:
+          node-version: '20'
+
+      - name: Install the pinned Markdown test linter
+        run: npm install --no-save --no-package-lock --ignore-scripts markdownlint-cli2@0.17.2
 
       - name: Verify model governance parity against pinned PT producer
         run: python scripts/review/verify_governance_parity.py "$PERPETUATOOLSROOT"
