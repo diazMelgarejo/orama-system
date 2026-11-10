@@ -20,7 +20,7 @@ BASH = "/bin/bash"  # macOS ships bash 3.2: the functions must work there under 
 FUNCS = (
     "_peer_tls_frontend_dir", "_peer_tls_frontend_configured", "_peer_cert_sha256", "_peer_tls_port_args",
     "_peer_ip_from_discovery", "_peer_outbox_remap_args", "_port_listening", "_ensure_peer_tls_frontend",
-    "_run_lan_peer_probe", "_flush_lan_peer_outbox", "_run_lan_peer_inbox_check",
+    "_run_lan_peer_probe", "_flush_lan_peer_outbox", "_run_lan_peer_inbox_check", "_peer_tls_autostart_allowed",
 )
 pytestmark = pytest.mark.skipif(not os.path.exists(BASH), reason="/bin/bash is not available")
 
@@ -473,6 +473,8 @@ def test_nothing_ever_stops_restarts_or_reloads(tmp_path) -> None:
 
 
 # ── default launch autostart ────────────────────────────────────────────────────
+STRONG = {"ORAMA_CONTROL_PLANE_TOKEN": "t" * 48}  # not a documented placeholder, so the repository rule treats it as strong
+
 def _autostart_block() -> str:
     """Return the start.sh block that starts the front end after the stack is up (marked autostart region)."""
     match = re.search(r"# >>> peer-tls-frontend-autostart\n(.*?)# <<< peer-tls-frontend-autostart\n", _text(), re.S)
@@ -492,7 +494,7 @@ def test_default_launch_starts_a_provisioned_front_end(tmp_path: Path) -> None:
     port = _free_port()
     result, log = _run_autostart(
         tmp_path, "0",
-        {"ORAMA_LAN_CONTROL_PLANE_DIR": str(_config_dir(tmp_path)), "PEER_PORTAL_TLS_PORT": str(port), "FAKE_CADDY_LISTEN_PORT": str(port)},
+        {"ORAMA_LAN_CONTROL_PLANE_DIR": str(_config_dir(tmp_path)), "PEER_PORTAL_TLS_PORT": str(port), "FAKE_CADDY_LISTEN_PORT": str(port), **STRONG},
     )
     assert result.returncode == 0, result.stderr
     assert "starting the peer HTTPS front end" in result.stdout
@@ -530,3 +532,33 @@ def test_lan_peer_launch_still_warns_when_the_front_end_cannot_start(tmp_path: P
     empty.mkdir()
     result, _ = _run_autostart(tmp_path, "1", {"ORAMA_LAN_CONTROL_PLANE_DIR": str(empty), "PEER_PORTAL_TLS_PORT": str(_free_port())})
     assert result.returncode == 0 and "not running" in result.stderr
+
+
+def test_plain_launch_refuses_the_front_end_without_authentication(tmp_path: Path) -> None:
+    """A plain launch never starts the front end in insecure dev mode, with no token, or with a placeholder token."""
+    config = str(_config_dir(tmp_path))
+    port = str(_free_port())
+    base = {"ORAMA_LAN_CONTROL_PLANE_DIR": config, "PEER_PORTAL_TLS_PORT": port, "FAKE_CADDY_LISTEN_PORT": port}
+    cases = {
+        "insecure": ({**base, **STRONG, "ORAMA_INSECURE_DEV": "1"}, "ORAMA_INSECURE_DEV"),
+        "no token": (base, "strong ORAMA_CONTROL_PLANE_TOKEN"),
+        "placeholder": ({**base, "ORAMA_CONTROL_PLANE_TOKEN": "changeme"}, "strong ORAMA_CONTROL_PLANE_TOKEN"),
+    }
+    for name, (env, reason) in cases.items():
+        result, log = _run_autostart(tmp_path, "0", env)
+        assert result.returncode == 0, (name, result.stderr)
+        assert reason in result.stderr, (name, result.stderr)
+        assert not log.exists() or "start" not in log.read_text(encoding="utf-8"), name
+
+
+def test_plain_launch_is_quiet_when_the_front_end_already_listens_even_without_a_token(tmp_path: Path) -> None:
+    """Nothing is started, so no authentication warning: the idempotent no-op stays a no-op."""
+    with socket.socket() as held:
+        held.bind(("localhost", 0))
+        held.listen(1)
+        port = held.getsockname()[1]
+        result, log = _run_autostart(
+            tmp_path, "0", {"ORAMA_LAN_CONTROL_PLANE_DIR": str(_config_dir(tmp_path)), "PEER_PORTAL_TLS_PORT": str(port)},
+        )
+    assert result.returncode == 0 and "already listening" in result.stdout and result.stderr.strip() == ""
+    assert not log.exists() or "start" not in log.read_text(encoding="utf-8")

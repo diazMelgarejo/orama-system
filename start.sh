@@ -834,6 +834,29 @@ _port_listening() {
   ( exec 3<>"/dev/tcp/localhost/$1" ) 2>/dev/null
 }
 
+# A plain launch must not publish an unauthenticated portal through the front end. Same preconditions as the
+# --lan-peer preflight (_require_control_plane_token_for_lan), but it only checks: it never generates a token, because
+# the services started earlier in this launch would not have inherited one created now. Insecure dev mode or a missing
+# or placeholder ORAMA_CONTROL_PLANE_TOKEN means the front end is NOT started and the reason is printed.
+# Limit: this checks the launcher's configuration; a portal that was already running before this launch is not inspected.
+_peer_tls_autostart_allowed() {
+  case "${ORAMA_INSECURE_DEV:-}" in 1|true|yes|TRUE|YES)
+    _warn "peer-tls" "not starting the peer HTTPS front end: ORAMA_INSECURE_DEV disables portal authentication"
+    return 1
+    ;;
+  esac
+  _sync_control_plane_token
+  local py="${US_PYTHON:-}"
+  if [ -z "$py" ]; then py="$(command -v python3 2>/dev/null || true)"; fi
+  if [ -n "${ORAMA_CONTROL_PLANE_TOKEN:-}" ] && [ -n "$py" ] && [ -d "$SCRIPT_DIR/src" ] \
+    && PYTHONPATH="$SCRIPT_DIR/src${PYTHONPATH:+:$PYTHONPATH}" ORAMA_CONTROL_PLANE_TOKEN="$ORAMA_CONTROL_PLANE_TOKEN" \
+      "$py" -c 'from utils.control_plane_auth import is_weak_control_plane_token; import os, sys; sys.exit(1 if is_weak_control_plane_token(os.environ["ORAMA_CONTROL_PLANE_TOKEN"]) else 0)' >/dev/null 2>&1; then
+    return 0
+  fi
+  _warn "peer-tls" "not starting the peer HTTPS front end on a plain launch: it needs a strong ORAMA_CONTROL_PLANE_TOKEN; run ./start.sh --lan-peer, which sets one up"
+  return 1
+}
+
 # Make sure this Mac's peer HTTPS front end (Caddy: TLS on the peer port, proxying to the loopback portal) is up.
 # IDEMPOTENT by rule: it never stops, restarts or reloads anything. If the peer port already has a listener it
 # does nothing; if a Caddy admin endpoint is already up without the peer port listening it refuses to start a
@@ -1951,12 +1974,16 @@ fi
 # >>> peer-tls-frontend-autostart
 # Idempotent: a no-op when the peer port already has a listener; never stops, restarts or reloads anything.
 # --lan-peer always runs it (and warns when it cannot start). A plain launch runs it only when a front end is
-# provisioned (caddy installed and a Caddyfile present), so a stack restart never leaves the peer TLS port dead,
-# and a machine without one stays silent.
+# provisioned (caddy installed and a Caddyfile present) AND authentication is configured (_peer_tls_autostart_allowed),
+# so a stack restart never leaves the peer TLS port dead, a machine without one stays silent, and an unauthenticated
+# portal is never put on the LAN.
 if [ "${_LAN_PEER_MODE:-0}" = "1" ]; then
   _ensure_peer_tls_frontend || _warn "lan-peer" "peer HTTPS front end is not running: LAN peers cannot reach this Mac until it is started"
 elif _peer_tls_frontend_configured; then
-  _ensure_peer_tls_frontend || _warn "peer-tls" "peer HTTPS front end is not running: LAN peers cannot reach this Mac until it is started"
+  # Already listening: the idempotent no-op needs no authentication check. Otherwise only start it when auth is configured.
+  if _port_listening "${PEER_PORTAL_TLS_PORT:-8443}" || _peer_tls_autostart_allowed; then
+    _ensure_peer_tls_frontend || _warn "peer-tls" "peer HTTPS front end is not running: LAN peers cannot reach this Mac until it is started"
+  fi
 fi
 # <<< peer-tls-frontend-autostart
 
