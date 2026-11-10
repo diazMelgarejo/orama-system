@@ -453,8 +453,12 @@ def _cline_argv(cline_bin: str, task: str) -> list:
     mode with auto-approve off unless CLINE_ALLOW_ACT=1 is set by the operator.
     Installed on the Windows host as 3.0.74 on 2026-11-10; the same version the Mac peer verified.
     """
-    prompt = task if len(task.split()) >= 2 else f"Task: {task}"
-    argv = list(_cline_launcher(cline_bin) or [cline_bin])
+    needs_prefix = len(task.split()) < 2 or task.lstrip().startswith("-")  # a leading "-" would parse as an option
+    prompt = f"Task: {task}" if needs_prefix else task
+    launcher = _cline_launcher(cline_bin)
+    if launcher is None:  # never fall back to the shim itself: cmd.exe would re-parse metacharacters in the prompt
+        raise RuntimeError("cline shim node entry could not be resolved; refusing to pass a prompt through a shell shim")
+    argv = list(launcher)
     provider = os.getenv("CLINE_PROVIDER", "").strip()
     model = os.getenv("CLINE_MODEL", "").strip()
     if provider:
@@ -499,15 +503,27 @@ def dispatch_cline(task: str, plat: Optional[str] = None) -> Dict[str, Any]:
     except subprocess.TimeoutExpired:
         _reap(proc)
         return {"ok": False, "output": "cline task timed out (5min)", "elapsed": time.time() - t0, "outcome": "unknown"}
-    except BaseException as exc:  # includes OSError after the process started: the request may have left
+    except Exception as exc:  # includes OSError after the process started: the request may have left
         _reap(proc)
         return {"ok": False, "output": f"{type(exc).__name__} after start: {exc}", "elapsed": time.time() - t0, "outcome": "unknown"}
+    except BaseException:  # interrupt or exit: reap the child, keep the in-flight record (reads as ambiguous), propagate
+        _reap(proc)
+        raise
     elapsed = time.time() - t0
     stdout, stderr = stdout or "", stderr or ""
     output = stdout + stderr
     if proc.returncode == 0:
         return {"ok": True, "output": output, "elapsed": elapsed, "outcome": "completed"}
     return {"ok": False, "output": output, "elapsed": elapsed, "outcome": "unknown"}
+
+
+def _release_reporting(lock: Any, outcome: str) -> Optional[str]:
+    """Release *lock*; return an error string instead of raising (the record then stays non-free, which fails closed)."""
+    try:
+        lock.release(outcome)
+        return None
+    except Exception as exc:
+        return f"{type(exc).__name__}: {exc}"
 
 
 def _release_quietly(lock: Any, outcome: str) -> None:
@@ -560,28 +576,30 @@ def dispatch_autoresearcher(plat: str, task: str) -> Dict[str, Any]:
     try:
         lock.recheck(lambda: _effect_boundary_ok(plat))
     except _arl.LockRefused as exc:
-        _release_quietly(lock, "not-sent")
-        return {"ok": False, "fallback_active": True, "lock_state": exc.state,
+        release_error = _release_reporting(lock, "not-sent")
+        return {"ok": False, "fallback_active": True, "lock_state": exc.state, "release_error": release_error,
                 "output": f"effect-boundary recheck refused the send: {exc.reason}"}
     except Exception as exc:  # a probe raised: nothing was sent, so free the lock instead of leaving it held
-        _release_quietly(lock, "not-sent")
+        release_error = _release_reporting(lock, "not-sent")
         return {"ok": False, "fallback_active": True, "outcome": "not-sent", "lock_state": "refused",
+                "release_error": release_error,
                 "output": f"effect-boundary recheck failed; nothing was sent: {type(exc).__name__}: {exc}"}
 
     try:
         lock.mark_inflight()
     except Exception as exc:  # the marker could not be written, so nothing was sent
-        lock.release("not-sent")
-        return {"ok": False, "fallback_active": True, "outcome": "not-sent",
+        release_error = _release_reporting(lock, "not-sent")
+        return {"ok": False, "fallback_active": True, "outcome": "not-sent", "release_error": release_error,
                 "output": f"in-flight marker could not be written; nothing was sent: {exc}"}
     try:
         attempt = dispatch_cline(task, plat)
     except Exception as exc:  # after the marker the request may have been sent: hold it, never free it
-        lock.release("unknown")
+        release_error = _release_reporting(lock, "unknown")
         return {"ok": False, "fallback_active": True, "fallback_tier": "local-backend", "outcome": "unknown",
+                "release_error": release_error,
                 "output": f"dispatch raised after the in-flight marker: {exc}"}
     outcome = attempt.get("outcome") or ("completed" if attempt.get("ok") else "unknown")
-    lock.release(outcome if outcome in ("completed", "not-sent") else "unknown")
+    release_error = _release_reporting(lock, outcome if outcome in ("completed", "not-sent") else "unknown")
     return {
         "ok": bool(attempt.get("ok")),
         "fallback_active": True,
@@ -589,6 +607,7 @@ def dispatch_autoresearcher(plat: str, task: str) -> Dict[str, Any]:
         "outcome": outcome,
         "output": attempt.get("output", ""),
         "elapsed": attempt.get("elapsed"),
+        "release_error": release_error,
     }
 
 
