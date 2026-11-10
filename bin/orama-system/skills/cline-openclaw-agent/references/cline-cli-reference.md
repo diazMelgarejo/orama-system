@@ -1,5 +1,15 @@
 # Cline CLI Reference (v3.0.34)
 
+> **Update 2026-11-10 (verified on CLI 3.0.74 by the Windows and Mac hosts; Cline benchmark finding).** The CLI is now
+> 3.0.74. There is no `task` subcommand: the prompt is a bare positional argument. Cline's own default is act mode with
+> tool auto-approval ON, so review or unattended runs should pass `--plan --auto-approve false` unless the operator
+> authorises act mode. An npm install on Windows ships `cline.cmd`: never pass a prompt through a cmd shim; launch node
+> with the package entry script. The text below is the 3.0.34 record and is kept as history.
+>
+> **Live working code:** `scripts/cline_autoresearcher.py` (`_cline_argv`, `_cline_launcher`, `dispatch_cline`,
+> `dispatch_autoresearcher`) and `scripts/autoresearcher_lock.py` (`BackendLock`); the Windows watcher autostart is
+> the AutoResearcher block in `platform/windows/start.ps1`.
+
 Exhaustive reference for every command and flag of the `cline` CLI, verified
 against `cline --help` on 2026-06-30.
 
@@ -153,16 +163,20 @@ sent; the upstream model id is `zai/glm-5.3-flash`. Billed against Cline Credits
 
 ## Non-Interactive Patterns
 
+On CLI 3.0.74 the prompt is a bare positional argument and a ONE-WORD prompt is rejected as a mistyped
+subcommand (the AutoResearcher controller pads it as "Task: <word>"; a prompt that starts with a hyphen is
+padded too). Use prompts of two or more words in every example below.
+
 ```bash
 # One-shot, JSON, auto-approve (agent-friendly)
-cline "task" --json --auto-approve true -c /repo --thinking medium \
+cline "review the lock module" --json --auto-approve true -c /repo --thinking medium \
   -P cline-pass -m cline-pass/glm-5.3-flash --timeout 600 --retries 3
 
 # Plan mode (no mutations)
 cline "propose a refactor" --plan --json -c /repo
 
 # Resume a session
-cline --id 1782825530243_ayapk "continue" --json
+cline --id 1782825530243_ayapk "continue with the next step" --json
 
 # Background hub session
 cline "long task" --zen -c /repo

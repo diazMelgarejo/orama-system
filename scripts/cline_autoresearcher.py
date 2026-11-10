@@ -24,14 +24,19 @@ import argparse
 import json
 import os
 import platform as _platform_mod
+import ipaddress
 import shutil
+import socket
 import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+import autoresearcher_lock as _arl  # noqa: E402
 
 for _stream in (sys.stdout, sys.stderr):
     if hasattr(_stream, "reconfigure"):
@@ -53,6 +58,10 @@ WIN_PULSE_LOCK = Path.home() / ".openclaw" / "state" / "lan_peer" / "win_pulse.l
 WIN_COORD_PAUSE_FILE = Path.home() / ".openclaw" / "state" / "lan_peer" / "coord_pulse_pause.json"
 MAC_PULSE_LOCK = Path.home() / ".openclaw" / "state" / "lan_peer" / "mac_pulse.lock"
 MAC_GATEWAY_PAUSE_FILE = Path.home() / ".openclaw" / "state" / "lan_peer" / "openclaw_gateway_pause.json"
+
+# Single-owner backend locks (AR-WIN-1). An OS-held lock is the authority; see scripts/autoresearcher_lock.py.
+BACKEND_LOCK_WIN = Path.home() / ".openclaw" / "state" / "lan_peer" / "autoresearcher_backend_win.lock"
+BACKEND_LOCK_MAC = Path.home() / ".openclaw" / "state" / "lan_peer" / "autoresearcher_backend_mac.lock"
 
 _LAN_PEER_SESSION = (
     REPO_ROOT
@@ -82,11 +91,18 @@ def _is_windows(plat: Optional[str] = None) -> bool:
 # ── Cline CLI discovery ───────────────────────────────────────────────────────
 
 def _find_cline() -> Optional[str]:
-    """Return the path of the cline CLI from PATH or known install folders, or None."""
+    """Return the path of the cline CLI: a configured CLINE_BIN first, then PATH, then known install folders."""
+    configured = os.getenv("CLINE_BIN", "").strip()
+    if configured and Path(configured).is_file():
+        return configured
     bin_name = "cline.exe" if _is_windows() else "cline"
     found = shutil.which(bin_name)
     if found:
         return found
+    if _is_windows():  # the npm global install layout ships a cmd shim, not an exe (never given a prompt, see _cline_launcher)
+        found = shutil.which("cline.cmd")
+        if found:
+            return found
     if not _is_windows():
         found = shutil.which("cline")
         if found:
@@ -97,6 +113,10 @@ def _find_cline() -> Optional[str]:
         candidates.append(Path(local_appdata) / "Programs" / "cline" / "cline.exe")
         candidates.append(Path(local_appdata) / "cline" / "bin" / "cline.exe")
     home = Path.home()
+    # LM Studio bin folder: where a Windows host reported a Cline shim off PATH (reported, not verified on every host).
+    candidates.append(home / ".lmstudio" / "bin" / "cline.exe")
+    candidates.append(home / ".lmstudio" / "bin" / "cline.cmd")
+    candidates.append(home / ".lmstudio" / "bin" / "cline.ps1")
     candidates.append(home / ".local" / "bin" / "cline")
     candidates.append(home / "bin" / "cline")
     for candidate in candidates:
@@ -110,7 +130,27 @@ def cline_available() -> Dict[str, Any]:
     cline_bin = _find_cline()
     if not cline_bin:
         return {"available": False, "bin": None, "reason": "cline CLI not found on PATH or known install dirs"}
+    if _cline_launcher(cline_bin) is None:
+        return {"available": False, "bin": None,
+                "reason": "cline is a cmd/ps1 shim whose node entry could not be resolved; refusing to pass prompts through a shell shim"}
     return {"available": True, "bin": cline_bin, "reason": "cline CLI found"}
+
+
+def _cline_launcher(cline_bin: str) -> Optional[list]:
+    """Return the argv prefix that launches Cline, or None when it cannot be launched safely.
+
+    A normal executable is its own launcher. An npm ``.cmd``/``.bat``/``.ps1`` shim is never used to carry a
+    prompt (cmd.exe re-parses metacharacters in arguments); the node entry script next to it is launched with node.
+    """
+    if Path(cline_bin).suffix.lower() not in (".cmd", ".bat", ".ps1"):
+        return [cline_bin]
+    base = Path(cline_bin).parent
+    entry = base / "node_modules" / "cline" / "bin" / "cline"
+    node = base / "node.exe"
+    node_path = str(node) if node.is_file() else shutil.which("node")
+    if entry.is_file() and node_path:
+        return [node_path, str(entry)]
+    return None
 
 
 # ── Hermes CLI discovery (Windows gateway) ────────────────────────────────────
@@ -208,15 +248,56 @@ def gateway_status(plat: Optional[str] = None) -> Dict[str, Any]:
 
 # ── Local backend idle probe (per platform) ───────────────────────────────────
 
+def _probe_url(url: str) -> str:
+    """Use literal IPv4 loopback for plain-HTTP localhost without DNS lookup.
+
+    Preserve the Windows IPv6-delay repair without trusting resolver output.
+    HTTPS retains its certificate hostname; explicit peer hosts stay unchanged.
+    Userinfo and malformed configurations refuse instead of changing identity.
+    """
+    from urllib.parse import urlsplit, urlunsplit
+
+    parts = urlsplit(url)
+    if parts.scheme not in ("http", "https") or not parts.hostname:
+        raise ValueError("probe requires an HTTP or HTTPS host")
+    if parts.username is not None or parts.password is not None:
+        raise ValueError("probe URL must not contain userinfo")
+    port = parts.port
+    if parts.scheme != "http" or parts.hostname != "localhost":
+        return url
+    loopback = str(ipaddress.IPv4Address(0x7F000001))
+    netloc = loopback if port is None else f"{loopback}:{port}"
+    return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
+
+
 def _probe_http_ok(url: str, timeout: float = 3.0) -> bool:
-    """True when a GET on *url* returns a 2xx status within the timeout."""
+    """Probe with per-I/O timeouts and at most two literal localhost attempts.
+
+    Plain-HTTP localhost tries IPv4 first, then IPv6 loopback without DNS.
+    HTTPS and explicit peer hosts retain their identity and get one attempt.
+    This is not a whole-call deadline, including for DNS on unchanged hosts.
+    """
     try:
         import urllib.request
-        req = urllib.request.Request(url, method="GET")
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return 200 <= resp.status < 300
+        from urllib.parse import urlsplit, urlunsplit
+
+        candidates = [_probe_url(url)]
+        parts = urlsplit(url)
+        if parts.scheme == "http" and parts.hostname == "localhost":
+            host = f"[{ipaddress.IPv6Address(1)}]"
+            netloc = host if parts.port is None else f"{host}:{parts.port}"
+            candidates.append(urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment)))
+        for candidate in candidates:
+            try:
+                req = urllib.request.Request(candidate, method="GET")
+                with urllib.request.urlopen(req, timeout=timeout / len(candidates)) as resp:
+                    if 200 <= resp.status < 300:
+                        return True
+            except Exception:
+                continue
     except Exception:
-        return False
+        pass
+    return False
 
 
 # A coder lock older than this is stale even when its recorded PID was reused by an unrelated process.
@@ -267,6 +348,21 @@ def lock_is_held(lock: Path, now: Optional[float] = None) -> bool:
     return age < LOCK_MAX_AGE_SECONDS and _pid_alive(pid)
 
 
+def _backend_lock_busy(path: Path) -> Optional[str]:
+    """Return a reason when the backend lock at *path* is not free, or None when it is free.
+
+    Fail closed: if the lock check itself raises (another account owns the file, a sharing violation) the backend is
+    reported busy, so a broken check can never read as idle.
+    """
+    try:
+        own = _arl.inspect(path)
+    except Exception as exc:
+        return f"backend lock check failed (treated as busy): {type(exc).__name__}"
+    if own.state != _arl.FREE:
+        return f"backend lock {own.state}: {own.reason}"
+    return None
+
+
 def local_backend_idle(plat: Optional[str] = None) -> Dict[str, Any]:
     """Returns {idle, reachable, reason} for the platform's local coder backend."""
     plat = plat or detect_platform()
@@ -276,6 +372,9 @@ def local_backend_idle(plat: Optional[str] = None) -> Dict[str, Any]:
             return {"idle": False, "reachable": False, "reason": "LM Studio Win not reachable"}
         if lock_is_held(WIN_PULSE_LOCK):
             return {"idle": False, "reachable": True, "reason": "GPU lock held (win_pulse.lock)"}
+        busy = _backend_lock_busy(BACKEND_LOCK_WIN)
+        if busy:
+            return {"idle": False, "reachable": True, "reason": busy}
         return {"idle": True, "reachable": True, "reason": "LM Studio Win idle"}
 
     reachable = _probe_http_ok(f"{OLLAMA_MAC_ENDPOINT}/api/tags")
@@ -283,6 +382,9 @@ def local_backend_idle(plat: Optional[str] = None) -> Dict[str, Any]:
         return {"idle": False, "reachable": False, "reason": "ollama not reachable"}
     if lock_is_held(MAC_PULSE_LOCK):
         return {"idle": False, "reachable": True, "reason": "coder lock held (mac_pulse.lock)"}
+    busy = _backend_lock_busy(BACKEND_LOCK_MAC)
+    if busy:
+        return {"idle": False, "reachable": True, "reason": busy}
     return {"idle": True, "reachable": True, "reason": "ollama idle"}
 
 
@@ -329,37 +431,129 @@ def should_fallback_to_cline(plat: Optional[str] = None) -> Dict[str, Any]:
 
 # ── Dispatch ──────────────────────────────────────────────────────────────────
 
+def _reap(proc: Any) -> None:
+    """Best-effort kill and reap of a child so a failed dispatch leaves no orphan process."""
+    try:
+        proc.kill()
+        proc.communicate(timeout=10)
+    except Exception:
+        pass
+
+
+def _cline_argv(cline_bin: str, task: str) -> list:
+    """Build the Cline command line for a one-shot prompt.
+
+    HISTORY (kept on purpose): this controller originally called ``cline task <prompt>`` (2026-07-01). A ``task``
+    subcommand existed on the Cline CLI of that period, so the call worked then (exact version unverified). It was
+    verified absent on CLI 3.0.49 (2026-08-05) and 3.0.74 (2026-11-10, by the Mac peer), where it exits at once with
+    "Unknown command or unquoted prompt". LIVE BEHAVIOUR (CLI 3.0.49 or later): the prompt is a bare positional
+    argument to ``cline``; a one-word prompt is rejected as a mistyped subcommand, so one is padded here. Provider
+    and model come from Cline's own configuration unless CLINE_PROVIDER / CLINE_MODEL pin them (``-P`` / ``-m``).
+    Cline's own default is act mode with tool auto-approval ON (verified in the 3.0.74 help text), so runs are plan
+    mode with auto-approve off unless CLINE_ALLOW_ACT=1 is set by the operator.
+    Installed on the Windows host as 3.0.74 on 2026-11-10; the same version the Mac peer verified.
+    """
+    needs_prefix = len(task.split()) < 2 or task.lstrip().startswith("-")  # a leading "-" would parse as an option
+    prompt = f"Task: {task}" if needs_prefix else task
+    launcher = _cline_launcher(cline_bin)
+    if launcher is None:  # never fall back to the shim itself: cmd.exe would re-parse metacharacters in the prompt
+        raise RuntimeError("cline shim node entry could not be resolved; refusing to pass a prompt through a shell shim")
+    argv = list(launcher)
+    provider = os.getenv("CLINE_PROVIDER", "").strip()
+    model = os.getenv("CLINE_MODEL", "").strip()
+    if provider:
+        argv += ["-P", provider]
+    if model:
+        argv += ["-m", model]
+    if os.getenv("CLINE_ALLOW_ACT", "").strip() != "1":  # Cline defaults to act mode with auto-approve ON; do not
+        argv += ["--plan", "--auto-approve", "false"]
+    return argv + [prompt]
+
+
+def _cline_workdir() -> Path:
+    """Scratch working directory for Cline runs (CLINE_WORKDIR overrides), so repository hooks do not apply."""
+    configured = os.getenv("CLINE_WORKDIR", "").strip()
+    path = Path(configured) if configured else Path.home() / ".openclaw" / "state" / "autoresearcher_scratch"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
 def dispatch_cline(task: str, plat: Optional[str] = None) -> Dict[str, Any]:
-    """Run the `cline` CLI directly (ClinePass credits tier)."""
+    """Run the `cline` CLI once (ClinePass credits tier) and classify the outcome.
+
+    ``outcome`` is ``completed``, ``not-sent`` when the CLI is missing or the process could not be started, or
+    ``unknown`` for a timeout, post-start I/O error, or any nonzero exit. Output text cannot prove no request was sent.
+    An unknown outcome must be held for reconciliation and never retried automatically.
+    """
     cline = cline_available()
     if not cline.get("available"):
-        return {"ok": False, "output": cline.get("reason", "cline unavailable"), "elapsed": 0}
+        return {"ok": False, "output": cline.get("reason", "cline unavailable"), "elapsed": 0, "outcome": "not-sent"}
     t0 = time.time()
     try:
-        proc = subprocess.run(
-            [cline["bin"], "task", task],
-            capture_output=True, text=True, timeout=300, cwd=str(REPO_ROOT),
+        proc = subprocess.Popen(
+            _cline_argv(cline["bin"], task),
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd=str(_cline_workdir()),
         )
-        elapsed = time.time() - t0
-        output = (proc.stdout or "") + (proc.stderr or "")
-        return {"ok": proc.returncode == 0, "output": output, "elapsed": elapsed}
+    except OSError as exc:  # Popen itself failed: the process never existed, so nothing was sent
+        return {"ok": False, "output": str(exc), "elapsed": time.time() - t0, "outcome": "not-sent"}
+    except Exception as exc:  # could not prepare the call (for example the scratch directory): nothing was sent
+        return {"ok": False, "output": str(exc), "elapsed": time.time() - t0, "outcome": "not-sent"}
+    try:
+        stdout, stderr = proc.communicate(timeout=300)
     except subprocess.TimeoutExpired:
-        return {"ok": False, "output": "cline task timed out (5min)", "elapsed": time.time() - t0}
+        _reap(proc)
+        return {"ok": False, "output": "cline task timed out (5min)", "elapsed": time.time() - t0, "outcome": "unknown"}
+    except Exception as exc:  # includes OSError after the process started: the request may have left
+        _reap(proc)
+        return {"ok": False, "output": f"{type(exc).__name__} after start: {exc}", "elapsed": time.time() - t0, "outcome": "unknown"}
+    except BaseException:  # interrupt or exit: reap the child, keep the in-flight record (reads as ambiguous), propagate
+        _reap(proc)
+        raise
+    elapsed = time.time() - t0
+    stdout, stderr = stdout or "", stderr or ""
+    output = stdout + stderr
+    if proc.returncode == 0:
+        return {"ok": True, "output": output, "elapsed": elapsed, "outcome": "completed"}
+    return {"ok": False, "output": output, "elapsed": elapsed, "outcome": "unknown"}
+
+
+def _release_reporting(lock: Any, outcome: str) -> Optional[str]:
+    """Release *lock*; return an error string instead of raising (the record then stays non-free, which fails closed)."""
+    try:
+        lock.release(outcome)
+        return None
     except Exception as exc:
-        return {"ok": False, "output": str(exc), "elapsed": time.time() - t0}
+        return f"{type(exc).__name__}: {exc}"
+
+
+def _release_quietly(lock: Any, outcome: str) -> None:
+    """Release *lock* with *outcome*; a failing release is swallowed (the record then stays stale, which fails closed)."""
+    try:
+        lock.release(outcome)
+    except Exception:
+        pass
+
+
+def _effect_boundary_ok(plat: str) -> Tuple[bool, str]:
+    """Re-read the gateway and Cline inputs right before the send (never reuse the earlier decision)."""
+    gw = gateway_status(plat)
+    gateway_down = bool(gw.get("paused")) or (not gw.get("running")) or bool(gw.get("rate_limited"))
+    if not gateway_down:
+        return False, "gateway recovered"
+    cline = cline_available()
+    if not cline.get("available", False):
+        return False, f"Cline unavailable: {cline.get('reason', '')}"
+    return True, "gateway still down and Cline available"
 
 
 def dispatch_autoresearcher(plat: str, task: str) -> Dict[str, Any]:
-    """Two-tier ClinePass AutoResearcher dispatch.
+    """Single-attempt ClinePass AutoResearcher dispatch under the backend lock.
 
-    Tier 1 ("local-backend"): Cline is configured with the local coder backend
-    (LM Studio Win / Ollama Mac) as its preferred provider — a first
-    successful dispatch_cline() call means Cline resolved the task against
-    the local model, not paid credits.
-    Tier 2 ("cline-pass-credits"): if the first attempt fails (local backend
-    dropped, model unloaded mid-task, etc.), retry once — Cline's own
-    provider fallback chain (cline-workspace.json) may route the retry to
-    ClinePass-hosted credits instead.
+    The fallback decision is advisory. The dispatcher takes the single-owner backend lock, re-reads the gateway
+    and Cline inputs at the effect boundary, flushes an in-flight marker and sends exactly once. A failure after
+    the request was written is an *unknown* outcome: it is recorded as such, the lock record stays ambiguous and
+    nothing is retried or re-routed (a provably unsent request frees the lock). Operators clear an ambiguous
+    record with ``autoresearcher_lock.reconcile``.
     """
     check = should_fallback_to_cline(plat)
     if not check["should_fallback"]:
@@ -369,24 +563,51 @@ def dispatch_autoresearcher(plat: str, task: str) -> Dict[str, Any]:
             "output": f"ClinePass AutoResearcher fallback is not active: {check['reason']}",
         }
 
-    local_attempt = dispatch_cline(task, plat)
-    if local_attempt.get("ok"):
-        return {
-            "ok": True,
-            "fallback_active": True,
-            "fallback_tier": "local-backend",
-            "output": local_attempt.get("output", ""),
-            "elapsed": local_attempt.get("elapsed"),
-        }
+    lock = _arl.BackendLock(BACKEND_LOCK_WIN if _is_windows(plat) else BACKEND_LOCK_MAC, resource="local-backend")
+    try:
+        lock.acquire()
+    except _arl.LockRefused as exc:
+        return {"ok": False, "fallback_active": True, "lock_state": exc.state,
+                "output": f"backend lock {exc.state}: {exc.reason}"}
+    except Exception as exc:  # the lock layer failed (permissions, sharing violation): refuse, never send
+        return {"ok": False, "fallback_active": True, "lock_state": "refused",
+                "output": f"backend lock could not be taken: {type(exc).__name__}: {exc}"}
 
-    cline_attempt = dispatch_cline(task, plat)
+    try:
+        lock.recheck(lambda: _effect_boundary_ok(plat))
+    except _arl.LockRefused as exc:
+        release_error = _release_reporting(lock, "not-sent")
+        return {"ok": False, "fallback_active": True, "lock_state": exc.state, "release_error": release_error,
+                "output": f"effect-boundary recheck refused the send: {exc.reason}"}
+    except Exception as exc:  # a probe raised: nothing was sent, so free the lock instead of leaving it held
+        release_error = _release_reporting(lock, "not-sent")
+        return {"ok": False, "fallback_active": True, "outcome": "not-sent", "lock_state": "refused",
+                "release_error": release_error,
+                "output": f"effect-boundary recheck failed; nothing was sent: {type(exc).__name__}: {exc}"}
+
+    try:
+        lock.mark_inflight()
+    except Exception as exc:  # the marker could not be written, so nothing was sent
+        release_error = _release_reporting(lock, "not-sent")
+        return {"ok": False, "fallback_active": True, "outcome": "not-sent", "release_error": release_error,
+                "output": f"in-flight marker could not be written; nothing was sent: {exc}"}
+    try:
+        attempt = dispatch_cline(task, plat)
+    except Exception as exc:  # after the marker the request may have been sent: hold it, never free it
+        release_error = _release_reporting(lock, "unknown")
+        return {"ok": False, "fallback_active": True, "fallback_tier": "local-backend", "outcome": "unknown",
+                "release_error": release_error,
+                "output": f"dispatch raised after the in-flight marker: {exc}"}
+    outcome = attempt.get("outcome") or ("completed" if attempt.get("ok") else "unknown")
+    release_error = _release_reporting(lock, outcome if outcome in ("completed", "not-sent") else "unknown")
     return {
-        "ok": bool(cline_attempt.get("ok")),
+        "ok": bool(attempt.get("ok")),
         "fallback_active": True,
-        "fallback_tier": "cline-pass-credits",
-        "output": cline_attempt.get("output", ""),
-        "elapsed": cline_attempt.get("elapsed"),
-        "local_backend_attempt": local_attempt,
+        "fallback_tier": "local-backend",
+        "outcome": outcome,
+        "output": attempt.get("output", ""),
+        "elapsed": attempt.get("elapsed"),
+        "release_error": release_error,
     }
 
 
