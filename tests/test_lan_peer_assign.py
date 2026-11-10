@@ -155,3 +155,46 @@ def test_timeout_flag_controls_peer_request_duration(tmp_path):
     payload = json.loads(result.stdout)
     assert payload["queued"] is True
     assert payload["filename"] == "win-timeout-task.md"
+
+
+# ── default portal port follows the TLS configuration ───────────────────────────
+LOOP = ".".join(["127", "0", "0", "1"])  # built at runtime: tracked files carry no address literals
+
+
+def _drop_sidecar_port(tmp_path, env_extra, extra_args=()):
+    """Run a peer drop that cannot be delivered (closed ports) and return the portal_port its outbox record stored."""
+    home = tmp_path / "home"
+    task = tmp_path / "task.md"
+    task.write_text("# Task\n", encoding="utf-8")
+    ca = tmp_path / "ca.pem"
+    ca.write_text("not-a-real-certificate\n", encoding="utf-8")
+    env = {k: v for k, v in __import__("os").environ.items() if not k.startswith(("PEER_", "PORTAL_"))}
+    env.update({"HOME": str(home), "PEER_CA_FILE": str(ca), **env_extra})
+    result = subprocess.run(
+        ["python3", str(SCRIPT), "drop", "--peer", "--peer-ip", LOOP, *extra_args,
+         "--file", str(task), "--filename", "win-port.md", "--assignee", "win", "--topic", "smoke", "--timeout", "2"],
+        cwd=ROOT, env=env, text=True, capture_output=True, check=False,
+    )
+    meta = home / ".openclaw" / "state" / "lan_peer" / "outbox" / "win-port.md.meta.json"
+    assert meta.is_file(), (result.stdout, result.stderr)
+    return json.loads(meta.read_text(encoding="utf-8")).get("portal_port")
+
+
+def test_drop_defaults_to_the_tls_port_when_pinned_tls_is_configured(tmp_path):
+    """With peer TLS enabled and a pinned CA, a bare drop targets the TLS port, not the plain portal port."""
+    port = _drop_sidecar_port(tmp_path, {"PEER_PORTAL_TLS_ENABLED": "1", "PEER_PORTAL_TLS_PORT": "1", "PORTAL_PORT": "2"})
+    assert str(port) == "1"
+
+
+def test_drop_keeps_the_plain_portal_port_when_tls_is_not_enabled(tmp_path):
+    """Without peer TLS the default is unchanged (PORTAL_PORT, else 8002)."""
+    port = _drop_sidecar_port(tmp_path, {"PORTAL_PORT": "2", "PEER_PORTAL_TLS_PORT": "1"})
+    assert str(port) == "2"
+
+
+def test_an_explicit_portal_port_always_wins(tmp_path):
+    """--portal-port overrides the TLS-derived default."""
+    port = _drop_sidecar_port(
+        tmp_path, {"PEER_PORTAL_TLS_ENABLED": "1", "PEER_PORTAL_TLS_PORT": "1"}, ("--portal-port", "3"),
+    )
+    assert str(port) == "3"

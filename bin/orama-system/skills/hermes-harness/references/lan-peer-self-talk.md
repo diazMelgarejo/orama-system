@@ -333,3 +333,20 @@ Command card: [`../commands/lan-peer-self-talk/SKILL.md`](../commands/lan-peer-s
 - [`docs/guides/lan-peer-bidirectional-talk-2026-06-28.md`](../../../../docs/guides/lan-peer-bidirectional-talk-2026-06-28.md) — live attempts, probe matrix, future plan
 - [`docs/plans/2026-06-28-windows-powershell-todo.md`](../../../../docs/plans/2026-06-28-windows-powershell-todo.md)
 - [`ecc-hermes-cross-harness.md`](ecc-hermes-cross-harness.md)
+
+## Sending one file to the peer (canonical helper)
+
+Use `scripts/lan_peer_send.py --file <path> [--assignee win] [--topic <topic>]`. It wraps `lan_peer_assign.py drop --peer`,
+reads the peer-TLS and token settings only from its own environment (it never opens an env or credential file, and passes
+the drop process just those settings plus basic process variables), masks addresses and token-like strings, and reports delivery only when the drop's own JSON shows `ok`, a `received_at` and a byte
+count equal to the file size. Exit 0 means delivered with that evidence; exit 2 means not delivered. Export the settings
+first, in a subshell, from the operator's env file (set -a, source it, set +a); the helper then forwards only its allowlist.
+
+- A bare `drop --peer` now defaults to the pinned-TLS port (`PEER_PORTAL_TLS_PORT`, default 8443) when peer TLS is enabled
+  and a CA or pins are configured. Before that, it defaulted to the plain portal port and timed out when only the HTTPS front
+  end was reachable. An explicit `--portal-port` still wins.
+- A failed send leaves a queued outbox record. Reconcile only that record with `lan_peer_assign.py outbox-resolve --only <file>`;
+  never flush the whole outbox to clear it, because that also sends every other queued item.
+- A queued drop is not delivery. Send once per file and keep the full output.
+- After any Mac stack restart, confirm the peer TLS port is LISTENING before reporting the stack healthy; 8000, 8001 and 8002
+  returning 200 does not cover it.
