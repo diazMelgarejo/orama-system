@@ -121,16 +121,17 @@ def test_timed_out_child_is_killed_and_gone(shim, monkeypatch):
 
 
 @pytest.mark.parametrize("kind", ["cmd", "bat", "ps1"])
-def test_shim_kinds_in_a_path_with_spaces_and_non_ascii(tmp_path, monkeypatch, kind):
+def test_shim_kinds_in_a_path_with_spaces_and_non_ascii(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, kind: str) -> None:
     """cmd, bat and ps1 shims in a folder with spaces, parentheses and non-ASCII letters all launch node plus entry."""
     root = tmp_path / "Üser Tëst (x86) dir"
     entry = root / "node_modules" / "cline" / "bin" / "cline"
     entry.parent.mkdir(parents=True)
     entry.write_text(ENTRY_JS, encoding="utf-8")
-    body = ('@echo off\r\nnode "%~dp0node_modules\cline\bin\cline" %*\r\n' if kind != "ps1"
-            else 'node "$PSScriptRoot\node_modules\cline\bin\cline" $args\r\n')
+    body = ('@echo off\r\nnode "%~dp0node_modules\\cline\\bin\\cline" %*\r\n' if kind != "ps1"
+            else 'node "$PSScriptRoot\\node_modules\\cline\\bin\\cline" $args\r\n')
     shim = root / f"cline.{kind}"
-    shim.write_text(body, encoding="ascii")
+    shim.write_text(body, encoding="ascii", newline="")
+    assert shim.read_bytes() == body.encode("ascii")
     out = tmp_path / "out.json"
     monkeypatch.setenv("CLINE_BIN", str(shim))
     monkeypatch.setenv("CLINE_WORKDIR", str(tmp_path / "work"))
@@ -142,14 +143,17 @@ def test_shim_kinds_in_a_path_with_spaces_and_non_ascii(tmp_path, monkeypatch, k
     assert prompt in json.loads(out.read_text(encoding="utf-8"))["argv"]
 
 
-def test_pathext_pick_prefers_a_launchable_shim(tmp_path, monkeypatch):
+def test_pathext_pick_prefers_a_launchable_shim(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """With cline.cmd and an empty cline.ps1 both on PATH the controller picks cline.cmd and can launch it."""
     entry = tmp_path / "node_modules" / "cline" / "bin" / "cline"
     entry.parent.mkdir(parents=True)
     entry.write_text(ENTRY_JS, encoding="utf-8")
     (tmp_path / "cline.cmd").write_text("@echo off\r\n", encoding="ascii")
     (tmp_path / "cline.ps1").write_text("", encoding="ascii")
-    monkeypatch.setenv("PATH", str(tmp_path) + os.pathsep + os.environ["PATH"])
+    node = shutil.which("node")
+    real_which = shutil.which
+    monkeypatch.setenv("PATH", str(tmp_path))
+    monkeypatch.setattr(car.shutil, "which", lambda name: node if name == "node" else real_which(name))
     monkeypatch.delenv("CLINE_BIN", raising=False)
     picked = car._find_cline()
     assert picked is not None and Path(picked).name == "cline.cmd"

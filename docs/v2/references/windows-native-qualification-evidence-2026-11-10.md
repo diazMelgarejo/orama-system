@@ -83,6 +83,6 @@ qualification can be claimed either way.
 | H04 | Local model canary | PARTIAL | one exact-reply call on the loaded policy-allowed chat model, 20 s, finish reason stop; partner and graph round trips not run |
 | H05 | TLS both ways with receipts | PARTIAL | both directions: sent, accepted, receiver receipt with raw bytes and SHA-256 that matched the sender's independent record; must be repeated after both certificate renewals |
 | H07 | Bootstrap, mesh, heartbeat (3080 node) | PARTIAL | all stack processes outside any job object and alive after the launcher exited; status output matches listener PIDs; pulse process alive; the RTX 5080 node is offline and not covered |
-| H08 | Native runtime and process | MOST ADVANCED | cmd, bat and ps1 shims in a path with spaces and non-ASCII letters, quoting, PATHEXT pick, spawn failure, exit classification, timeout kill including a grandchild: native tests above. Not covered: a detached grandchild, permissions under another user |
+| H08 | Native runtime and process | MOST ADVANCED | cmd, bat and ps1 shims in a path with spaces and non-ASCII letters, quoting, PATHEXT pick, spawn failure, exit classification, timeout kill of the recorded child: native tests above. Not covered: grandchild termination, permissions under another user |
 | H01, H02, H06, H09 | Physical canaries, ACL proof, trust, serving identity | OPEN, operator-only | unchanged |
 | H10 | Owner decisions | DEFERRED | by the operator |
