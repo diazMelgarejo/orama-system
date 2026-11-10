@@ -70,3 +70,19 @@ lock branch by
 ancestry, so merging in order is conflict-free: backend lock, then watcher autostart, then this
 evidence change.
 The Perpetua-Tools memory stack (three pull requests) is separate and already ordered.
+
+## Addendum after the merges (2026-11-10, V on the Windows host)
+
+State: orama main f7036d97 and Perpetua-Tools main f9564bed, Windows stack restarted from them outside
+the app job. Windows is still NOT qualified; H10 (scope) is deferred by the operator, so no
+qualification can be claimed either way.
+
+| ID | Item | Status now | Evidence |
+| --- | --- | --- | --- |
+| H03 | Hermes policy walkthrough | PARTIAL | Phase B verify passes; Phase C policy CLI and the launcher gate pass; a policy-allowed model validates for Windows (exit 0) and a Mac-only model is refused (exit 1, negative control without editing any config); Phase A and E config parts N/A (no OpenClaw config on this host); Phase D cloud canary not run |
+| H04 | Local model canary | PARTIAL | one exact-reply call on the loaded policy-allowed chat model, 20 s, finish reason stop; partner and graph round trips not run |
+| H05 | TLS both ways with receipts | PARTIAL | both directions: sent, accepted, receiver receipt with raw bytes and SHA-256 that matched the sender's independent record; must be repeated after both certificate renewals |
+| H07 | Bootstrap, mesh, heartbeat (3080 node) | PARTIAL | all stack processes outside any job object and alive after the launcher exited; status output matches listener PIDs; pulse process alive; the RTX 5080 node is offline and not covered |
+| H08 | Native runtime and process | MOST ADVANCED | cmd, bat and ps1 shims in a path with spaces and non-ASCII letters, quoting, PATHEXT pick, spawn failure, exit classification, timeout kill of the recorded child: native tests above. Not covered: grandchild termination, permissions under another user |
+| H01, H02, H06, H09 | Physical canaries, ACL proof, trust, serving identity | OPEN, operator-only | unchanged |
+| H10 | Owner decisions | DEFERRED | by the operator |
