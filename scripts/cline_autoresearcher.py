@@ -267,14 +267,33 @@ def _probe_url(url: str) -> str:
 
 
 def _probe_http_ok(url: str, timeout: float = 3.0) -> bool:
-    """Return whether GET succeeds with a per-I/O, not whole-call, timeout."""
+    """Probe with per-I/O timeouts and at most two literal localhost attempts.
+
+    Plain-HTTP localhost tries IPv4 first, then IPv6 loopback without DNS.
+    HTTPS and explicit peer hosts retain their identity and get one attempt.
+    This is not a whole-call deadline, including for DNS on unchanged hosts.
+    """
     try:
         import urllib.request
-        req = urllib.request.Request(_probe_url(url), method="GET")
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return 200 <= resp.status < 300
+        from urllib.parse import urlsplit, urlunsplit
+
+        candidates = [_probe_url(url)]
+        parts = urlsplit(url)
+        if parts.scheme == "http" and parts.hostname == "localhost":
+            host = f"[{ipaddress.IPv6Address(1)}]"
+            netloc = host if parts.port is None else f"{host}:{parts.port}"
+            candidates.append(urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment)))
+        for candidate in candidates:
+            try:
+                req = urllib.request.Request(candidate, method="GET")
+                with urllib.request.urlopen(req, timeout=timeout / len(candidates)) as resp:
+                    if 200 <= resp.status < 300:
+                        return True
+            except Exception:
+                continue
     except Exception:
-        return False
+        pass
+    return False
 
 
 # A coder lock older than this is stale even when its recorded PID was reused by an unrelated process.

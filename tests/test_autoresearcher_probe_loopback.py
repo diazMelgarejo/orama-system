@@ -10,6 +10,7 @@ import ipaddress
 import sys
 from pathlib import Path
 from unittest.mock import patch
+from unittest.mock import MagicMock
 from typing import Any
 
 import pytest
@@ -59,6 +60,25 @@ def test_loopback_rewrite_preserves_port_path_query_fragment() -> None:
     """Only the hostname changes for the supported plain-HTTP optimization."""
     assert car._probe_url("http://localhost:1234/a?b=c#d") == f"http://{LOOPBACK}:1234/a?b=c#d"
     assert car._probe_url("http://localhost/a") == f"http://{LOOPBACK}/a"
+
+
+def test_ipv6_only_localhost_backend_has_literal_fallback() -> None:
+    """Try literal IPv6 loopback if the fast IPv4 listener is unavailable."""
+    response = MagicMock()
+    response.__enter__.return_value.status = 200
+    with patch("urllib.request.urlopen", side_effect=[ConnectionRefusedError(), response]) as request, \
+         patch.object(car.socket, "gethostbyname", side_effect=AssertionError("unexpected DNS")):
+        assert car._probe_http_ok("http://localhost:1234/v1/models?q=1") is True
+    urls = [call.args[0].full_url for call in request.call_args_list]
+    ipv6 = str(ipaddress.IPv6Address(1))
+    assert urls == [f"http://{LOOPBACK}:1234/v1/models?q=1", f"http://[{ipv6}]:1234/v1/models?q=1"]
+
+
+def test_https_failure_does_not_retry_under_another_hostname() -> None:
+    """Preserve certificate identity and make only one HTTPS attempt."""
+    with patch("urllib.request.urlopen", side_effect=OSError("unreachable")) as request:
+        assert car._probe_http_ok("https://localhost:1234/v1/models") is False
+    assert request.call_count == 1
 
 
 def test_probe_http_ok_uses_the_rewritten_url() -> None:

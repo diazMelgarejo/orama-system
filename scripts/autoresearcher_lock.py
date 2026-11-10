@@ -303,6 +303,8 @@ class BackendLock:
         self.resource = resource
         self._fd: Optional[int] = None
         self._nonce: Optional[str] = None
+        self._state: Optional[str] = None
+        self._owner_record: Optional[Dict[str, Any]] = None
 
     def acquire(self) -> "BackendLock":
         """Take the OS lock and write an ``acquired`` record, or raise LockRefused naming the state."""
@@ -323,6 +325,8 @@ class BackendLock:
         except BaseException:
             self._fd = None
             self._nonce = None
+            self._state = None
+            self._owner_record = None
             try:
                 if locked:
                     _unlock(fd)
@@ -334,16 +338,28 @@ class BackendLock:
     def _write(self, state: str) -> None:
         """Write this owner's record with *state*."""
         assert self._fd is not None and self._nonce is not None
-        _write_record(self._fd, _base_record(state, self._nonce, self.resource))
+        record = _base_record(state, self._nonce, self.resource)
+        _write_record(self._fd, record)
+        self._state = state
+        self._owner_record = record
+
+    def _check_owner(self) -> None:
+        """Refuse if the locked file, owner nonce, resource or expected state changed."""
+        if self._fd is None or self._nonce is None or self._state is None:
+            raise LockRefused("refused", "lock is not held")
+        try:
+            same_file = os.path.samestat(os.fstat(self._fd), os.stat(self.path))
+        except OSError:
+            same_file = False
+        if not same_file:
+            raise LockRefused("refused", "lock path no longer names the held file")
+        kind, record = _read_record(self.path)
+        if kind != "ok" or record != self._owner_record:
+            raise LockRefused("refused", "owner record is not ours")
 
     def recheck(self, extra_check: Optional[Callable[[], Tuple[bool, str]]] = None) -> None:
         """Confirm we still own the lock, then re-run *extra_check* (returns (ok, reason)); refuse on any doubt."""
-        if self._fd is None:
-            raise LockRefused("refused", "lock is not held")
-        kind, record = _read_record(self.path)
-        if kind != "ok" or record is None or record.get("nonce") != self._nonce \
-                or record.get("state") not in ("acquired", "inflight"):
-            raise LockRefused("refused", "owner record is not ours")
+        self._check_owner()
         if extra_check is not None:
             ok, reason = extra_check()
             if not ok:
@@ -351,20 +367,29 @@ class BackendLock:
 
     def mark_inflight(self) -> None:
         """Flush an in-flight marker before the request is sent; it stays until the outcome is known."""
-        if self._fd is None:
-            raise LockRefused("refused", "lock is not held")
+        self._check_owner()
+        if self._state != "acquired":
+            raise LockRefused("refused", "lock is not in acquired state")
         self._write("inflight")
 
     def release(self, outcome: str) -> None:
-        """Release the lock. ``completed`` and ``not-sent`` leave it free; ``unknown`` keeps an ambiguous record."""
+        """Release resources; preserve changed records, otherwise record the supplied outcome."""
         if outcome not in ("completed", "not-sent", "unknown"):
             raise ValueError(f"unknown outcome {outcome!r}")
         if self._fd is None:
             return
-        fd, self._fd = self._fd, None
+        fd = self._fd
         try:
+            try:
+                self._check_owner()
+            except Exception:
+                return
             _write_record(fd, _base_record("unknown" if outcome == "unknown" else "released", self._nonce or "", self.resource))
         finally:
+            self._fd = None
+            self._nonce = None
+            self._state = None
+            self._owner_record = None
             try:
                 _unlock(fd)
             finally:
