@@ -480,7 +480,7 @@ def _autostart_block() -> str:
     return match.group(1)
 
 
-def _run_autostart(tmp: Path, lan_peer: str, env: dict[str, str], with_caddy: bool = True):
+def _run_autostart(tmp: Path, lan_peer: str, env: dict[str, str], with_caddy: bool = True) -> tuple[subprocess.CompletedProcess, Path]:
     """Run the autostart region with the launcher mode *lan_peer* and return the CompletedProcess."""
     bindir, log = _fake_caddy(tmp)
     path = f"{bindir}:/usr/bin:/bin" if with_caddy else "/usr/bin:/bin"

@@ -16,14 +16,21 @@ LOOP = ".".join(["127", "0", "0", "1"])  # addresses are built at runtime: track
 PRIV = ".".join(["192", "168", "1", "20"])
 
 
-def test_env_loading_takes_only_allowlisted_keys_and_never_overrides(tmp_path):
-    """Only the TLS and token keys are read; an already-set variable is kept; other keys are ignored."""
-    env_file = tmp_path / ".env.local"
-    env_file.write_text(
-        'PEER_CA_FILE="/x/ca.pem"\nexport PEER_PORTAL_TLS_ENABLED=1\nOPENAI_API_KEY=sk-secret\nPEER_CA_SHA256=aa\n', encoding="utf-8"
-    )
-    loaded = lps.load_allowed_env(env_file, {"PEER_CA_SHA256": "keep"})
-    assert loaded == {"PEER_CA_FILE": "/x/ca.pem", "PEER_PORTAL_TLS_ENABLED": "1"}
+def test_child_env_passes_only_the_allowlist_and_basic_process_settings():
+    """The child process gets the peer-TLS and token settings plus basics; every other variable is dropped."""
+    environ = {
+        "PEER_CA_FILE": "/x/ca.pem", "PEER_PORTAL_TLS_ENABLED": "1", "ORAMA_CONTROL_PLANE_TOKEN_PEER": "t",
+        "PATH": "/usr/bin", "HOME": "/h", "OPENAI_API_KEY": "sk-secret", "AWS_SECRET_ACCESS_KEY": "x", "GITHUB_TOKEN": "y",
+    }
+    child = lps.child_env(environ)
+    assert child == {"PEER_CA_FILE": "/x/ca.pem", "PEER_PORTAL_TLS_ENABLED": "1", "ORAMA_CONTROL_PLANE_TOKEN_PEER": "t",
+                     "PATH": "/usr/bin", "HOME": "/h"}
+
+
+def test_helper_never_opens_an_env_file():
+    """The helper reads settings only from its environment: no file named like an env file is opened by its source."""
+    source = (SCRIPTS / "lan_peer_send.py").read_text(encoding="utf-8")
+    assert "read_text" not in source and "open(" not in source and "--env-file" not in source
 
 
 def test_mask_hides_addresses_and_token_like_strings():
@@ -48,8 +55,7 @@ def test_failed_send_exits_nonzero_masks_output_and_names_the_queue_record(tmp_p
     task = tmp_path / "t.md"
     task.write_text("# t\n", encoding="utf-8")
     result = subprocess.run(
-        [sys.executable, str(SCRIPTS / "lan_peer_send.py"), "--file", str(task), "--peer-ip", LOOP, "--portal-port", "1",
-         "--env-file", str(tmp_path / "none.env"), "--timeout", "2"],
+        [sys.executable, str(SCRIPTS / "lan_peer_send.py"), "--file", str(task), "--peer-ip", LOOP, "--portal-port", "1", "--timeout", "2"],
         env={"PATH": "/usr/bin:/bin", "HOME": str(home)}, text=True, capture_output=True, check=False, cwd=ROOT,
     )
     assert result.returncode == 2, (result.stdout, result.stderr)

@@ -337,9 +337,10 @@ Command card: [`../commands/lan-peer-self-talk/SKILL.md`](../commands/lan-peer-s
 ## Sending one file to the peer (canonical helper)
 
 Use `scripts/lan_peer_send.py --file <path> [--assignee win] [--topic <topic>]`. It wraps `lan_peer_assign.py drop --peer`,
-loads only the peer-TLS and token settings from the env file (never printed, never overriding what is already set), masks
-addresses and token-like strings, and reports delivery only when the drop's own JSON shows `ok`, a `received_at` and a byte
-count equal to the file size. Exit 0 means delivered with that evidence; exit 2 means not delivered.
+reads the peer-TLS and token settings only from its own environment (it never opens an env or credential file, and passes
+the drop process just those settings plus basic process variables), masks addresses and token-like strings, and reports delivery only when the drop's own JSON shows `ok`, a `received_at` and a byte
+count equal to the file size. Exit 0 means delivered with that evidence; exit 2 means not delivered. Export the settings
+first, in a subshell, from the operator's env file (set -a, source it, set +a); the helper then forwards only its allowlist.
 
 - A bare `drop --peer` now defaults to the pinned-TLS port (`PEER_PORTAL_TLS_PORT`, default 8443) when peer TLS is enabled
   and a CA or pins are configured. Before that, it defaulted to the plain portal port and timed out when only the HTTPS front

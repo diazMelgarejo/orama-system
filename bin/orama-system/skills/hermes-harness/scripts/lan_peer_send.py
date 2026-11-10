@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """lan_peer_send.py -- send ONE file to the LAN peer and report delivery evidence (the supported send helper).
 
-Wraps ``lan_peer_assign.py drop --peer``. It adds what a bare drop lacks: it loads only the peer-TLS and token
-settings from the env file (never printing them, never overriding what is already set), masks addresses and
-token-like strings in its output, and treats the drop's own JSON as the only evidence of delivery (``ok``,
-``received_at`` and a byte count equal to the file size). A failed send leaves a queued outbox record; this tool
+Wraps ``lan_peer_assign.py drop --peer``. It adds what a bare drop lacks: it reads the peer-TLS and token settings only
+from its own environment (it never opens an env or credential file), passes the child process just that allowlist
+plus basic process settings, masks addresses and token-like strings in its output, and treats the drop's own JSON as
+the only evidence of delivery (``ok``, ``received_at`` and a byte count equal to the file size). A failed send leaves a queued outbox record; this tool
 never resolves or flushes it: reconcile that record explicitly with ``lan_peer_assign.py outbox-resolve``.
 
 Exit codes: 0 delivered with matching evidence, 2 not delivered. Stdlib only.
@@ -33,18 +33,12 @@ def mask(text: str) -> str:
     return _TOKEN.sub("<tok>", _IP.sub("<ip>", text or ""))
 
 
-def load_allowed_env(path: Path, current: dict) -> dict:
-    """Return the allowlisted KEY=VALUE pairs from *path* that are not already set in *current*."""
-    found: dict = {}
-    try:
-        lines = path.read_text(encoding="utf-8").splitlines()
-    except OSError:
-        return found
-    for line in lines:
-        match = re.match(r"\s*(?:export\s+)?([A-Z0-9_]+)=(.*)$", line)
-        if match and match.group(1) in ALLOWED_ENV and not current.get(match.group(1)):
-            found[match.group(1)] = match.group(2).strip().strip('"').strip("'")
-    return found
+BASIC_ENV = ("PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "PYTHONUTF8", "PORTAL_PORT", "LAN_PEER_HTTP_TIMEOUT")
+
+
+def child_env(environ: dict) -> dict:
+    """Return the environment for the drop process: the peer-TLS and token allowlist plus basic process settings only."""
+    return {k: v for k, v in environ.items() if v and (k in ALLOWED_ENV or k in BASIC_ENV)}
 
 
 def verdict(payload: dict, expected_bytes: int) -> dict:
@@ -68,13 +62,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--peer-ip", default="")
     ap.add_argument("--portal-port", type=int, default=0, help="default: lan_peer_assign picks the TLS port when configured")
     ap.add_argument("--timeout", type=int, default=15)
-    ap.add_argument("--env-file", default=os.environ.get("ORAMA_ENV_FILE", str(Path(__file__).resolve().parents[4] / ".env.local")))
     args = ap.parse_args(argv)
     src = Path(args.file)
     if not src.is_file():
         print(json.dumps({"delivered": False, "error": "file not found"}))
         return 2
-    env = {**os.environ, **load_allowed_env(Path(args.env_file), os.environ)}
+    env = child_env(dict(os.environ))
     cmd = [sys.executable, str(_ASSIGN), "drop", "--peer", "--file", str(src), "--assignee", args.assignee, "--timeout", str(args.timeout)]
     if args.topic:
         cmd += ["--topic", args.topic]
