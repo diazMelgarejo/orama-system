@@ -26,6 +26,7 @@ for p in (str(_SCRIPTS_DIR), str(_HERE)):
 import autoresearcher_lock as arl  # noqa: E402
 import cline_autoresearcher as car  # noqa: E402
 from _cline_fakes import FakeProc  # noqa: E402
+from _cline_fakes import isolated_cline_workdir  # noqa: E402,F401  (autouse fixture)
 
 LOOPBACK = str(ipaddress.IPv4Address(0x7F000001))  # built, not written, so the hygiene gate sees no literal
 DOC_NET = "203.0.113.7"

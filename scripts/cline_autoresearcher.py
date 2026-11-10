@@ -327,6 +327,21 @@ def lock_is_held(lock: Path, now: Optional[float] = None) -> bool:
     return age < LOCK_MAX_AGE_SECONDS and _pid_alive(pid)
 
 
+def _backend_lock_busy(path: Path) -> Optional[str]:
+    """Return a reason when the backend lock at *path* is not free, or None when it is free.
+
+    Fail closed: if the lock check itself raises (another account owns the file, a sharing violation) the backend is
+    reported busy, so a broken check can never read as idle.
+    """
+    try:
+        own = _arl.inspect(path)
+    except Exception as exc:
+        return f"backend lock check failed (treated as busy): {type(exc).__name__}"
+    if own.state != _arl.FREE:
+        return f"backend lock {own.state}: {own.reason}"
+    return None
+
+
 def local_backend_idle(plat: Optional[str] = None) -> Dict[str, Any]:
     """Returns {idle, reachable, reason} for the platform's local coder backend."""
     plat = plat or detect_platform()
@@ -336,9 +351,9 @@ def local_backend_idle(plat: Optional[str] = None) -> Dict[str, Any]:
             return {"idle": False, "reachable": False, "reason": "LM Studio Win not reachable"}
         if lock_is_held(WIN_PULSE_LOCK):
             return {"idle": False, "reachable": True, "reason": "GPU lock held (win_pulse.lock)"}
-        own = _arl.inspect(BACKEND_LOCK_WIN)
-        if own.state != _arl.FREE:
-            return {"idle": False, "reachable": True, "reason": f"backend lock {own.state}: {own.reason}"}
+        busy = _backend_lock_busy(BACKEND_LOCK_WIN)
+        if busy:
+            return {"idle": False, "reachable": True, "reason": busy}
         return {"idle": True, "reachable": True, "reason": "LM Studio Win idle"}
 
     reachable = _probe_http_ok(f"{OLLAMA_MAC_ENDPOINT}/api/tags")
@@ -346,9 +361,9 @@ def local_backend_idle(plat: Optional[str] = None) -> Dict[str, Any]:
         return {"idle": False, "reachable": False, "reason": "ollama not reachable"}
     if lock_is_held(MAC_PULSE_LOCK):
         return {"idle": False, "reachable": True, "reason": "coder lock held (mac_pulse.lock)"}
-    own = _arl.inspect(BACKEND_LOCK_MAC)
-    if own.state != _arl.FREE:
-        return {"idle": False, "reachable": True, "reason": f"backend lock {own.state}: {own.reason}"}
+    busy = _backend_lock_busy(BACKEND_LOCK_MAC)
+    if busy:
+        return {"idle": False, "reachable": True, "reason": busy}
     return {"idle": True, "reachable": True, "reason": "ollama idle"}
 
 
@@ -489,6 +504,14 @@ def dispatch_cline(task: str, plat: Optional[str] = None) -> Dict[str, Any]:
     return {"ok": False, "output": output, "elapsed": elapsed, "outcome": outcome}
 
 
+def _release_quietly(lock: Any, outcome: str) -> None:
+    """Release *lock* with *outcome*; a failing release is swallowed (the record then stays stale, which fails closed)."""
+    try:
+        lock.release(outcome)
+    except Exception:
+        pass
+
+
 def _effect_boundary_ok(plat: str) -> Tuple[bool, str]:
     """Re-read the gateway and Cline inputs right before the send (never reuse the earlier decision)."""
     gw = gateway_status(plat)
@@ -524,13 +547,20 @@ def dispatch_autoresearcher(plat: str, task: str) -> Dict[str, Any]:
     except _arl.LockRefused as exc:
         return {"ok": False, "fallback_active": True, "lock_state": exc.state,
                 "output": f"backend lock {exc.state}: {exc.reason}"}
+    except Exception as exc:  # the lock layer failed (permissions, sharing violation): refuse, never send
+        return {"ok": False, "fallback_active": True, "lock_state": "refused",
+                "output": f"backend lock could not be taken: {type(exc).__name__}: {exc}"}
 
     try:
         lock.recheck(lambda: _effect_boundary_ok(plat))
     except _arl.LockRefused as exc:
-        lock.release("not-sent")
+        _release_quietly(lock, "not-sent")
         return {"ok": False, "fallback_active": True, "lock_state": exc.state,
                 "output": f"effect-boundary recheck refused the send: {exc.reason}"}
+    except Exception as exc:  # a probe raised: nothing was sent, so free the lock instead of leaving it held
+        _release_quietly(lock, "not-sent")
+        return {"ok": False, "fallback_active": True, "outcome": "not-sent", "lock_state": "refused",
+                "output": f"effect-boundary recheck failed; nothing was sent: {type(exc).__name__}: {exc}"}
 
     try:
         lock.mark_inflight()

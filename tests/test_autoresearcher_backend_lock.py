@@ -24,6 +24,7 @@ if str(_SCRIPTS_DIR) not in sys.path:
 import autoresearcher_lock as arl  # noqa: E402
 import cline_autoresearcher as car  # noqa: E402
 from _cline_fakes import FakeProc as _FakeProc  # noqa: E402
+from _cline_fakes import isolated_cline_workdir  # noqa: E402,F401  (autouse fixture)
 
 _HOLDER = """
 import sys, time
