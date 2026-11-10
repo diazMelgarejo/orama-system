@@ -162,6 +162,21 @@ def _peer_trust_configured() -> bool:
     return any((os.environ.get(var) or "").strip() for var in (peer_tls.PEER_CA_ENV, peer_tls.PEER_PINS_ENV))
 
 
+def _default_portal_port() -> int:
+    """Return the default peer portal port: the pinned-TLS port when peer TLS is enabled and a CA or pins are
+    configured (the rule start.sh uses for its probe and flush), else PORTAL_PORT, else 8002.
+
+    A bare ``drop --peer`` used to ignore the TLS configuration and queue to the plain portal port, which times
+    out when only the HTTPS front end is reachable. An explicit ``--portal-port`` still wins.
+    """
+    if _peer_portal_tls_enabled() and _peer_trust_configured():
+        raw = (os.environ.get("PEER_PORTAL_TLS_PORT") or "8443").strip()
+        if not raw.isdigit() or not 1 <= int(raw) <= 65535:
+            raise SystemExit("PEER_PORTAL_TLS_PORT must be a TCP port between 1 and 65535")
+        return int(raw)
+    return int(os.environ.get("PORTAL_PORT", "8002"))
+
+
 def _resolve_live_target(
     stored_ip: str,
     stored_port: int,
@@ -1119,7 +1134,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     peer_p.add_argument("--peer-ip", help="Override peer IP")
     peer_p.add_argument(
-        "--portal-port", type=int, default=int(os.environ.get("PORTAL_PORT", "8002"))
+        "--portal-port", type=int, default=_default_portal_port(),
+        help="Peer portal port (default: the pinned-TLS port when peer TLS is configured, else PORTAL_PORT or 8002)"
     )
     peer_p.add_argument(
         "--timeout",
