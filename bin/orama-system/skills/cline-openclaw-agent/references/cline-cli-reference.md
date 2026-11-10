@@ -5,6 +5,10 @@
 > tool auto-approval ON, so review or unattended runs should pass `--plan --auto-approve false` unless the operator
 > authorises act mode. An npm install on Windows ships `cline.cmd`: never pass a prompt through a cmd shim; launch node
 > with the package entry script. The text below is the 3.0.34 record and is kept as history.
+>
+> **Live working code:** `scripts/cline_autoresearcher.py` (`_cline_argv`, `_cline_launcher`, `dispatch_cline`,
+> `dispatch_autoresearcher`) and `scripts/autoresearcher_lock.py` (`BackendLock`); the Windows watcher autostart is
+> the AutoResearcher block in `platform/windows/start.ps1`.
 
 Exhaustive reference for every command and flag of the `cline` CLI, verified
 against `cline --help` on 2026-06-30.
