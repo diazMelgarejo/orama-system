@@ -113,6 +113,10 @@ def _find_cline() -> Optional[str]:
         candidates.append(Path(local_appdata) / "Programs" / "cline" / "cline.exe")
         candidates.append(Path(local_appdata) / "cline" / "bin" / "cline.exe")
     home = Path.home()
+    # LM Studio bin folder: where a Windows host reported a Cline shim off PATH (reported, not verified on every host).
+    candidates.append(home / ".lmstudio" / "bin" / "cline.exe")
+    candidates.append(home / ".lmstudio" / "bin" / "cline.cmd")
+    candidates.append(home / ".lmstudio" / "bin" / "cline.ps1")
     candidates.append(home / ".local" / "bin" / "cline")
     candidates.append(home / "bin" / "cline")
     for candidate in candidates:

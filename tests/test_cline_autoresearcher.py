@@ -60,6 +60,18 @@ class TestClineCLI:
                 with patch("pathlib.Path.exists", return_value=False):
                     assert _find_cline() is None
 
+    def test_find_cline_finds_lmstudio_bin_shim_when_not_on_path(self, tmp_path, monkeypatch):
+        """A Cline shim only in the LM Studio bin folder is found; discriminates: fails without the candidate lines."""
+        shim = tmp_path / ".lmstudio" / "bin" / "cline.ps1"
+        shim.parent.mkdir(parents=True)
+        shim.write_text("")
+        monkeypatch.delenv("CLINE_BIN", raising=False)
+        monkeypatch.delenv("LOCALAPPDATA", raising=False)
+        with patch("shutil.which", return_value=None), \
+                patch("cline_autoresearcher._is_windows", return_value=True), \
+                patch("pathlib.Path.home", return_value=tmp_path):
+            assert _find_cline() == str(shim)
+
     def test_cline_available_returns_false_if_not_found(self):
         """A missing cline binary reports unavailable."""
         with patch("cline_autoresearcher._find_cline", return_value=None):
