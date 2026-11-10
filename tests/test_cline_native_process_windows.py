@@ -153,6 +153,7 @@ def test_pathext_pick_prefers_a_launchable_shim(tmp_path: Path, monkeypatch: pyt
     node = shutil.which("node")
     real_which = shutil.which
     monkeypatch.setenv("PATH", str(tmp_path))
+    monkeypatch.setenv("PATHEXT", ".PS1;.CMD;.EXE")
     monkeypatch.setattr(car.shutil, "which", lambda name: node if name == "node" else real_which(name))
     monkeypatch.delenv("CLINE_BIN", raising=False)
     picked = car._find_cline()
