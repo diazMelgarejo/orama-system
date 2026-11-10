@@ -1,5 +1,11 @@
 # Cline CLI Reference (v3.0.34)
 
+> **Update 2026-11-10 (verified on CLI 3.0.74 by the Windows and Mac hosts; Cline benchmark finding).** The CLI is now
+> 3.0.74. There is no `task` subcommand: the prompt is a bare positional argument. Cline's own default is act mode with
+> tool auto-approval ON, so review or unattended runs should pass `--plan --auto-approve false` unless the operator
+> authorises act mode. An npm install on Windows ships `cline.cmd`: never pass a prompt through a cmd shim; launch node
+> with the package entry script. The text below is the 3.0.34 record and is kept as history.
+
 Exhaustive reference for every command and flag of the `cline` CLI, verified
 against `cline --help` on 2026-06-30.
 
