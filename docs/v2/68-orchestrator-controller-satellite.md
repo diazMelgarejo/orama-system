@@ -3,6 +3,17 @@
 > **Status:** v2.1 design; **definitive home is the `oramasys/oramasys` internal
 > satellite module** (`orama.orchestrator_controller`); no runtime implementation
 > exists yet
+> **Partial runtime implementation (recorded 2026-11-11):** a partial
+> runtime implementation of the claim store, request envelope, refusal
+> vocabulary, Telos and Phylax ports with deny-all defaults, the
+> transactional outbox and the opt-in expiry worker exists in the
+> `oramasys` repository under `src/orama/orchestrator_controller/`. It is
+> not reviewed, not deployed, not activated, and no serving path composes
+> it. The prior "no runtime implementation exists yet" wording above is
+> preserved as history; this note is added and nothing is rewritten. See
+> the [Queue Fencing and Recovery work
+> package](queue-fencing-and-recovery/README.md) and its decision record
+> for the accepted Q-68 amendment.
 > **Spin-off:** a standalone `oramasys/orchestrator-controller` repository is a
 > later and unlikely option, reachable only through the admission gate in §9
 > **Ownership-table correction (2026-11-06):** any older row below naming the

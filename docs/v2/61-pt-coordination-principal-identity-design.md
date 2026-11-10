@@ -161,3 +161,15 @@ for the clean v2 protocol and migration boundary.
   agents, they can read `principals.json`'s token store directly. This
   design raises the bar against misconfiguration and cross-agent
   confusion, not against a fully compromised host.
+
+## Amendment 2026-11-11 — Q-D2 decision recorded (additive)
+
+Additive amendment from the D-0 decision record of the Queue Fencing and
+Recovery consolidated plan
+([queue-fencing-and-recovery/decision-record.md](queue-fencing-and-recovery/decision-record.md)).
+The operator accepted Q-D2 for the PT queue contract: shim names are
+retained; the changed availability and handle requirements for mutations
+are observed first, then enforced; and there is no fallback writer after
+cutover. This section only records that decision — the design status above
+is unchanged, nothing is implemented by this note, and the migration ladder
+above is not modified.
