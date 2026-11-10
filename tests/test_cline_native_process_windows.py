@@ -118,3 +118,39 @@ def test_timed_out_child_is_killed_and_gone(shim, monkeypatch):
     while _alive(pid) and time.time() < deadline:
         time.sleep(0.2)
     assert not _alive(pid), "the timed-out node child is still running"
+
+
+@pytest.mark.parametrize("kind", ["cmd", "bat", "ps1"])
+def test_shim_kinds_in_a_path_with_spaces_and_non_ascii(tmp_path, monkeypatch, kind):
+    """cmd, bat and ps1 shims in a folder with spaces, parentheses and non-ASCII letters all launch node plus entry."""
+    root = tmp_path / "Üser Tëst (x86) dir"
+    entry = root / "node_modules" / "cline" / "bin" / "cline"
+    entry.parent.mkdir(parents=True)
+    entry.write_text(ENTRY_JS, encoding="utf-8")
+    body = ('@echo off\r\nnode "%~dp0node_modules\cline\bin\cline" %*\r\n' if kind != "ps1"
+            else 'node "$PSScriptRoot\node_modules\cline\bin\cline" $args\r\n')
+    shim = root / f"cline.{kind}"
+    shim.write_text(body, encoding="ascii")
+    out = tmp_path / "out.json"
+    monkeypatch.setenv("CLINE_BIN", str(shim))
+    monkeypatch.setenv("CLINE_WORKDIR", str(tmp_path / "work"))
+    monkeypatch.setenv("FAKE_CLINE_OUT", str(out))
+    monkeypatch.setenv("FAKE_CLINE_MODE", "ok")
+    prompt = 'check "quoted" & piped | caret ^ percent %PATH% (paren) done'
+    res = car.dispatch_cline(prompt)
+    assert res["outcome"] == "completed", res
+    assert prompt in json.loads(out.read_text(encoding="utf-8"))["argv"]
+
+
+def test_pathext_pick_prefers_a_launchable_shim(tmp_path, monkeypatch):
+    """With cline.cmd and an empty cline.ps1 both on PATH the controller picks cline.cmd and can launch it."""
+    entry = tmp_path / "node_modules" / "cline" / "bin" / "cline"
+    entry.parent.mkdir(parents=True)
+    entry.write_text(ENTRY_JS, encoding="utf-8")
+    (tmp_path / "cline.cmd").write_text("@echo off\r\n", encoding="ascii")
+    (tmp_path / "cline.ps1").write_text("", encoding="ascii")
+    monkeypatch.setenv("PATH", str(tmp_path) + os.pathsep + os.environ["PATH"])
+    monkeypatch.delenv("CLINE_BIN", raising=False)
+    picked = car._find_cline()
+    assert picked is not None and Path(picked).name == "cline.cmd"
+    assert car._cline_launcher(picked) is not None
