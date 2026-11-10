@@ -41,12 +41,12 @@ def _dispatch(proc_or_exc, **env_unused):
 
 
 class TestNotSentNeedsStrongEvidence:
-    """Only a short, stderr-only, immediate, anchored usage error counts as not-sent."""
+    """No output shape can prove that a launched process sent nothing."""
 
     @pytest.mark.parametrize("err", ["Unknown command or unquoted prompt: task x", "Error: Unknown or disabled provider 'clinepass'"])
-    def test_a_lone_fast_stderr_usage_error_is_not_sent(self, err):
-        """The accepted shape: empty stdout, one stderr line that starts with the known text, exit nonzero, fast."""
-        assert _dispatch(FakeProc(1, "", err + "\n"))["outcome"] == "not-sent"
+    def test_a_lone_fast_stderr_usage_error_is_unknown(self, err: str) -> None:
+        """Even short stderr from a fast process cannot establish that no request was sent."""
+        assert _dispatch(FakeProc(1, "", err + "\n"))["outcome"] == "unknown"
 
     def test_the_marker_in_stdout_is_unknown(self):
         """Model text goes to stdout: a marker quoted there (after a send) must not clear the in-flight record."""
@@ -137,13 +137,15 @@ class TestLoopbackOnlyRewrite:
         with patch.object(car.socket, "gethostbyname", return_value=LOOPBACK):
             assert car._probe_url("http://localhost:1234/v1/models") == f"http://{LOOPBACK}:1234/v1/models"
 
-    def test_a_non_loopback_answer_is_refused_and_the_url_is_left_alone(self):
-        """A resolver that points localhost elsewhere (hosts-file or DNS tampering) is not followed."""
-        with patch.object(car.socket, "gethostbyname", return_value=DOC_NET):
-            assert car._probe_url("http://localhost:1234/v1/models") == "http://localhost:1234/v1/models"
+    def test_a_non_loopback_answer_is_never_consulted(self) -> None:
+        """Use literal loopback rather than falling back to hostile hostname resolution."""
+        with patch.object(car.socket, "gethostbyname", return_value=DOC_NET) as resolve:
+            assert car._probe_url("http://localhost:1234/v1/models") == f"http://{LOOPBACK}:1234/v1/models"
+        resolve.assert_not_called()
 
-    def test_userinfo_and_https_urls_are_left_alone(self):
-        """Userinfo would be dropped and an https hostname check would change, so such URLs are never rewritten."""
+    def test_userinfo_refuses_and_https_keeps_hostname(self) -> None:
+        """Credentials are unsupported; HTTPS retains its certificate identity."""
         with patch.object(car.socket, "gethostbyname", return_value=LOOPBACK):
-            assert car._probe_url("http://user:pw@localhost:1234/x") == "http://user:pw@localhost:1234/x"
+            with pytest.raises(ValueError, match="userinfo"):
+                car._probe_url("http://user:pw@localhost:1234/x")
             assert car._probe_url("https://localhost:1234/x") == "https://localhost:1234/x"

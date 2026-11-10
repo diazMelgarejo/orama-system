@@ -25,7 +25,6 @@ import json
 import os
 import platform as _platform_mod
 import ipaddress
-import re
 import shutil
 import socket
 import subprocess
@@ -246,30 +245,29 @@ def gateway_status(plat: Optional[str] = None) -> Dict[str, Any]:
 # ── Local backend idle probe (per platform) ───────────────────────────────────
 
 def _probe_url(url: str) -> str:
-    """Rewrite a ``localhost`` URL to the IPv4 address localhost resolves to.
+    """Use literal IPv4 loopback for plain-HTTP localhost without DNS lookup.
 
-    ``localhost`` tries IPv6 first on Windows and costs about 2 s (2106 ms against 8 ms for the IPv4 loopback address,
-    measured 2026-11-10), which made a 3 s probe flaky. Other hosts, https or userinfo URLs, a failed resolution and a
-    non-loopback answer are left unchanged. The lookup itself is not time-bounded (the hosts file answers locally).
+    Preserve the Windows IPv6-delay repair without trusting resolver output.
+    HTTPS retains its certificate hostname; explicit peer hosts stay unchanged.
+    Userinfo and malformed configurations refuse instead of changing identity.
     """
     from urllib.parse import urlsplit, urlunsplit
 
     parts = urlsplit(url)
-    # Only plain-http URLs without userinfo are rewritten: userinfo would be dropped and an https hostname check changes.
-    if parts.hostname != "localhost" or parts.scheme != "http" or parts.username is not None or parts.password is not None:
+    if parts.scheme not in ("http", "https") or not parts.hostname:
+        raise ValueError("probe requires an HTTP or HTTPS host")
+    if parts.username is not None or parts.password is not None:
+        raise ValueError("probe URL must not contain userinfo")
+    port = parts.port
+    if parts.scheme != "http" or parts.hostname != "localhost":
         return url
-    try:
-        ip = socket.gethostbyname("localhost")
-        if not ipaddress.ip_address(ip).is_loopback:  # a tampered resolver must not move the probe off this machine
-            return url
-    except (OSError, ValueError):
-        return url
-    netloc = ip if parts.port is None else f"{ip}:{parts.port}"
+    loopback = str(ipaddress.IPv4Address(0x7F000001))
+    netloc = loopback if port is None else f"{loopback}:{port}"
     return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
 
 
 def _probe_http_ok(url: str, timeout: float = 3.0) -> bool:
-    """True when a GET on *url* returns a 2xx status within the timeout."""
+    """Return whether GET succeeds with a per-I/O, not whole-call, timeout."""
     try:
         import urllib.request
         req = urllib.request.Request(_probe_url(url), method="GET")
@@ -395,19 +393,6 @@ def should_fallback_to_cline(plat: Optional[str] = None) -> Dict[str, Any]:
 
 # ── Dispatch ──────────────────────────────────────────────────────────────────
 
-# Cline output that proves it refused the command line before any request was made (verified on CLI 3.0.74).
-_CLINE_USAGE_ERROR = re.compile(r"^(?:Error:\s*)?(?:Unknown command or unquoted prompt|Unknown or disabled provider)\b.{0,200}$")
-_PRE_SEND_MAX_SECONDS = 10.0
-
-
-def _is_pre_send_usage_error(stdout: str, stderr: str, elapsed: float) -> bool:
-    """Strong evidence, not proof, that Cline refused the command line before any request: nothing on stdout (model
-    text goes there), exactly one short stderr line that STARTS with a known usage error, and an immediate exit.
-    Anything else (text quoted in stdout, extra stderr lines, a slow exit) stays unknown."""
-    err = stderr.strip()
-    return (not stdout.strip()) and "\n" not in err and elapsed < _PRE_SEND_MAX_SECONDS and bool(_CLINE_USAGE_ERROR.match(err))
-
-
 def _reap(proc: Any) -> None:
     """Best-effort kill and reap of a child so a failed dispatch leaves no orphan process."""
     try:
@@ -454,10 +439,9 @@ def _cline_workdir() -> Path:
 def dispatch_cline(task: str, plat: Optional[str] = None) -> Dict[str, Any]:
     """Run the `cline` CLI once (ClinePass credits tier) and classify the outcome.
 
-    ``outcome`` is ``completed``, ``not-sent`` (CLI missing, the process could not be started, or strong evidence of
-    an immediate command-line usage error, see _is_pre_send_usage_error) or ``unknown`` (a timeout, an I/O error
-    after the process started, or any other nonzero exit). An unknown outcome must be held for reconciliation and never
-    retried automatically.
+    ``outcome`` is ``completed``, ``not-sent`` when the CLI is missing or the process could not be started, or
+    ``unknown`` for a timeout, post-start I/O error, or any nonzero exit. Output text cannot prove no request was sent.
+    An unknown outcome must be held for reconciliation and never retried automatically.
     """
     cline = cline_available()
     if not cline.get("available"):
@@ -485,8 +469,7 @@ def dispatch_cline(task: str, plat: Optional[str] = None) -> Dict[str, Any]:
     output = stdout + stderr
     if proc.returncode == 0:
         return {"ok": True, "output": output, "elapsed": elapsed, "outcome": "completed"}
-    outcome = "not-sent" if _is_pre_send_usage_error(stdout, stderr, elapsed) else "unknown"
-    return {"ok": False, "output": output, "elapsed": elapsed, "outcome": outcome}
+    return {"ok": False, "output": output, "elapsed": elapsed, "outcome": "unknown"}
 
 
 def _effect_boundary_ok(plat: str) -> Tuple[bool, str]:

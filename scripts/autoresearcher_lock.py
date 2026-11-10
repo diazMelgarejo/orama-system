@@ -308,28 +308,24 @@ class BackendLock:
         """Take the OS lock and write an ``acquired`` record, or raise LockRefused naming the state."""
         self.path.parent.mkdir(parents=True, exist_ok=True)
         fd = _open_rw(self.path, create=True)
+        locked = False
         try:
             locked = _try_lock(fd)
-        except BaseException:  # for example the distinct permission refusal: never leak the descriptor we just opened
-            os.close(fd)
-            raise
-        if not locked:
-            os.close(fd)
-            raise LockRefused(HELD, "lock is held by another owner")
-        kind, record = _read_record(self.path)
-        state, reason = _classify(kind, record)
-        if state != FREE:
-            _unlock(fd)
-            os.close(fd)
-            raise LockRefused(state, reason)
-        self._fd = fd
-        self._nonce = uuid.uuid4().hex
-        try:
+            if not locked:
+                raise LockRefused(HELD, "lock is held by another owner")
+            kind, record = _read_record(self.path)
+            state, reason = _classify(kind, record)
+            if state != FREE:
+                raise LockRefused(state, reason)
+            self._fd = fd
+            self._nonce = uuid.uuid4().hex
             self._write("acquired")
         except BaseException:
             self._fd = None
+            self._nonce = None
             try:
-                _unlock(fd)
+                if locked:
+                    _unlock(fd)
             finally:
                 os.close(fd)
             raise

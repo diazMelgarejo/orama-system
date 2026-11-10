@@ -2,7 +2,7 @@
 """Regression tests for the Mac review of the AR-WIN-1 backend-lock branch (2026-11-10).
 
 Covers the failed-acquire lock leak, exception paths in the dispatcher, the positional Cline command line,
-pre-request usage errors classified as not-sent, a configured Cline path, and an honest identity label.
+conservative outcome classification, a configured Cline path, and an honest identity label.
 """
 from __future__ import annotations
 
@@ -52,6 +52,40 @@ class TestLockLeaks:
         assert arl.inspect(lock_path).state != arl.HELD
         arl.BackendLock(lock_path).acquire().release("not-sent")
 
+    @pytest.mark.parametrize("stage", ["lock_error", "contended", "read_error", "classify_error", "write_error"])
+    def test_acquire_failure_closes_descriptor_once(self, lock_path: Path, stage: str) -> None:
+        """Failed acquisition closes once, unlocking only when an OS lock was acquired."""
+        lock = arl.BackendLock(lock_path)
+        real_close = os.close
+        closed = []
+
+        def close_once(fd: int) -> None:
+            """Record and close the descriptor."""
+            closed.append(fd)
+            real_close(fd)
+
+        with patch.object(arl.os, "close", side_effect=close_once), \
+             patch.object(arl, "_unlock", wraps=arl._unlock) as unlock, \
+             patch.object(arl, "_try_lock", wraps=arl._try_lock) as try_lock, \
+             patch.object(arl, "_read_record", wraps=arl._read_record) as read, \
+             patch.object(arl, "_classify", wraps=arl._classify) as classify, \
+             patch.object(lock, "_write", wraps=lock._write) as write:
+            if stage == "lock_error":
+                try_lock.side_effect = arl.LockRefused("refused", "permission denied")
+            elif stage == "contended":
+                try_lock.return_value = False
+            elif stage == "read_error":
+                read.side_effect = OSError("read failed")
+            elif stage == "classify_error":
+                classify.side_effect = ValueError("classification failed")
+            else:
+                write.side_effect = OSError("write failed")
+            with pytest.raises((arl.LockRefused, OSError, ValueError)):
+                lock.acquire()
+            assert len(closed) == 1
+            assert unlock.call_count == (0 if stage in ("lock_error", "contended") else 1)
+        assert lock._fd is None
+
     def test_mark_inflight_failure_is_not_sent_and_frees_the_lock(self, wired):
         """Nothing was sent if the in-flight marker cannot be written; the lock is freed."""
         with patch.object(car, "should_fallback_to_cline", return_value=_GW_DOWN), \
@@ -69,6 +103,32 @@ class TestLockLeaks:
              patch.object(car, "dispatch_cline", side_effect=RuntimeError("boom")):
             result = car.dispatch_autoresearcher("windows", "task")
         assert result["ok"] is False and result["outcome"] == "unknown"
+        assert arl.inspect(wired).state == arl.AMBIGUOUS
+
+    def test_fast_usage_error_after_effect_keeps_durable_ambiguous(
+        self, wired: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A child may have acted before emitting a short usage error and exiting."""
+        monkeypatch.setenv("CLINE_WORKDIR", str(tmp_path / "scratch"))
+        effects = []
+
+        class EffectProcess(FakeProc):
+            """Simulate an external effect before a fast error response."""
+
+            def communicate(self, timeout: float | None = None) -> tuple[str, str]:
+                """Record the effect and return the scripted response."""
+                effects.append("sent")
+                return super().communicate(timeout=timeout)
+
+        process = EffectProcess(1, "", "Unknown command or unquoted prompt\n")
+        with patch.object(car, "should_fallback_to_cline", return_value=_GW_DOWN), \
+             patch.object(car, "_effect_boundary_ok", return_value=(True, "ok")), \
+             patch.object(arl, "process_start_id", return_value="test-start"), \
+             patch.object(car, "cline_available", return_value={"available": True, "bin": "cline"}), \
+             patch.object(car.subprocess, "Popen", return_value=process) as popen:
+            result = car.dispatch_autoresearcher("windows", "two word prompt")
+        assert effects == ["sent"] and popen.call_count == 1
+        assert result["outcome"] == "unknown"
         assert arl.inspect(wired).state == arl.AMBIGUOUS
 
 
@@ -111,12 +171,12 @@ class TestClineCommandLine:
     @pytest.mark.parametrize(
         "text", ["Unknown command or unquoted prompt: task x", "Unknown or disabled provider 'clinepass'"]
     )
-    def test_a_usage_error_before_any_request_is_not_sent(self, text):
-        """A known pre-request usage error is not-sent, so one bad call does not wedge the lock."""
+    def test_usage_error_text_does_not_prove_not_sent(self, text: str) -> None:
+        """Usage-like text does not prove that the launched child sent nothing."""
         bad = FakeProc(1, "", text)
         with patch.object(car, "cline_available", return_value={"available": True, "bin": "cline"}), \
              patch.object(car.subprocess, "Popen", return_value=bad):
-            assert car.dispatch_cline("two word prompt")["outcome"] == "not-sent"
+            assert car.dispatch_cline("two word prompt")["outcome"] == "unknown"
 
     def test_any_other_nonzero_exit_stays_unknown(self):
         """A failure that is not a recognised pre-request error keeps the conservative unknown outcome."""
