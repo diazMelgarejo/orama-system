@@ -27,6 +27,27 @@ Limits: one host, one run each, a fake Cline (node script) and no network. The l
 real Cline
 3.0.74 install was exercised separately by the Cline session (plan-mode probe, one run, exit 0).
 
+## Real Cline CLI run and the L4 root cause (V)
+
+`tests/test_cline_real_cli_windows.py` is opt-in (`RUN_REAL_CLINE=1` plus `CLINE_MODEL`, spends a
+few credits).
+On the Windows host with Cline 3.0.74, one plan-mode call through `dispatch_cline` from a scratch
+directory
+completed in 5.7 s and echoed the requested marker, with the model pinned to the current ClinePass
+coding lane.
+
+The same call WITHOUT a pinned model failed in 4.7 s: a "hook dispatch failed" line, then "model
+not found".
+So the earlier benchmark's L4 failure was not repository-scope hooks (that guess is withdrawn):
+this run was in a
+scratch directory and reproduced it. The cause is that the global Cline configuration names a
+retired default
+model; the hook error is a misleading side effect. Fix on the operator side: set `CLINE_PROVIDER`
+and
+`CLINE_MODEL` for the controller and the watcher. A controller improvement (a clear "model not
+found, pin
+CLINE_MODEL" hint) belongs in the backend-lock pull request and is passed to its owner.
+
 ## Register status (from the Windows hardware canary handoff, H01 to H10)
 
 | ID | Item | Windows status | Why / what is left |
