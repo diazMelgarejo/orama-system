@@ -141,6 +141,21 @@ recorded separately in the PR publication receipt, not inferred from ancestry.
 Windows integration: review the actual published PR487 tip, preserving all
 existing source commits. Run the same nine files natively on Windows and
 report exact SHA/runtime/pass/skip counts; do not call Mac skips Windows proof.
+
+Reproduction set (Windows-side note, added in orama PR 488). The receipt above does not enumerate
+its nine files, so the Mac's exact set is unconfirmed. Windows reproduces with these explicit
+files and the helper module `tests/_cline_fakes.py`:
+
+```bash
+python -X utf8 -m pytest -q -p no:cacheprovider \
+  tests/test_autoresearcher_backend_lock.py tests/test_autoresearcher_backend_lock_review.py \
+  tests/test_autoresearcher_backend_lock_followups.py tests/test_autoresearcher_review2.py \
+  tests/test_autoresearcher_review3.py tests/test_autoresearcher_probe_loopback.py \
+  tests/test_autoresearcher_ownership_integrity.py tests/test_cline_autoresearcher.py
+```
+
+Windows result at Mac head 69cb2ea7: 130 passed, 1 skipped.
+Ask the Mac to name its ninth file.
 PT memory stack remains PR487 then PR488 then PR489 by the previously
 reported branch relationship; verify live heads and current mergeability
 before each operator-authorized merge. Orama PR488 is separate Windows watcher

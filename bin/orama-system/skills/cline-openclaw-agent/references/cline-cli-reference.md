@@ -163,16 +163,20 @@ sent; the upstream model id is `zai/glm-5.3-flash`. Billed against Cline Credits
 
 ## Non-Interactive Patterns
 
+On CLI 3.0.74 the prompt is a bare positional argument and a ONE-WORD prompt is rejected as a mistyped
+subcommand (the AutoResearcher controller pads it as "Task: <word>"; a prompt that starts with a hyphen is
+padded too). Use prompts of two or more words in every example below.
+
 ```bash
 # One-shot, JSON, auto-approve (agent-friendly)
-cline "task" --json --auto-approve true -c /repo --thinking medium \
+cline "review the lock module" --json --auto-approve true -c /repo --thinking medium \
   -P cline-pass -m cline-pass/glm-5.3-flash --timeout 600 --retries 3
 
 # Plan mode (no mutations)
 cline "propose a refactor" --plan --json -c /repo
 
 # Resume a session
-cline --id 1782825530243_ayapk "continue" --json
+cline --id 1782825530243_ayapk "continue with the next step" --json
 
 # Background hub session
 cline "long task" --zen -c /repo
