@@ -23,6 +23,7 @@ if str(_SCRIPTS_DIR) not in sys.path:
 
 import autoresearcher_lock as arl  # noqa: E402
 import cline_autoresearcher as car  # noqa: E402
+from _cline_fakes import FakeProc as _FakeProc  # noqa: E402
 
 _HOLDER = """
 import sys, time
@@ -345,8 +346,8 @@ class TestDispatchIntegration:
         with patch.object(car, "cline_available", return_value={"available": False, "reason": "missing"}):
             assert car.dispatch_cline("t")["outcome"] == "not-sent"
         with patch.object(car, "cline_available", return_value={"available": True, "bin": "cline"}), \
-             patch.object(car.subprocess, "run", side_effect=subprocess.TimeoutExpired("cline", 300)):
+             patch.object(car.subprocess, "Popen", return_value=_FakeProc(0, "", "", comm_exc=subprocess.TimeoutExpired("cline", 300))):
             assert car.dispatch_cline("t")["outcome"] == "unknown"
         with patch.object(car, "cline_available", return_value={"available": True, "bin": "cline"}), \
-             patch.object(car.subprocess, "run", side_effect=FileNotFoundError("cline")):
+             patch.object(car.subprocess, "Popen", side_effect=FileNotFoundError("cline")):
             assert car.dispatch_cline("t")["outcome"] == "not-sent"

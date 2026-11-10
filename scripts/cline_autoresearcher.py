@@ -24,6 +24,8 @@ import argparse
 import json
 import os
 import platform as _platform_mod
+import ipaddress
+import re
 import shutil
 import socket
 import subprocess
@@ -247,16 +249,20 @@ def _probe_url(url: str) -> str:
     """Rewrite a ``localhost`` URL to the IPv4 address localhost resolves to.
 
     ``localhost`` tries IPv6 first on Windows and costs about 2 s (2106 ms against 8 ms for the IPv4 loopback address,
-    measured 2026-11-10), which made a 3 s probe flaky. Other hosts, and a failed resolution, are left unchanged.
+    measured 2026-11-10), which made a 3 s probe flaky. Other hosts, https or userinfo URLs, a failed resolution and a
+    non-loopback answer are left unchanged. The lookup itself is not time-bounded (the hosts file answers locally).
     """
     from urllib.parse import urlsplit, urlunsplit
 
     parts = urlsplit(url)
-    if parts.hostname != "localhost":
+    # Only plain-http URLs without userinfo are rewritten: userinfo would be dropped and an https hostname check changes.
+    if parts.hostname != "localhost" or parts.scheme != "http" or parts.username is not None or parts.password is not None:
         return url
     try:
         ip = socket.gethostbyname("localhost")
-    except OSError:
+        if not ipaddress.ip_address(ip).is_loopback:  # a tampered resolver must not move the probe off this machine
+            return url
+    except (OSError, ValueError):
         return url
     netloc = ip if parts.port is None else f"{ip}:{parts.port}"
     return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
@@ -390,7 +396,25 @@ def should_fallback_to_cline(plat: Optional[str] = None) -> Dict[str, Any]:
 # ── Dispatch ──────────────────────────────────────────────────────────────────
 
 # Cline output that proves it refused the command line before any request was made (verified on CLI 3.0.74).
-_CLINE_PRE_REQUEST_ERRORS = ("Unknown command or unquoted prompt", "Unknown or disabled provider")
+_CLINE_USAGE_ERROR = re.compile(r"^(?:Error:\s*)?(?:Unknown command or unquoted prompt|Unknown or disabled provider)\b.{0,200}$")
+_PRE_SEND_MAX_SECONDS = 10.0
+
+
+def _is_pre_send_usage_error(stdout: str, stderr: str, elapsed: float) -> bool:
+    """Strong evidence, not proof, that Cline refused the command line before any request: nothing on stdout (model
+    text goes there), exactly one short stderr line that STARTS with a known usage error, and an immediate exit.
+    Anything else (text quoted in stdout, extra stderr lines, a slow exit) stays unknown."""
+    err = stderr.strip()
+    return (not stdout.strip()) and "\n" not in err and elapsed < _PRE_SEND_MAX_SECONDS and bool(_CLINE_USAGE_ERROR.match(err))
+
+
+def _reap(proc: Any) -> None:
+    """Best-effort kill and reap of a child so a failed dispatch leaves no orphan process."""
+    try:
+        proc.kill()
+        proc.communicate(timeout=10)
+    except Exception:
+        pass
 
 
 def _cline_argv(cline_bin: str, task: str) -> list:
@@ -404,7 +428,7 @@ def _cline_argv(cline_bin: str, task: str) -> list:
     and model come from Cline's own configuration unless CLINE_PROVIDER / CLINE_MODEL pin them (``-P`` / ``-m``).
     Cline's own default is act mode with tool auto-approval ON (verified in the 3.0.74 help text), so runs are plan
     mode with auto-approve off unless CLINE_ALLOW_ACT=1 is set by the operator.
-    Cline is not installed on the Windows host, so the Windows CLI version is unverified.
+    Installed on the Windows host as 3.0.74 on 2026-11-10; the same version the Mac peer verified.
     """
     prompt = task if len(task.split()) >= 2 else f"Task: {task}"
     argv = list(_cline_launcher(cline_bin) or [cline_bin])
@@ -430,31 +454,39 @@ def _cline_workdir() -> Path:
 def dispatch_cline(task: str, plat: Optional[str] = None) -> Dict[str, Any]:
     """Run the `cline` CLI once (ClinePass credits tier) and classify the outcome.
 
-    ``outcome`` is ``completed``, ``not-sent`` (the request provably never left this process: CLI missing, could
-    not be started, or it printed a known command-line usage error) or ``unknown`` (a timeout, or any other nonzero
-    exit after the CLI started). An unknown outcome must be held for reconciliation and never retried automatically.
+    ``outcome`` is ``completed``, ``not-sent`` (CLI missing, the process could not be started, or strong evidence of
+    an immediate command-line usage error, see _is_pre_send_usage_error) or ``unknown`` (a timeout, an I/O error
+    after the process started, or any other nonzero exit). An unknown outcome must be held for reconciliation and never
+    retried automatically.
     """
     cline = cline_available()
     if not cline.get("available"):
         return {"ok": False, "output": cline.get("reason", "cline unavailable"), "elapsed": 0, "outcome": "not-sent"}
     t0 = time.time()
     try:
-        proc = subprocess.run(
+        proc = subprocess.Popen(
             _cline_argv(cline["bin"], task),
-            capture_output=True, text=True, timeout=300, cwd=str(_cline_workdir()),
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd=str(_cline_workdir()),
         )
-        elapsed = time.time() - t0
-        output = (proc.stdout or "") + (proc.stderr or "")
-        if proc.returncode == 0:
-            return {"ok": True, "output": output, "elapsed": elapsed, "outcome": "completed"}
-        refused = any(marker in output for marker in _CLINE_PRE_REQUEST_ERRORS)
-        return {"ok": False, "output": output, "elapsed": elapsed, "outcome": "not-sent" if refused else "unknown"}
-    except subprocess.TimeoutExpired:
-        return {"ok": False, "output": "cline task timed out (5min)", "elapsed": time.time() - t0, "outcome": "unknown"}
-    except OSError as exc:  # the process could not be started: nothing was sent
+    except OSError as exc:  # Popen itself failed: the process never existed, so nothing was sent
         return {"ok": False, "output": str(exc), "elapsed": time.time() - t0, "outcome": "not-sent"}
-    except Exception as exc:
-        return {"ok": False, "output": str(exc), "elapsed": time.time() - t0, "outcome": "unknown"}
+    except Exception as exc:  # could not prepare the call (for example the scratch directory): nothing was sent
+        return {"ok": False, "output": str(exc), "elapsed": time.time() - t0, "outcome": "not-sent"}
+    try:
+        stdout, stderr = proc.communicate(timeout=300)
+    except subprocess.TimeoutExpired:
+        _reap(proc)
+        return {"ok": False, "output": "cline task timed out (5min)", "elapsed": time.time() - t0, "outcome": "unknown"}
+    except BaseException as exc:  # includes OSError after the process started: the request may have left
+        _reap(proc)
+        return {"ok": False, "output": f"{type(exc).__name__} after start: {exc}", "elapsed": time.time() - t0, "outcome": "unknown"}
+    elapsed = time.time() - t0
+    stdout, stderr = stdout or "", stderr or ""
+    output = stdout + stderr
+    if proc.returncode == 0:
+        return {"ok": True, "output": output, "elapsed": elapsed, "outcome": "completed"}
+    outcome = "not-sent" if _is_pre_send_usage_error(stdout, stderr, elapsed) else "unknown"
+    return {"ok": False, "output": output, "elapsed": elapsed, "outcome": outcome}
 
 
 def _effect_boundary_ok(plat: str) -> Tuple[bool, str]:

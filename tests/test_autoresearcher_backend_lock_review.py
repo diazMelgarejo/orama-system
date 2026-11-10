@@ -22,6 +22,7 @@ if str(_SCRIPTS_DIR) not in sys.path:
 
 import autoresearcher_lock as arl  # noqa: E402
 import cline_autoresearcher as car  # noqa: E402
+from _cline_fakes import FakeProc  # noqa: E402
 
 _GW_DOWN = {"should_fallback": True, "reason": "gw down"}
 
@@ -99,11 +100,10 @@ class TestClineCommandLine:
     def test_dispatch_cline_uses_the_positional_form_and_a_scratch_directory(self, tmp_path, monkeypatch):
         """The subprocess gets no ``task`` argument and does not run in the repository root."""
         monkeypatch.setenv("CLINE_WORKDIR", str(tmp_path / "scratch"))
-        done = subprocess.CompletedProcess(["cline"], 0, stdout="ok", stderr="")
         with patch.object(car, "cline_available", return_value={"available": True, "bin": "cline"}), \
-             patch.object(car.subprocess, "run", return_value=done) as run:
+             patch.object(car.subprocess, "Popen", return_value=FakeProc(0, "ok", "")) as popen:
             car.dispatch_cline("two word prompt")
-        argv, kwargs = run.call_args.args[0], run.call_args.kwargs
+        argv, kwargs = popen.call_args.args[0], popen.call_args.kwargs
         assert argv[1:2] != ["task"]
         assert kwargs["cwd"] == str(tmp_path / "scratch")
         assert Path(kwargs["cwd"]).is_dir() and Path(kwargs["cwd"]) != car.REPO_ROOT
@@ -113,16 +113,16 @@ class TestClineCommandLine:
     )
     def test_a_usage_error_before_any_request_is_not_sent(self, text):
         """A known pre-request usage error is not-sent, so one bad call does not wedge the lock."""
-        bad = subprocess.CompletedProcess(["cline"], 1, stdout="", stderr=text)
+        bad = FakeProc(1, "", text)
         with patch.object(car, "cline_available", return_value={"available": True, "bin": "cline"}), \
-             patch.object(car.subprocess, "run", return_value=bad):
+             patch.object(car.subprocess, "Popen", return_value=bad):
             assert car.dispatch_cline("two word prompt")["outcome"] == "not-sent"
 
     def test_any_other_nonzero_exit_stays_unknown(self):
         """A failure that is not a recognised pre-request error keeps the conservative unknown outcome."""
-        bad = subprocess.CompletedProcess(["cline"], 1, stdout="", stderr="the model stopped halfway")
+        bad = FakeProc(1, "", "the model stopped halfway")
         with patch.object(car, "cline_available", return_value={"available": True, "bin": "cline"}), \
-             patch.object(car.subprocess, "run", return_value=bad):
+             patch.object(car.subprocess, "Popen", return_value=bad):
             assert car.dispatch_cline("two word prompt")["outcome"] == "unknown"
 
     def test_cline_bin_environment_variable_is_honoured(self, tmp_path, monkeypatch):
