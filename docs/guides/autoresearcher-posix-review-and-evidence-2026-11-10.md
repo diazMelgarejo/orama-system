@@ -9,7 +9,7 @@ This is evidence and reusable operating guidance, not deployment approval.
 ## Attribution and Integration
 
 Windows Claude Code, acting as `win-researcher`, authored the backend-lock
-implementation and fixes through `d15ebce5230a4fed278197a11b59b0ea1dda7410`.
+implementation and fixes through `9ba89cb9819967cca5c8f05aa7f21ccc0818ea48`.
 Mac Codex's source-review sidecar identified the three findings below; the
 primary Mac actor independently ran tests and synthetic fault injection.
 Mac integration preserves the Windows commits and adds stricter outcome
@@ -25,7 +25,7 @@ decision retained `win-researcher`, superseding the earlier shared-persona idea.
 | --- | --- | --- |
 | Usage substrings or a generic `subprocess.run` error could clear an in-flight record | Synthetic post-effect marker and I/O-error cases released to free | Preserve Windows' separate `Popen` launch boundary; every nonzero result after successful launch is unknown, regardless of text or speed |
 | Permission refusal left an opened lock descriptor | Synthetic permission injection observed an unclosed descriptor | Preserve Windows' acquisition-exception cleanup and regression; verify all acquisition failure paths |
-| Localhost rewrite trusted DNS, changed HTTPS identity and dropped userinfo | Source review and failing probe regressions | HTTP localhost uses literal IPv4 loopback without DNS; HTTPS retains hostname; unsupported userinfo and malformed URLs refuse before I/O |
+| Localhost rewrite trusted DNS, changed HTTPS identity and dropped userinfo | Source review and failing probe regressions | HTTP localhost uses literal IPv4 then IPv6 loopback without DNS; HTTPS retains hostname; unsupported userinfo and malformed URLs refuse before I/O |
 
 An absent CLI or independently failed spawn can be `not-sent`. A timeout,
 post-start I/O error or launched nonzero exit is `unknown`, never an automatic
@@ -35,7 +35,9 @@ an operator approved effects. Plan mode and disabled tool auto-approval remain
 the default; no real Cline or paid-provider dispatch was used for these tests.
 
 Probe optimization applies only to plain HTTP localhost, not arbitrary peers
-or HTTPS. The configured HTTP read timeout is per I/O, not a whole-process
+or HTTPS. It makes at most two literal-loopback attempts, splitting the I/O
+timeout between them to retain IPv6-only backend reachability. The configured
+HTTP read timeout is per I/O, not a whole-process
 deadline; HTTPS and explicit peer names may still involve DNS. No TLS checks,
 CA trust or bearer credentials are weakened. Tests use synthetic URLs/mocks,
 not operator secrets. Explicit LAN endpoints retain their configured behavior.
@@ -145,3 +147,16 @@ before each operator-authorized merge. Orama PR488 is separate Windows watcher
 work: this review does not endorse it. Do not merge the historical Mac Cline
 branch separately; its prompt correction is already incorporated in PR487.
 No branch, PR or main should be force-updated to implement this handoff.
+
+Final-review follow-up `03effcc8ae1ebc1fbf231f8d79f7cb8ebb44b013` closes
+another integrity gap: recheck/mark/release verify the expected owner record
+and held-file identity. If those change or cannot be verified, cleanup closes
+its resources without replacing the evidence. An unchanged owner may still
+release after an external prerequisite refuses. New regressions cover changed
+nonce/state/resource/PID, malformed evidence, replacement inode and the real
+dispatch refusal path. The real rename test is POSIX-only; portable identity
+fault injection complements it. These checks coordinate participating writers;
+an uncooperative process with file-write privileges can race any check/write
+pair, so this is not a cryptographic integrity or hostile-filesystem guarantee.
+The IPv6-only regression failed before the literal-loopback fallback was added.
+Windows reference updates through `9ba89cb9` are retained, not overwritten.
