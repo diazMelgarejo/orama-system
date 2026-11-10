@@ -470,3 +470,63 @@ def test_nothing_ever_stops_restarts_or_reloads(tmp_path) -> None:
     for line in body.splitlines():
         code = line.strip()
         assert not re.match(r"^(caddy (stop|reload|run)|kill|pkill|killall|launchctl)\b", code), code
+
+
+# ── default launch autostart ────────────────────────────────────────────────────
+def _autostart_block() -> str:
+    """Return the start.sh block that starts the front end after the stack is up (marked autostart region)."""
+    match = re.search(r"# >>> peer-tls-frontend-autostart\n(.*?)# <<< peer-tls-frontend-autostart\n", _text(), re.S)
+    assert match, "the peer-tls-frontend-autostart region is missing from start.sh"
+    return match.group(1)
+
+
+def _run_autostart(tmp: Path, lan_peer: str, env: dict[str, str], with_caddy: bool = True):
+    """Run the autostart region with the launcher mode *lan_peer* and return the CompletedProcess."""
+    bindir, log = _fake_caddy(tmp)
+    path = f"{bindir}:/usr/bin:/bin" if with_caddy else "/usr/bin:/bin"
+    return _bash(tmp, f"_LAN_PEER_MODE={lan_peer}\n{_autostart_block()}", env=env, path=path), log
+
+
+def test_default_launch_starts_a_provisioned_front_end(tmp_path: Path) -> None:
+    """A plain launch (no --lan-peer) starts a provisioned front end, so a stack restart never leaves the TLS port dead."""
+    port = _free_port()
+    result, log = _run_autostart(
+        tmp_path, "0",
+        {"ORAMA_LAN_CONTROL_PLANE_DIR": str(_config_dir(tmp_path)), "PEER_PORTAL_TLS_PORT": str(port), "FAKE_CADDY_LISTEN_PORT": str(port)},
+    )
+    assert result.returncode == 0, result.stderr
+    assert "starting the peer HTTPS front end" in result.stdout
+    assert "start --config" in log.read_text(encoding="utf-8")
+
+
+def test_default_launch_is_silent_when_no_front_end_is_provisioned(tmp_path: Path) -> None:
+    """A plain launch on a machine without a Caddyfile or Caddy prints nothing and never fails."""
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    result, log = _run_autostart(tmp_path, "0", {"ORAMA_LAN_CONTROL_PLANE_DIR": str(empty)})
+    assert result.returncode == 0 and result.stdout.strip() == "" and result.stderr.strip() == ""
+    assert not log.exists()
+    result, _ = _run_autostart(tmp_path, "0", {"ORAMA_LAN_CONTROL_PLANE_DIR": str(_config_dir(tmp_path))}, with_caddy=False)
+    assert result.returncode == 0 and result.stdout.strip() == "" and result.stderr.strip() == ""
+
+
+def test_default_launch_respects_the_disable_flag_and_an_existing_listener(tmp_path: Path) -> None:
+    """ORAMA_PEER_TLS_FRONTEND=0 skips it; a listener on the peer port is never started over (idempotent)."""
+    config = str(_config_dir(tmp_path))
+    result, log = _run_autostart(tmp_path, "0", {"ORAMA_LAN_CONTROL_PLANE_DIR": config, "ORAMA_PEER_TLS_FRONTEND": "0"})
+    assert result.returncode == 0 and not log.exists()
+    with socket.socket() as held:
+        held.bind(("localhost", 0))
+        held.listen(1)
+        port = held.getsockname()[1]
+        result, log = _run_autostart(tmp_path, "0", {"ORAMA_LAN_CONTROL_PLANE_DIR": config, "PEER_PORTAL_TLS_PORT": str(port)})
+    assert result.returncode == 0 and "already listening" in result.stdout
+    assert not log.exists() or "start" not in log.read_text(encoding="utf-8")
+
+
+def test_lan_peer_launch_still_warns_when_the_front_end_cannot_start(tmp_path: Path) -> None:
+    """--lan-peer keeps its warning when the front end is not provisioned."""
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    result, _ = _run_autostart(tmp_path, "1", {"ORAMA_LAN_CONTROL_PLANE_DIR": str(empty), "PEER_PORTAL_TLS_PORT": str(_free_port())})
+    assert result.returncode == 0 and "not running" in result.stderr

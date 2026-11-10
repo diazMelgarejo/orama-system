@@ -837,7 +837,8 @@ _port_listening() {
 # Make sure this Mac's peer HTTPS front end (Caddy: TLS on the peer port, proxying to the loopback portal) is up.
 # IDEMPOTENT by rule: it never stops, restarts or reloads anything. If the peer port already has a listener it
 # does nothing; if a Caddy admin endpoint is already up without the peer port listening it refuses to start a
-# second instance and tells the operator which explicit stop command to run first. Only called under --lan-peer.
+# second instance and tells the operator which explicit stop command to run first. Called on every launch when a front end is
+# provisioned, and always under --lan-peer.
 _ensure_peer_tls_frontend() {
   case "$(printf '%s' "${ORAMA_PEER_TLS_FRONTEND:-1}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')" in
     0|false|no|off)
@@ -1947,10 +1948,17 @@ if [ "${_LAN_PEER_MODE:-0}" = "1" ]; then
   _ensure_coord_pulse "--lan-peer" || true
 fi
 
+# >>> peer-tls-frontend-autostart
+# Idempotent: a no-op when the peer port already has a listener; never stops, restarts or reloads anything.
+# --lan-peer always runs it (and warns when it cannot start). A plain launch runs it only when a front end is
+# provisioned (caddy installed and a Caddyfile present), so a stack restart never leaves the peer TLS port dead,
+# and a machine without one stays silent.
 if [ "${_LAN_PEER_MODE:-0}" = "1" ]; then
-  # Idempotent: a no-op when the peer port already has a listener; never stops or restarts anything.
   _ensure_peer_tls_frontend || _warn "lan-peer" "peer HTTPS front end is not running: LAN peers cannot reach this Mac until it is started"
+elif _peer_tls_frontend_configured; then
+  _ensure_peer_tls_frontend || _warn "peer-tls" "peer HTTPS front end is not running: LAN peers cannot reach this Mac until it is started"
 fi
+# <<< peer-tls-frontend-autostart
 
 if [ "${_LAN_PEER_MODE:-0}" = "1" ]; then
   if ! _lan_peer_session should-retry >/dev/null; then
