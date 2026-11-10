@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from typing import Optional
 
+import pytest
+
 
 class FakeProc:
     """A subprocess.Popen stand-in: scripted return code, output, and an optional error on the first communicate()."""
@@ -24,3 +26,9 @@ class FakeProc:
     def kill(self) -> None:
         """Record that the process was killed."""
         self.killed = True
+
+
+@pytest.fixture(autouse=True)
+def isolated_cline_workdir(tmp_path, monkeypatch):
+    """Point CLINE_WORKDIR at a temporary directory so dispatch tests never create the scratch folder in the real home."""
+    monkeypatch.setenv("CLINE_WORKDIR", str(tmp_path / "cline-scratch"))
