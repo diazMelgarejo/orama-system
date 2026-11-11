@@ -56,6 +56,7 @@ $LanPeer = $false
 $ValidateOnly = $false
 $ListOnly = $false
 $ListIncludeNetwork = $false
+$RestartPortal = $false
 
 function Show-Usage {
     @"
@@ -74,6 +75,8 @@ Options:
   --validate             Validate launcher arguments without environment, bootstrap,
                          discovery, or service startup.
   --lan-peer             LAN-bind services and probe the peer after startup.
+  --restart-portal       Stop only the Portal (and the Portal TLS proxy), then start normally.
+                         PT and orama keep running; nothing is stopped by process name.
   --help, -h             Show this help.
 "@ | Write-Host
 }
@@ -170,19 +173,23 @@ foreach ($a in $args) {
         '^--hardware-policy$|^-HardwarePolicy$' { $HardwarePolicy = $true }
         '^--validate$|^-Validate$'     { $ValidateOnly = $true }
         '^--lan-peer$|^-LanPeer$'      { $LanPeer = $true }
+        '^--restart-portal$|^-RestartPortal$' { $RestartPortal = $true }
         '^--help$|^-h$|^-Help$'        { Show-Usage; exit 0 }
-        default { throw "Unknown argument: $a. Supported: --no-open --stop --status --fleet-status[=text|json] --discover --hardware-policy --validate --lan-peer --help" }
+        default { throw "Unknown argument: $a. Supported: --no-open --stop --status --fleet-status[=text|json] --discover --hardware-policy --validate --lan-peer --restart-portal --help" }
     }
 }
 
 if ($ListIncludeNetwork -and -not $ListOnly) {
     throw '--include-network is only valid with --list.'
 }
-if ($ListOnly -and ($NoOpen -or $Stop -or $Status -or $FleetStatus -or $Discover -or $HardwarePolicy -or $LanPeer)) {
+if ($ListOnly -and ($NoOpen -or $Stop -or $Status -or $FleetStatus -or $Discover -or $HardwarePolicy -or $LanPeer -or $RestartPortal)) {
     throw '--list cannot be combined with lifecycle or probe modes.'
 }
-if ($ValidateOnly -and ($ListOnly -or $ListIncludeNetwork -or $NoOpen -or $Stop -or $Status -or $FleetStatus -or $Discover -or $HardwarePolicy -or $LanPeer)) {
+if ($ValidateOnly -and ($ListOnly -or $ListIncludeNetwork -or $NoOpen -or $Stop -or $Status -or $FleetStatus -or $Discover -or $HardwarePolicy -or $LanPeer -or $RestartPortal)) {
     throw '--validate cannot be combined with another launcher mode.'
+}
+if ($RestartPortal -and ($Stop -or $Status -or $FleetStatus -or $Discover -or $HardwarePolicy)) {
+    throw '--restart-portal starts services, so it cannot be combined with --stop, --status, --fleet-status, --discover or --hardware-policy.'
 }
 
 if ($ValidateOnly) {
@@ -533,8 +540,19 @@ $UsPort     = if ($env:US_PORT)     { [int]$env:US_PORT }     else { 8001 }
 $PortalPort = if ($env:PORTAL_PORT) { [int]$env:PORTAL_PORT } else { 8002 }
 $PortalUrl  = "http://localhost:$PortalPort"
 
+# Portal TLS front end (opt-in: PORTAL_TLS_ENABLED=1/true/yes), parsed once here
+# and reused everywhere below. When enabled, the Portal binds loopback only and
+# orchestrator.portal_tls_proxy (Perpetua-Tools) is the single LAN-facing listener.
+$PortalTlsEnabled = $false
+if ($env:PORTAL_TLS_ENABLED) {
+    $PortalTlsEnabled = ($env:PORTAL_TLS_ENABLED.Trim().ToLower() -in @('1', 'true', 'yes'))
+}
+
 if ($LanPeer) {
-    if (-not $env:PORTAL_BIND_LAN) { $env:PORTAL_BIND_LAN = '1' }
+    # Under TLS the Portal stays loopback and only the TLS port faces the LAN;
+    # plain-http peers (TLS off) keep the legacy LAN bind.
+    if (-not $PortalTlsEnabled -and -not $env:PORTAL_BIND_LAN) { $env:PORTAL_BIND_LAN = '1' }
+    if ($PortalTlsEnabled) { _Info 'lan-peer' 'Portal TLS enabled: Portal stays loopback; only the TLS port faces the LAN' }
     if (-not $env:ORAMA_BIND_LAN)  { $env:ORAMA_BIND_LAN  = '1' }
     if (-not $env:PT_BIND_LAN)     { $env:PT_BIND_LAN     = '1' }
     _Info 'lan-peer' 'LAN bind env set (services bind 0.0.0.0 on Windows)'
@@ -736,24 +754,62 @@ function Get-PidOnPort {
     return $null
 }
 
+# Local addresses (text) of every Listen socket on the port. Prefers
+# Get-NetTCPConnection -State Listen and falls back to parsing netstat when the
+# cmdlet is unavailable or finds nothing.
+function Get-PortListenAddresses {
+    param([int]$Port)
+    $addrs = @()
+    try {
+        foreach ($conn in @(Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction Stop)) {
+            $addrs += "$($conn.LocalAddress)"
+        }
+        return $addrs
+    } catch {}
+    try {
+        foreach ($nsLine in @(& netstat -ano 2>$null)) {
+            if ("$nsLine" -match '^\s*TCP\s+(\S+):(\d+)\s+\S+\s+LISTENING\s+\d+') {
+                $nsAddrText = $Matches[1]
+                if ([int]$Matches[2] -eq $Port) { $addrs += $nsAddrText }
+            }
+        }
+    } catch {}
+    return $addrs
+}
+
 # True when every LISTENING socket on the port is bound to a loopback address.
 # No listener, or an unparsable address, counts as not loopback-only (fail closed).
 function Test-PortLoopbackOnly {
     param([int]$Port)
     $seen = 0
     try {
-        foreach ($nsLine in @(& netstat -ano 2>$null)) {
-            if ("$nsLine" -match '^\s*TCP\s+(\S+):(\d+)\s+\S+\s+LISTENING\s+\d+') {
-                $nsAddrText = $Matches[1].Trim('[', ']')
-                if ([int]$Matches[2] -ne $Port) { continue }
-                $seen++
-                $nsAddr = $null
-                if (-not [System.Net.IPAddress]::TryParse($nsAddrText, [ref]$nsAddr)) { return $false }
-                if (-not [System.Net.IPAddress]::IsLoopback($nsAddr)) { return $false }
-            }
+        foreach ($addrText in @(Get-PortListenAddresses $Port)) {
+            $seen++
+            $addr = $null
+            if (-not [System.Net.IPAddress]::TryParse(("$addrText").Trim('[', ']'), [ref]$addr)) { return $false }
+            if (-not [System.Net.IPAddress]::IsLoopback($addr)) { return $false }
         }
     } catch { return $false }
     return ($seen -gt 0)
+}
+
+# Bind invariant for TLS mode: empty string when every Listen address of the
+# Portal port is loopback, otherwise the failure reason for the summary row.
+function Get-PortalBindFailure {
+    param([int]$Port)
+    if (Test-PortLoopbackOnly $Port) { return '' }
+    return 'bound to a non-loopback address; run --restart-portal (or --stop) first'
+}
+
+# Waits until nothing listens on the port; returns $true once it is free.
+function Wait-PortReleased {
+    param([int]$Port, [int]$MaxSeconds = 10)
+    $deadline = (Get-Date).AddSeconds($MaxSeconds)
+    while ((Get-Date) -lt $deadline) {
+        if (-not (Get-PidOnPort $Port)) { return $true }
+        Start-Sleep -Milliseconds 250
+    }
+    return (-not (Get-PidOnPort $Port))
 }
 
 # Life-* helpers: service lifecycle (detached launch, readiness, stop). PS 5.1 safe.
@@ -860,15 +916,90 @@ function Open-Browser {
     try { Start-Process $Url } catch { _Warn 'browser' "Could not open browser: $_" }
 }
 
-# ── Portal TLS front end (opt-in: PORTAL_TLS_ENABLED=1/true/yes) ──────────────
-# When enabled, the Portal binds loopback only and orchestrator.portal_tls_proxy
-# (Perpetua-Tools) is the single LAN-facing listener, on PORTAL_TLS_PORT.
-$PortalTlsEnabled = $false
-if ($env:PORTAL_TLS_ENABLED) {
-    $PortalTlsEnabled = ($env:PORTAL_TLS_ENABLED.Trim().ToLower() -in @('1', 'true', 'yes'))
-}
+# ── Portal TLS front end ports ($PortalTlsEnabled is computed early) ──────────
+# The proxy listens on PORTAL_TLS_PORT (default 8443).
 $PortalTlsPort = if ($env:PORTAL_TLS_PORT) { [int]$env:PORTAL_TLS_PORT } else { 8443 }
 $PortalTlsListenHost = if ($env:PORTAL_TLS_LISTEN_HOST) { $env:PORTAL_TLS_LISTEN_HOST.Trim() } else { '0.0.0.0' }
+
+# Stops services recorded in .logs\*.pid, checking ownership first (the recorded
+# PID must be alive, a matching process name and match the command line); never by
+# process name alone. -Only limits the sweep to those pid file base names (for
+# example portal, portal_tls). Returns the base names that were actually stopped.
+function Stop-PidFileService {
+    param([string[]]$Only = @())
+    $stopped = @()
+    if (-not (Test-Path $LogDir)) { return $stopped }
+    foreach ($pf in @(Get-ChildItem -Path $LogDir -Filter '*.pid' -File -ErrorAction SilentlyContinue)) {
+        if ($Only.Count -gt 0 -and ($Only -notcontains $pf.BaseName)) { continue }
+        $recorded = Life-ReadPid $pf.FullName
+        $isWatcher = ($pf.BaseName -eq 'lm_link_watch')
+        if ($isWatcher) {
+            $owned = Life-PidMatches $recorded '^(powershell|pwsh)$' 'lm_link_watch'
+        } elseif ($pf.BaseName -eq 'portal_tls') {
+            # Portal TLS proxy: command-line match on portal_tls_proxy, never by name.
+            $owned = Life-PidMatches $recorded '^pythonw?[0-9.]*$' 'portal_tls_proxy'
+        } else {
+            $owned = Life-PidMatches $recorded '^pythonw?[0-9.]*$' 'uvicorn'
+        }
+        if ($owned) {
+            & taskkill.exe /PID $recorded /T /F 2>$null | Out-Null
+            Write-Host "  killed PID $recorded ($($pf.BaseName) from $($pf.Name))"
+            $stopped += $pf.BaseName
+        } elseif ($recorded -gt 0) {
+            Write-Host "  $($pf.Name): PID $recorded is not a matching process (already stopped or reused); not killed"
+        }
+        Remove-Item -Path $pf.FullName -Force -ErrorAction SilentlyContinue
+    }
+    return $stopped
+}
+
+# Runs the Perpetua-Tools TLS self-check (read-only, no tokens on the command line)
+# from the PT directory. Native stderr is merged under a Continue policy so it
+# cannot abort the launcher. Returns ExitCode and Lines (stdout and stderr text).
+function Invoke-PortalTlsSelfCheck {
+    param([string]$PtDir, [string]$PtPython, [int]$ListenPort, [int]$UpstreamPort)
+    $scLines = @()
+    $scCode = 1
+    $prevEapSc = $ErrorActionPreference
+    $prevPyPathSc = $env:PYTHONPATH
+    $ErrorActionPreference = 'Continue'
+    Push-Location $PtDir
+    try {
+        $env:PYTHONPATH = "$PtDir\src;$PtDir"
+        $scLines = @(& $PtPython -m orchestrator.portal_tls_proxy --self-check --listen-port $ListenPort.ToString() --upstream-port $UpstreamPort.ToString() 2>&1 | ForEach-Object { "$_" })
+        $scCode = $LASTEXITCODE
+    } catch {
+        $scLines = @("self-check could not run: $($_.Exception.Message)")
+        $scCode = 1
+    } finally {
+        Pop-Location
+        $env:PYTHONPATH = $prevPyPathSc
+        $ErrorActionPreference = $prevEapSc
+    }
+    return [pscustomobject]@{ ExitCode = $scCode; Lines = $scLines }
+}
+
+# Maps a self-check exit code and output to a verdict. Status is PASS (exit 0, WARN
+# allowed), UNAVAILABLE (an older Perpetua-Tools without the flag: exit 2 plus
+# "unrecognized arguments"; not a failure) or FAIL (anything else, Detail set to
+# "self-check failed: <first FAIL line>").
+function Get-TlsSelfCheckVerdict {
+    param([int]$ExitCode, [string[]]$Lines = @())
+    if ($ExitCode -eq 0) { return [pscustomobject]@{ Status = 'PASS'; Detail = '' } }
+    if ($ExitCode -eq 2 -and @($Lines | Where-Object { $_ -match 'unrecognized arguments' }).Count -gt 0) {
+        return [pscustomobject]@{ Status = 'UNAVAILABLE'; Detail = '' }
+    }
+    $failLines = @($Lines | Where-Object { $_ -match '^check_\w+=FAIL' })
+    if ($failLines.Count -eq 0) { $failLines = @($Lines | Where-Object { $_ -match 'FAIL' }) }
+    if ($failLines.Count -gt 0) {
+        $first = $failLines[0]
+    } elseif ($Lines.Count -gt 0) {
+        $first = "exit $ExitCode, last output: $($Lines[$Lines.Count - 1])"
+    } else {
+        $first = "exit $ExitCode, no output"
+    }
+    return [pscustomobject]@{ Status = 'FAIL'; Detail = "self-check failed: $first" }
+}
 
 # ── --stop ────────────────────────────────────────────────────────────────────
 if ($Stop) {
@@ -883,27 +1014,7 @@ if ($Stop) {
         }
     }
     # PID files written by the detached launcher (never kill by process name).
-    if (Test-Path $LogDir) {
-        foreach ($pf in @(Get-ChildItem -Path $LogDir -Filter '*.pid' -File -ErrorAction SilentlyContinue)) {
-            $recorded = Life-ReadPid $pf.FullName
-            $isWatcher = ($pf.BaseName -eq 'lm_link_watch')
-            if ($isWatcher) {
-                $owned = Life-PidMatches $recorded '^(powershell|pwsh)$' 'lm_link_watch'
-            } elseif ($pf.BaseName -eq 'portal_tls') {
-                # Portal TLS proxy: command-line match on portal_tls_proxy, never by name.
-                $owned = Life-PidMatches $recorded '^pythonw?[0-9.]*$' 'portal_tls_proxy'
-            } else {
-                $owned = Life-PidMatches $recorded '^pythonw?[0-9.]*$' 'uvicorn'
-            }
-            if ($owned) {
-                & taskkill.exe /PID $recorded /T /F 2>$null | Out-Null
-                Write-Host "  killed PID $recorded ($($pf.BaseName) from $($pf.Name))"
-            } elseif ($recorded -gt 0) {
-                Write-Host "  $($pf.Name): PID $recorded is not a matching process (already stopped or reused); not killed"
-            }
-            Remove-Item -Path $pf.FullName -Force -ErrorAction SilentlyContinue
-        }
-    }
+    $null = Stop-PidFileService
     exit 0
 }
 
@@ -1396,6 +1507,24 @@ if (Test-Path "$RepoRoot\platform\windows\ensure-partner-cli-paths.ps1") {
     & "$RepoRoot\platform\windows\ensure-partner-cli-paths.ps1"
 }
 
+# ── --restart-portal: stop only the Portal and its TLS proxy, then start normally ─
+# Same ownership-checked sweep as --stop but limited to the portal and portal_tls
+# pid files; PT and orama are never touched and the normal start path below reuses
+# them ("already running") while starting whatever is missing.
+if ($RestartPortal) {
+    Write-Host 'Restarting Portal (PT and orama keep running)...'
+    $restartStopped = @(Stop-PidFileService -Only @('portal', 'portal_tls'))
+    foreach ($restartName in $restartStopped) {
+        $restartPort = if ($restartName -eq 'portal_tls') { $PortalTlsPort } else { $PortalPort }
+        if (-not (Wait-PortReleased $restartPort)) {
+            Write-Host "  port $restartPort is still held after stopping the $restartName pid file; the start below may reuse it"
+        }
+    }
+    if ($restartStopped.Count -eq 0) {
+        Write-Host '  no owned Portal pid file to stop; continuing with the normal start path'
+    }
+}
+
 # ── 1. Perpetua-Tools ─────────────────────────────────────────────────────────
 $LifeResults = @()
 if ($PtDir -and (Test-Path (Join-Path $PtDir 'orchestrator\fastapi_app.py'))) {
@@ -1435,17 +1564,21 @@ $portalRow = Life-Settle $svc $PortalHost
 $PortalLoopbackOk = $true
 $PortalTlsReused = $false
 if ($PortalTlsEnabled -and $portalRow.State -eq 'UP') {
-    # A reused Portal keeps whatever bind it was started with. The TLS proxy must
-    # never sit in front of one that also serves plain HTTP on the LAN.
-    $PortalLoopbackOk = Test-PortLoopbackOnly $PortalPort
-    if (-not $PortalLoopbackOk) {
+    # Bind invariant, one code path for a started and a reused Portal (it runs
+    # after Life-Settle either way): every Listen address of the Portal port must
+    # be loopback, or the TLS proxy must never sit in front of it.
+    $portalBindFailure = Get-PortalBindFailure $PortalPort
+    if ($portalBindFailure) {
+        $PortalLoopbackOk = $false
         Write-Host "  Portal  port $PortalPort is bound to a non-loopback address; not starting the TLS front end"
-        $portalRow = [pscustomobject]@{ Name = 'Portal'; Port = $PortalPort; State = 'FAILED'; Detail = 'bound to a non-loopback address; run --stop first' }
+        $portalRow = [pscustomobject]@{ Name = 'Portal'; Port = $PortalPort; State = 'FAILED'; Detail = $portalBindFailure }
     }
 }
 $LifeResults += $portalRow
 
 # ── 4. Portal TLS front end (only when PORTAL_TLS_ENABLED) ────────────────────
+$TlsSelfCheckLines = @()
+$TlsSelfCheckNotice = ''
 if ($PortalTlsEnabled -and $PortalLoopbackOk) {
     $tlsModule = if ($PtDir) { Join-Path $PtDir 'orchestrator\portal_tls_proxy.py' } else { '' }
     if (-not $PtDir -or -not $PtPython -or -not (Test-Path $tlsModule)) {
@@ -1460,6 +1593,17 @@ if ($PortalTlsEnabled -and $PortalLoopbackOk) {
             -EnvExtra @{ PYTHONPATH = "$PtDir\src;$PtDir" }
         $tlsRow = Life-Settle $svc $PortalTlsListenHost
         if ($tlsRow.State -eq 'UP' -and -not $svc.Started) { $PortalTlsReused = $true }
+        if ($tlsRow.State -eq 'UP') {
+            # Evidence gate: the TLS row is only UP when the proxy's own self-check agrees.
+            $selfCheck = Invoke-PortalTlsSelfCheck -PtDir $PtDir -PtPython $PtPython -ListenPort $PortalTlsPort -UpstreamPort $PortalPort
+            $TlsSelfCheckLines = @($selfCheck.Lines | Where-Object { $_ -match '^(check_\w+|ca_sha256_file|self_check)=' })
+            $selfCheckVerdict = Get-TlsSelfCheckVerdict -ExitCode $selfCheck.ExitCode -Lines $selfCheck.Lines
+            if ($selfCheckVerdict.Status -eq 'FAIL') {
+                $tlsRow = [pscustomobject]@{ Name = 'Portal TLS'; Port = $PortalTlsPort; State = 'FAILED'; Detail = $selfCheckVerdict.Detail }
+            } elseif ($selfCheckVerdict.Status -eq 'UNAVAILABLE') {
+                $TlsSelfCheckNotice = 'self-check unavailable (update Perpetua-Tools)'
+            }
+        }
         $LifeResults += $tlsRow
     }
 }
@@ -1470,6 +1614,8 @@ Write-Host '── service summary ───────────────
 foreach ($r in $LifeResults) {
     Write-Host ('  {0,-10} port {1,-6} {2,-8} {3}' -f $r.Name, $r.Port, $r.State, $r.Detail)
 }
+foreach ($scLine in $TlsSelfCheckLines) { Write-Host "  $scLine" }
+if ($TlsSelfCheckNotice) { Write-Host "  $TlsSelfCheckNotice" -ForegroundColor Yellow }
 $LifeFailed = @($LifeResults | Where-Object { $_.State -eq 'FAILED' })
 if ($LifeFailed.Count -gt 0) {
     Write-Host ("  {0} core service(s) failed: {1}" -f $LifeFailed.Count, (($LifeFailed | ForEach-Object { $_.Name }) -join ', '))
