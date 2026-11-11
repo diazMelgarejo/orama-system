@@ -1,4 +1,5 @@
 #Requires -Version 5.1
+
 <#
 .SYNOPSIS
     fallback-chain-verify.ps1 — Verify all model fallback tiers are healthy (Windows)
@@ -40,11 +41,24 @@ $SecretsDir = Join-Path $env:USERPROFILE '.openclaw\secrets'
 $EnvFile    = Join-Path $env:USERPROFILE '.openclaw\.env.openrouter'
 
 function Log {
+    <#
+    .SYNOPSIS
+    Write a message to the host with the fallback-verify prefix.
+    #>
     param([string]$Message)
     Write-Host "[fallback-verify] $Message"
 }
 
 function Test-TierAvailable {
+    <#
+    .SYNOPSIS
+    Run a check scriptblock for a model tier and print [AVAILABLE] or [OFFLINE].
+    Success means the scriptblock did not throw.
+    .PARAMETER CheckCmd
+    Scriptblock probing the tier.
+    .OUTPUTS
+    True when the check succeeds, false otherwise.
+    #>
     param(
         [int]$Tier,
         [string]$Name,
@@ -73,6 +87,12 @@ function Test-TierAvailable {
 }
 
 function Test-TierConfigured {
+    <#
+    .SYNOPSIS
+    Print [CONFIGURED] or [NOT CONFIGURED] depending on whether the tier credential file exists.
+    .OUTPUTS
+    True when the file exists, false otherwise.
+    #>
     param(
         [int]$Tier,
         [string]$Name,

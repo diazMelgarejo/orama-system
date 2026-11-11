@@ -1,4 +1,5 @@
 #Requires -Version 5.1
+
 <#
 .SYNOPSIS
     Idempotently prepare Windows partner CLIs for the current session.
@@ -32,6 +33,15 @@ param(
 $ErrorActionPreference = 'Stop'
 
 function Add-UserPathEntry {
+    <#
+    .SYNOPSIS
+    Prepend an existing directory to the process PATH, and to the User PATH unless -SessionOnly is set.
+    Honors -WhatIf (reports without changing anything).
+    .PARAMETER Dir
+    Directory to add; ignored when it does not exist.
+    .OUTPUTS
+    True when something was (or would be) added, false when nothing changed.
+    #>
     param([string]$Dir)
     if (-not $Dir) { return $false }
     $resolved = $Dir
@@ -91,6 +101,9 @@ foreach ($c in $candidates) {
 if ($added -eq 0) {
     $scope = if ($SessionOnly) { 'process PATH' } else { 'User PATH' }
     Write-Host "  OK - all existing partner CLI paths already on $scope"
+} elseif ($WhatIf) {
+    $scope = if ($SessionOnly) { 'process PATH' } else { 'User PATH' }
+    Write-Host "  [whatif] would add $added path(s) to the $scope; nothing was changed."
 } else {
     if ($SessionOnly) {
         Write-Host "  OK - added $added path(s) to the current process."
