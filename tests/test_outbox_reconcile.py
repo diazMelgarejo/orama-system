@@ -21,6 +21,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 @pytest.fixture
 def env(monkeypatch, tmp_path):
+    """Isolated environment: clean peer-trust variables, a temporary home and a synthetic control-plane token; returns the home path."""
     for var in (
         "PEER_CA_FILE", "PEER_PINNED_FINGERPRINTS", "ORAMA_CONTROL_PLANE_TOKEN_PEER",
         "ORAMA_CONTROL_PLANE_TOKEN_LOCAL", "PT_CONTROL_PLANE_TOKEN", "PERPETUA_TOOLS_ROOT",
@@ -37,6 +38,7 @@ def env(monkeypatch, tmp_path):
 
 @pytest.fixture
 def tls_peer(env, monkeypatch, tmp_path):
+    """Run a verifying TLS peer signed by a throwaway CA and point peer trust at that CA; stops the server afterwards."""
     ca = fx.make_ca()
     srv = fx.start_server(tmp_path, fx.make_leaf(issuer=ca))
     monkeypatch.setenv("PEER_PORTAL_TLS_ENABLED", "1")
@@ -46,6 +48,7 @@ def tls_peer(env, monkeypatch, tmp_path):
 
 
 def _queue(name, port, host=fx.LOOPBACK_V4, body="# body\n"):
+    """Queue an outbox file with the given body aimed at the given peer host and port."""
     from orama_system.lan_peer_files import write_outbox_file
 
     return write_outbox_file(name, body, assignee="win", topic="t", source="mac",
@@ -53,18 +56,21 @@ def _queue(name, port, host=fx.LOOPBACK_V4, body="# body\n"):
 
 
 def _meta(name):
+    """Read an outbox item's metadata sidecar as a dict."""
     from orama_system.lan_peer_files import _meta_path, outbox_dir
 
     return json.loads(_meta_path(outbox_dir() / name).read_text(encoding="utf-8"))
 
 
 def _run(capsys, *argv):
+    """Run a lan_peer_assign command and return (exit code, parsed stdout JSON, stderr)."""
     rc = lpa.main(list(argv))
     cap = capsys.readouterr()
     return rc, json.loads(cap.out), cap.err
 
 
 def _outbox_has(name):
+    """Return whether the named file is still in the outbox."""
     from orama_system.lan_peer_files import list_outbox
 
     return name in [i["filename"] for i in list_outbox()]
@@ -73,11 +79,13 @@ def _outbox_has(name):
 # ---- outbox-resolve ---------------------------------------------------------
 
 def test_resolve_requires_only(env):
+    """outbox-resolve exits when no --only item is given."""
     with pytest.raises(SystemExit):
         lpa.main(["outbox-resolve", "--state", "delivered", "--evidence", "x"])
 
 
 def test_resolve_records_evidence_without_network(env, capsys):
+    """Resolve records sanitised evidence and a resolved time without any network call and keeps the file."""
     _queue("a.md", 1)
     dirty = "receiver" + chr(27) + "[31m reported" + chr(13) + chr(10) + "receipt" + chr(0) + " ok"
     rc, out, _ = _run(capsys, "outbox-resolve", "--only", "a.md", "--state", "delivered",
@@ -91,6 +99,7 @@ def test_resolve_records_evidence_without_network(env, capsys):
 
 
 def test_resolve_truncates_evidence(env, capsys):
+    """Resolve truncates evidence to 500 characters."""
     _queue("b.md", 1)
     _run(capsys, "outbox-resolve", "--only", "b.md", "--state", "superseded", "--evidence", "e" * 5000)
     m = _meta("b.md")
@@ -98,6 +107,7 @@ def test_resolve_truncates_evidence(env, capsys):
 
 
 def test_resolve_rejects_credentials_and_changes_nothing(env):
+    """Resolve rejects evidence that looks like a credential and leaves the item unchanged."""
     _queue("c.md", 1)
     for bad in ("Bearer abcdef123456", "token=abc123", f"seen {fx.SYNTHETIC_TOKEN} here"):
         with pytest.raises(SystemExit):
@@ -106,6 +116,7 @@ def test_resolve_rejects_credentials_and_changes_nothing(env):
 
 
 def test_resolve_unmatched_only_is_atomic(env):
+    """Resolve with an unmatched --only name fails and changes none of the items."""
     _queue("d.md", 1)
     with pytest.raises(SystemExit):
         lpa.main(["outbox-resolve", "--only", "d.md", "--only", "nope.md", "--state", "delivered",
@@ -114,12 +125,14 @@ def test_resolve_unmatched_only_is_atomic(env):
 
 
 def test_resolve_has_no_credential_options(env):
+    """outbox-resolve accepts no credential options."""
     with pytest.raises(SystemExit):
         lpa.main(["outbox-resolve", "--only", "x.md", "--state", "delivered", "--evidence", "x",
                   "--token", "abc"])
 
 
 def test_resolved_items_are_not_flushed_and_counted(env, capsys):
+    """Resolved items are skipped by flush and counted by outbox-status."""
     _queue("e.md", 1)
     _run(capsys, "outbox-resolve", "--only", "e.md", "--state", "superseded", "--evidence", "replaced")
     rc, out, _ = _run(capsys, "flush-outbox", "--timeout", "2")
@@ -131,6 +144,7 @@ def test_resolved_items_are_not_flushed_and_counted(env, capsys):
 # ---- outbox-resubmit --------------------------------------------------------
 
 def test_resubmit_requires_explicit_only_and_destination(env):
+    """outbox-resubmit requires --only, a destination host and a destination port."""
     _queue("f.md", 1)
     with pytest.raises(SystemExit):
         lpa.main(["outbox-resubmit", "--peer-ip", "localhost", "--portal-port", "1"])
@@ -141,6 +155,7 @@ def test_resubmit_requires_explicit_only_and_destination(env):
 
 
 def test_resubmit_sends_same_name_keeps_origin_and_records_history(tls_peer, capsys):
+    """Resubmit sends the same filename, preserves the original destination, records history and marks the item delivered."""
     _queue("g.md", 1, host=fx.LOOPBACK_V4)
     rc, out, _ = _run(capsys, "outbox-resubmit", "--only", "g.md", "--peer-ip", "localhost",
                       "--portal-port", str(tls_peer.port), "--timeout", "3")
@@ -157,6 +172,7 @@ def test_resubmit_sends_same_name_keeps_origin_and_records_history(tls_peer, cap
 
 
 def test_resubmit_failure_keeps_item_and_file(env, capsys):
+    """A failed resubmit keeps the item queued with an error, history and the file."""
     _queue("h.md", 1)
     rc, out, _ = _run(capsys, "outbox-resubmit", "--only", "h.md", "--peer-ip", fx.LOOPBACK_V4,
                       "--portal-port", "1", "--timeout", "2")
@@ -167,6 +183,7 @@ def test_resubmit_failure_keeps_item_and_file(env, capsys):
 
 
 def test_resubmit_over_http_withholds_token(env, tmp_path, capsys):
+    """Resubmit over plain http sends no token and records sent, not delivered."""
     srv = fx.start_server(tmp_path, tls=False)
     try:
         _queue("i.md", 1)
@@ -180,6 +197,7 @@ def test_resubmit_over_http_withholds_token(env, tmp_path, capsys):
 
 
 def test_resubmit_skips_already_resolved(tls_peer, capsys):
+    """Resubmit skips an item that was already resolved and sends nothing."""
     _queue("j.md", 1)
     _run(capsys, "outbox-resolve", "--only", "j.md", "--state", "delivered", "--evidence", "seen")
     rc, out, _ = _run(capsys, "outbox-resubmit", "--only", "j.md", "--peer-ip", "localhost",
@@ -190,6 +208,7 @@ def test_resubmit_skips_already_resolved(tls_peer, capsys):
 # ---- duplicate safety -------------------------------------------------------
 
 def test_resubmit_does_not_send_when_peer_already_has_file(tls_peer, capsys):
+    """Resubmit does not POST when the peer already has the same content; it records verified evidence instead."""
     body = "# body\n"
     _queue("k.md", 1, body=body)
     tls_peer.reply = {"ok": True, "files": [{"filename": "k.md", "bytes": len(body)}]}
@@ -206,6 +225,7 @@ def test_resubmit_does_not_send_when_peer_already_has_file(tls_peer, capsys):
 
 
 def test_flush_does_not_send_duplicate_and_keeps_evidence(tls_peer, capsys):
+    """Flush does not send a duplicate when the peer already has the same content and keeps the evidence."""
     _queue("l.md", tls_peer.port, host="localhost")
     tls_peer.reply = {"ok": True, "files": [{"filename": "l.md", "bytes": 7}]}
     tls_peer.replies["/api/peer-inbox/l.md"] = {"ok": True, "body": "# body\n"}
@@ -216,6 +236,7 @@ def test_flush_does_not_send_duplicate_and_keeps_evidence(tls_peer, capsys):
 
 
 def test_listing_failure_blocks_send_and_keeps_item(env, monkeypatch, tmp_path, capsys):
+    """A failed duplicate-check listing blocks the send and keeps the item."""
     srv = fx.start_server(tmp_path, fx.make_leaf(issuer=fx.make_ca()))
     try:
         monkeypatch.setenv("PEER_PORTAL_TLS_ENABLED", "1")
@@ -231,6 +252,7 @@ def test_listing_failure_blocks_send_and_keeps_item(env, monkeypatch, tmp_path, 
 # ---- review-fix regressions -------------------------------------------------
 
 def test_same_name_different_size_is_collision_not_delivered(tls_peer, capsys):
+    """Same name with a different size is a collision: nothing is sent and the item stays queued."""
     _queue("n.md", 1, body="# body\nline2\n")
     tls_peer.reply = {"ok": True, "files": [{"filename": "n.md", "bytes": 999}]}
     rc, out, _ = _run(capsys, "outbox-resubmit", "--only", "n.md", "--peer-ip", "localhost",
@@ -244,6 +266,7 @@ def test_same_name_different_size_is_collision_not_delivered(tls_peer, capsys):
 
 
 def test_crlf_receiver_size_counts_as_same_content(tls_peer, capsys):
+    """A receiver size equal to the CRLF encoding of the body counts as the same content."""
     body = "# body\nline2\n"
     _queue("o.md", 1, body=body)
     crlf_len = len(body.replace("\n", "\r\n").encode("utf-8"))
@@ -256,6 +279,7 @@ def test_crlf_receiver_size_counts_as_same_content(tls_peer, capsys):
 
 
 def test_evidence_filter_sees_through_control_characters(env):
+    """The evidence filter detects credentials hidden behind control characters."""
     for bad in ("Bearer" + chr(0) + "eyJhbGciOiJIUzI1NiJ9.x", "api_key" + chr(0) + "= sk-live-abc",
                 "Bearer" + chr(27) + "[0m abc123"):
         with pytest.raises(SystemExit):
@@ -263,6 +287,7 @@ def test_evidence_filter_sees_through_control_characters(env):
 
 
 def test_resubmit_rejects_out_of_range_port(env):
+    """Resubmit rejects a destination port outside the valid range."""
     _queue("p.md", 1)
     with pytest.raises(SystemExit):
         lpa.main(["outbox-resubmit", "--only", "p.md", "--peer-ip", "localhost",
@@ -270,6 +295,7 @@ def test_resubmit_rejects_out_of_range_port(env):
 
 
 def test_flush_skips_item_resubmitted_elsewhere(env, capsys):
+    """Flush skips an item whose last history hop went to another destination."""
     _queue("q.md", 1)
     lpa._set_state("q.md", "sent", history=[
         {"from": {"peer_ip": fx.LOOPBACK_V4, "portal_port": "1"},
@@ -279,6 +305,7 @@ def test_flush_skips_item_resubmitted_elsewhere(env, capsys):
 
 
 def test_urlopen_kwargs_bad_port_is_trust_error(env, monkeypatch, tmp_path):
+    """A bad port in a trust-configured URL raises PeerTrustError."""
     monkeypatch.setenv("PEER_CA_FILE", str(tmp_path / "ca.pem"))
     with pytest.raises(peer_tls.PeerTrustError):
         peer_tls.urlopen_kwargs("https://host.invalid:70000/x")
@@ -287,11 +314,13 @@ def test_urlopen_kwargs_bad_port_is_trust_error(env, monkeypatch, tmp_path):
 # ---- round-2 review fixes (content proof, redirect skip, host typo, Cf chars) -
 
 def _resubmit(capsys, name, port):
+    """Run outbox-resubmit for one item to the localhost TLS peer on a port."""
     return _run(capsys, "outbox-resubmit", "--only", name, "--peer-ip", "localhost",
                 "--portal-port", str(port), "--timeout", "3")
 
 
 def test_equal_size_different_content_is_not_delivered(tls_peer, capsys):
+    """Equal size but different content is not delivered and nothing is sent."""
     new_body, old_body = "date: 2026-10-25\n", "date: 2026-10-24\n"
     assert len(new_body) == len(old_body)
     _queue("r.md", 1, body=new_body)
@@ -307,6 +336,7 @@ def test_equal_size_different_content_is_not_delivered(tls_peer, capsys):
 
 
 def test_equal_size_unfetchable_content_stays_queued(tls_peer, capsys):
+    """Equal size with unfetchable content stays queued and nothing is sent."""
     body = "# body\n"
     _queue("s.md", 1, body=body)
     tls_peer.reply = {"ok": True, "files": [{"filename": "s.md", "bytes": len(body)}]}
@@ -320,6 +350,7 @@ def test_equal_size_unfetchable_content_stays_queued(tls_peer, capsys):
 
 
 def test_equal_size_over_http_is_not_delivered(env, tmp_path, capsys):
+    """Equal size over plain http is recorded as sent, not delivered, with no token."""
     srv = fx.start_server(tmp_path, tls=False)
     try:
         body = "# body\n"
@@ -334,11 +365,13 @@ def test_equal_size_over_http_is_not_delivered(env, tmp_path, capsys):
 
 
 def _redirect_hop():
+    """Return a history entry recording a hop to another destination."""
     return [{"from": {"peer_ip": fx.LOOPBACK_V4, "portal_port": "1"},
              "to": {"peer_ip": "localhost", "portal_port": "2"}, "at": "x", "result": "error"}]
 
 
 def test_flush_skips_queued_item_with_redirected_history(env, capsys):
+    """Flush skips a queued item with redirected history unless --only is given."""
     _queue("u.md", 1)
     lpa._set_state("u.md", "queued", history=_redirect_hop())
     rc, out, _ = _run(capsys, "flush-outbox", "--timeout", "2")
@@ -346,6 +379,7 @@ def test_flush_skips_queued_item_with_redirected_history(env, capsys):
 
 
 def test_flush_only_resends_to_last_approved_destination(tls_peer, capsys):
+    """Flush with --only resends to the last approved destination and extends the history."""
     _queue("v.md", 1)  # stale original: loopback port 1
     lpa._set_state("v.md", "queued", history=[
         {"from": {"peer_ip": fx.LOOPBACK_V4, "portal_port": "1"},
@@ -359,6 +393,7 @@ def test_flush_only_resends_to_last_approved_destination(tls_peer, capsys):
 
 
 def test_peer_base_brackets_only_real_ipv6():
+    """_peer_base brackets only real IPv6 literals and rejects host:port typos."""
     assert lpa._peer_base("2001:db8::1", 8002) == "http://[2001:db8::1]:8002"
     assert lpa._peer_base("[2001:db8::1]", 8002) == "http://[2001:db8::1]:8002"
     assert lpa._peer_base("peer.example.test", 8002) == "http://peer.example.test:8002"
@@ -368,6 +403,7 @@ def test_peer_base_brackets_only_real_ipv6():
 
 
 def test_host_port_typo_is_clean_systemexit_not_traceback(env, capsys):
+    """A host:port typo is a clean SystemExit on resubmit and a per-item error on flush, not a traceback."""
     _queue("w.md", 1)
     with pytest.raises(SystemExit) as ei:
         lpa.main(["outbox-resubmit", "--only", "w.md", "--peer-ip", "host:8002", "--portal-port", "8002"])
@@ -380,12 +416,14 @@ def test_host_port_typo_is_clean_systemexit_not_traceback(env, capsys):
 
 
 def test_urlopen_kwargs_malformed_url_is_trust_error(env, monkeypatch, tmp_path):
+    """A malformed URL in a trust-configured URL raises PeerTrustError."""
     monkeypatch.setenv("PEER_CA_FILE", str(tmp_path / "ca.pem"))
     with pytest.raises(peer_tls.PeerTrustError):
         peer_tls.urlopen_kwargs("https://[host:8002]:8002/x")
 
 
 def test_evidence_filter_sees_through_format_characters(env):
+    """The evidence filter detects credentials hidden behind format characters and strips them from clean text."""
     for bad in ("Bearer" + chr(0x200B) + "eyJhbGciOiJIUzI1NiJ9.secret",
                 "api_key" + chr(0x2060) + "= sk-live-abc",
                 "Bearer" + chr(0xAD) + "abc123def",

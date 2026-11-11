@@ -30,14 +30,17 @@ _PEM = serialization.Encoding.PEM
 
 
 def _name(cn: str) -> x509.Name:
+    """Build an X.509 name containing only a common name."""
     return x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, cn)])
 
 
 def _key():
+    """Generate a fresh P-256 private key."""
     return ec.generate_private_key(ec.SECP256R1())
 
 
 def make_ca(cn: str = "test-peer-ca"):
+    """Make a short-lived self-signed CA and return (private key, certificate)."""
     key = _key()
     now = dt.datetime.now(dt.timezone.utc)
     cert = (
@@ -81,6 +84,7 @@ def make_leaf(*, issuer=None, days_valid: int = 2, expired: bool = False, cn: st
 
 
 def write_pem(path: Path, cert=None, key=None) -> Path:
+    """Write the optional certificate and private key as PEM to a path and return it."""
     data = b""
     if cert is not None:
         data += cert.public_bytes(_PEM)
@@ -91,11 +95,13 @@ def write_pem(path: Path, cert=None, key=None) -> Path:
 
 
 def fingerprint(cert) -> str:
+    """Return the SHA-256 fingerprint of a certificate's DER encoding as lowercase hex."""
     return hashlib.sha256(cert.public_bytes(serialization.Encoding.DER)).hexdigest()
 
 
 @dataclass
 class PeerServer:
+    """Handle for a running test peer: its port, the requests it has seen, and the canned replies it serves."""
     port: int
     seen: list = field(default_factory=list)  # (method, path, authorization or "")
     reply: dict = field(default_factory=lambda: {"ok": True})
@@ -103,19 +109,24 @@ class PeerServer:
     httpd: ThreadingHTTPServer | None = None
 
     def stop(self) -> None:
+        """Shut the server down and close its socket."""
         self.httpd.shutdown()
         self.httpd.server_close()
 
     @property
     def auth_headers(self) -> list:
+        """Return the non-empty Authorization header values the server has received."""
         return [a for _, _, a in self.seen if a]
 
 
 def start_server(tmp_path: Path, leaf=None, tls: bool = True) -> PeerServer:
+    """Start a loopback HTTP server (HTTPS when tls is true) on a free port in a daemon thread and return its PeerServer handle."""
     srv = PeerServer(port=0)
 
     class H(BaseHTTPRequestHandler):
+        """Request handler that records each request and answers with the configured JSON reply."""
         def _go(self):
+            """Record the request (method, path, Authorization) and send the JSON reply for its path."""
             n = int(self.headers.get("Content-Length") or 0)
             if n:
                 self.rfile.read(n)
@@ -130,6 +141,7 @@ def start_server(tmp_path: Path, leaf=None, tls: bool = True) -> PeerServer:
         do_GET = do_POST = _go
 
         def log_message(self, *a):
+            """Silence the default per-request logging."""
             pass
 
     httpd = ThreadingHTTPServer((LOOPBACK_V4, 0), H)

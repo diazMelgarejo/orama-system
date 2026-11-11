@@ -22,6 +22,7 @@ PEER = "192.0.2.10"
 
 @pytest.fixture
 def peer_mod(monkeypatch):
+    """Load a fresh copy of probe_lan_peer with the WebSocket check stubbed to skip."""
     spec = importlib.util.spec_from_file_location("probe_lan_peer_guard", SCRIPT)
     mod = importlib.util.module_from_spec(spec)
     monkeypatch.setitem(sys.modules, spec.name, mod)
@@ -34,7 +35,9 @@ def peer_mod(monkeypatch):
 
 
 def _recorder(calls):
+    """Return a fake http_get that records (url, token) calls and answers successfully."""
     def fake_get(url: str, token: str = "", timeout: int = 8):
+        """Record the call and answer health, models or a generic success."""
         calls.append((url, token))
         if url.endswith("/health"):
             return 200, '{"status":"ok"}'
@@ -45,6 +48,7 @@ def _recorder(calls):
 
 
 def test_token_never_sent_over_http(peer_mod, monkeypatch):
+    """Over plain http the status check fails with SECURITY_STOP and no token is sent."""
     monkeypatch.delenv("PEER_PORTAL_TLS_ENABLED", raising=False)
     calls: list = []
     monkeypatch.setattr(peer_mod, "http_get", _recorder(calls))
@@ -57,6 +61,7 @@ def test_token_never_sent_over_http(peer_mod, monkeypatch):
 
 
 def test_token_sent_only_over_https_when_tls_enabled(peer_mod, monkeypatch):
+    """With TLS enabled tokens are sent only to https URLs and status passes."""
     monkeypatch.setenv("PEER_PORTAL_TLS_ENABLED", "1")
     calls: list = []
     monkeypatch.setattr(peer_mod, "http_get", _recorder(calls))
@@ -68,6 +73,7 @@ def test_token_sent_only_over_https_when_tls_enabled(peer_mod, monkeypatch):
 
 
 def test_no_tokens_still_skips_status(peer_mod, monkeypatch):
+    """With no tokens the status check is skipped."""
     monkeypatch.delenv("PEER_PORTAL_TLS_ENABLED", raising=False)
     calls: list = []
     monkeypatch.setattr(peer_mod, "http_get", _recorder(calls))
