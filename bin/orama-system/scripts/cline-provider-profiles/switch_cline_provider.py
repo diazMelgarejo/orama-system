@@ -237,6 +237,12 @@ def rotate_backups(backup_dir: str, max_backups: int = MAX_BACKUPS) -> None:
         os.unlink(os.path.join(backup_dir, stale))
 
 
+def _cline_timestamp(moment: datetime) -> str:
+    """Format ``moment`` the way Cline writes timestamps: UTC, millisecond precision, trailing Z."""
+    utc = moment.astimezone(timezone.utc)
+    return utc.strftime("%Y-%m-%dT%H:%M:%S.") + f"{utc.microsecond // 1000:03d}Z"
+
+
 def switch_provider(
     providers_path: str,
     tmpl_path: str,
@@ -291,8 +297,12 @@ def switch_provider(
     # are carried over untouched by construction, not by omission.
     new_openai_compatible = {
         "settings": new_settings,
-        "updatedAt": now.isoformat(),
-        "tokenSource": f"switch-cline-provider.sh:{profile}",
+        # Millisecond precision with a Z suffix, as Cline writes it; Python's isoformat() (+00:00, microseconds)
+        # made Cline 3.0.74 reject the entry with "invalid model ID" (live, 2026-11-12).
+        "updatedAt": _cline_timestamp(now),
+        # Cline 3.0.74 accepts only its own labels (manual, oauth, migration); a custom label such as
+        # "switch-cline-provider.sh:<profile>" made requests fail with "invalid model ID" (live, 2026-11-12).
+        "tokenSource": "manual",
     }
     new_providers = {**cfg.get("providers", {}), "openai-compatible": new_openai_compatible}
     new_cfg = {**cfg, "providers": new_providers, "lastUsedProvider": "openai-compatible"}

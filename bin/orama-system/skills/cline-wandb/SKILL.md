@@ -462,3 +462,9 @@ Rule (operator, 2026-11-12): ask for `medium`, else `high`, else `low`; never `x
   live check.
 - A balance, auth or rate-limit error during a re-check is "could not verify": keep the checked-in
   value and report it, do not guess.
+- Cline 3.0.74 validates the `openai-compatible` entry strictly. `tokenSource` must be `manual`
+  (or Cline's own `oauth`/`migration`) and `updatedAt` must look like
+  `2026-11-12T02:48:17.562Z`; a custom `tokenSource` or Python's `+00:00` timestamp made every
+  request fail with the misleading `error: invalid model ID`. `switch_cline_provider.py` now
+  writes both correctly (tests cover it). An end-to-end run of the real switch script into a
+  throwaway HOME followed by a Cline tool task passed on 2026-11-12.
