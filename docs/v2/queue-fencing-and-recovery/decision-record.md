@@ -30,26 +30,21 @@ Windows gate record (event 497); the operator ratification at 09:45 supersedes t
 This section is the operative one.
 
 Existing binding rules stay in force: D1, D2, D3, D23, IC-1–IC-29, separate R6/R7/R8 and C3d
-gates. Consequences: D-0 documentation must present the gates as Proposed; V1-2 and V2-2
-implementation claims are HELD pending ratified gates; both L-1a commits are HELD (see
-section 3b).
+gates. Consequences: D-0 documentation presents the section 3 gates as accepted; V1-2 and
+V2-2 remain HELD on their independent prerequisites and operator-held C3d-base, push, merge and
+activation decisions. The Windows L-1a drafts remain HELD as cross-evidence; see section 3b.
 
 ## 2. Q-68b — HITL operator override decision (recorded with the cost stated)
 
-Decision: **recorded per the orchestrator tracker's operative HITL formulation — "first retry
-returns the token; subsequent retries are token-free" — with the cost stated.** This session's
-earlier draft recorded the simpler option-B reading; the orchestrator tracker (Antigravity,
-QUEUE-FENCING-PROGRESS-TRACKER.md) carries the operative graded formulation and this record
-defers to it, pending explicit operator confirmation of the graded semantics.
+Decision: **the operator selected the two-stage formulation: the first verified retry returns
+the raw lease token; attempts two and later return a token-free receipt.** Earlier option-A-only
+and option-B-only draft wording is historical and superseded by this graded decision.
 
-- The default (option A, authorized replay returning the raw lease token) stands for slice F;
-  under the graded formulation the FIRST retry of an authorized replay returns the token, and
-  SUBSEQUENT retries are token-free (receipt without the raw token, lost-response lease held
-  for conservative recovery).
-- Cost, stated: a canonical honest failure (a lost response) consumes a full lease TTL before
-  conservative recovery can proceed. The operator accepts this cost deliberately.
-- Scope: slice A hardening, gated behind the slice A premise decision (V1-0/A-V1/P-H1), which
-  remains OPEN.
+- First verified retry: return the token after full admission and idempotency verification.
+- Attempts two and later: return a token-free receipt; the lost-response lease is held for
+  conservative recovery under the applicable controller policy.
+- Scope: this is the Q-68b replay decision only. It does not authorize the other slice-A work
+  (V1-0/A-V1/P-H1), which remains OPEN.
 - Invariant: regardless of the option, a byte-identical captured request from another verified
   channel yields no token and no new lease unless it passes full admission; the cross-channel
   replay regression test applies to both options.
@@ -100,8 +95,9 @@ from cc57cd14; mark 0ca6e421 superseded (keep it, do not revert); re-derive V1-2
 synthesized base.** The canonical L-1a remains the Mac/POSIX lane per the division; both
 Windows commits stand as native cross-evidence.
 
-Also recorded: V1-2 (7a812adf) and the V2-2 claim by the agy implementers are HELD pending
-ratified gates; the gates read Proposed until the operator decides each one.
+Also recorded: V1-2 (7a812adf) and the V2-2 claim by the agy implementers remain HELD pending
+their independent prerequisites and operator-held C3d-base, pushes, merges and activation. The
+section 3 gates are accepted; they are not still Proposed.
 
 ## 4. Disposition cross-reference
 

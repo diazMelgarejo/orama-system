@@ -1,5 +1,12 @@
 # Queue Fencing and Recovery — Consolidated v1/v2 Execution Plan
 
+> **Status note added 2026-11-12 (additive; the plan text below records its
+> pre-ratification state):** the [D-0 decision record](decision-record.md)
+> records operator acceptance of Q-D23, Q-TOPO, Q-D1, Q-D2, Q-68, Q-SQLITE,
+> Q-AGE, Q-RET and Q-LAYOUT. Q-68b uses the two-stage retry rule. These
+> decisions do not authorize merges, pushes, activation, C3d-base or the other
+> owner-held gates.
+
 Status: proposal for manual review. Nothing here is ratified, implemented, published or activated.
 Only the two read-only audits (V1-1, V2-1) and the documentation work package (D-0) are ready to
 start. On acceptance this plan replaces, as recommendations only, the 2026-11-10 authenticated
@@ -173,7 +180,8 @@ L-1 stays a separate task with its own review.
   is gone. Protected queues then refuse legacy cleanup writes and route manual recovery through
   the authority with expected generation and versions. If liveness exists only elsewhere, refuse
   or require continuing quiescence. No false cross-database atomicity.
-- Continuing quiescence from PR 493 stays in force until L-1 lands, is tested, is deployed to
+- Continuing quiescence from Perpetua-Tools PR 493 stays in force until L-1
+  lands, is tested, is deployed to
   every relevant caller and its boundary is proven. Do not run cleanup during the audits. No
   periodic PT cleanup is introduced (D1).
 

@@ -3,9 +3,8 @@
 > **Status:** D-0 documentation work package, assembled 2026-11-11 on branch
 > `qf/d0-documentation`. This directory carries plan, decision and
 > amendment-draft records only; this PR ships no runtime change.
-> **Parent register:** the [master closure register]
-> (../MASTER-CLOSURE-AND-IMPLEMENTATION-PLAN-2026-11-06.md) is the one
-> register for the closure arc; this is a subordinate work package of it, not
+> **Parent register:** the [master closure register](../MASTER-CLOSURE-AND-IMPLEMENTATION-PLAN-2026-11-06.md)
+> is the one register for the closure arc; this is a subordinate work package of it, not
 > a competing register, and every task below maps to an existing master row.
 > Master-register row appends remain with the integrator and are not part of
 > this PR.
@@ -41,13 +40,10 @@ gate** as proposed: Q-D23, Q-TOPO, Q-D1, Q-D2, Q-68, Q-AGE, Q-RET, Q-LAYOUT
 and Q-SQLITE. The recorded decisions and what each gate blocks are in the
 [decision record](decision-record.md).
 
-**Q-68b** is recorded as a **HITL operator override**: the operator selected
-token-free delivery (**option B**) as **slice-A hardening**, accepting the
-stated cost that a lost response consumes a full lease TTL before
-conservative recovery can proceed. The default for slice F remains option A
-(authorized replay returning the raw lease token). Option B stays gated
-behind the slice-A premise decision, which remains open. The cross-channel
-replay regression test applies to both options.
+**Q-68b** has its own recorded two-stage operator decision: the first verified
+retry returns the raw lease token, while attempts two and later return a
+token-free receipt. This limited replay decision does not authorize other
+slice-A work. The cross-channel replay regression test applies to both stages.
 
 ## 4. Tasks and current status
 
@@ -60,7 +56,7 @@ for their own premise decision.
 | V1-1 | PT and integrator, C2/C4/C5 | COMPLETE (2026-11-11): read-only audit, exit 0, PT tree clean at 1020b58; all three L-1a premises confirmed; L-1a GO |
 | V2-1 | Oramasys and integrator, C2/C3a–C3d | Windows-side cross-evidence complete (oramasys audit at f33d809; deliverables written); canonical V2-1 assigned to Antigravity on the Mac; integration pending |
 | D-0 | Orama design owner and operator, C1/C2 | This PR |
-| L-1a | PT, C2/C5 | In implementation on the PT side |
+| L-1a | PT, C2/C5 | Implemented and tested on the Mac/POSIX branch; local commit remains unpushed pending operator-held push and merge. Windows drafts remain held as cross-evidence; no live cleanup run is authorized by this row. |
 | V1-2 | PT, C2/C4/C5 | Gated (needs D-0 accepted gates and Q-SQLITE) |
 | V1-3 | PT, C2/C5 | Gated (needs V1-2) |
 | L-1b | PT, C2/C5 | Gated (needs V1-2) |
@@ -85,11 +81,10 @@ for their own premise decision.
   pins the authoritative recipient field names and the old-client refusal
   code before the Q-68 amendment text is finalized.
 
-All three are byte-identical copies of their sources (SHA-256 verified).
-plan.md satisfies the 100-column wrap in full; decision-record.md and
-amendment-drafts.md preserve their source line wrapping verbatim, including
-source lines that exceed the wrap — per the repository's byte-preserved-copy
-precedent, re-wrapping was not applied to verbatim records.
+The source records are preserved as historical inputs. The dated status notes in
+this work package are additive remediation: they identify superseded operational
+status without rewriting the source history. Markdown lint applies to the files
+as published here.
 
 ## 6. Amendments applied in docs/v2 by this PR
 

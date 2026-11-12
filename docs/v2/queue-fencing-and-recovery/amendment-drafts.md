@@ -122,6 +122,13 @@ implementation" and are accurate at this head
 
 ## Part 2 — Q-68b amendment draft
 
+> **Status note (2026-11-12, additive): historical draft, superseded as an
+> operator choice.** The operative Q-68b decision is the two-stage rule in the
+> [decision record](decision-record.md): the first verified retry returns the
+> raw lease token and attempts two and later return a token-free receipt. The
+> option A/B analysis below remains the V2-1 audit record; it is not an open
+> choice.
+
 ### 2.1 The decision Q-68b requests (plan text; U as a decision, V as plan wording)
 
 Plan line 113: "Replay delivery: A keeps authorized replay returning the token (default, F). B
@@ -190,13 +197,17 @@ absent today (V of absence) and is the proving test named in the plan's Transpor
 
 ### 2.6 Open points for the operator (U)
 
-1. Confirm option A as the default or authorize option B; confirm the stated cost (a lost response
-   consumes a full lease TTL) is accepted.
+1. Q-68b operator choice is recorded: use the two-stage rule in the decision record. Specify the
+   controller policy governing the held lost-response lease for attempts two and later.
 2. Pin the authoritative recipient field names and the old-client refusal code for Q-68 from the
    legacy envelope definition (external to this clone).
 3. Confirm the additive banner wording for doc 68 with the Orama design owner.
-4. Record the answers in the D-0 decision record per plan section 5 row D-0 and section 12 (plan
-   lines 189, 335–337).
+4. Record the remaining Q-68 field-name, refusal-code and doc-68-banner answers in the D-0 decision
+   record per plan section 5 row D-0 and section 12 (plan lines 189, 335–337).
+5. Define cross-version replay/read-back policy before the schema bump: because a request digest
+   includes schema_version, a schema-1 replay after the Q-68 bump can receive
+   `idempotency.key_reused` instead of recovering its prior receipt. Either define a compatible
+   read-back path or drain affected claims before cutover.
 
 ---
 
