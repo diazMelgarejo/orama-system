@@ -141,7 +141,7 @@ to OpenRouter free models in fallback order:
 ```text
 1. openrouter/nvidia/nemotron-3-super-120b-a12b:free   (1M ctx, agent-strong)
 2. openrouter/minimax/minimax-m2.5:free                (205K, 80.2% SWE-Bench)
-3. openrouter/deepseek/deepseek-v4-flash:free          (1M, fast triage)
+3. (removed 2026-11-12: no live :free DeepSeek flash id; see the stale-reference ledger)
 4. openrouter/openai/gpt-oss-120b:free                 (131K, tool-use)
 5. openrouter/z-ai/glm-4.5-air:free                    (131K, agentic backup)
 6. openrouter/inclusionai/ling-2.6-flash:free          (262K, lightweight)

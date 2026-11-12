@@ -189,7 +189,6 @@ OPENROUTER_FREE_FALLBACKS = [
     "ollama/qwen3.5:9b-mlx",
     "openrouter/nvidia/nemotron-3-super-120b-a12b:free",
     "openrouter/minimax/minimax-m2.5:free",
-    "openrouter/deepseek/deepseek-v4-flash:free",
     "openrouter/openai/gpt-oss-120b:free",
     "openrouter/z-ai/glm-4.5-air:free",
     "openrouter/inclusionai/ling-2.6-flash:free",

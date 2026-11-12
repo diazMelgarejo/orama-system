@@ -438,6 +438,7 @@ class TestSetupCompletion:
         payload = json.loads(request.split(" -d ", 1)[1])
         assert payload["model"] == "glm-5.3-flash"
         assert payload["max_tokens"] == 512
+        assert payload["reasoning_effort"] == "high"  # BigModel defaults to max when omitted; never max
         assert payload["messages"] == [{"role": "user", "content": "Reply with only OK."}]
 
     def test_prints_setup_complete_message(self, tmp_path):

@@ -33,10 +33,11 @@ if [[ -z "${OPENROUTER_API_KEY:-}" ]]; then
   echo "ERROR: OPENROUTER_API_KEY is not set. Skipping endpoint checks." >&2
   EXIT_CODE=1
 else
+  # 2026-11-12: deepseek/deepseek-v4-flash:free was removed (not in OpenRouter's live model list).
+  # The other :free ids below were also absent that day; this check reports them as WARN on purpose.
   MODELS=(
     "nvidia/nemotron-3-super-120b-a12b:free"
     "minimax/minimax-m2.5:free"
-    "deepseek/deepseek-v4-flash:free"
     "openai/gpt-oss-120b:free"
     "z-ai/glm-4.5-air:free"
     "inclusionai/ling-2.6-flash:free"

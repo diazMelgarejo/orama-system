@@ -28,11 +28,19 @@ When a caller does NOT specify an agent, the openclaw-skills MUST route to OpenR
 |------|----------|---------|------|
 | A (primary) | `openrouter/nvidia/nemotron-3-super-120b-a12b:free` | 1M | Default agent brain — long-context, agentic, SWE-Bench/AIME-strong |
 | B | `openrouter/minimax/minimax-m2.5:free` | 205K | Coding fallback — 80.2% SWE-Bench Verified |
-| C | `openrouter/deepseek/deepseek-v4-flash:free` | 1.05M | Fast triage — heartbeat analysis, log review |
+| C | removed 2026-11-12 (no live `:free` id) | n/a | was fast triage |
 | D | `openrouter/openai/gpt-oss-120b:free` | 131K | Reasoning + tool use |
 | E | `openrouter/z-ai/glm-4.5-air:free` | 131K | Agentic backup |
 | F | `openrouter/inclusionai/ling-2.6-flash:free` | 262K | Lightweight tasks |
 | Z (last resort) | `openrouter/openrouter/free` | varies | Auto-router |
+
+> **Live check 2026-11-12:** `openrouter/deepseek/deepseek-v4-flash:free` was removed:
+> OpenRouter's public model list has no `:free` DeepSeek flash id (paid ids
+> `deepseek/deepseek-v4.1-flash-1017`, `deepseek/deepseek-v4.1-flash`,
+> `deepseek/deepseek-v4-flash-0731` exist at about $0.1 per 1M input tokens, so they do not belong
+> in a free-tier stack without an explicit opt-in). Five other ids in this list are also absent
+> from the live list; an operator decision is needed on replacements (the stack still ends in the
+> working `openrouter/free` router). Details: `docs/stale-reference-ledger-2026-11-12.md`.
 
 ## Local-first preference
 
@@ -63,7 +71,6 @@ Gemini is NOT in the default fallback. Reserved for:
         "fallbacks": [
           "openrouter/nvidia/nemotron-3-super-120b-a12b:free",
           "openrouter/minimax/minimax-m2.5:free",
-          "openrouter/deepseek/deepseek-v4-flash:free",
           "openrouter/openai/gpt-oss-120b:free",
           "openrouter/z-ai/glm-4.5-air:free",
           "openrouter/inclusionai/ling-2.6-flash:free",
@@ -74,7 +81,6 @@ Gemini is NOT in the default fallback. Reserved for:
         "ollama/qwen3.5:9b-nvfp4": {},
         "openrouter/nvidia/nemotron-3-super-120b-a12b:free": {},
         "openrouter/minimax/minimax-m2.5:free": {},
-        "openrouter/deepseek/deepseek-v4-flash:free": {},
         "openrouter/openai/gpt-oss-120b:free": {},
         "openrouter/z-ai/glm-4.5-air:free": {},
         "openrouter/inclusionai/ling-2.6-flash:free": {},

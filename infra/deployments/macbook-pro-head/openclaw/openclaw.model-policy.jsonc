@@ -32,7 +32,6 @@
         "fallbacks_to_merge": [
           "openrouter/nvidia/nemotron-3-super-120b-a12b:free",
           "openrouter/minimax/minimax-m2.5:free",
-          "openrouter/deepseek/deepseek-v4-flash:free",
           "openrouter/openai/gpt-oss-120b:free",
           "openrouter/z-ai/glm-4.5-air:free",
           "openrouter/inclusionai/ling-2.6-flash:free",
@@ -49,9 +48,6 @@
         },
         "openrouter/minimax/minimax-m2.5:free": {
           "alias": "Free-MiniMax-M25"
-        },
-        "openrouter/deepseek/deepseek-v4-flash:free": {
-          "alias": "Free-DeepSeek-V4-Flash"
         },
         "openrouter/openai/gpt-oss-120b:free": {
           "alias": "Free-GPT-OSS-120B"
@@ -82,7 +78,7 @@
   //   2. <existing fallbacks>                         (user's manual overrides)
   //   3. openrouter/nvidia/nemotron-3-super-...:free  (agent-strong, 1M ctx)
   //   4. openrouter/minimax/minimax-m2.5:free         (coding, 80.2% SWE-Bench)
-  //   5. openrouter/deepseek/deepseek-v4-flash:free   (fast long-context)
+  //   (removed 2026-11-12: the :free DeepSeek flash id is not in OpenRouter's live model list; paid DeepSeek flash ids exist but are not free-tier)
   //   6. openrouter/openai/gpt-oss-120b:free          (tool use, structured)
   //   7. openrouter/z-ai/glm-4.5-air:free             (agentic backup)
   //   8. openrouter/inclusionai/ling-2.6-flash:free   (lightweight, 262K)

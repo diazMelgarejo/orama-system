@@ -2,7 +2,7 @@
 
 **Status:** Active default model policy as of 2026-05-14
 **Source spec:** [`OpenClaw/v1/OpenRouter.md`](../../v1/OpenRouter.md)
-**Canonical MCP routing:** [`bin/orama-system/skills/mcp-orchestration/SKILL.md`](../bin/orama-system/skills/mcp-orchestration/SKILL.md) §2
+**Canonical MCP routing:** [`mcp-orchestration/SKILL.md`][mcp-skill] §2
 **Apply with:** `scripts/apply-openrouter-free-defaults.sh`
 **Verify with:** `scripts/verify-openrouter-models.sh`
 
@@ -10,36 +10,49 @@
 
 ## What this policy is
 
-OpenClaw and the orama-system agent network default to **OpenRouter free models** as the generic worker pool. Local ollama on Mac still orchestrates first when the task can stay local. Gemini is no longer a default reader path; use it only for explicit analyzer use-cases such as visual diff, whole-repo, or multi-file audits.
+OpenClaw and the orama-system agent network default to **OpenRouter free models** as the generic
+worker pool. Local ollama on Mac still orchestrates first when the task can stay local. Gemini is no
+longer a default reader path; use it only for explicit analyzer use-cases such as visual diff,
+whole-repo, or multi-file audits.
 
-The policy is benchmark-informed and uses pinned `*:free` model IDs for deterministic behavior, with `openrouter/openrouter/free` as the auto-router fallback.
+The policy is benchmark-informed and uses pinned `*:free` model IDs for deterministic behavior, with
+`openrouter/openrouter/free` as the auto-router fallback.
 
 ---
 
 ## Routing chain (this session's adopted order)
 
 | # | Model | Context | Use |
-|---|-------|---------|-----|
+| --- | ------- | --------- | ----- |
 | 1 | ollama qwen3.5:9b-nvfp4 (local Mac) | local | Lint, format, bash scripts, no-network workloads |
 | 2 | openrouter/nvidia/nemotron-3-super-120b-a12b:free | 1M | Primary worker — agent reasoning, long-context |
 | 3 | openrouter/minimax/minimax-m2.5:free | 205K | Coding, document generation (80.2% SWE-Bench) |
-| 4 | openrouter/deepseek/deepseek-v4-flash:free | 1M | Fast triage, heartbeat checks |
+| 4 | removed 2026-11-12 (no live `:free` id) | n/a | was fast triage |
 | 5 | openrouter/openai/gpt-oss-120b:free | 131K | Structured output, tool use |
 | 6 | openrouter/z-ai/glm-4.5-air:free | 131K | Agentic backup |
 | 7 | openrouter/inclusionai/ling-2.6-flash:free | 262K | Speed-focused parsing |
 | 8 | openrouter/openrouter/free | varies | Auto-router, last resort |
 | 9 | gemini (Pro/Flash) | 2M | **Analyzer-only, explicit opt-in** — visual diff, whole-repo audit, never first-class fallback |
 
+> **Live check 2026-11-12:** `openrouter/deepseek/deepseek-v4-flash:free` was removed:
+> OpenRouter's public model list has no `:free` DeepSeek flash id (paid ids
+> `deepseek/deepseek-v4.1-flash-1017`, `deepseek/deepseek-v4.1-flash`,
+> `deepseek/deepseek-v4-flash-0731` exist at about $0.1 per 1M input tokens, so they do not belong
+> in a free-tier stack without an explicit opt-in). Five other ids in this list are also absent
+> from the live list; an operator decision is needed on replacements (the stack still ends in the
+> working `openrouter/free` router). Details: `docs/stale-reference-ledger-2026-11-12.md`.
+
 Models 2–8 are accessed via OpenRouter API (`OPENROUTER_API_KEY`).
 Model 1 is local-only (no API cost).
-Model 9 is access-constrained (GitHub auth issues per user note) — reserve for visual/large-context specialty and keep it behind the OpenRouter fallback chain.
+Model 9 is access-constrained (GitHub auth issues per user note) — reserve for visual/large-context
+specialty and keep it behind the OpenRouter fallback chain.
 
 ---
 
 ## Per-agent overrides
 
 | Agent | Primary | Why |
-|-------|---------|-----|
+| ------- | --------- | ----- |
 | Frontdoor | Ling 2.6 Flash | Fast parser, messaging profile |
 | LogRotator | DeepSeek V4 Flash | Fast long-context for log triage |
 | Backup | Nemotron 3 Super | Long-term coherence |
@@ -66,7 +79,8 @@ Source: [openrouter.ai/pricing](https://openrouter.ai/pricing)
 Free models may have provider-specific logging. For lab/RC-1 work:
 
 - **No secrets in prompts** — no API keys, passwords, payroll, PHI, credential dumps, private keys
-- **Wrappers stay deterministic** — `LLM → structured intent → signed wrapper → strict action allowlist → JSON result`
+- **Wrappers stay deterministic** — `LLM → structured intent → signed wrapper → strict action
+  allowlist → JSON result`
 - **Human gates preserved:**
   - dry-run default
   - `--apply` requires explicit YES
@@ -98,6 +112,10 @@ scripts/verify-openrouter-models.sh
 
 - Adopted OpenRouter free-model policy from `OpenClaw/v1/OpenRouter.md`
 - Added ollama qwen3.5:9b-nvfp4 as local-first priority (per Mac hard requirement in CLAUDE.md)
-- Pushed Gemini to explicit analyzer-only routing (visual diff + whole-repo only) due to GitHub access issues
-- Canonical MCP orchestration skill at `bin/orama-system/mcp-orchestration/SKILL.md` references this policy as §2 Rule 1
+- Pushed Gemini to explicit analyzer-only routing (visual diff + whole-repo only) due to GitHub
+  access issues
+- Canonical MCP orchestration skill at `bin/orama-system/mcp-orchestration/SKILL.md` references this
+  policy as §2 Rule 1
 - Preserved LAN gateway, WhatsApp allowlist, sandbox, wrapper safety defaults
+
+[mcp-skill]: ../bin/orama-system/skills/mcp-orchestration/SKILL.md

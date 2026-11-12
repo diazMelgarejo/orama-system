@@ -14,8 +14,10 @@ import os
 import re
 import sys
 import tempfile
+import urllib.error
+import urllib.request
 from datetime import datetime, timedelta, timezone
-from typing import Any, Mapping, Sequence
+from typing import Any, Callable, Mapping, Sequence
 
 try:  # POSIX
     import fcntl
@@ -121,6 +123,113 @@ def resolve_template(tmpl_path: str, env: Mapping[str, str] | None = None) -> di
     return json.loads(re.sub(r"\$\{([A-Z0-9_]+)\}", resolve, raw))["settings"]
 
 
+# --- live model / effort resolution -------------------------------------------
+# Operator rules (2026-11-12): effort order medium -> high -> low, never xhigh
+# or max; the model is the first candidate the provider actually serves. A
+# route with no acceptable choice is reported blocked, never guessed.
+EFFORT_ORDER = ("medium", "high", "low")
+FORBIDDEN_EFFORTS = frozenset({"xhigh", "max"})
+_REJECTED_STATUSES = frozenset({400, 404, 422})  # the provider said "not this model/level"
+_HTTP_TIMEOUT_SECONDS = 60  # hard ceiling per call; GLM on W&B answers in 23-30 s
+_PROBE_PROMPT = "Reply with the number 1."
+
+
+class ProbeError(RuntimeError):
+    """A probe was inconclusive (auth, balance, rate limit, server or network error); it must not read as 'rejected'."""
+
+
+def choose_first_available(candidates: Sequence[str], live_ids: Sequence[str]) -> str | None:
+    """Return the first candidate that appears in ``live_ids`` (exact match), or None; candidate order is the preference order."""
+    served = set(live_ids)
+    return next((c for c in candidates if c in served), None)
+
+
+def choose_effort(candidates: Sequence[str], probe: Callable[[str], bool]) -> str | None:
+    """Return the first non-forbidden level that ``probe`` accepts, or None; forbidden levels are never probed and ProbeError propagates."""
+    for level in candidates:
+        if level in FORBIDDEN_EFFORTS:
+            continue
+        if probe(level):
+            return level
+    return None
+
+
+def resolve_route(
+    model_candidates: Sequence[str],
+    live_ids: Sequence[str],
+    effort_candidates: Sequence[str],
+    probe: Callable[[str, str], bool] | None,
+) -> tuple[str, str] | None:
+    """Return (model, effort) for the first served model with an acceptable effort, or None when blocked.
+
+    Without ``probe`` nothing is billed: the first served model and the first
+    allowed effort are returned unverified.
+    """
+    served = [m for m in model_candidates if m in set(live_ids)]
+    allowed = [e for e in effort_candidates if e not in FORBIDDEN_EFFORTS]
+    if probe is None:
+        return (served[0], allowed[0]) if served and allowed else None
+    for model in served:
+        effort = choose_effort(allowed, lambda level, m=model: probe(m, level))
+        if effort is not None:
+            return model, effort
+    return None
+
+
+def with_model_and_effort(settings: Mapping[str, Any], model: str, effort: str) -> dict[str, Any]:
+    """Return a new settings dict with ``model`` and ``reasoning.effort`` replaced; the input is never mutated."""
+    reasoning = {"enabled": True, **dict(settings.get("reasoning", {})), "effort": effort}
+    return {**settings, "model": model, "reasoning": reasoning}
+
+
+def read_resolution(tmpl_path: str) -> dict[str, Any]:
+    """Return the template's sibling ``resolution`` block (models and efforts), or {} when absent; forbidden efforts raise ValueError."""
+    with open(tmpl_path) as f:
+        block = json.load(f).get("resolution", {})
+    bad = FORBIDDEN_EFFORTS.intersection(block.get("efforts", []))
+    if bad:
+        raise ValueError(f"template resolution lists forbidden effort level(s): {sorted(bad)}")
+    return block
+
+
+def _request(url: str, api_key: str, body: Mapping[str, Any] | None) -> tuple[int, str]:
+    """Send one bounded request with the key in an Authorization header; return (status, body text) without ever echoing the key."""
+    data = json.dumps(body).encode() if body is not None else None
+    req = urllib.request.Request(
+        url, data=data, method="POST" if body is not None else "GET",
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=_HTTP_TIMEOUT_SECONDS) as resp:  # noqa: S310 - https/loopback only
+            return resp.status, resp.read().decode()
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.read().decode()
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        raise ProbeError(f"network error: {type(exc).__name__}") from exc
+
+
+def list_live_models(base_url: str, api_key: str) -> list[str]:
+    """Return the model ids the provider lists at ``GET {base_url}/models`` (free call); anything but 200 raises ProbeError."""
+    status, text = _request(f"{base_url.rstrip('/')}/models", api_key, None)
+    if status != 200:
+        raise ProbeError(f"model list returned HTTP {status}")
+    return [m["id"] for m in json.loads(text).get("data", []) if "id" in m]
+
+
+def probe_effort(base_url: str, api_key: str, model: str, level: str) -> bool:
+    """Send one tiny billed request with ``reasoning_effort=level``; True on 200, False when the provider rejects it, ProbeError otherwise."""
+    if level in FORBIDDEN_EFFORTS:
+        raise ValueError(f"refusing to probe forbidden effort level {level!r}")
+    body = {"model": model, "messages": [{"role": "user", "content": _PROBE_PROMPT}],
+            "max_tokens": 200, "reasoning_effort": level}
+    status, _text = _request(f"{base_url.rstrip('/')}/chat/completions", api_key, body)
+    if status == 200:
+        return True
+    if status in _REJECTED_STATUSES:
+        return False
+    raise ProbeError(f"probe returned inconclusive HTTP {status}")
+
+
 def rotate_backups(backup_dir: str, max_backups: int = MAX_BACKUPS) -> None:
     """Delete the oldest backups whose stamp parses so that at most ``max_backups`` newest ones remain; unparseable names are neither counted nor deleted."""
     entries = _stamped_backups(backup_dir)
@@ -135,6 +244,7 @@ def switch_provider(
     backup_dir: str,
     env: Mapping[str, str] | None = None,
     now: datetime | None = None,
+    resolution: tuple[str, str] | None = None,
 ) -> str:
     """Returns a status string: "no-op" or "activated"."""
     now = now or datetime.now(timezone.utc)
@@ -142,6 +252,8 @@ def switch_provider(
     cfg = load_json(providers_path)
     outgoing = cfg.get("providers", {}).get("openai-compatible", {}).get("settings", {})
     new_settings = resolve_template(tmpl_path, env=env)
+    if resolution is not None:
+        new_settings = with_model_and_effort(new_settings, *resolution)
 
     # No-op check: if the requested profile resolves to what's already
     # live, there is nothing to change and nothing to back up.
@@ -215,21 +327,47 @@ def _unlock(fd: int) -> None:
     msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
 
 
+def _resolve_for_main(tmpl_path: str, flags: Sequence[str]) -> tuple[str, str] | None:
+    """Apply ``--resolve`` (free model-list check) and ``--verify-effort`` (billed, opt-in probes); return None to keep the template as written."""
+    wants_list = "--resolve" in flags or "--verify-effort" in flags
+    if not wants_list:
+        return None
+    settings = resolve_template(tmpl_path)
+    resolution = read_resolution(tmpl_path)
+    models = resolution.get("models") or [settings["model"]]
+    efforts = resolution.get("efforts") or list(EFFORT_ORDER)
+    base_url, api_key = settings["baseUrl"], settings["apiKey"]
+    live = list_live_models(base_url, api_key)
+    probe = (lambda m, e: probe_effort(base_url, api_key, m, e)) if "--verify-effort" in flags else None
+    chosen = resolve_route(models, live, efforts, probe)
+    if chosen is None:
+        raise SystemExit("ERROR: route blocked: no candidate model is served with an acceptable effort level; providers.json left unchanged")
+    if probe is None:
+        chosen = (chosen[0], settings.get("reasoning", {}).get("effort", chosen[1]))
+    return chosen
+
+
 def main(argv: Sequence[str]) -> None:
-    """CLI entry: take providers path, template, profile name, backup dir and lock path from ``argv``, switch under an exclusive lock, then print whether the profile was activated or already live."""
+    """CLI entry: providers path, template, profile, backup dir and lock path from ``argv``, then optional ``--resolve`` / ``--verify-effort``; switch under an exclusive lock and print whether the profile was activated or already live."""
     providers_path, tmpl_path, profile, backup_dir, lock_path = argv[1:6]
+    flags = argv[6:]
+    try:
+        chosen = _resolve_for_main(tmpl_path, flags)
+    except ProbeError as exc:
+        raise SystemExit(f"ERROR: could not verify the route ({exc}); providers.json left unchanged") from exc
     lock_fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
     _lock_exclusive(lock_fd)
     try:
-        status = switch_provider(providers_path, tmpl_path, profile, backup_dir)
+        status = switch_provider(providers_path, tmpl_path, profile, backup_dir, resolution=chosen)
     finally:
         _unlock(lock_fd)
         os.close(lock_fd)
 
+    detail = f" (model {chosen[0]}, effort {chosen[1]})" if chosen else ""
     if status == "no-op":
-        print(f"Already on profile: {profile} (no changes)")
+        print(f"Already on profile: {profile} (no changes){detail}")
     else:
-        print(f"Activated profile: {profile}")
+        print(f"Activated profile: {profile}{detail}")
 
 
 if __name__ == "__main__":

@@ -155,11 +155,19 @@ OpenRouter fallback stack:
 | ------ | ---------- | ------ |
 | A | `openrouter/nvidia/nemotron-3-super-120b-a12b:free` | Default agent brain |
 | B | `openrouter/minimax/minimax-m2.5:free` | Coding fallback |
-| C | `openrouter/deepseek/deepseek-v4-flash:free` | Fast triage |
+| C | removed 2026-11-12 (no live `:free` id) | n/a |
 | D | `openrouter/openai/gpt-oss-120b:free` | Reasoning and tool use |
 | E | `openrouter/z-ai/glm-4.5-air:free` | Agentic backup |
 | F | `openrouter/inclusionai/ling-2.6-flash:free` | Lightweight tasks |
 | Z | `openrouter/openrouter/free` | Last-resort auto-router |
+
+> **Live check 2026-11-12:** `openrouter/deepseek/deepseek-v4-flash:free` was removed:
+> OpenRouter's public model list has no `:free` DeepSeek flash id (paid ids
+> `deepseek/deepseek-v4.1-flash-1017`, `deepseek/deepseek-v4.1-flash`,
+> `deepseek/deepseek-v4-flash-0731` exist at about $0.1 per 1M input tokens, so they do not belong
+> in a free-tier stack without an explicit opt-in). Five other ids in this list are also absent
+> from the live list; an operator decision is needed on replacements (the stack still ends in the
+> working `openrouter/free` router). Details: `docs/stale-reference-ledger-2026-11-12.md`.
 
 Gemini is specialized only and is not the default fallback. Reserve it for visual diff, screenshot comparison, whole-repo architecture mapping, stale-doc detection, or explicit second-opinion review.
 

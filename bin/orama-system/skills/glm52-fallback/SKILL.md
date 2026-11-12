@@ -77,8 +77,13 @@ The script creates the secrets file and operator-local env bundle (mode 600), wi
 - **Endpoint**: `https://open.bigmodel.cn/api/paas/v4/chat/completions`
 - **API Key**: `$GLM52_API_KEY` environment variable (never hardcode)
 - **Model**: `glm-5.3-flash`
-- **Thinking**: Enabled (reasoning_content in response)
-- **Max tokens**: 65536
+- **Thinking**: Always on for glm-5.3-flash (it cannot be disabled; reasoning_content in response)
+- **Reasoning effort**: send `"reasoning_effort": "high"` explicitly. Official BigModel docs
+  (2026-11-12): glm-5.3-flash accepts only `low`, `high` and `max`, and the default is `max`,
+  which the operator rule forbids. `medium` is rejected (HTTP 400, code 1210), so the rule
+  medium, else high, else low lands on `high`. Never `xhigh` or `max`.
+- **Context window**: 1M tokens (official). Older text here said 131072: that is the maximum output.
+- **Max tokens**: default 65536, maximum 131072 (official); this skill requests 65536
 - **Temperature**: 1.0
 
 ## Request Template
@@ -92,6 +97,7 @@ curl -X POST "$GLM52_ENDPOINT" \
     "model": "glm-5.3-flash",
     "messages": [{"role": "user", "content": "<USER_PROMPT>"}],
     "thinking": {"type": "enabled"},
+    "reasoning_effort": "high",
     "max_tokens": 65536,
     "temperature": 1.0
   }'
@@ -108,7 +114,7 @@ curl -X POST "$GLM52_ENDPOINT" \
     "models": [{
       "id": "glm-5.3-flash",
       "name": "glm-5.3-flash (BigModel, thinking)",
-      "contextWindow": 131072,
+      "contextWindow": 1000000,
       "maxTokens": 65536,
       "reasoning": true
     }]
@@ -119,7 +125,7 @@ curl -X POST "$GLM52_ENDPOINT" \
 ## Timeout & Retry Policy
 
 - **Connect timeout**: 10s (fail fast on network issues)
-- **Total timeout**: 120s (allow reasoning time)
+- **Total timeout**: 120s (allow reasoning time; the Cline profile `bigmodel-glm53-flash` uses the same 120000 ms)
 - **Auto-retry**: 3 attempts, 2s backoff
 
 **Exit codes:** `0` = success · `7` = connection failed → next fallback · `28` = timeout → next · `52` = empty reply → next
@@ -183,3 +189,15 @@ This skill is the reference implementation for [`references/interactive-provider
 - [cline-openclaw-agent](../cline-openclaw-agent/SKILL.md) — ClinePass default
 - [mcp-orchestration](../mcp-orchestration/SKILL.md) — routing strategy
 - [openrouter-defaults](../openclaw-skills/references/openrouter-defaults.md) — free tier fallback
+
+## Evidence status (2026-11-12)
+
+- OFFICIAL (BigModel docs, Chinese originals translated): effort levels and default, thinking
+  forced on, 1M context, default/max output 65536/131072, price 0.8 in / 2.8 out CNY per 1M
+  tokens, error codes 1113 (account in arrears, HTTP 429) and 1210 (invalid parameters, HTTP 400).
+- LIVE: `glm-5.3-flash` appears in `GET /models`; `reasoning_effort: medium` returned HTTP 400
+  (code 1210); every other call returned HTTP 429 code 1113 because the account has no balance.
+  Real completions on BigModel were therefore NOT observed. The same model name on W&B
+  (`zai-org/GLM-5.3-Flash`) accepted medium, high and low but takes 23-30 s per call.
+- Legacy names kept on purpose: `GLM52_API_KEY`, `.env.glm52`, `setup-glm52.sh` and this
+  directory name predate the model rename; the model is `glm-5.3-flash`.
