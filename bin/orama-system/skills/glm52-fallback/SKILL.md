@@ -201,3 +201,7 @@ This skill is the reference implementation for [`references/interactive-provider
   (`zai-org/GLM-5.3-Flash`) accepted medium, high and low but takes 23-30 s per call.
 - Legacy names kept on purpose: `GLM52_API_KEY`, `.env.glm52`, `setup-glm52.sh` and this
   directory name predate the model rename; the model is `glm-5.3-flash`.
+- Effort re-check cadence: the checked-in `high` is applied on every switch; medium, then high,
+  then low is re-verified only periodically during a reviewed repository update (see the
+  "Effort rule" section of `../cline-wandb/SKILL.md`). BigModel could not be probed live on
+  2026-11-12 (no balance), so re-check it first once the account can be called.

@@ -442,3 +442,23 @@ Every line below was observed that day with a throwaway `--config` directory.
 - Official DeepSeek rationale for `1017`: the 2026-10-17 upgrade of V4.1-Flash
   (a performance-cost improvement); DeepSeek's own `deepseek-flash` alias now
   serves it.
+
+## Effort rule: what runs on every switch, and when it is re-checked
+
+Rule (operator, 2026-11-12): ask for `medium`, else `high`, else `low`; never `xhigh` or `max`.
+
+- **Every switch (free, no network):** `switch-cline-provider.sh <profile>` writes the template as
+  checked in. The template's `effort` is the last level verified live (`high` for the W&B V4.1
+  models and for BigModel today), so every update to the rule or to the request syntax that landed
+  in the template is applied automatically on every switch.
+- **Not on every switch:** the medium, then high, then low order is only walked when the opt-in
+  `--verify-effort` flag is used. It sends tiny billed requests, so it is not run per switch. A
+  provider that starts accepting `medium` later is therefore not picked up by a plain switch.
+- **Periodic re-check (the accepted cost):** run `--resolve --verify-effort` as part of a
+  repository update, after review and testing like the 2026-11-12 qualification: list the live
+  models, probe each effort level on the first served model, run one Cline tool task with a
+  throwaway `--config`, then update the template's `effort` and `resolution` block and the
+  evidence section above in the same reviewed change. Never edit the effort by hand without a
+  live check.
+- A balance, auth or rate-limit error during a re-check is "could not verify": keep the checked-in
+  value and report it, do not guess.

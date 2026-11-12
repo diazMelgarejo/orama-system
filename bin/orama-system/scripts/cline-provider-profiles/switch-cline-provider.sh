@@ -30,7 +30,9 @@
 # Reasoning effort (operator rule, 2026-11-12): medium, else high, else low;
 # never xhigh or max; always explicit (BigModel defaults to max when it is
 # omitted). The checked-in static value is the last live-verified choice
-# (high on both profiles today). Optional live checks:
+# (high on both profiles today) and is applied on EVERY switch. The medium ->
+# high -> low walk is a periodic, reviewed re-check (repo updates), not a
+# per-switch cost. Optional live checks:
 #   --resolve        free GET /models: pick the first served model candidate
 #   --verify-effort  tiny BILLED probes: also pick the first accepted effort
 #                    (implies --resolve). Opt-in only. A balance, auth or

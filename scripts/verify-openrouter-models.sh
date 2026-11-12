@@ -33,14 +33,15 @@ if [[ -z "${OPENROUTER_API_KEY:-}" ]]; then
   echo "ERROR: OPENROUTER_API_KEY is not set. Skipping endpoint checks." >&2
   EXIT_CODE=1
 else
-  # 2026-11-12: deepseek/deepseek-v4-flash:free was removed (not in OpenRouter's live model list).
-  # The other :free ids below were also absent that day; this check reports them as WARN on purpose.
+  # 2026-11-12: the six :free ids that had vanished from OpenRouter's live list were replaced by
+  # ids that answered live (plain + tool call) that day; a future vanished id shows as WARN here.
   MODELS=(
-    "nvidia/nemotron-3-super-120b-a12b:free"
-    "minimax/minimax-m2.5:free"
-    "openai/gpt-oss-120b:free"
-    "z-ai/glm-4.5-air:free"
-    "inclusionai/ling-2.6-flash:free"
+    "nvidia/nemotron-3-ultra-550b-a55b:free"
+    "cohere/north-mini-code:free"
+    "nvidia/nemotron-3.5-lightning:free"
+    "nvidia/nemotron-3.5-super-vl:free"
+    "baidu/ernie-5.5-flash-preview:free"
+    "liquid/lfm-3-1.7b:free"
     "openrouter/free"
   )
 
@@ -115,8 +116,8 @@ else
   fi
 
   # Required: Nemotron primary present
-  if grep -q "openrouter/nvidia/nemotron-3-super-120b-a12b:free" "$CONFIG"; then
-    echo "  ✓ Nemotron primary present"
+  if grep -q "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free" "$CONFIG"; then
+    echo "  ✓ Nemotron primary present (nemotron-3-ultra)"
   else
     echo "  ✗ MISSING: Nemotron primary"
     EXIT_CODE=1

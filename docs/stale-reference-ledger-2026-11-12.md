@@ -15,7 +15,7 @@ provider checks, translated BigModel official docs, DeepSeek official change log
 | BigModel `glm-5.3-flash` limits | context 131072, max 65536 | context 1M; default output 65536; maximum output 131072 (official) |
 | BigModel profile name | `bigmodel-glm52` | `bigmodel-glm53-flash` (old name still accepted as an alias) |
 | OpenRouter DeepSeek flash | `openrouter/deepseek/deepseek-v4-flash:free` | not in OpenRouter's live list; paid ids `deepseek/deepseek-v4.1-flash-1017`, `deepseek/deepseek-v4.1-flash`, `deepseek/deepseek-v4-flash-0731`; alias `~deepseek/deepseek-flash-latest` |
-| Other OpenRouter free ids | `nvidia/nemotron-3-super-120b-a12b:free`, `minimax/minimax-m2.5:free`, `openai/gpt-oss-120b:free`, `z-ai/glm-4.5-air:free`, `inclusionai/ling-2.6-flash:free` | also absent from the live list on 2026-11-12; **open operator decision** on replacements; `openrouter/free` is live |
+| OpenRouter free-tier stack | six ids: `nvidia/nemotron-3-super-120b-a12b:free`, `minimax/minimax-m2.5:free`, `deepseek/deepseek-v4-flash:free`, `openai/gpt-oss-120b:free`, `z-ai/glm-4.5-air:free`, `inclusionai/ling-2.6-flash:free` (all absent from the live list) | A `nvidia/nemotron-3-ultra-550b-a55b:free`, B `cohere/north-mini-code:free`, C `nvidia/nemotron-3.5-lightning:free`, D `nvidia/nemotron-3.5-super-vl:free`, E `baidu/ernie-5.5-flash-preview:free`, F `liquid/lfm-3-1.7b:free`, Z `openrouter/free`; each answered a plain and a tool-call request live on 2026-11-12 |
 | DeepSeek `1017` | "V4-Flash" / "V4.1-Flash" without a build | `V4.1-Flash-1017` is the 2026-10-17 upgrade; DeepSeek's own `deepseek-flash` alias serves it |
 
 ## Classified HISTORICAL, NOT LIVE (files left unedited)
@@ -57,4 +57,15 @@ directory and skill name. The model they serve is `glm-5.3-flash`.
 - `config/mac-orchestrator.json` lists `glm-5.3-flash` with zero cost; BigModel's price list says
   0.8 in / 2.8 out CNY per 1M tokens with a "free for a limited time" column that was not
   interpreted.
-- Replacement choices for the five absent OpenRouter free ids.
+- Free OpenRouter ids churn: `google/gemma-4-26b-a4b-it:free` and `google/gemma-4-31b-it:free` were
+  rate-limited upstream (HTTP 429) at probe time and `thinkingmachines/inkling-2-small:free` refused
+  non-agentic use (403), so they were not chosen; `baidu/ernie-5.5-flash-preview:free` is a preview
+  model; `liquid/lfm-3-1.7b:free` states prompts may be retained. Re-run
+  `scripts/verify-openrouter-models.sh` during repository updates.
+- The Cline provider tables under `skills/cline-openclaw-agent/references/` now show
+  `cohere/north-mini-code:free` as the OpenRouter example; the operator's own Cline config uses
+  `google/gemma-4-26b-a4b-it:free`.
+- Web UI mock data and the routing view (`web/src/data/mockState.ts`,
+  `web/src/features/routing/RoutingView.tsx`) still display the old OpenRouter ids as labels. They
+  are display data, not routing, and the repo's TDD gate requires an adjacent test for any `web/src`
+  change, so they need their own small change with a test.

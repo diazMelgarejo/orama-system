@@ -87,7 +87,7 @@ cline "task" -P anthropic -m claude-fable-5-1 --json -c /repo
 cline "task" -P anthropic -m claude-sonnet-5-5 --json -c /repo
 
 # Use OpenRouter free tier
-cline "task" -P openrouter -m minimax/minimax-m2.5:free --json -c /repo
+cline "task" -P openrouter -m cohere/north-mini-code:free --json -c /repo
 
 # API key override for one run
 cline "task" -P openrouter -k sk-or-v1-... --json -c /repo

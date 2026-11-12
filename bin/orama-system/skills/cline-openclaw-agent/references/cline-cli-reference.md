@@ -146,7 +146,7 @@ Run the kanban app.
 | `cline` | `zai/glm-5.3-flash` | WorkOS OAuth | Cline Credits billing |
 | `cline-pass` | `cline-pass/glm-5.3-flash` | WorkOS OAuth | Same token as `cline`; `lastUsedProvider` |
 | `anthropic` | `claude-fable-5` | API key | — |
-| `openrouter` | `minimax/minimax-m2.5:free` | API key | — |
+| `openrouter` | `cohere/north-mini-code:free` | API key | — |
 | `openai-compatible` | `gemini-3.8-flash` | API key | Custom baseUrl |
 | `openai-codex` | — | OAuth | — |
 | `gemini` | Saved model (host-specific) | API key | Selecting without an override can retain a different saved model |

@@ -25,22 +25,22 @@ The policy is benchmark-informed and uses pinned `*:free` model IDs for determin
 | # | Model | Context | Use |
 | --- | ------- | --------- | ----- |
 | 1 | ollama qwen3.5:9b-nvfp4 (local Mac) | local | Lint, format, bash scripts, no-network workloads |
-| 2 | openrouter/nvidia/nemotron-3-super-120b-a12b:free | 1M | Primary worker — agent reasoning, long-context |
-| 3 | openrouter/minimax/minimax-m2.5:free | 205K | Coding, document generation (80.2% SWE-Bench) |
-| 4 | removed 2026-11-12 (no live `:free` id) | n/a | was fast triage |
-| 5 | openrouter/openai/gpt-oss-120b:free | 131K | Structured output, tool use |
-| 6 | openrouter/z-ai/glm-4.5-air:free | 131K | Agentic backup |
-| 7 | openrouter/inclusionai/ling-2.6-flash:free | 262K | Speed-focused parsing |
+| 2 | openrouter/nvidia/nemotron-3-ultra-550b-a55b:free | 1M | Primary worker — agent reasoning, long-context |
+| 3 | openrouter/cohere/north-mini-code:free | 256K | Agentic coding, document generation |
+| 4 | openrouter/nvidia/nemotron-3.5-lightning:free | 1M | Fast triage, heartbeat checks |
+| 5 | openrouter/nvidia/nemotron-3.5-super-vl:free | 1M | Structured output, reasoning, tool use |
+| 6 | openrouter/baidu/ernie-5.5-flash-preview:free | 1M | Agentic backup (preview model) |
+| 7 | openrouter/liquid/lfm-3-1.7b:free | 256K | Speed-focused parsing |
 | 8 | openrouter/openrouter/free | varies | Auto-router, last resort |
 | 9 | gemini (Pro/Flash) | 2M | **Analyzer-only, explicit opt-in** — visual diff, whole-repo audit, never first-class fallback |
 
-> **Live check 2026-11-12:** `openrouter/deepseek/deepseek-v4-flash:free` was removed:
-> OpenRouter's public model list has no `:free` DeepSeek flash id (paid ids
-> `deepseek/deepseek-v4.1-flash-1017`, `deepseek/deepseek-v4.1-flash`,
-> `deepseek/deepseek-v4-flash-0731` exist at about $0.1 per 1M input tokens, so they do not belong
-> in a free-tier stack without an explicit opt-in). Five other ids in this list are also absent
-> from the live list; an operator decision is needed on replacements (the stack still ends in the
-> working `openrouter/free` router). Details: `docs/stale-reference-ledger-2026-11-12.md`.
+> **Live check 2026-11-12:** six `:free` ids from the earlier stack
+> (`nvidia/nemotron-3-super-120b-a12b`, `minimax/minimax-m2.5`, `deepseek/deepseek-v4-flash`,
+> `openai/gpt-oss-120b`, `z-ai/glm-4.5-air`, `inclusionai/ling-2.6-flash`) were absent from
+> OpenRouter's live model list. Each role now has the best live free id that answered a plain and
+> a tool-call request that day; the stack still ends in `openrouter/free`. At least one
+> (`liquid/lfm-3-1.7b`) states that prompts and outputs may be retained and used, so send
+> sanitized data only. Details: `docs/stale-reference-ledger-2026-11-12.md`.
 
 Models 2–8 are accessed via OpenRouter API (`OPENROUTER_API_KEY`).
 Model 1 is local-only (no API cost).

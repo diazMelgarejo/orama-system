@@ -187,11 +187,12 @@ OLLAMA_WIN = os.getenv("OLLAMA_WINDOWS_ENDPOINT", _WIN_OLL_DEFAULT)
 OLLAMA_MAC = os.getenv("OLLAMA_MAC_ENDPOINT", "http://localhost:11434")
 OPENROUTER_FREE_FALLBACKS = [
     "ollama/qwen3.5:9b-mlx",
-    "openrouter/nvidia/nemotron-3-super-120b-a12b:free",
-    "openrouter/minimax/minimax-m2.5:free",
-    "openrouter/openai/gpt-oss-120b:free",
-    "openrouter/z-ai/glm-4.5-air:free",
-    "openrouter/inclusionai/ling-2.6-flash:free",
+    "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
+    "openrouter/cohere/north-mini-code:free",
+    "openrouter/nvidia/nemotron-3.5-lightning:free",
+    "openrouter/nvidia/nemotron-3.5-super-vl:free",
+    "openrouter/baidu/ernie-5.5-flash-preview:free",
+    "openrouter/liquid/lfm-3-1.7b:free",
     "openrouter/openrouter/free",
 ]
 

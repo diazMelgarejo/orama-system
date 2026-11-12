@@ -145,7 +145,7 @@ Model dispatch table:
 | `mac-ollama` | `ollama/qwen3.5:9b-nvfp4` | Mac :11434 | Local orchestrator, always available |
 | `mac-coder` | `lmstudio-mac/qwen3.5-9b-mlx` | Mac :1234 | Fast iteration, small files |
 | `win-coder` | `lmstudio-win/qwen3.5-27b-*` | Win :1234 | Complex reasoning, large context |
-| `openrouter-fallback` | `openrouter/nvidia/nemotron-3-super-120b-a12b:free` | Cloud | First-class fallback worker pool |
+| `openrouter-fallback` | `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free` | Cloud | First-class fallback worker pool |
 | `gemini-analyzer` | `gemini-3.8-flash` (via gemini-cli MCP) | Cloud | Explicit analyzer-only large context reading, architecture review |
 | `codex-impl` | Codex (via ai-cli MCP) | Cloud | Code implementation, mechanical tasks |
 

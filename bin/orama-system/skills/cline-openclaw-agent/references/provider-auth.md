@@ -11,7 +11,7 @@ object), `model`, `timeout`, and `reasoning`.
 | `cline` | `zai/glm-5.3-flash` | WorkOS OAuth | Cline Credits | `api.cline.bot` |
 | `cline-pass` | `cline-pass/glm-5.3-flash` | WorkOS OAuth | Cline Credits | `api.cline.bot` |
 | `anthropic` | `claude-fable-5` | API key (`sk-ant-...`) | Anthropic | `api.anthropic.com` |
-| `openrouter` | `minimax/minimax-m2.5:free` | API key (`sk-or-v1-...`) | OpenRouter | `openrouter.ai` |
+| `openrouter` | `cohere/north-mini-code:free` | API key (`sk-or-v1-...`) | OpenRouter | `openrouter.ai` |
 | `openai-compatible` | `gemini-3.8-flash` | API key | Google AI | `generativelanguage.googleapis.com` |
 | `openai-codex` | — | OAuth | OpenAI | `api.openai.com` |
 | `gemini` | Saved model (host-specific) | API key | Google AI | `generativelanguage.googleapis.com` |

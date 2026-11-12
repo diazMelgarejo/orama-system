@@ -14,7 +14,7 @@ Use ai-cli-mcp to run three workers in parallel:
    workFolder=/absolute/path/project
    prompt="Write test suggestions for src/frontend. Do not edit files."
 
-3. model=openrouter/nvidia/nemotron-3-super-120b-a12b:free
+3. model=openrouter/nvidia/nemotron-3-ultra-550b-a55b:free
    workFolder=/absolute/path/project
    prompt="Read the repo and find stale docs. Return file list."
 

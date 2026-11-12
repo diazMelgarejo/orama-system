@@ -90,7 +90,14 @@ def test_wrapper_keeps_the_old_bigmodel_profile_name_as_an_alias() -> None:
 
 
 _LIVE_DIRS = ("src", "scripts", "config", "infra", "deployments", "bin/orama-system/scripts")
-_DEAD_OPENROUTER = "deepseek-v4-flash:free"
+_DEAD_OPENROUTER_IDS = (
+    "deepseek-v4-flash:free",
+    "nemotron-3-super-120b-a12b:free",
+    "minimax-m2.5:free",
+    "gpt-oss-120b:free",
+    "glm-4.5-air:free",
+    "ling-2.6-flash:free",
+)
 
 
 def _tracked_live_files() -> list[Path]:
@@ -107,7 +114,7 @@ def test_live_code_and_config_hold_no_dead_deepseek_ids() -> None:
         if path.name == "test_cline_provider_templates.py":
             continue
         text = path.read_text(errors="ignore")
-        if _DEAD_OPENROUTER in text.replace("# 2026-11-12: deepseek/deepseek-v4-flash:free was removed", ""):
+        if any(dead in text for dead in _DEAD_OPENROUTER_IDS):
             offenders.append(str(path.relative_to(_ROOT)))
         if re.search(r"deepseek-ai/DeepSeek-V4-Flash(?!-0731)", text) and path.suffix == ".tmpl":
             offenders.append(str(path.relative_to(_ROOT)))
