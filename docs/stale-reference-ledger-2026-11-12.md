@@ -1,5 +1,15 @@
 # Stale-reference ledger (2026-11-12)
 
+<!-- wandb-inference-working-config -->
+## W&B inference, not the Cline CLI
+
+When this guidance mentions Cline and the call is W&B inference,
+use the OpenAI client and Weave setup in
+[../bin/orama-system/skills/cline-openclaw-agent/references/wandb-inference-working-config.md](../bin/orama-system/skills/cline-openclaw-agent/references/wandb-inference-working-config.md).
+The Cline CLI returns `invalid model ID` for the model that client
+completes. Do not send a CoreWeave team/project string. Shell-source
+the operator W&B env file before reading `DEEPSEEK_V4_FLASH_WANDB`.
+
 Purpose: one place that says which model ids, limits and routes in older records are **superseded**,
 and what is current. Dated records were marked HISTORICAL, NOT LIVE instead of being rewritten
 (rewriting would falsify what was true on the day). Evidence:
