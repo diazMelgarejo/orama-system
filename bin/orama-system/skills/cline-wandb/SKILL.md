@@ -3,7 +3,7 @@ name: cline-wandb
 description: Run Cline CLI as a non-interactive fan-out worker using DeepSeek V4.1-Flash-1017 via wanDB.ai (Weave/W&B inference), explicit reasoning effort (medium, else high, else low). Use when the user asks for wanDB-routed Cline bot fan-out, headless Cline review via wanDB, EXA plus Firecrawl verification for Cline usage on this route, or a parallel Cline route that does not replace ClinePass DeepSeek Flash or the GLM ClinePass skill. Includes a mandatory harmonized TDD reference card extending docs/TDD.md, and a mandatory generalized self-review discipline.
 version: 1.0.0
 compatibility: cline-cli, wandb-inference
-allowed-tools: bash, file-operations
+allowed-tools: Bash(bin/orama-system/skills/cline-wandb/scripts/launch_cline_wandb.py *), Bash(../../scripts/cline-provider-profiles/switch-cline-provider.sh *), file-operations
 triggers:
   - cline wandb
   - wandb cline fan-out
