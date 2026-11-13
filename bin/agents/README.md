@@ -19,7 +19,7 @@
 **Pipeline:** orchestrator, context, architect, refiner, executor, verifier, crystallizer  
 **Research:** mac-researcher, win-researcher, autoresearcher  
 **Win LM path:** coder (`coder-win` profile)  
-**Adapters:** cole, hermes-monitor, sage, relay-cursor, relay, nova, rex
+**Adapters:** cole, hermes-monitor, sage, relay-cursor, relay, wanda, nova, rex
 **Lifecycle:** lifecycle (Atlas / `main` — no Hermes profile)
 
 ## Live sources (read-only, not git)
