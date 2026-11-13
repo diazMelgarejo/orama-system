@@ -468,3 +468,17 @@ Rule (operator, 2026-11-12): ask for `medium`, else `high`, else `low`; never `x
   request fail with the misleading `error: invalid model ID`. `switch_cline_provider.py` now
   writes both correctly (tests cover it). An end-to-end run of the real switch script into a
   throwaway HOME followed by a Cline tool task passed on 2026-11-12.
+
+## Launcher (isolated, no shared-slot switching)
+
+`scripts/launch_cline_wandb.py` runs Cline 3.0.74 on this route without touching the operator's
+`~/.cline`: it writes a throwaway config directory with only the W&B entry (a `tokenSource` and
+`updatedAt` that Cline 3.0.74 accepts), calls `cline --config <dir> -P openai-compatible -m <model>
+--thinking <effort> ...` and deletes the directory. The key stays out of argv. Defaults:
+`deepseek-ai/DeepSeek-V4.1-Flash-1017` at `high`; `--model` and `--effort` follow the model and
+effort orders above and refuse `xhigh` and `max`. Prefer it over `switch-cline-provider.sh` when two
+routes run side by side, because a separate config directory is what actually isolates the provider
+slot (a separate working directory does not). Tests: `tests/test_launch_cline_wandb.py`. The live
+review evidence for the 2026-11-12 remediation is in
+[the evidence report](../../../../docs/reference/2026-11-12-wandb-cline-live-review-evidence-report.md).
+
