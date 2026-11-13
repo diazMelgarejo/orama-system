@@ -122,7 +122,7 @@ cursor-agent status         # verify login, show account info
 Set API key via env var instead of browser flow:
 
 ```bash
-export CURSOR_API_KEY="sk-..."   # never commit; load from macOS Keychain or .env
+export CURSOR_API_KEY="sk-..."   # never commit; load from macOS Keychain or your shell exports
 cursor-agent models              # confirms key is accepted
 ```
 
