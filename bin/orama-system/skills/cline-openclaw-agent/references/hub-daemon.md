@@ -1,11 +1,21 @@
 # Hub Daemon (`cline --zen` / `cline hub`)
 
+<!-- wandb-inference-working-config -->
+## W&B inference, not the Cline CLI
+
+When this guidance mentions Cline and the call is W&B inference,
+use the OpenAI client and Weave setup in
+[wandb-inference-working-config.md](wandb-inference-working-config.md).
+The Cline CLI returns `invalid model ID` for the model that client
+completes. Do not send a CoreWeave team/project string. Shell-source
+the operator W&B env file before reading `DEEPSEEK_V4_FLASH_WANDB`.
+
 Cline can run sessions in a background hub daemon, useful for long-running tasks
 that shouldn't block the terminal.
 
 ## Endpoint
 
-```
+```text
 ws://127.0.0.1:25463/hub
 ```
 

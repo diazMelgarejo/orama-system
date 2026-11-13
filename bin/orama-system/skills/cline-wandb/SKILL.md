@@ -12,6 +12,12 @@ triggers:
   - cline bot fan-out
 ---
 
+<!-- wandb-inference-working-config -->
+## W&B inference, not the Cline CLI
+
+When this guidance mentions Cline and the call is W&B inference, use the OpenAI client and Weave setup in [../cline-openclaw-agent/references/wandb-inference-working-config.md](../cline-openclaw-agent/references/wandb-inference-working-config.md). The Cline CLI returns `invalid model ID` for the model that client completes. Do not send a CoreWeave team/project string. Shell-source the operator W&B env file before reading `DEEPSEEK_V4_FLASH_WANDB`.
+
+
 # Cline wanDB (DeepSeek V4.1-Flash-1017)
 
 ## Purpose

@@ -14,6 +14,12 @@ compatibility: Claude Code, Cursor, Codex CLI; needs the firecrawl MCP server or
 allowed-tools: Read, Write, Bash, firecrawl_search, firecrawl_scrape, firecrawl_interact, firecrawl_interact_stop, firecrawl_parse, firecrawl_crawl, firecrawl_check_crawl_status, firecrawl_map, firecrawl_extract, firecrawl_monitor_create, firecrawl_monitor_get, firecrawl_monitor_list, firecrawl_monitor_run, firecrawl_monitor_update, firecrawl_monitor_delete, firecrawl_monitor_check, firecrawl_monitor_checks, firecrawl_research_search_papers, firecrawl_research_inspect_paper, firecrawl_research_read_paper, firecrawl_research_related_papers, firecrawl_research_search_github, firecrawl_agent, firecrawl_agent_status, firecrawl_feedback, firecrawl_search_feedback, mcp__firecrawl__authenticate, mcp__firecrawl__complete_authentication
 ---
 
+<!-- wandb-inference-working-config -->
+## W&B inference, not the Cline CLI
+
+When this guidance mentions Cline and the call is W&B inference, use the OpenAI client and Weave setup in [../cline-openclaw-agent/references/wandb-inference-working-config.md](../cline-openclaw-agent/references/wandb-inference-working-config.md). The Cline CLI returns `invalid model ID` for the model that client completes. Do not send a CoreWeave team/project string. Shell-source the operator W&B env file before reading `DEEPSEEK_V4_FLASH_WANDB`.
+
+
 # Firecrawl
 
 Firecrawl is a downstream scraping and extraction tool, used once a URL

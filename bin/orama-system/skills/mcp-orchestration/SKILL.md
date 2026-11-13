@@ -24,6 +24,7 @@ supersedes:
 last_updated: 2026-07-22
 ---
 
+<!-- wandb-inference-working-config: W&B inference uses the OpenAI client and Weave in ../cline-openclaw-agent/references/wandb-inference-working-config.md, not the Cline CLI. -->
 # MCP Orchestration Skill (canonical)
 
 ## Purpose

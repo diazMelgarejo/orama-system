@@ -1,5 +1,15 @@
 # ACP Bridge (OpenClaw ↔ Cline)
 
+<!-- wandb-inference-working-config -->
+## W&B inference, not the Cline CLI
+
+When this guidance mentions Cline and the call is W&B inference,
+use the OpenAI client and Weave setup in
+[wandb-inference-working-config.md](wandb-inference-working-config.md).
+The Cline CLI returns `invalid model ID` for the model that client
+completes. Do not send a CoreWeave team/project string. Shell-source
+the operator W&B env file before reading `DEEPSEEK_V4_FLASH_WANDB`.
+
 Agent Client Protocol (ACP) is the structured, streaming bridge between OpenClaw
 and Cline. Both sides implement it: OpenClaw bundles `@agentclientprotocol/sdk`
 and ships `openclaw acp`; Cline ships `cline --acp`.
