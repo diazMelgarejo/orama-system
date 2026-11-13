@@ -14,22 +14,42 @@ do **not** authorize merge, host qualification, C6, or activation.
 
 ## 1. Authority (required by review)
 
-- Claim class - Canonical location - Not here
-- Closure register, C6/C8 ordering, dispositions - `orama-system/docs/v2/` especially `MASTER-
-  CLOSURE-AND-IMPLEMENTATION-PLAN-2026-11-06.md`, `closure/c1-orama-dispositions-2026-11-06.md`,
-  `closure/c3d-operator-review-procedure-2026-11-06.md`, `references/r0-r2-contract-
-  freeze-2026-10-26.md` - Oramasys product docs, PT plans
-- Serving activation, Release 1–2 post-merge, revocation capacity, C6 Mac/Windows -
-  `oramasys/oramasys/docs/` (`serving-activation-runbook.md`, `release12-postmerge-
-  qualification-2026-11-04.md`, `revocation-capacity-handoff-2026-11-03.md`,
-  `closure/c6-qualification-runbook.md`, `closure/c6-windows-handoff.md`) - `orama-system/docs/v2/`
-  alone
-- PT Part 3, multi-agent remediation, phase-0 disposition - `Perpetua-
-  Tools/docs/next/2026-08-23-coordination-consolidation-part3-plan.md` (2026-11-06 ratification: PT
-  stays manual, no daemon, automatic expiry is v2-only), `docs/plans/`, `docs/references/phase0-and-
-  orama-open-work-closure-plan-2026-07-18.md` - Orama or Oramasys
-- Review methodology (finding matrix, single-edit, bot SHA replies) - `orama-system/bin/orama-
-  system/references/post-review-micro-remediation.md` + `SKILL.md` link - Product gates
+Closure register, C6/C8 ordering, and dispositions live in `orama-system/docs/v2/`:
+
+- `orama-system/docs/v2/MASTER-CLOSURE-AND-IMPLEMENTATION-PLAN-2026-11-06.md`
+- `orama-system/docs/v2/closure/c1-orama-dispositions-2026-11-06.md`
+- `orama-system/docs/v2/closure/c3d-operator-review-procedure-2026-11-06.md`
+- `orama-system/references/r0-r2-contract-freeze-2026-10-26.md`
+
+Those paths are not Oramasys product docs or Perpetua-Tools plans.
+
+Serving activation, Release 1–2 post-merge, revocation capacity, and the C6
+Mac/Windows handoff live in `oramasys/oramasys/docs/`:
+
+- `oramasys/oramasys/docs/serving-activation-runbook.md`
+- `oramasys/oramasys/docs/release12-postmerge-qualification-2026-11-04.md`
+- `oramasys/oramasys/docs/revocation-capacity-handoff-2026-11-03.md`
+- `oramasys/oramasys/docs/closure/c6-qualification-runbook.md`
+- `oramasys/oramasys/docs/closure/c6-windows-handoff.md`
+
+`orama-system/docs/v2/` alone does not own serving activation.
+
+PT Part 3, multi-agent remediation, and the phase-0 disposition. The
+2026-11-06 ratification keeps PT manual, with no daemon. Automatic expiry is
+v2-only:
+
+- `Perpetua-Tools/docs/next/2026-08-23-coordination-consolidation-part3-plan.md`
+- `Perpetua-Tools/docs/plans/`
+- `Perpetua-Tools/docs/references/phase0-and-orama-open-work-closure-plan-2026-07-18.md`
+
+These paths are not Orama or Oramasys product docs.
+
+Review methodology (finding matrix, single-edit, bot SHA replies):
+
+- `orama-system/bin/orama-system/references/post-review-micro-remediation.md`
+- `orama-system/bin/orama-system/SKILL.md`
+
+Product gates do not own that methodology.
 
 **Dropped citation:** `VERIFIED-HANDOFF-AND-NEXT-SLICE-2026-11-08.md` (not in tree). Use the
 Oramasys C6 runbooks + Orama master closure instead.
@@ -92,19 +112,15 @@ Stack: `#496` (main) → `#495` → `#497`. Merge bottom-up only under operator 
   floor - `#496`
 - PT 496 - CR `4558150131` — empty capture still folds full history - `task_queue.py` - Early
   `return []` when capture empty before `release_captured_queue_claims` - `#496`
-- PT 495 - CR `4557491086` — mtime-only CAS unsafe - `.agent/memory` via `learn.py`/`graduate.py
-  --supersedes lesson_8d06f91c13bd` - Require shared lock or content-hash/revision CAS; ban mtime-
-  only - `#495`
+- PT 495 - CR `4557491086` — mtime-only CAS unsafe - `.agent/memory` via `learn.py` /
+  `graduate.py --supersedes lesson_8d06f91c13bd` - Require a shared lock or a
+  content-hash CAS; ban mtime-only - `#495`
 - PT 495 - CR `4557491096` — LF-normalized ≠ byte identity - supersede `lesson_7db1ec37e5d8` - State
   digest form; raw-byte vs normalized-equivalence labels - `#495`
 - PT 497 - (none open) - — - Rebase only if `#495` moves; no content change required - `#497`
-- Orama 493 - CR `4533389934` / `4533389971` — two-stage replay + attempt numbering -
-  `docs/v2/queue-fencing-and-recovery/{README,amendment-drafts,decision-record}.md` - Align README +
-  decision record; define attempt 1 = first verified retry after initial grant - `#493`
-- Orama 493 - CR `4545895750` — atomic durable stage advance - `decision-record.md` - Persist stage
-  before returning token; concurrent retries ≤ one token - `#493`
-- Orama 493 - CR `4545895775` — split V1-2 vs V2-2 holds - `decision-record.md` - Separate
-  prerequisite lists - `#493`
+- Orama 493 - CR `4533389934` / `4533389971` — accepted attempt numbering -
+  `docs/v2/queue-fencing-and-recovery/{README,amendment-drafts,decision-record}.md` -
+  attempt 1 = original request, attempt 2 = first verified retry - `#493`
 - Orama 493 - CI markdownlint MD013/MD047 - same docs - Wrap to 100 cols; trailing newline - `#493`
 
 ---
