@@ -1,6 +1,6 @@
 ---
 name: wanda-wandb
-description: Board worker uniting Cline coding discipline and Agnes fan-out. W&B calls use the OpenAI client, not the Cline CLI.
+description: Board worker uniting Cline coding discipline and Agnes fan-out. Her W&B calls use the OpenAI client. Cline itself works after provider metadata is current.
 version: 1.1.1.0
 license: Apache 2.0
 compatibility: openclaw, openai, weave

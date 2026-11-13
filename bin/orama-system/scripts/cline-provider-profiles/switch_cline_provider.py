@@ -38,6 +38,8 @@ _WIN_LOCK_TIMEOUT_ERRNO = 36  # errno.EDEADLOCK: msvcrt LK_LOCK gave up after it
 # settings key added to a future profile template is compared by default
 # instead of silently ignored the way COMPARE_KEYS previously was.
 _METADATA_KEYS = ("updatedAt", "tokenSource")
+# Cline 3.0.74 writes timestamps as UTC with millisecond precision and a Z suffix.
+_CLINE_TIMESTAMP_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$")
 
 
 def atomic_write_json(path: str, data: Mapping[str, Any]) -> None:
@@ -213,7 +215,21 @@ def list_live_models(base_url: str, api_key: str) -> list[str]:
     status, text = _request(f"{base_url.rstrip('/')}/models", api_key, None)
     if status != 200:
         raise ProbeError(f"model list returned HTTP {status}")
-    return [m["id"] for m in json.loads(text).get("data", []) if "id" in m]
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ProbeError("model list was not valid JSON") from exc
+    if not isinstance(payload, dict):
+        raise ProbeError("model list response was malformed")
+    data = payload.get("data")
+    if not isinstance(data, list):
+        raise ProbeError("model list response was malformed")
+    ids: list[str] = []
+    for item in data:
+        if not isinstance(item, dict) or not isinstance(item.get("id"), str):
+            raise ProbeError("model list response was malformed")
+        ids.append(item["id"])
+    return ids
 
 
 def probe_effort(base_url: str, api_key: str, model: str, level: str) -> bool:
@@ -243,6 +259,16 @@ def _cline_timestamp(moment: datetime) -> str:
     return utc.strftime("%Y-%m-%dT%H:%M:%S.") + f"{utc.microsecond // 1000:03d}Z"
 
 
+def _cline_metadata_current(entry: Mapping[str, Any]) -> bool:
+    """True when the provider entry already has the token source and timestamp shape Cline 3.0.74 accepts."""
+    updated = entry.get("updatedAt")
+    return (
+        entry.get("tokenSource") == "manual"
+        and isinstance(updated, str)
+        and _CLINE_TIMESTAMP_RE.fullmatch(updated) is not None
+    )
+
+
 def switch_provider(
     providers_path: str,
     tmpl_path: str,
@@ -256,14 +282,21 @@ def switch_provider(
     now = now or datetime.now(timezone.utc)
 
     cfg = load_json(providers_path)
-    outgoing = cfg.get("providers", {}).get("openai-compatible", {}).get("settings", {})
+    entry = cfg.get("providers", {}).get("openai-compatible", {})
+    outgoing = entry.get("settings", {}) if isinstance(entry, dict) else {}
     new_settings = resolve_template(tmpl_path, env=env)
     if resolution is not None:
         new_settings = with_model_and_effort(new_settings, *resolution)
 
-    # No-op check: if the requested profile resolves to what's already
-    # live, there is nothing to change and nothing to back up.
-    if outgoing and comparable(outgoing) == comparable(new_settings):
+    # No-op only when the settings and the Cline compatibility metadata
+    # already match. Settings alone are not enough: an older script left
+    # a custom tokenSource or a +00:00 timestamp that Cline rejects.
+    if (
+        outgoing
+        and isinstance(entry, dict)
+        and comparable(outgoing) == comparable(new_settings)
+        and _cline_metadata_current(entry)
+    ):
         return "no-op"
 
     # Backup step: snapshot the state we're about to replace, but only if

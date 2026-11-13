@@ -182,6 +182,13 @@ def test_list_live_models_reads_ids(stub: Any) -> None:
     assert scp.list_live_models(base, "k") == ["m1", "m2"]
 
 
+@pytest.mark.parametrize("body", ["[]", '{"data": null}', '{"data": [null]}', "{", "not-json"])
+def test_list_live_models_rejects_malformed_bodies(monkeypatch: pytest.MonkeyPatch, body: str) -> None:
+    monkeypatch.setattr(scp, "_request", lambda *_args, **_kwargs: (200, body))
+    with pytest.raises(scp.ProbeError, match="malformed|not valid JSON"):
+        scp.list_live_models("https://example.test/v1", "k")
+
+
 def test_probe_accepts_200_and_sends_the_requested_effort(stub: Any) -> None:
     base, routes = stub
     assert scp.probe_effort(base, "k", "m1", "medium") is True

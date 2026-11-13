@@ -2,7 +2,15 @@
 
 Evidence: 2026-11-13 live chat completions. GossipBus note `485cda77bc0e4dcebe949d52e850af7f`, topic `WANDB_INFERENCE_WORKING_CONFIG_20261113`. No secret values belong in this card.
 
-This route is the OpenAI client plus Weave. It is not the Cline CLI.
+This card is the direct OpenAI client plus Weave. The Cline CLI is a separate
+route. It works after the provider entry has `tokenSource` `manual` (or
+Cline's `oauth` or `migration`) and an `updatedAt` in UTC with millisecond
+precision and a trailing `Z`. Repair a shared entry with
+`bin/orama-system/scripts/cline-provider-profiles/switch_cline_provider.py`.
+When two routes run side by side, use
+`bin/orama-system/skills/cline-wandb/scripts/launch_cline_wandb.py`.
+Use this client only if `invalid model ID` remains after that metadata is
+current.
 
 ## Use this
 
@@ -43,7 +51,9 @@ Do not print `DEEPSEEK_V4_FLASH_WANDB`. Do not put it in argv, a prompt, a commi
 
 - A CoreWeave team/project string. Chat returns 401. `weave.init` on that string is permission denied for this key.
 - Model id `deepseek-ai/DeepSeek-V4-Flash`. This endpoint returns 404.
-- The Cline CLI (`-P openai-compatible` with `deepseek-ai/DeepSeek-V4.1-Flash-1017`). It returns `invalid model ID` for the same key and model the OpenAI client completes.
+- A Cline entry whose `tokenSource` is a custom label, or whose `updatedAt`
+  is not millisecond-precision UTC with a trailing `Z`. That metadata is
+  what produces `invalid model ID`.
 - A raw parse of the env file. Only the shell-sourced value authenticates.
 
 ## Stick to this

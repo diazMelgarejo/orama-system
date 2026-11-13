@@ -63,9 +63,17 @@ sub_skills:
 ---
 
 <!-- wandb-inference-working-config -->
-## W&B inference, not the Cline CLI
+## W&B inference
 
-When this guidance mentions Cline and the call is W&B inference, use the OpenAI client and Weave setup in [skills/cline-openclaw-agent/references/wandb-inference-working-config.md](skills/cline-openclaw-agent/references/wandb-inference-working-config.md). The Cline CLI returns `invalid model ID` for the model that client completes. Do not send a CoreWeave team/project string. Shell-source the operator W&B env file before reading `DEEPSEEK_V4_FLASH_WANDB`.
+`invalid model ID` from the Cline CLI is stale provider metadata, not a
+bad model id. `tokenSource` must be `manual` (or Cline's `oauth` or
+`migration`) and `updatedAt` must be UTC with millisecond precision and a
+trailing `Z`. Repair a shared entry with
+`bin/orama-system/scripts/cline-provider-profiles/switch_cline_provider.py`.
+When two routes run side by side, use
+`bin/orama-system/skills/cline-wandb/scripts/launch_cline_wandb.py`.
+Use the OpenAI client and Weave only if that error remains after the
+metadata is current. Do not send a CoreWeave team/project string. Shell-source the operator W&B env file before reading `DEEPSEEK_V4_FLASH_WANDB`.
 
 <!-- lint-ignore LINT-013 -->
 

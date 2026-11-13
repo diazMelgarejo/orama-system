@@ -1,17 +1,23 @@
 # Stale-reference ledger (2026-11-12)
 
 <!-- wandb-inference-working-config -->
-## W&B inference, not the Cline CLI
+## W&B inference
 
-When this guidance mentions Cline and the call is W&B inference,
-use the OpenAI client and Weave setup in
-[../bin/orama-system/skills/cline-openclaw-agent/references/wandb-inference-working-config.md](../bin/orama-system/skills/cline-openclaw-agent/references/wandb-inference-working-config.md).
-The Cline CLI returns `invalid model ID` for the model that client
-completes. Do not send a CoreWeave team/project string. Shell-source
-the operator W&B env file before reading `DEEPSEEK_V4_FLASH_WANDB`.
+`invalid model ID` from the Cline CLI is stale provider metadata, not a
+bad model id. `tokenSource` must be `manual` (or Cline's `oauth` or
+`migration`) and `updatedAt` must be UTC with millisecond precision and a
+trailing `Z`. Repair a shared entry with
+`bin/orama-system/scripts/cline-provider-profiles/switch_cline_provider.py`.
+When two routes run side by side, use
+`bin/orama-system/skills/cline-wandb/scripts/launch_cline_wandb.py`.
+Use the OpenAI client and Weave only if that error remains after the
+metadata is current. Do not send a CoreWeave team/project string.
+Shell-source the operator W&B env file before reading
+`DEEPSEEK_V4_FLASH_WANDB`.
 
 Purpose: one place that says which model ids, limits and routes in older records are **superseded**,
-and what is current. Dated records were marked HISTORICAL, NOT LIVE instead of being rewritten
+and what is current. Dated records are classified HISTORICAL, NOT LIVE in
+this ledger and left unedited instead of being rewritten
 (rewriting would falsify what was true on the day). Evidence:
 `references/2026-11-12-live-probe-results-wandb-bigmodel-cline.md` in the operator workspace (live
 provider checks, translated BigModel official docs, DeepSeek official change log).

@@ -24,7 +24,7 @@ supersedes:
 last_updated: 2026-07-22
 ---
 
-<!-- wandb-inference-working-config: W&B inference uses the OpenAI client and Weave in ../cline-openclaw-agent/references/wandb-inference-working-config.md, not the Cline CLI. -->
+<!-- wandb-inference-working-config: invalid model ID is stale Cline metadata. Repair with switch_cline_provider.py; the OpenAI client is only for a failure that remains. -->
 # MCP Orchestration Skill (canonical)
 
 ## Purpose
