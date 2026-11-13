@@ -124,8 +124,9 @@ implementation" and are accurate at this head
 
 > **Status note (2026-11-12, additive): historical draft, superseded as an
 > operator choice.** The operative Q-68b decision is the two-stage rule in the
-> [decision record](decision-record.md): the first verified retry returns the
-> raw lease token and attempts two and later return a token-free receipt. The
+> [decision record](decision-record.md): attempt 1 is the original request,
+> attempt 2 (the first verified retry) may return the raw lease token, and
+> attempt 3 and later return a token-free receipt. The
 > option A/B analysis below remains the V2-1 audit record; it is not an open
 > choice.
 
@@ -198,7 +199,8 @@ absent today (V of absence) and is the proving test named in the plan's Transpor
 ### 2.6 Open points for the operator (U)
 
 1. Q-68b operator choice is recorded: use the two-stage rule in the decision record. Specify the
-   controller policy governing the held lost-response lease for attempts two and later.
+   controller policy governing the held lost-response lease for attempt 3 and later, and the
+   durable, atomic consumption of the attempt-2 token allowance (decision record section 2).
 2. Pin the authoritative recipient field names and the old-client refusal code for Q-68 from the
    legacy envelope definition (external to this clone).
 3. Confirm the additive banner wording for doc 68 with the Orama design owner.
@@ -222,3 +224,25 @@ absent today (V of absence) and is the proving test named in the plan's Transpor
   handoff, versioned recipient fields, old-client refusal, schema bump, additive banner
   correction) and Q-68b (option A default vs option B with the stated lease-TTL cost,
   cross-channel regression test for both) is drafted for operator review; nothing ratified.
+
+## 2.7 Additive review gate — schema-1 replay identities (2026-11-13)
+
+This is a review gate, not an operator-selected migration policy. The historical option
+analysis above does not authorize unchanged schema-1 receipts to survive a schema-2 cutover
+without a tested recovery disposition. Q-68b controls retry token delivery; it does not make
+schema-version-dependent request digests interchangeable.
+
+Before schema-2 cutover, the Controller owner must present and the operator must accept one
+safe policy: an explicitly admitted cross-version read-back path preserving the original
+claim identity and replay allowance, or a verified drain/disposition of all affected claims.
+Do not rewrite the original digest, reuse a key with changed content, reset the retry stage,
+issue a second lease, or delete unresolved receipts to satisfy migration. Unknown effects
+remain held. If drain is chosen, expiry alone is not proof that effects are reconciled.
+
+Keep cutover blocked until the chosen policy and rollback are documented and tested for a
+lost schema-1 response, schema-2 key reuse, attempt-2 delivery loss, restart, concurrent
+retries and cross-channel denial. Invalid requests cannot receive a token or new lease.
+This note selects neither policy and does not waive C3d-base or activation gates.
+
+The operative numbering is attempt 1 original, attempt 2 first verified retry (token allowed),
+attempt 3+ token-free. The earlier Part 2 option and attempt wording is historical only.

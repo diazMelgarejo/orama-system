@@ -40,10 +40,14 @@ gate** as proposed: Q-D23, Q-TOPO, Q-D1, Q-D2, Q-68, Q-AGE, Q-RET, Q-LAYOUT
 and Q-SQLITE. The recorded decisions and what each gate blocks are in the
 [decision record](decision-record.md).
 
-**Q-68b** has its own recorded two-stage operator decision: the first verified
-retry returns the raw lease token, while attempts two and later return a
-token-free receipt. This limited replay decision does not authorize other
-slice-A work. The cross-channel replay regression test applies to both stages.
+**Q-68b** uses the operator-confirmed numbering: attempt 1 is the original
+request, attempt 2 is the first verified retry and may return the raw lease
+token, and attempt 3 and later return token-free receipts under the stricter
+replay policy. There is no attempt 0. Full admission is required at every
+stage. The first-retry allowance is consumed atomically and durably before
+returning the token; concurrency and restart must not restore that allowance.
+This limited replay decision does not authorize other slice-A work. See the
+[decision record](decision-record.md) for enforcement and migration gates.
 
 ## 4. Tasks and current status
 

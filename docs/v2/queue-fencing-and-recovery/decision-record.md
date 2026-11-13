@@ -20,7 +20,8 @@ Per the operator HITL decision in chat at 09:45 +08:00 (relayed by win-researche
 - Q-68: schema 2 reservations with old-client refusal.
 - Q-SQLITE: SQLite >= 3.51.3 required by both new ledgers.
 - Q-AGE, Q-RET, Q-LAYOUT: accepted as proposed.
-- Q-68b: unchanged two-stage decision (attempt 1 returns the token; attempt 2 and later token-free).
+- Q-68b: attempt 1 is original; attempt 2 is the first retry and may return the token;
+  attempt 3 and later are token-free (section 2). This clarifies the recorded numbering.
 
 Still operator-held: C3d-base, merges and pushes, activation, R6-R8, test authorization on the
   authority host, PT PR 494 status.
@@ -30,19 +31,30 @@ Windows gate record (event 497); the operator ratification at 09:45 supersedes t
 This section is the operative one.
 
 Existing binding rules stay in force: D1, D2, D3, D23, IC-1–IC-29, separate R6/R7/R8 and C3d
-gates. Consequences: D-0 documentation presents the section 3 gates as accepted; V1-2 and
-V2-2 remain HELD on their independent prerequisites and operator-held C3d-base, push, merge and
-activation decisions. The Windows L-1a drafts remain HELD as cross-evidence; see section 3b.
+gates. D-0 presents the section 3 gates as accepted. V1-2 remains HELD on D-0 accepted gates,
+Q-SQLITE and its applicable operator-held publication, merge and activation decisions.
+V2-2 remains HELD on V2-1, Q-68, C3d-base, Q-SQLITE and its applicable operator-held decisions.
+C3d-base is not a V1-2 prerequisite. Windows L-1a drafts remain HELD as cross-evidence.
 
 ## 2. Q-68b — HITL operator override decision (recorded with the cost stated)
 
-Decision: **the operator selected the two-stage formulation: the first verified retry returns
-the raw lease token; attempts two and later return a token-free receipt.** Earlier option-A-only
-and option-B-only draft wording is historical and superseded by this graded decision.
+Decision: **attempt 1 is the original request; attempt 2 is the first verified retry.**
+There is no attempt 0. Attempt 2 may return the raw lease token after full admission and
+idempotency verification. Attempt 3 and later return token-free receipts under the stricter
+replay policy. Earlier option-A-only and option-B-only wording is historical.
 
-- First verified retry: return the token after full admission and idempotency verification.
-- Attempts two and later: return a token-free receipt; the lost-response lease is held for
-  conservative recovery under the applicable controller policy.
+- Consume the first-retry allowance in the same store write transaction as idempotency and
+  applicable admission-state verification, and commit its durable stage advance before
+  returning the token. External transport/capability verification remains outside the lock;
+  its result must be revalidated at the final boundary. Concurrent retries can produce at
+  most one token-bearing retry response; a restart cannot reset the committed allowance.
+- If the initial response is lost but attempt 2 succeeds, recovery need not consume a full
+  lease TTL. If the token-bearing retry is also lost, later retries cannot recover the token;
+  the claim remains held for conservative recovery. A crash after commit but before delivery
+  must not restore the allowance. A token-free retry must not revoke a token already delivered.
+- Attempt numbering is logical, per claim identity, not a count supplied by the client.
+  Persistence, rejected-request accounting and stricter-policy details must be specified and
+  tested by the Controller owner before implementation is qualified. No bypass is implied.
 - Scope: this is the Q-68b replay decision only. It does not authorize the other slice-A work
   (V1-0/A-V1/P-H1), which remains OPEN.
 - Invariant: regardless of the option, a byte-identical captured request from another verified
@@ -95,9 +107,10 @@ from cc57cd14; mark 0ca6e421 superseded (keep it, do not revert); re-derive V1-2
 synthesized base.** The canonical L-1a remains the Mac/POSIX lane per the division; both
 Windows commits stand as native cross-evidence.
 
-Also recorded: V1-2 (7a812adf) and the V2-2 claim by the agy implementers remain HELD pending
-their independent prerequisites and operator-held C3d-base, pushes, merges and activation. The
-section 3 gates are accepted; they are not still Proposed.
+Also recorded: V1-2 (7a812adf) remains HELD on D-0 accepted gates, Q-SQLITE and applicable
+operator-held publication, merge and activation decisions. V2-2 remains HELD on V2-1, Q-68,
+C3d-base, Q-SQLITE and its applicable operator-held decisions. C3d-base applies only to V2-2.
+The section 3 gates are accepted; they are not still Proposed.
 
 ## 4. Disposition cross-reference
 

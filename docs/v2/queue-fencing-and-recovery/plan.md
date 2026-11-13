@@ -3,7 +3,9 @@
 > **Status note added 2026-11-12 (additive; the plan text below records its
 > pre-ratification state):** the [D-0 decision record](decision-record.md)
 > records operator acceptance of Q-D23, Q-TOPO, Q-D1, Q-D2, Q-68, Q-SQLITE,
-> Q-AGE, Q-RET and Q-LAYOUT. Q-68b uses the two-stage retry rule. These
+> Q-AGE, Q-RET and Q-LAYOUT. Q-68b uses the two-stage retry rule (attempt 1
+> original; attempt 2, the first verified retry, may return the token; attempt
+> 3 and later are token-free). These
 > decisions do not authorize merges, pushes, activation, C3d-base or the other
 > owner-held gates.
 
@@ -156,8 +158,12 @@ claims protection from a hostile same-user process. A needs its own premise reco
 - Reserved handoff stays release followed by a separately admitted claim. The release atomically
   establishes a versioned reservation so an unrelated principal cannot take the gap. This needs
   the Q-68 amendment. Forced takeover stays controller-only expiry and recovery.
-- Replay follows Q-68b. Regardless of the option, a byte-identical captured request from another
-  verified channel yields no token and no new lease unless it passes full admission.
+- Replay follows Q-68b with attempt 1 original, attempt 2 first retry and attempt 3+
+  token-free. Consume the token-bearing retry allowance atomically with store-side verification
+  and persist it before returning the token. Concurrent retries and restart cannot reset it.
+  External verifiers stay outside the write lock. Every channel still requires full admission.
+  Prove the transition using concurrent retries and real process death before and after commit.
+  Schema-2 cutover remains blocked on the replay-identity gate in amendment-drafts section 2.7.
 - `verified_at` and any maximum age enter only through Q-AGE, checked inside the write
   transaction before idempotency or task lookup. No network verifier runs under the SQLite lock.
 - `reconcile` resolution tooling is out of this slice. No operator bypass returns a `reconcile`
@@ -180,10 +186,11 @@ L-1 stays a separate task with its own review.
   is gone. Protected queues then refuse legacy cleanup writes and route manual recovery through
   the authority with expected generation and versions. If liveness exists only elsewhere, refuse
   or require continuing quiescence. No false cross-database atomicity.
-- Continuing quiescence from Perpetua-Tools PR 493 stays in force until L-1
-  lands, is tested, is deployed to
-  every relevant caller and its boundary is proven. Do not run cleanup during the audits. No
-  periodic PT cleanup is introduced (D1).
+- Continuing quiescence from Perpetua-Tools PR 493 covers affected workers, automatic
+  restarts and queue mutations throughout each operator-authorized cleanup. It stays in
+  force until L-1 lands, is tested, is deployed to every relevant caller and its boundary
+  is proven. This documentation authorizes no live cleanup. Do not run cleanup during audits.
+  No periodic PT cleanup is introduced (D1).
 
 ## 5. Work packages (map to the master register)
 
