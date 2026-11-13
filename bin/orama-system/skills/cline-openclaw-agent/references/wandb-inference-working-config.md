@@ -48,4 +48,12 @@ Do not print `DEEPSEEK_V4_FLASH_WANDB`. Do not put it in argv, a prompt, a commi
 
 ## Stick to this
 
-Shell-source the env file. OpenAI client at `https://api.inference.wandb.ai/v1`. Key variable `DEEPSEEK_V4_FLASH_WANDB`. Project variable `DEEPSEEK_V4_FLASH_WANDB_PROJECT`. Model `deepseek-ai/DeepSeek-V4.1-Flash-1017`. Weave init on that same project variable.
+Shell-source the env file. OpenAI client at `https://api.inference.wandb.ai/v1`.
+Key variable `DEEPSEEK_V4_FLASH_WANDB`. Project variable
+`DEEPSEEK_V4_FLASH_WANDB_PROJECT`. Model
+`deepseek-ai/DeepSeek-V4.1-Flash-1017`. Weave init on that same project
+variable.
+
+The canonical worker for this call is Wanda
+(`bin/orama-system/skills/wanda-wandb/SKILL.md`). She unions Cline's
+coding discipline with Agnes's board fan-out contract.

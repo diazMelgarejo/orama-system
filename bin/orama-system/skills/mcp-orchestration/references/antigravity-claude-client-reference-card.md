@@ -101,6 +101,10 @@ Before handoff, the primary agent verifies:
 - no secrets, host-specific topology, or fabricated provider configuration was
   added to tracked files.
 
+Wanda (`wanda-wandb`) is the separate worker that unions this fan-out
+contract with Cline's coding discipline and calls W&B through the OpenAI
+client. See [`wanda-wandb/SKILL.md`](../../wanda-wandb/SKILL.md).
+
 Related guidance: [`antigravity-agent/SKILL.md`](../../antigravity-agent/SKILL.md),
 [`gemini-and-ai-cli-mcp-setup.md`](gemini-and-ai-cli-mcp-setup.md), and the
 shared [multi-agent collaboration protocol](../../references/multi-agent-collaboration-protocol.md).
