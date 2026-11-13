@@ -199,8 +199,9 @@ This skill is the reference implementation for [`references/interactive-provider
   (code 1210); every other call returned HTTP 429 code 1113 because the account has no balance.
   Real completions on BigModel were therefore NOT observed. The same model name on W&B
   (`zai-org/GLM-5.3-Flash`) accepted medium, high and low but takes 23-30 s per call.
-- Legacy names kept on purpose: `GLM52_API_KEY`, `.env.glm52`, `setup-glm52.sh` and this
-  directory name predate the model rename; the model is `glm-5.3-flash`.
+- Legacy names kept on purpose: `GLM52_API_KEY`, the operator-local env bundle
+  written by `setup-glm52.sh`, and this directory name predate the model rename;
+  the model is `glm-5.3-flash`.
 - Effort re-check cadence: the checked-in `high` is applied on every switch; medium, then high,
   then low is re-verified only periodically during a reviewed repository update (see the
   "Effort rule" section of `../cline-wandb/SKILL.md`). BigModel could not be probed live on
