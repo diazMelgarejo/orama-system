@@ -79,18 +79,15 @@ python3 ~/.openclaw/scripts/discover.py --status   # current tier + reachability
 python3 ~/.openclaw/scripts/discover.py --force    # bypass 5-min TTL, re-probe now
 ```
 
-Expected when both nodes live:
+These endpoints are model-server endpoints. Port 1234 is only the default
+used when a probe omits a port. Take each host address from that host's own
+interfaces: the discovery snapshot or that host's interface list. Do not copy
+an address from another machine's notes.
 
-```text
-Tier:    1
-  mac: model server on localhost, port from discovery
-  win: model server on that host's interface, port from discovery
-Source:  tier1
-```
-
-These lines are model-server endpoints. Port 1234 is only the default when
-the discovery record omits a port. Take each host address from that host's
-own interfaces. Do not copy an address into this card.
+Expected shape when both nodes are live: a tier label, one reachability line
+per host using the address just read from that host, a model count, and the
+discovery source. Include a port only when the probe did not use the
+omitted-port default.
 
 ---
 
