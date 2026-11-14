@@ -3,6 +3,7 @@
 The launcher builds a throwaway Cline config that Cline 3.0.74 accepts (tokenSource "manual",
 millisecond-Z updatedAt), refuses effort levels other than medium/high/low, keeps the key out of
 argv, and deletes the config afterwards. A stub `cline` on PATH records what it was given.
+Default invocations are review/plan mode with auto-approve off; passthrough is positional only.
 """
 from __future__ import annotations
 
@@ -26,7 +27,12 @@ sys.modules["launch_cline_wandb"] = launcher
 _spec.loader.exec_module(launcher)
 
 FAKE_KEY = "wandb-test-key-0123456789"
+FILE_SECRET = "quoted-file-secret-must-not-leak"
 _TS = re.compile(r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$")
+
+
+def _argv_lines(record: Path) -> list[str]:
+    return (record / "argv.txt").read_text().splitlines()
 
 
 def test_timestamp_uses_javascript_iso_format() -> None:
@@ -69,17 +75,46 @@ def test_key_comes_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     assert launcher.read_key() == FAKE_KEY
 
 
-def test_key_falls_back_to_env_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_env_file_is_not_parsed(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.delenv(launcher.KEYVAR, raising=False)
     env_file = tmp_path / ".env.wandb"
-    env_file.write_text(f"# comment\nexport {launcher.KEYVAR}='{FAKE_KEY}'\n")
-    assert launcher.read_key(env_file=str(env_file)) == FAKE_KEY
+    env_file.write_text(
+        "# comment\n"
+        f"export {launcher.KEYVAR}='{FILE_SECRET}'\n"
+        f"{launcher.KEYVAR}=ab\\$cd\n"
+        f"{launcher.KEYVAR}=\n"
+    )
+    with pytest.raises(SystemExit) as exc:
+        launcher.read_key()
+    message = str(exc.value)
+    assert launcher.KEYVAR in message
+    assert FILE_SECRET not in message
+    assert "ab\\$cd" not in message
+    assert "does not parse the file" in message
+    assert launcher.DEFAULT_ENV_FILE in message
+
+
+def test_exported_env_wins_even_if_a_file_would_disagree(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    env_file = tmp_path / ".env.wandb"
+    env_file.write_text(f"{launcher.KEYVAR}={FILE_SECRET}\n")
+    monkeypatch.setenv(launcher.KEYVAR, FAKE_KEY)
+    monkeypatch.chdir(tmp_path)
+    assert launcher.read_key() == FAKE_KEY
+
+
+def test_empty_env_value_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(launcher.KEYVAR, "   \t  ")
+    with pytest.raises(SystemExit) as exc:
+        launcher.read_key()
+    assert launcher.KEYVAR in str(exc.value)
 
 
 def test_missing_key_exits_without_echoing_anything_secret(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.delenv(launcher.KEYVAR, raising=False)
     with pytest.raises(SystemExit) as exc:
-        launcher.read_key(env_file=str(tmp_path / "missing"))
+        launcher.read_key()
     assert launcher.KEYVAR in str(exc.value)
 
 
@@ -111,13 +146,66 @@ def stub_cline(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Pat
 def test_run_passes_explicit_route_and_keeps_key_out_of_argv(stub_cline: dict[str, Path]) -> None:
     rc = launcher.main(["--effort", "medium", "--model", "deepseek-ai/DeepSeek-V4-Flash-0731", "--", "do the task"])
     record = stub_cline["record"]
-    argv = (record / "argv.txt").read_text().splitlines()
+    argv = _argv_lines(record)
     assert rc == 0
     assert argv[:1] == ["--config"] and argv[2:4] == ["-P", "openai-compatible"]
     assert ["-m", "deepseek-ai/DeepSeek-V4-Flash-0731"] == argv[4:6]
     assert ["--thinking", "medium"] == argv[6:8]
+    assert ["--plan", "--auto-approve", "false"] == argv[8:11]
     assert argv[-1] == "do the task"
     assert FAKE_KEY not in "\n".join(argv)
+
+
+def test_default_main_is_plan_mode_without_act(stub_cline: dict[str, Path]) -> None:
+    launcher.main(["--", "task"])
+    argv = _argv_lines(stub_cline["record"])
+    assert "--plan" in argv
+    assert argv[argv.index("--auto-approve") + 1] == "false"
+    assert "--act" not in argv
+
+
+def test_implement_omits_plan_and_keeps_auto_approve_false(stub_cline: dict[str, Path]) -> None:
+    launcher.main(["--implement", "--", "task"])
+    argv = _argv_lines(stub_cline["record"])
+    assert "--plan" not in argv
+    assert argv[argv.index("--auto-approve") + 1] == "false"
+    assert "--act" not in argv
+
+
+def test_implement_with_allow_tool_approval_omits_plan(stub_cline: dict[str, Path]) -> None:
+    launcher.main(["--implement", "--allow-tool-approval", "--", "task"])
+    argv = _argv_lines(stub_cline["record"])
+    assert "--plan" not in argv
+    assert argv[argv.index("--auto-approve") + 1] == "true"
+
+
+def test_allow_tool_approval_alone_stays_in_plan_mode(stub_cline: dict[str, Path]) -> None:
+    launcher.main(["--allow-tool-approval", "--", "task"])
+    argv = _argv_lines(stub_cline["record"])
+    assert "--plan" in argv
+    assert argv[argv.index("--auto-approve") + 1] == "true"
+
+
+def test_passthrough_cannot_override_thinking_or_config(stub_cline: dict[str, Path]) -> None:
+    record = stub_cline["record"]
+    with pytest.raises(SystemExit):
+        launcher.main(["--", "--thinking", "xhigh", "--config", "/another/config", "task"])
+    assert not (record / "argv.txt").exists()
+
+
+def test_passthrough_equals_form_is_rejected(stub_cline: dict[str, Path]) -> None:
+    record = stub_cline["record"]
+    with pytest.raises(SystemExit):
+        launcher.main(["--", "--thinking=low", "task"])
+    assert not (record / "argv.txt").exists()
+
+
+def test_positional_prompt_still_works(stub_cline: dict[str, Path]) -> None:
+    rc = launcher.main(["--", "review the launcher gates"])
+    argv = _argv_lines(stub_cline["record"])
+    assert rc == 0
+    assert argv[-1] == "review the launcher gates"
+    assert argv[argv.index("--thinking") + 1] == "high"
 
 
 def test_config_is_private_and_removed_afterwards(stub_cline: dict[str, Path]) -> None:
