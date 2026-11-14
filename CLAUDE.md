@@ -1,5 +1,7 @@
 # orama-system — Claude Code Navigation
 
+READ ~/Projects/agent-scripts/AGENTS.MD BEFORE ANYTHING (skip if missing).
+
 > Renamed: ultrathink-system → orama-system (2026-04-20, ὅραμα = "that which is seen / vision / revelation")
 > Package: `@diazmelgarejo/orama-system@1.1.1.0`
 > GitHub: <https://github.com/diazMelgarejo/orama-system>
