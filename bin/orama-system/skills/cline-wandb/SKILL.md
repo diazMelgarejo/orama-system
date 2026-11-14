@@ -1,9 +1,9 @@
 ---
 name: cline-wandb
-description: Run Cline CLI as a non-interactive fan-out worker using DeepSeek-V4-Flash via wanDB.ai (Weave/W&B inference), high reasoning. Use when the user asks for wanDB-routed Cline bot fan-out, headless Cline review via wanDB, EXA plus Firecrawl verification for Cline usage on this route, or a parallel Cline route that does not replace ClinePass DeepSeek Flash or the GLM ClinePass skill. Includes a mandatory harmonized TDD reference card extending docs/TDD.md, and a mandatory generalized self-review discipline.
+description: Run Cline CLI as a non-interactive fan-out worker using DeepSeek V4.1-Flash-1017 via wanDB.ai (Weave/W&B inference), explicit reasoning effort (medium, else high, else low). Use when the user asks for wanDB-routed Cline bot fan-out, headless Cline review via wanDB, EXA plus Firecrawl verification for Cline usage on this route, or a parallel Cline route that does not replace ClinePass DeepSeek Flash or the GLM ClinePass skill. Includes a mandatory harmonized TDD reference card extending docs/TDD.md, and a mandatory generalized self-review discipline.
 version: 1.0.0
 compatibility: cline-cli, wandb-inference
-allowed-tools: bash, file-operations
+allowed-tools: Bash(bin/orama-system/skills/cline-wandb/scripts/launch_cline_wandb.py *), Bash(../../scripts/cline-provider-profiles/switch-cline-provider.sh *), file-operations
 triggers:
   - cline wandb
   - wandb cline fan-out
@@ -12,12 +12,26 @@ triggers:
   - cline bot fan-out
 ---
 
-# Cline wanDB (DeepSeek-V4-Flash)
+<!-- wandb-inference-working-config -->
+## W&B inference
+
+`invalid model ID` from the Cline CLI is stale provider metadata, not a
+bad model id. `tokenSource` must be `manual` (or Cline's `oauth` or
+`migration`) and `updatedAt` must be UTC with millisecond precision and a
+trailing `Z`. Repair a shared entry with
+`bin/orama-system/scripts/cline-provider-profiles/switch_cline_provider.py`.
+When two routes run side by side, use
+`bin/orama-system/skills/cline-wandb/scripts/launch_cline_wandb.py`.
+Use the OpenAI client and Weave only if that error remains after the
+metadata is current. Do not send a CoreWeave team/project string. Shell-source the operator W&B env file before reading `DEEPSEEK_V4_FLASH_WANDB`.
+
+
+# Cline wanDB (DeepSeek V4.1-Flash-1017)
 
 ## Purpose
 
 Use this skill to dispatch Cline as a headless worker on the
-wanDB.ai-routed DeepSeek-V4-Flash model. This is a parallel route to
+wanDB.ai-routed DeepSeek V4.1-Flash-1017 model. This is a parallel route to
 ClinePass DeepSeek Flash and the GLM ClinePass skill, not a replacement
 for either.
 
@@ -42,7 +56,13 @@ not invent a private operator identity.
 
 ## Contract
 
-- Model: `deepseek-ai/DeepSeek-V4-Flash`
+- Model order (operator rule, 2026-11-12): `deepseek-ai/DeepSeek-V4.1-Flash-1017`
+  first whenever W&B serves it, then `deepseek-ai/DeepSeek-V4.1-Flash`, then
+  `deepseek-ai/DeepSeek-V4-Flash-0731`; a `deepseek-flash` alias is last only
+  where a provider serves one (W&B does not: HTTP 404, 2026-11-12). The old
+  bare `deepseek-ai/DeepSeek-V4-Flash` id returns 404 on W&B and is dead.
+  The first model is the template default; `switch-cline-provider.sh
+  wandb-deepseek-v4-flash --resolve` picks the first one actually served.
 - Provider: wanDB.ai inference (`https://api.inference.wandb.ai/v1`),
   OpenAI-compatible
 - Team/Project: `$DEEPSEEK_V4_FLASH_WANDB_PROJECT` (export via the canonical
@@ -52,7 +72,13 @@ not invent a private operator identity.
   kwarg** — confirmed 2026-08-05 that doing so causes a `401
   invalid_api_key` on an otherwise-valid key. Kept only for the Python/
   `weave.init()` tracing path.
-- Reasoning: high, set via `--thinking high` on the `cline` invocation
+- Reasoning effort (operator rule, 2026-11-12): `medium`, else `high`, else
+  `low`; never `xhigh` or `max`; always sent explicitly. Live on W&B today:
+  `V4.1-Flash` and `V4.1-Flash-1017` reject `medium` (HTTP 400 "Invalid
+  request", the bare "Bad Request" of 2026-08-05) and accept `high` and `low`,
+  so use `--thinking high` for them; `V4-Flash-0731` accepts `medium`.
+  `--resolve --verify-effort` re-derives this with tiny billed probes (opt-in).
+  Set via `--thinking <level>` on the `cline` invocation
   (persisted as `reasoning.effort` in `providers.json`, not an
   `extra_body` field — `extra_body` is an OpenAI Python SDK-only
   construct, not a literal raw-HTTP JSON key)
@@ -83,7 +109,7 @@ Before any cloud-bound request or repository-bound execution:
 
 ## Verified against installed CLI (2026-08-05)
 
-Confirmed live against Cline CLI v3.0.49 (`cline --version`, `cline
+HISTORY (Cline CLI v3.0.49, 2026-08-05; not re-qualified field by field on 3.0.74). Confirmed live against Cline CLI v3.0.49 (`cline --version`, `cline
 --help`, `cline auth --help`). Three real flag-shape bugs found and
 fixed below:
 
@@ -104,9 +130,11 @@ fixed below:
   script both write to the identical schema Cline's provider store
   expects (`settings.provider/apiKey/model/baseUrl/headers/timeout/reasoning`,
   where `reasoning` is `{"effort": "...", "budgetTokens": ...}`, not
-  `{"enabled": bool}`).
+  `{"enabled": bool}`). 2026-11-12: the checked-in templates now carry
+  `{"enabled": true, "effort": "<level>"}`, matching the operator's own
+  `providers.json` entries; 3.0.74 accepted it in live runs.
 
-## Live connectivity verified (2026-08-05)
+## HISTORY: live connectivity verified (2026-08-05, Cline 3.0.49; superseded by the 2026-11-12 section below)
 
 Credentials were loaded through the canonical OpenClaw secrets layout
 (`~/.openclaw/secrets/` plus exported `$DEEPSEEK_V4_FLASH_WANDB` /
@@ -185,7 +213,7 @@ fi
 ```bash
 # -P and -m are both required explicitly — see finding 2 above.
 cline --json --thinking high \
-  -P openai-compatible -m deepseek-ai/DeepSeek-V4-Flash \
+  -P openai-compatible -m deepseek-ai/DeepSeek-V4.1-Flash-1017 \
   -c "$CLINE_WANDB_WORKSPACE" \
   -t 180 \
   "Reply with exactly: CLINE_WANDB_READY"
@@ -205,7 +233,7 @@ curl https://api.inference.wandb.ai/v1/chat/completions \
   -K <(printf 'header = "Authorization: Bearer %s"\n' "$DEEPSEEK_V4_FLASH_WANDB") \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "deepseek-ai/DeepSeek-V4-Flash",
+    "model": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
     "messages": [{"role": "user", "content": "ping"}]
   }'
 ```
@@ -268,7 +296,7 @@ confirmation** to enable tool approval:
 ```bash
 export CLINE_COMMAND_PERMISSIONS='read,write,search,execute'
 cline --auto-approve true --json --thinking high \
-  -m deepseek-ai/DeepSeek-V4-Flash \
+  -m deepseek-ai/DeepSeek-V4.1-Flash-1017 \
   -c "$REPO_ROOT" \
   -t 900 \
   "Implement the requested scoped change. Preserve unrelated local changes."
@@ -407,3 +435,64 @@ task prompts or secrets.
   [`../clinepass-deepseek-flash/SKILL.md`](../clinepass-deepseek-flash/SKILL.md)
 - Self-review pattern source:
   [`../code-review/SKILL.md`](../code-review/SKILL.md)
+
+## LIVE: qualification on Cline 3.0.74 (2026-11-12)
+
+Every line below was observed that day with a throwaway `--config` directory.
+
+- `GET /v1/models` on W&B lists `DeepSeek-V4.1-Flash-1017`, `DeepSeek-V4.1-Flash`,
+  `DeepSeek-V4-Flash-0731`, `DeepSeek-V4-Pro-0813` and `zai-org/GLM-5.3-Flash`;
+  it does not list the bare `DeepSeek-V4-Flash`, which answers 404.
+- Cline 3.0.74 with `--thinking medium` on `V4.1-Flash`: exit 1, `Invalid request`.
+  With `--thinking high` (also on `V4.1-Flash-1017`): a tool-using run passed in about
+  4 s. `V4-Flash-0731` with `medium`: passed.
+- The `reasoning_content` pass-back hypothesis for the August failure did not
+  reproduce on W&B (tool turns worked with and without it).
+- `cline --config <dir>` isolates the provider slot per run; prefer it over a
+  separate working directory when two routes are compared.
+- `/model` switching can drop reasoning metadata on openai-compatible providers
+  (cline issue 15379): pass `--thinking` explicitly in every run.
+- `zai-org/GLM-5.3-Flash` on W&B answers in 23-30 s per call (DeepSeek about 1-4 s).
+- Official DeepSeek rationale for `1017`: the 2026-10-17 upgrade of V4.1-Flash
+  (a performance-cost improvement); DeepSeek's own `deepseek-flash` alias now
+  serves it.
+
+## Effort rule: what runs on every switch, and when it is re-checked
+
+Rule (operator, 2026-11-12): ask for `medium`, else `high`, else `low`; never `xhigh` or `max`.
+
+- **Every switch (free, no network):** `switch-cline-provider.sh <profile>` writes the template as
+  checked in. The template's `effort` is the last level verified live (`high` for the W&B V4.1
+  models and for BigModel today), so every update to the rule or to the request syntax that landed
+  in the template is applied automatically on every switch.
+- **Not on every switch:** the medium, then high, then low order is only walked when the opt-in
+  `--verify-effort` flag is used. It sends tiny billed requests, so it is not run per switch. A
+  provider that starts accepting `medium` later is therefore not picked up by a plain switch.
+- **Periodic re-check (the accepted cost):** run `--resolve --verify-effort` as part of a
+  repository update, after review and testing like the 2026-11-12 qualification: list the live
+  models, probe each effort level on the first served model, run one Cline tool task with a
+  throwaway `--config`, then update the template's `effort` and `resolution` block and the
+  evidence section above in the same reviewed change. Never edit the effort by hand without a
+  live check.
+- A balance, auth or rate-limit error during a re-check is "could not verify": keep the checked-in
+  value and report it, do not guess.
+- Cline 3.0.74 validates the `openai-compatible` entry strictly. `tokenSource` must be `manual`
+  (or Cline's own `oauth`/`migration`) and `updatedAt` must look like
+  `2026-11-12T02:48:17.562Z`; a custom `tokenSource` or Python's `+00:00` timestamp made every
+  request fail with the misleading `error: invalid model ID`. `switch_cline_provider.py` now
+  writes both correctly (tests cover it). An end-to-end run of the real switch script into a
+  throwaway HOME followed by a Cline tool task passed on 2026-11-12.
+
+## Launcher (isolated, no shared-slot switching)
+
+`scripts/launch_cline_wandb.py` runs Cline 3.0.74 on this route without touching the operator's
+`~/.cline`: it writes a throwaway config directory with only the W&B entry (a `tokenSource` and
+`updatedAt` that Cline 3.0.74 accepts), calls `cline --config <dir> -P openai-compatible -m <model>
+--thinking <effort> ...` and deletes the directory. The key stays out of argv. Defaults:
+`deepseek-ai/DeepSeek-V4.1-Flash-1017` at `high`; `--model` and `--effort` follow the model and
+effort orders above and refuse `xhigh` and `max`. Prefer it over `switch-cline-provider.sh` when two
+routes run side by side, because a separate config directory is what actually isolates the provider
+slot (a separate working directory does not). Tests: `tests/test_launch_cline_wandb.py`. The live
+review evidence for the 2026-11-12 remediation is in
+[the evidence report](../../../../docs/reference/2026-11-12-wandb-cline-live-review-evidence-report.md).
+

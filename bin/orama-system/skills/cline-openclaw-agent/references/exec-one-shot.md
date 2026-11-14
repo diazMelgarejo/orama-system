@@ -1,5 +1,20 @@
 # Exec One-Shot (Shell-Out Bridge)
 
+<!-- wandb-inference-working-config -->
+## W&B inference
+
+`invalid model ID` from the Cline CLI is stale provider metadata, not a
+bad model id. `tokenSource` must be `manual` (or Cline's `oauth` or
+`migration`) and `updatedAt` must be UTC with millisecond precision and a
+trailing `Z`. Repair a shared entry with
+`bin/orama-system/scripts/cline-provider-profiles/switch_cline_provider.py`.
+When two routes run side by side, use
+`bin/orama-system/skills/cline-wandb/scripts/launch_cline_wandb.py`.
+Use the OpenAI client and Weave only if that error remains after the
+metadata is current. Do not send a CoreWeave team/project string.
+Shell-source the operator W&B env file before reading
+`DEEPSEEK_V4_FLASH_WANDB`.
+
 The simplest bridge: the OpenClaw agent invokes `cline` as a subprocess via the
 exec tool. Works now with zero config — `tools.exec.security: "full"` is
 already set.
@@ -87,7 +102,7 @@ cline "task" -P anthropic -m claude-fable-5-1 --json -c /repo
 cline "task" -P anthropic -m claude-sonnet-5-5 --json -c /repo
 
 # Use OpenRouter free tier
-cline "task" -P openrouter -m minimax/minimax-m2.5:free --json -c /repo
+cline "task" -P openrouter -m cohere/north-mini-code:free --json -c /repo
 
 # API key override for one run
 cline "task" -P openrouter -k sk-or-v1-... --json -c /repo

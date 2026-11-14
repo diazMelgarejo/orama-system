@@ -1,5 +1,20 @@
 # Provider Auth
 
+<!-- wandb-inference-working-config -->
+## W&B inference
+
+`invalid model ID` from the Cline CLI is stale provider metadata, not a
+bad model id. `tokenSource` must be `manual` (or Cline's `oauth` or
+`migration`) and `updatedAt` must be UTC with millisecond precision and a
+trailing `Z`. Repair a shared entry with
+`bin/orama-system/scripts/cline-provider-profiles/switch_cline_provider.py`.
+When two routes run side by side, use
+`bin/orama-system/skills/cline-wandb/scripts/launch_cline_wandb.py`.
+Use the OpenAI client and Weave only if that error remains after the
+metadata is current. Do not send a CoreWeave team/project string.
+Shell-source the operator W&B env file before reading
+`DEEPSEEK_V4_FLASH_WANDB`.
+
 Cline providers are configured in `~/.cline/data/settings/providers.json`. Each
 provider has a `settings` block with `provider`, auth (`apiKey` or `auth` OAuth
 object), `model`, `timeout`, and `reasoning`.
@@ -11,7 +26,7 @@ object), `model`, `timeout`, and `reasoning`.
 | `cline` | `zai/glm-5.3-flash` | WorkOS OAuth | Cline Credits | `api.cline.bot` |
 | `cline-pass` | `cline-pass/glm-5.3-flash` | WorkOS OAuth | Cline Credits | `api.cline.bot` |
 | `anthropic` | `claude-fable-5` | API key (`sk-ant-...`) | Anthropic | `api.anthropic.com` |
-| `openrouter` | `minimax/minimax-m2.5:free` | API key (`sk-or-v1-...`) | OpenRouter | `openrouter.ai` |
+| `openrouter` | `cohere/north-mini-code:free` | API key (`sk-or-v1-...`) | OpenRouter | `openrouter.ai` |
 | `openai-compatible` | `gemini-3.8-flash` | API key | Google AI | `generativelanguage.googleapis.com` |
 | `openai-codex` | — | OAuth | OpenAI | `api.openai.com` |
 | `gemini` | Saved model (host-specific) | API key | Google AI | `generativelanguage.googleapis.com` |

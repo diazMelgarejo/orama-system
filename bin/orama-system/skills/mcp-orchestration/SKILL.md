@@ -24,6 +24,7 @@ supersedes:
 last_updated: 2026-07-22
 ---
 
+<!-- wandb-inference-working-config: invalid model ID is stale Cline metadata. Repair with switch_cline_provider.py; the OpenAI client is only for a failure that remains. -->
 # MCP Orchestration Skill (canonical)
 
 ## Purpose
@@ -139,12 +140,12 @@ For lightweight routing/triage/quick replies that don't need tool loops, route
 to OpenRouter free models in fallback order:
 
 ```text
-1. openrouter/nvidia/nemotron-3-super-120b-a12b:free   (1M ctx, agent-strong)
-2. openrouter/minimax/minimax-m2.5:free                (205K, 80.2% SWE-Bench)
-3. openrouter/deepseek/deepseek-v4-flash:free          (1M, fast triage)
-4. openrouter/openai/gpt-oss-120b:free                 (131K, tool-use)
-5. openrouter/z-ai/glm-4.5-air:free                    (131K, agentic backup)
-6. openrouter/inclusionai/ling-2.6-flash:free          (262K, lightweight)
+1. openrouter/nvidia/nemotron-3-ultra-550b-a55b:free   (1M ctx, agent-strong)
+2. openrouter/cohere/north-mini-code:free              (256K, agentic coding)
+3. openrouter/nvidia/nemotron-3.5-lightning:free       (1M, fast triage)
+4. openrouter/nvidia/nemotron-3.5-super-vl:free        (1M, reasoning + tools)
+5. openrouter/baidu/ernie-5.5-flash-preview:free       (1M, agentic backup)
+6. openrouter/liquid/lfm-3-1.7b:free                   (256K, lightweight)
 7. openrouter/openrouter/free                          (auto-router, last resort)
 ```
 
@@ -282,8 +283,8 @@ Full config shape lives in `deployments/macbook-pro-head/openclaw/openclaw.model
   "agents": {
     "defaults": {
       "model": {
-        "primary": "openrouter/nvidia/nemotron-3-super-120b-a12b:free",
-        "fallbacks": ["openrouter/minimax/minimax-m2.5:free", "openrouter/openrouter/free"]
+        "primary": "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
+        "fallbacks": ["openrouter/cohere/north-mini-code:free", "openrouter/openrouter/free"]
       }
     }
   }

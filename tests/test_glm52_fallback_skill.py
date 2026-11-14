@@ -74,12 +74,16 @@ def _make_fake_bin(tmp_path: Path, curl_sentinel: Path, curl_body: str | None = 
     return fakebin
 
 
+_HEALTHY_BODY = '{"choices":[{"message":{"content":"ok"}}]}'
+
+
 def _run_setup(
     tmp_path: Path,
     env: dict,
     make_profiles: bool = False,
     home: Path | None = None,
     curl_body: str | None = None,
+    curl_fails: bool = False,
 ) -> subprocess.CompletedProcess:
     """Run the setup script with an isolated home and a stubbed network call."""
     if home is None:
@@ -92,7 +96,13 @@ def _run_setup(
             (home / ".bashrc").write_text("# existing bashrc\n", encoding="utf-8")
 
     curl_sentinel = tmp_path / "curl_calls.txt"
-    fakebin = _make_fake_bin(tmp_path, curl_sentinel, curl_body)
+    if curl_fails:
+        probed_body = None
+    elif curl_body is None:
+        probed_body = _HEALTHY_BODY
+    else:
+        probed_body = curl_body
+    fakebin = _make_fake_bin(tmp_path, curl_sentinel, probed_body)
 
     full_env = os.environ.copy()
     full_env.pop("GLM52_API_KEY", None)
@@ -438,6 +448,7 @@ class TestSetupCompletion:
         payload = json.loads(request.split(" -d ", 1)[1])
         assert payload["model"] == "glm-5.3-flash"
         assert payload["max_tokens"] == 512
+        assert payload["reasoning_effort"] == "high"  # BigModel defaults to max when omitted; never max
         assert payload["messages"] == [{"role": "user", "content": "Reply with only OK."}]
 
     def test_prints_setup_complete_message(self, tmp_path):
@@ -451,20 +462,34 @@ class TestSetupCompletion:
         result = _run_setup(tmp_path, env={"GLM52_API_KEY": "k"})
         assert result.returncode == 0, result.stdout + result.stderr
         assert "source ~/.openclaw/.env.glm52" in result.stdout
+        activate = result.home / ".openclaw" / "glm52-activate.sh"
+        assert activate.is_file()
+        assert "source \"$HOME/.openclaw/.env.glm52\"" in activate.read_text(encoding="utf-8")
 
-    def test_unreachable_endpoint_does_not_abort_script(self, tmp_path):
-        """The fake curl always fails (simulating no network); the script's
-        health-check chain uses && / || so this must not trigger `set -e`."""
-        result = _run_setup(tmp_path, env={"GLM52_API_KEY": "k"})
-        assert result.returncode == 0, result.stdout + result.stderr
-        assert "unreachable" in result.stdout or "healthy" in result.stdout
+    def test_stored_key_is_loaded_when_process_env_is_unset(self, tmp_path):
+        """A fresh shell with no GLM52_API_KEY reuses the previously stored key."""
+        first = _run_setup(tmp_path, env={"GLM52_API_KEY": "stored-key"})
+        assert first.returncode == 0, first.stdout + first.stderr
+        second = _run_setup(tmp_path, env={}, home=first.home)
+        assert second.returncode == 0, second.stdout + second.stderr
+        secret = (first.home / ".openclaw" / "secrets" / "glm52-api-key").read_text(encoding="utf-8")
+        assert secret == "stored-key"
+
+    def test_unreachable_endpoint_fails_after_writing_files(self, tmp_path):
+        """A failed endpoint check is a failed setup, and the files are still written."""
+        result = _run_setup(tmp_path, env={"GLM52_API_KEY": "k"}, curl_fails=True)
+        assert result.returncode != 0
+        assert "unreachable" in result.stdout
+        assert "Setup complete." not in result.stdout
+        assert (result.home / ".openclaw" / ".env.glm52").is_file()
+        assert (result.home / ".openclaw" / "glm52-activate.sh").is_file()
 
     @pytest.mark.skipif(shutil.which("jq") is None, reason="health validation requires jq")
     def test_null_completion_is_reported_unreachable_not_healthy(self, tmp_path):
         """A 2xx reply whose completion is null fails the health check (``jq -e``)."""
         body = '{"choices":[{"message":{"content":null}}]}'
         result = _run_setup(tmp_path, env={"GLM52_API_KEY": "k"}, curl_body=body)
-        assert result.returncode == 0, result.stdout + result.stderr
+        assert result.returncode != 0
         assert "unreachable" in result.stdout
         assert "healthy" not in result.stdout
 
@@ -480,6 +505,7 @@ class TestSetupCompletion:
     def test_unusable_completion_is_reported_unreachable(self, tmp_path, body):
         """Missing, blank and non-string completions cannot report a healthy provider."""
         result = _run_setup(tmp_path, env={"GLM52_API_KEY": "k"}, curl_body=body)
+        assert result.returncode != 0
         assert "unreachable" in result.stdout
         assert "healthy" not in result.stdout
 

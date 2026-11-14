@@ -16,6 +16,11 @@
     {
       "name": "cyre",
       "email": "lawrence@bettermind.ph"
+    },
+    {
+      "name": "diazMelgarejo",
+      "email": "71907175+diazMelgarejo@users.noreply.github.com",
+      "note": "Operator-approved GitHub noreply committer. Matches author of e3c68ef5888d9af45b8b475189bc382f0425f642."
     }
   ],
   "agent_identities": [
@@ -29,7 +34,8 @@
     {"email": "cloud-kimi-agent@kimi.ai", "allowed_names": ["Cloud Kimi Agent"]},
     {"email": "noreply@coderabbit.ai", "allowed_names": ["CodeRabbit"]},
     {"email": "cline@local.invalid", "allowed_names": []},
-    {"email": "noreply@cline.bot", "allowed_names": ["Cline"]}
+    {"email": "noreply@cline.bot", "allowed_names": ["Cline"]},
+    {"email": "openhands@all-hands.dev", "allowed_names": ["OpenHands"]}
   ],
   "repo_bot_identities": {
     "orama-system": [

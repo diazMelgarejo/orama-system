@@ -493,12 +493,33 @@ def test_main_wires_lock_and_switch_and_prints_activated(
     assert lock_path.exists(), "lock file must be created"
 
 
+def test_matching_settings_with_stale_metadata_are_repaired(workspace: Workspace) -> None:
+    """An older entry can already have the requested settings and still carry a custom tokenSource or +00:00 timestamp."""
+    providers_path, backup_dir, tmpl_path = workspace
+    _write_json(providers_path, _providers_cfg(_settings("model-a", "key-a")))
+
+    status = switch_provider(
+        str(providers_path), str(tmpl_path), "profile-a", str(backup_dir),
+        env={"A_KEY": "key-a"},
+        now=datetime(2026, 11, 12, 2, 48, 17, 562287, tzinfo=timezone.utc),
+    )
+
+    assert status == "activated"
+    entry = _read_json(providers_path)["providers"]["openai-compatible"]
+    assert entry["settings"]["model"] == "model-a"
+    assert entry["tokenSource"] == "manual"
+    assert entry["updatedAt"] == "2026-11-12T02:48:17.562Z"
+
+
 def test_main_prints_no_changes_when_already_on_profile(
     workspace: Workspace, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """main() reports no changes when the requested profile is already live."""
+    """main() reports no changes when the requested profile and Cline metadata are already live."""
     providers_path, backup_dir, tmpl_path = workspace
-    _write_json(providers_path, _providers_cfg(_settings("model-a", "key-a")))
+    current = _providers_cfg(_settings("model-a", "key-a"))
+    current["providers"]["openai-compatible"]["tokenSource"] = "manual"
+    current["providers"]["openai-compatible"]["updatedAt"] = "2026-11-12T02:48:17.562Z"
+    _write_json(providers_path, current)
     lock_path = tmpl_path.parent / "switch.lock"
     os.environ["A_KEY"] = "key-a"
     try:
@@ -510,3 +531,28 @@ def test_main_prints_no_changes_when_already_on_profile(
         del os.environ["A_KEY"]
 
     assert "Already on profile: profile-a (no changes)" in capsys.readouterr().out
+
+
+def test_activated_entry_uses_the_manual_token_source(workspace: Workspace) -> None:
+    """Cline 3.0.74 only accepts its own labels (manual, oauth, migration); a custom tokenSource made every
+    request fail with "invalid model ID" in live testing (2026-11-12), so the script must write "manual"."""
+    providers_path, backup_dir, tmpl_path = workspace
+    _write_json(providers_path, _providers_cfg(_settings("model-prior", "key-prior")))
+
+    switch_provider(str(providers_path), str(tmpl_path), "profile-a", str(backup_dir), env={"A_KEY": "key-a"})
+
+    entry = _read_json(providers_path)["providers"]["openai-compatible"]
+    assert entry["tokenSource"] == "manual"
+
+
+def test_activated_entry_timestamp_uses_javascript_iso_format(workspace: Workspace) -> None:
+    """Cline 3.0.74 failed every request with "invalid model ID" when updatedAt looked like
+    2026-11-12T02:48:17.562287+00:00; its own entries use millisecond precision with a Z suffix."""
+    providers_path, backup_dir, tmpl_path = workspace
+    _write_json(providers_path, _providers_cfg(_settings("model-prior", "key-prior")))
+
+    switch_provider(str(providers_path), str(tmpl_path), "profile-a", str(backup_dir), env={"A_KEY": "key-a"},
+                    now=datetime(2026, 11, 12, 2, 48, 17, 562287, tzinfo=timezone.utc))
+
+    entry = _read_json(providers_path)["providers"]["openai-compatible"]
+    assert entry["updatedAt"] == "2026-11-12T02:48:17.562Z"

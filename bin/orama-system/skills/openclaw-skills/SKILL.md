@@ -153,13 +153,21 @@ OpenRouter fallback stack:
 
 | Tier | Model ID | Role |
 | ------ | ---------- | ------ |
-| A | `openrouter/nvidia/nemotron-3-super-120b-a12b:free` | Default agent brain |
-| B | `openrouter/minimax/minimax-m2.5:free` | Coding fallback |
-| C | `openrouter/deepseek/deepseek-v4-flash:free` | Fast triage |
-| D | `openrouter/openai/gpt-oss-120b:free` | Reasoning and tool use |
-| E | `openrouter/z-ai/glm-4.5-air:free` | Agentic backup |
-| F | `openrouter/inclusionai/ling-2.6-flash:free` | Lightweight tasks |
+| A | `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free` | Default agent brain |
+| B | `openrouter/cohere/north-mini-code:free` | Coding fallback |
+| C | `openrouter/nvidia/nemotron-3.5-lightning:free` | Fast triage |
+| D | `openrouter/nvidia/nemotron-3.5-super-vl:free` | Reasoning and tool use |
+| E | `openrouter/baidu/ernie-5.5-flash-preview:free` | Agentic backup |
+| F | `openrouter/liquid/lfm-3-1.7b:free` | Lightweight tasks |
 | Z | `openrouter/openrouter/free` | Last-resort auto-router |
+
+> **Live check 2026-11-12:** six `:free` ids from the earlier stack
+> (`nvidia/nemotron-3-super-120b-a12b`, `minimax/minimax-m2.5`, `deepseek/deepseek-v4-flash`,
+> `openai/gpt-oss-120b`, `z-ai/glm-4.5-air`, `inclusionai/ling-2.6-flash`) were absent from
+> OpenRouter's live model list. Each role now has the best live free id that answered a plain and
+> a tool-call request that day; the stack still ends in `openrouter/free`. At least one
+> (`liquid/lfm-3-1.7b`) states that prompts and outputs may be retained and used, so send
+> sanitized data only. Details: `docs/stale-reference-ledger-2026-11-12.md`.
 
 Gemini is specialized only and is not the default fallback. Reserve it for visual diff, screenshot comparison, whole-repo architecture mapping, stale-doc detection, or explicit second-opinion review.
 

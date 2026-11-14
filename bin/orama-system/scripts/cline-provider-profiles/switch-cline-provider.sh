@@ -18,10 +18,26 @@
 #                             (verified via a live 429) — real requests
 #                             fail until the project has quota/billing
 #                             configured.
-#   wandb-deepseek-v4-flash — DeepSeek-V4-Flash via wanDB.ai (Weave
-#                             tracing), per the cline-wandb skill.
-#   bigmodel-glm52          — the REAL BigModel glm-5.3-flash endpoint, per
-#                             the glm52-fallback skill.
+#   wandb-deepseek-v4-flash — DeepSeek V4.1-Flash-1017 via wanDB.ai (Weave
+#                             tracing), per the cline-wandb skill. Model
+#                             order 1017 -> V4.1-Flash -> V4-Flash-0731
+#                             (2026-11-12: the old bare DeepSeek-V4-Flash id
+#                             returns 404 on W&B).
+#   bigmodel-glm53-flash    — the REAL BigModel glm-5.3-flash endpoint, per
+#                             the glm52-fallback skill. "bigmodel-glm52" is
+#                             kept as a legacy alias of this profile.
+#
+# Reasoning effort (operator rule, 2026-11-12): medium, else high, else low;
+# never xhigh or max; always explicit (BigModel defaults to max when it is
+# omitted). The checked-in static value is the last live-verified choice
+# (high on both profiles today) and is applied on EVERY switch. The medium ->
+# high -> low walk is a periodic, reviewed re-check (repo updates), not a
+# per-switch cost. Optional live checks:
+#   --resolve        free GET /models: pick the first served model candidate
+#   --verify-effort  tiny BILLED probes: also pick the first accepted effort
+#                    (implies --resolve). Opt-in only. A balance, auth or
+#                    rate-limit error is reported as inconclusive, never as
+#                    "rejected", and providers.json is left unchanged.
 #
 # Secret values never live in this script or in providers.json in
 # tracked form — they resolve from ~/.openclaw/.env.<profile-loader> at
@@ -44,7 +60,7 @@
 # open of a file another process might be mid-read on.
 #
 # Usage:
-#   switch-cline-provider.sh <profile-name>
+#   switch-cline-provider.sh <profile-name> [--resolve] [--verify-effort]
 #   switch-cline-provider.sh --list
 #   switch-cline-provider.sh --list-backups
 
@@ -56,7 +72,7 @@ BACKUP_HISTORY_DIR="$HOME/.cline/data/settings/openai-compatible-history"
 LOCK_FILE="$HOME/.cline/data/settings/.switch-cline-provider.lock"
 
 usage() {
-  echo "Usage: $0 <profile-name>" >&2
+  echo "Usage: $0 <profile-name> [--resolve] [--verify-effort]" >&2
   echo "" >&2
   echo "Available profiles:" >&2
   for f in "$SCRIPT_DIR"/*.json.tmpl; do
@@ -76,6 +92,14 @@ if [ "${1:-}" = "--list" ] || [ -z "${1:-}" ]; then
 fi
 
 PROFILE="$1"
+shift
+EXTRA_FLAGS=("$@")
+# Legacy alias: the BigModel profile was renamed once its model name was
+# corrected from glm52 to glm-5.3-flash. Old callers keep working.
+if [ "$PROFILE" = "bigmodel-glm52" ]; then
+  echo "NOTE: profile 'bigmodel-glm52' is now 'bigmodel-glm53-flash' (alias still accepted)" >&2
+  PROFILE="bigmodel-glm53-flash"
+fi
 TMPL="$SCRIPT_DIR/$PROFILE.json.tmpl"
 
 if [ ! -f "$TMPL" ]; then
@@ -100,7 +124,7 @@ case "$PROFILE" in
     # weave.init() tracing path, which is unrelated to this Cline route.
     REQUIRED_VARS=("DEEPSEEK_V4_FLASH_WANDB")
     ;;
-  bigmodel-glm52)
+  bigmodel-glm53-flash)
     ENV_FILES=("$HOME/.openclaw/.env.glm52")
     REQUIRED_VARS=("GLM52_API_KEY")
     ;;
@@ -139,4 +163,10 @@ fi
 # see tests/test_switch_cline_provider.py).
 mkdir -p "$BACKUP_HISTORY_DIR"
 
-python3 "$SCRIPT_DIR/switch_cline_provider.py" "$PROVIDERS_JSON" "$TMPL" "$PROFILE" "$BACKUP_HISTORY_DIR" "$LOCK_FILE"
+# Some macOS Python builds ship without a CA bundle; point OpenSSL at the system
+# one for the optional live checks (TLS verification stays on).
+if [ -z "${SSL_CERT_FILE:-}" ] && [ -f /etc/ssl/cert.pem ]; then
+  export SSL_CERT_FILE=/etc/ssl/cert.pem
+fi
+
+python3 "$SCRIPT_DIR/switch_cline_provider.py" "$PROVIDERS_JSON" "$TMPL" "$PROFILE" "$BACKUP_HISTORY_DIR" "$LOCK_FILE" ${EXTRA_FLAGS[@]+"${EXTRA_FLAGS[@]}"}

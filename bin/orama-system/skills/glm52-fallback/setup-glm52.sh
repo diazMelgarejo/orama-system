@@ -8,6 +8,12 @@ printf '%s\n' "Configuring glm-5.3-flash BigModel fallback for OpenClaw agents..
 if [ -z "${GLM52_API_KEY:-}" ] && [ -n "${OPENCLAW_MODELS_PROVIDERS_BIGMODEL_APIKEY:-}" ]; then
   GLM52_API_KEY="$OPENCLAW_MODELS_PROVIDERS_BIGMODEL_APIKEY"
 fi
+# A previous install stores the key in the operator environment file. Load it
+# in this process before the fail-fast exit, which otherwise ignores that file.
+if [ -z "${GLM52_API_KEY:-}" ] && [ -f "$HOME/.openclaw/.env.glm52" ]; then
+  # shellcheck source=/dev/null
+  source "$HOME/.openclaw/.env.glm52"
+fi
 if [ -z "${GLM52_API_KEY:-}" ]; then
   printf '%s\n' "ERROR: GLM52_API_KEY must be set before running this script." >&2
   printf '%s\n' "Example: export GLM52_API_KEY='<BigModel.API.key>'" >&2
@@ -24,6 +30,13 @@ export GLM52_API_KEY=$(cat "$HOME/.openclaw/secrets/glm52-api-key")
 export GLM52_ENDPOINT="https://open.bigmodel.cn/api/paas/v4/chat/completions"
 ENVEOF
 chmod 600 "$HOME/.openclaw/.env.glm52"
+# Caller-shell activator. The installer is a subprocess and cannot export
+# back to its parent; the parent sources this file instead.
+cat > "$HOME/.openclaw/glm52-activate.sh" <<'ACTIVATE'
+# shellcheck source=/dev/null
+source "$HOME/.openclaw/.env.glm52"
+ACTIVATE
+chmod 600 "$HOME/.openclaw/glm52-activate.sh"
 
 # 3. Shell profile persistence is OPT-IN (GLM52_PERSIST_SHELL_PROFILE=1).
 #    start.sh already sources ~/.openclaw/.env.glm52 at runtime, so profile
@@ -47,12 +60,19 @@ fi
 printf '\n%s\n' "Testing glm-5.3-flash connection..."
 # shellcheck source=/dev/null
 source "$HOME/.openclaw/.env.glm52"
-curl -s -f -X POST "$GLM52_ENDPOINT" \
+if curl -s -f -X POST "$GLM52_ENDPOINT" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $GLM52_API_KEY" \
   --connect-timeout 5 --max-time 30 \
-  -d '{"model":"glm-5.3-flash","messages":[{"role":"user","content":"Reply with only OK."}],"max_tokens":512}' \
-  | jq -e '.choices[0].message.content | select(type == "string" and test("\\S"))' 2>/dev/null && printf '%s\n' "✓ glm-5.3-flash healthy" || printf '%s\n' "✗ glm-5.3-flash unreachable (check credits at https://open.bigmodel.cn)"
+  -d '{"model":"glm-5.3-flash","messages":[{"role":"user","content":"Reply with only OK."}],"max_tokens":512,"reasoning_effort":"high"}' \
+  | jq -e '.choices[0].message.content | select(type == "string" and test("\\S"))' >/dev/null; then
+  printf '%s\n' "✓ glm-5.3-flash healthy"
+else
+  printf '%s\n' "✗ glm-5.3-flash unreachable (check credits at https://open.bigmodel.cn)"
+  printf '%s\n' "Fallback files were written, but the endpoint check failed." >&2
+  exit 1
+fi
 
 printf '\n%s\n' "Setup complete. glm-5.3-flash will be available to all agents on next startup."
 printf '%s\n' "To activate now: source ~/.openclaw/.env.glm52"
+printf '%s\n' "Calling shell: source ~/.openclaw/glm52-activate.sh"

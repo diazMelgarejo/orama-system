@@ -26,13 +26,21 @@ When a caller does NOT specify an agent, the openclaw-skills MUST route to OpenR
 
 | Tier | Model ID | Context | Role |
 |------|----------|---------|------|
-| A (primary) | `openrouter/nvidia/nemotron-3-super-120b-a12b:free` | 1M | Default agent brain — long-context, agentic, SWE-Bench/AIME-strong |
-| B | `openrouter/minimax/minimax-m2.5:free` | 205K | Coding fallback — 80.2% SWE-Bench Verified |
-| C | `openrouter/deepseek/deepseek-v4-flash:free` | 1.05M | Fast triage — heartbeat analysis, log review |
-| D | `openrouter/openai/gpt-oss-120b:free` | 131K | Reasoning + tool use |
-| E | `openrouter/z-ai/glm-4.5-air:free` | 131K | Agentic backup |
-| F | `openrouter/inclusionai/ling-2.6-flash:free` | 262K | Lightweight tasks |
+| A (primary) | `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free` | 1M | Default agent brain — frontier reasoning and orchestration, tools |
+| B | `openrouter/cohere/north-mini-code:free` | 256K | Coding fallback — agentic coding model |
+| C | `openrouter/nvidia/nemotron-3.5-lightning:free` | 1M | Fast triage — heartbeat analysis, log review |
+| D | `openrouter/nvidia/nemotron-3.5-super-vl:free` | 1M | Reasoning + tool use |
+| E | `openrouter/baidu/ernie-5.5-flash-preview:free` | 1M | Agentic backup (preview model) |
+| F | `openrouter/liquid/lfm-3-1.7b:free` | 256K | Lightweight tasks |
 | Z (last resort) | `openrouter/openrouter/free` | varies | Auto-router |
+
+> **Live check 2026-11-12:** six `:free` ids from the earlier stack
+> (`nvidia/nemotron-3-super-120b-a12b`, `minimax/minimax-m2.5`, `deepseek/deepseek-v4-flash`,
+> `openai/gpt-oss-120b`, `z-ai/glm-4.5-air`, `inclusionai/ling-2.6-flash`) were absent from
+> OpenRouter's live model list. Each role now has the best live free id that answered a plain and
+> a tool-call request that day; the stack still ends in `openrouter/free`. At least one
+> (`liquid/lfm-3-1.7b`) states that prompts and outputs may be retained and used, so send
+> sanitized data only. Details: `docs/stale-reference-ledger-2026-11-12.md`.
 
 ## Local-first preference
 
@@ -61,23 +69,23 @@ Gemini is NOT in the default fallback. Reserved for:
       "model": {
         "primary": "ollama/qwen3.5:9b-nvfp4",
         "fallbacks": [
-          "openrouter/nvidia/nemotron-3-super-120b-a12b:free",
-          "openrouter/minimax/minimax-m2.5:free",
-          "openrouter/deepseek/deepseek-v4-flash:free",
-          "openrouter/openai/gpt-oss-120b:free",
-          "openrouter/z-ai/glm-4.5-air:free",
-          "openrouter/inclusionai/ling-2.6-flash:free",
+          "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
+          "openrouter/cohere/north-mini-code:free",
+          "openrouter/nvidia/nemotron-3.5-lightning:free",
+          "openrouter/nvidia/nemotron-3.5-super-vl:free",
+          "openrouter/baidu/ernie-5.5-flash-preview:free",
+          "openrouter/liquid/lfm-3-1.7b:free",
           "openrouter/openrouter/free"
         ]
       },
       "models": {
         "ollama/qwen3.5:9b-nvfp4": {},
-        "openrouter/nvidia/nemotron-3-super-120b-a12b:free": {},
-        "openrouter/minimax/minimax-m2.5:free": {},
-        "openrouter/deepseek/deepseek-v4-flash:free": {},
-        "openrouter/openai/gpt-oss-120b:free": {},
-        "openrouter/z-ai/glm-4.5-air:free": {},
-        "openrouter/inclusionai/ling-2.6-flash:free": {},
+        "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free": {},
+        "openrouter/cohere/north-mini-code:free": {},
+        "openrouter/nvidia/nemotron-3.5-lightning:free": {},
+        "openrouter/nvidia/nemotron-3.5-super-vl:free": {},
+        "openrouter/baidu/ernie-5.5-flash-preview:free": {},
+        "openrouter/liquid/lfm-3-1.7b:free": {},
         "openrouter/openrouter/free": {}
       }
     }

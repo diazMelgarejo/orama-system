@@ -1,5 +1,20 @@
 # Cline CLI Reference (v3.0.34)
 
+<!-- wandb-inference-working-config -->
+## W&B inference
+
+`invalid model ID` from the Cline CLI is stale provider metadata, not a
+bad model id. `tokenSource` must be `manual` (or Cline's `oauth` or
+`migration`) and `updatedAt` must be UTC with millisecond precision and a
+trailing `Z`. Repair a shared entry with
+`bin/orama-system/scripts/cline-provider-profiles/switch_cline_provider.py`.
+When two routes run side by side, use
+`bin/orama-system/skills/cline-wandb/scripts/launch_cline_wandb.py`.
+Use the OpenAI client and Weave only if that error remains after the
+metadata is current. Do not send a CoreWeave team/project string.
+Shell-source the operator W&B env file before reading
+`DEEPSEEK_V4_FLASH_WANDB`.
+
 > **Update 2026-11-10 (verified on CLI 3.0.74 by the Windows and Mac hosts; Cline benchmark finding).** The CLI is now
 > 3.0.74. There is no `task` subcommand: the prompt is a bare positional argument. Cline's own default is act mode with
 > tool auto-approval ON, so review or unattended runs should pass `--plan --auto-approve false` unless the operator
@@ -146,7 +161,7 @@ Run the kanban app.
 | `cline` | `zai/glm-5.3-flash` | WorkOS OAuth | Cline Credits billing |
 | `cline-pass` | `cline-pass/glm-5.3-flash` | WorkOS OAuth | Same token as `cline`; `lastUsedProvider` |
 | `anthropic` | `claude-fable-5` | API key | — |
-| `openrouter` | `minimax/minimax-m2.5:free` | API key | — |
+| `openrouter` | `cohere/north-mini-code:free` | API key | — |
 | `openai-compatible` | `gemini-3.8-flash` | API key | Custom baseUrl |
 | `openai-codex` | — | OAuth | — |
 | `gemini` | Saved model (host-specific) | API key | Selecting without an override can retain a different saved model |
