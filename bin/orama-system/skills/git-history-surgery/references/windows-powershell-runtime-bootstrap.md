@@ -76,7 +76,8 @@ Two encoding rules apply. They cover different cases.
 
 PowerShell 5.1 `>` and `2>` write UTF-16 LE. `Out-File -Encoding utf8` writes
 a UTF-8 BOM. Redirected process bytes must not go through either path. Build
-`jq` arguments from JSON or a file.
+`jq` arguments from JSON or a file. Hand-quoting a jq filter through
+PowerShell breaks the quotes.
 
 Do not start `start.ps1` from a job object. Bash sourcing and PowerShell
 assignment are different contracts. Load settings with shell exports or

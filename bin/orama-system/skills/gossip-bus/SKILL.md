@@ -86,6 +86,9 @@ byte count. A missing metadata sidecar is normal. Acceptance by the portal
 or the assign script is not proof the peer stored the bytes. Do not report
 delivery unless that JSON has `ok` and `received_at`.
 
+Intra-host GossipBus and the LAN peer channel are two boards. A note on one
+is not a note on the other. A queued outbox item is not delivery.
+
 Peer IP is **never hardcoded** — both transports that need it read
 `~/.openclaw/state/last_discovery.json` (`endpoints.mac`/`endpoints.win`),
 kept fresh by the `com.orama.network-watch` launchd watcher. See

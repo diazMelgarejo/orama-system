@@ -192,8 +192,9 @@ Propose the addition. Present separately for approval (same A/B/C gate). Only up
 ## Supersession scope
 
 A narrow supersession hides every claim in the old lesson, not only the claim
-it corrects. Before superseding, copy forward every claim that should remain
-visible. Otherwise the old lesson disappears as a whole.
+it corrects. Recall drops the old id. Read the old lesson before treating the
+new row as the whole rule. Before superseding, copy forward every claim that
+should remain visible. Otherwise the old lesson disappears as a whole.
 
 ## Idempotency Rules
 
@@ -214,6 +215,7 @@ visible. Otherwise the old lesson disappears as a whole.
 
 ### Ask First
 
+- Writing a lesson that changes a canonical skill.
 - Committing or pushing crystallized lessons.
 
 ### Never Do
