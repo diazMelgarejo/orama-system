@@ -90,5 +90,10 @@ a UTF-8 BOM. Redirected process bytes must not go through either path. Build
 PowerShell breaks the quotes.
 
 Do not start `start.ps1` from a job object. Bash sourcing and PowerShell
-assignment are different contracts. Load settings with shell exports or
-PowerShell assignment.
+assignment are different contracts. Set each setting under the name the
+launcher reads from the process environment.
+
+- PowerShell session: `$env:PT_PORT = '8000'`. A plain `$PT_PORT = '8000'`
+  does not set the process environment.
+- Local settings file, literal KEY=VALUE lines: `PT_PORT=8000`. Do not prefix
+  the key with `export` or `$env:`.

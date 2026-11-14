@@ -61,7 +61,7 @@ CAS + byte-aligned chunks + blob-SHA proof*. Any one alone leaves a hole.
 | --- | --- | --- | --- |
 | `lesson_58ec2dc24e62` | main | Fan-out routed by model slug alone; model reached through a different provider than intended | Verify provider auth, not only the slug; stop and repair rather than silently switching models |
 | `lesson_49e8701ba9e9` | main | Writing a provider config into the tool's settings store does not make the CLI use it | Check for a separate top-level provider-selection default before assuming the write took effect |
-| `lesson_40b554e8fb35` | main | A rate-limited peer's stale job-board claim blocks re-claim | `queue fail <task_id> --notes <reason>` to release, then claim under your own id |
+| `lesson_40b554e8fb35` | main | A rate-limited peer's stale job-board claim blocks re-claim | The live claimant queue-fails its own claim. Do not queue-fail a peer's claim. |
 | `lesson_4b5e00553026` | main | Heartbeat cleanup of DEAD agents does *not* release their stale job-queue claims | Release job-queue claims explicitly; do not rely on heartbeat cleanup |
 
 ## Antigravity / Gemini-style headless agents

@@ -81,10 +81,10 @@ current.
 not wired to the intra-host event log, so a broadcast there is not a
 GossipBus row. Emit coordination events with `GossipBus.emit`.
 
-Judge a LAN file drop by that drop's own JSON: `ok`, `received_at`, and a
-byte count. A missing metadata sidecar is normal. Acceptance by the portal
-or the assign script is not proof the peer stored the bytes. Do not report
-delivery unless that JSON has `ok` and `received_at`.
+Judge a LAN file drop by that drop's own JSON. Report delivery only when
+`ok` is exactly true, `received_at` is present, and `bytes` equals the
+expected file size. A missing metadata sidecar is normal. Acceptance by the
+portal or the assign script is not proof the peer stored the bytes.
 
 Intra-host GossipBus and the LAN peer channel are two boards. A note on one
 is not a note on the other. A queued outbox item is not delivery.
