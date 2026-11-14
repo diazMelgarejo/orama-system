@@ -60,8 +60,9 @@ sub_skills:
     trigger: "guard sync, sync-attribution-guard-scripts, verify-guard-parity drift, sibling ahead of canonical, anti-clobber sync, GUARD_SYNC_E_DIVERGENCE, promote upstream before sync, check-guard-sync-divergence"
   - path: gstack/SKILL.md
     trigger: "fix gbrain, resync gbrain, gbrain sync failed, prepared statement does not exist, CONNECTION_CLOSED supabase pooler, No database URL, GBRAIN_DATABASE_URL, gbrain doctor failures, createVersion failed, autopilot wedged, gbrain after history rewrite, gbrain list empty, gbrain prepare false, gbrain source pin"
+  - path: skills/metaresearcher/SKILL.md
+    trigger: "metaresearch outer seat, biafra, level 2 mechanism research, dual-mode outer loop"
 ---
-
 <!-- wandb-inference-working-config -->
 ## W&B inference
 

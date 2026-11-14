@@ -185,7 +185,7 @@ confirmed identically across raw HTTP smoke tests, the official Python
    HTTP-level request tracing (a local proxy) to pin down further —
    out of scope for this pass.
 
-## Quick Start (flags verified against v3.0.49; step 3 currently fails, see above)
+## Quick Start (historical shared-slot cline; step 3 fails; summon is launch_cline_wandb.py)
 
 ```bash
 export REPO_ROOT="$(git rev-parse --show-toplevel)"

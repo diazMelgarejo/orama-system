@@ -18,13 +18,20 @@ tri-level did not beat bi-level, so bi-level stays the default and tri-level sta
 research. Scout does not occupy that outer seat. The agent-neutral MetaResearcher role is a separate
 draft: `OpenClaw/references/2026-11-14-metaresearcher-role-plan-DRAFT.md`.
 
-This branch is the documentation of that split. It does not add a bilevel runner, a tri-level
-runner, or a serving grant. The plugin bridge and the single-track loop stay as they are.
+The v1 execution of that split is the Perpetua dry-run plan, not a new runner in this repository.
+The plan records `mechanism=bilevel`, `tri_level=optional-not-started`,
+`metaresearcher=adopted-not-started`, `v2_migration=pending`, and `serving_grant=false`.
+The inner seat is `autoresearch-inner`. The outer seat is `metaresearch-outer`.
+Scout keeps its name and both of its modes.
+The outer skill reads those modes. It does not take the plugin command or the GPU dispatch.
+The bridge does not start either seat.
+This repository adds no bilevel runner, no tri-level runner, and no serving grant.
+The plugin bridge and the single-track loop stay as they are. v2 repositories stay deferred.
 
 ## First Rule: Dry-Run Before Long Runs
 
 For long-running goals, begin with Perpetua dry-run planning. Dry-run receives a goal and returns
-archetype, pipeline, predicate, state snapshot, and safety gates.
+archetype, pipeline, predicate, state snapshot, safety gates, and the five bounds above.
 
 Perpetua v1 entry point:
 
