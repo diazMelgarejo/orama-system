@@ -7,6 +7,7 @@ plugin-loop reading, and GPU-verify reading. It does not take Scout's commands.
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 PRIMARY_MODE = "plugin-loop"
@@ -64,3 +65,37 @@ def dry_cycle(
 def launch_allowed() -> bool:
     """Live summon needs both the operator gate and an explicit arm. Neither is the default."""
     return os.environ.get(GATE_ENV) == "approved" and os.environ.get(ARM_ENV) == "1"
+
+
+def launcher_argv(seat: str) -> list[str]:
+    """Name the W&B summon. Naming it is not a call."""
+    script = (
+        Path(__file__).resolve().parents[1]
+        / "orama-system"
+        / "skills"
+        / "cline-wandb"
+        / "scripts"
+        / "launch_cline_wandb.py"
+    )
+    return [sys.executable, str(script), "--program", seat]
+
+
+def run_program(
+    seat: str,
+    task_type: str,
+    metric_before: float,
+    metric_after: float,
+    log_dir: Path,
+    artifact: str = "search-rule",
+) -> dict:
+    """One dry cycle. The launcher runs only when the operator gate and the arm are both set."""
+    result = dry_cycle(seat, task_type, metric_before, metric_after, log_dir, artifact)
+    result["argv"] = launcher_argv(seat)
+    result["called_launcher"] = False
+    if result.get("ok") and launch_allowed():
+        import subprocess
+
+        subprocess.run(result["argv"], check=False)
+        result["called_launcher"] = True
+        result["launched"] = True
+    return result

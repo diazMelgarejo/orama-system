@@ -35,6 +35,13 @@ runner as the verify substrate. This mode reads that metric. A lower metric
 is better. If the metric rises, the search rule reverts. The seat does not
 SSH, does not dispatch the GPU, and does not edit the verifier.
 
+## Programs
+
+The inner program proposes, measures, and keeps or reverts. The outer program
+reads the log, rewrites the search, and reverts when the metric drops. Both
+name `launch_cline_wandb.py`. A dry cycle records that name and does not call
+it. A live call needs the operator gate and the explicit arm together.
+
 ## Boundaries
 
 ### Always Do

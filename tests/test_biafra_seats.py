@@ -56,6 +56,38 @@ def test_outer_seat_cannot_edit_a_test(tmp_path: Path) -> None:
     assert result["reason"] == "verifier-protected"
 
 
+def test_programs_name_the_launcher_and_stay_closed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    cycle = _load()
+    monkeypatch.delenv(cycle.GATE_ENV, raising=False)
+    monkeypatch.delenv(cycle.ARM_ENV, raising=False)
+    inner = cycle.run_program("inner", "harden", 0.20, 0.10, tmp_path / "inner", artifact="train.py")
+    outer = cycle.run_program("outer", "harden", 0.20, 0.30, tmp_path / "outer")
+    assert inner["decision"] == "keep"
+    assert outer["decision"] == "revert"
+    assert inner["called_launcher"] is False
+    assert outer["called_launcher"] is False
+    assert Path(inner["argv"][1]).name == "launch_cline_wandb.py"
+    assert outer["argv"][-1] == "outer"
+
+
+def test_armed_program_is_the_only_path_that_calls_the_launcher(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cycle = _load()
+    monkeypatch.setenv(cycle.GATE_ENV, "approved")
+    monkeypatch.setenv(cycle.ARM_ENV, "1")
+    calls: list[list[str]] = []
+
+    def _fake_run(argv: list[str], check: bool = False) -> object:
+        calls.append(argv)
+        return type("Completed", (), {"returncode": 0})()
+
+    monkeypatch.setattr("subprocess.run", _fake_run)
+    result = cycle.run_program("outer", "harden", 0.20, 0.30, tmp_path)
+    assert result["called_launcher"] is True
+    assert Path(calls[0][1]).name == "launch_cline_wandb.py"
+
+
 def test_registry_and_skill_name_both_modes() -> None:
     registry = (ROOT / "bin" / "agents" / "REGISTRY.yml").read_text(encoding="utf-8")
     skill = (ROOT / "bin" / "orama-system" / "skills" / "metaresearcher" / "SKILL.md").read_text(encoding="utf-8")
