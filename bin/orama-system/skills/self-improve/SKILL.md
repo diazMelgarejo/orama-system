@@ -2,11 +2,42 @@
 name: self-improve
 version: 1.0.0
 description: Crystallize session learnings through the PT Agentic-Stack frontend and instincts. V1 uses tracked PT `.agent`; v2 runtime persistence is deferred to Anamnesis.
+compatibility: python>=3.9, orama-system, perpetua-tools
+allowed-tools: bash, file-operations
 user-invocable: true
 trigger: session-end
+triggers:
+  - session end
+  - self-improve
+  - crystallize lessons
 ---
 
 # Self-Improve — v1.0.0
+
+## Purpose
+
+Turn a finished session into additive lessons in Perpetua-Tools memory, after
+the user approves the diff.
+
+## When to Use
+
+Use this at session end, or when the user asks to save what the session learned.
+
+## Boundaries
+
+### Always Do
+
+- Append lessons. Do not overwrite an existing lesson row.
+- Wait for approval before committing the proposed diff.
+
+### Ask First
+
+- Writing a lesson that changes a canonical skill.
+
+### Never Do
+
+- Commit the proposed diff before the user approves it.
+- Treat a narrow supersession as if it kept the rest of the old lesson.
 
 Idempotent session-end skill. In v1, development lessons are written through PT's
 tracked `.agent` pipeline. It reads what happened, proposes minimal additive updates,
@@ -175,6 +206,12 @@ Propose the addition. Present separately for approval (same A/B/C gate). Only up
 - It's concrete and actionable (not vague)
 
 ---
+
+## Narrow supersession
+
+A narrow supersession hides every claim in the old lesson, not only the
+claim it corrects. Recall drops the old id. Read the old lesson before
+treating the new row as the whole rule.
 
 ## Idempotency Rules
 

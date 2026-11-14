@@ -53,8 +53,9 @@ $py = "$env:PERPETUA_TOOLS_ROOT\.venv\Scripts\python.exe"
   $env:PATH = "$tmpBashDir;$gitRoot\usr\bin;$env:PATH"
   ```
 
-- Some shell tests also require `jq`; install it separately or treat those local
-  failures as environment failures, not repo regressions.
+- Some shell tests also require `jq`. Build the filter from JSON or a file.
+  Hand-quoting it through PowerShell breaks the quotes. Treat a missing `jq`
+  as an environment failure, not a repo regression.
 
 ## PowerShell Gotchas
 
@@ -64,3 +65,12 @@ $py = "$env:PERPETUA_TOOLS_ROOT\.venv\Scripts\python.exe"
   separately or use PowerShell-native control flow.
 - If the HTTPS helper error disappears and the next failure is a proxy or
   `127.0.0.1` connection error, Git packaging is fixed; investigate network/proxy.
+- An ASCII `.ps1` needs no BOM. A non-ASCII `.ps1` needs a UTF-8 BOM and a
+  real Windows PowerShell 5.1 parse. June's "UTF-8 without BOM" rule and
+  July's "non-ASCII needs a BOM" rule are both true: the BOM is for the
+  script parser, not for process bytes.
+- Do not start `start.ps1` from a job object.
+- Sourcing a Bash file and assigning a PowerShell variable are different
+  contracts. One does not stand in for the other.
+- In Windows PowerShell 5.1, `>` writes UTF-16 and `Out-File -Encoding utf8`
+  writes a BOM. Do not send process bytes through either one.

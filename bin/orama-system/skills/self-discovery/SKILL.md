@@ -83,10 +83,14 @@ Expected when both nodes live:
 
 ```text
 Tier:    1
-  mac: ✅ localhost:1234 — N models
-  win: ✅ 192.168.254.105:1234 — N models
+  mac: model server on localhost, port from discovery
+  win: model server on that host's interface, port from discovery
 Source:  tier1
 ```
+
+These lines are model-server endpoints. Port 1234 is only the default when
+the discovery record omits a port. Take each host address from that host's
+own interfaces. Do not copy an address into this card.
 
 ---
 

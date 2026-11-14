@@ -81,6 +81,14 @@ kept fresh by the `com.orama.network-watch` launchd watcher. See
 `CLAUDE-instru.md` INVARIANT on Win LM Studio IP for the same rule applied
 elsewhere.
 
+`team_broadcast` is a runtime harness mailbox. It is not GossipBus, and a
+post there does not write this board. Intra-host GossipBus and the LAN peer
+channel are two boards. A note on one is not a note on the other.
+
+Judge a LAN drop by that call's JSON: `ok`, `received_at`, and the byte
+count. A missing sidecar is normal. Acceptance is not proof the peer stored
+the bytes. A queued outbox item is not delivery.
+
 ## Instructions
 
 ### Provenance, endorsement, and takeover
