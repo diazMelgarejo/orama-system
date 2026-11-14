@@ -20,7 +20,11 @@ draft: `OpenClaw/references/2026-11-14-metaresearcher-role-plan-DRAFT.md`.
 
 The v1 execution of that split is the Perpetua dry-run plan, not a new runner in this repository.
 The plan records `mechanism=bilevel`, `tri_level=optional-not-started`,
-`metaresearcher=draft-outside-bridge`, `v2_migration=pending`, and `serving_grant=false`.
+`metaresearcher=adopted-not-started`, `v2_migration=pending`, and `serving_grant=false`.
+The inner seat is `autoresearch-inner`. The outer seat is `metaresearch-outer`.
+Scout keeps its name and both of its modes.
+The outer skill reads those modes. It does not take the plugin command or the GPU dispatch.
+The bridge does not start either seat.
 This repository adds no bilevel runner, no tri-level runner, and no serving grant.
 The plugin bridge and the single-track loop stay as they are. v2 repositories stay deferred.
 
