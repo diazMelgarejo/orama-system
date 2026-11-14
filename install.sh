@@ -28,9 +28,10 @@ BRANCH="main"
 SKILL_SOURCE="bin/orama-system"
 
 # steipete/agent-scripts bootstrap (opt-in, Phase 4)
+# The clone is ~/.agent-scripts. ~/Projects/agent-scripts is a symlink to it.
 STEIPETE_REPO="https://github.com/steipete/agent-scripts"
-AGENT_SCRIPTS_DIR="$HOME/Projects/agent-scripts"
-AGENT_SCRIPTS_LINK="$HOME/.agent-scripts"
+AGENT_SCRIPTS_CLONE="$HOME/.agent-scripts"
+AGENT_SCRIPTS_LINK="$HOME/Projects/agent-scripts"
 WITH_AGENT_SCRIPTS=0
 
 # Default: global install
@@ -61,9 +62,11 @@ for arg in "$@"; do
       WITH_AGENT_SCRIPTS=1
       ;;
     --help|-h)
-      echo "Usage: install.sh [--project] [--with-test-deps] [--uninstall]"
+      echo "Usage: install.sh [--project] [--with-test-deps] [--with-agent-scripts] [--uninstall]"
       echo "  --project   Install to ./.claude/skills/ (project-local)"
       echo "  --with-test-deps  Install runtime/test deps for pytest and FastAPI PoCs"
+      echo "  --with-agent-scripts  Clone steipete/agent-scripts into ~/.agent-scripts"
+      echo "                        and point ~/Projects/agent-scripts at that clone"
       echo "  --uninstall Remove the ultrathink skill"
       exit 0
       ;;
@@ -196,66 +199,78 @@ elif [[ -f "$HARNESS_DIR/install_hermes_profiles.py" ]]; then
 fi
 
 # ─── steipete/agent-scripts bootstrap (opt-in, Phase 4) ─────────────────────
+agent_scripts_origin_ok() {
+  local dir="$1"
+  local url expected
+  url="$(git -C "$dir" remote get-url origin 2>/dev/null || true)"
+  url="${url%.git}"
+  url="${url%/}"
+  expected="${STEIPETE_REPO%.git}"
+  [[ "$url" == "$expected" || "$url" == "git@github.com:steipete/agent-scripts" ]]
+}
+
+refresh_agent_scripts() {
+  local dir="$1"
+  if ! agent_scripts_origin_ok "$dir"; then
+    warn "$dir origin is not steipete/agent-scripts — skipping refresh"
+    return 0
+  fi
+  if git -C "$dir" pull --ff-only; then
+    ok "steipete/agent-scripts refreshed (--ff-only)"
+  else
+    warn "steipete/agent-scripts refresh failed — run: git -C $dir pull --ff-only"
+  fi
+}
+
 bootstrap_agent_scripts() {
   info "Bootstrapping steipete/agent-scripts (shared agent rules + skills)..."
 
-  # No-op when git is missing
   if ! command -v git >/dev/null 2>&1; then
     warn "git not found on PATH — skipping steipete/agent-scripts bootstrap"
     return 0
   fi
 
-  local target_dir="$AGENT_SCRIPTS_DIR"
-  local target_link="$AGENT_SCRIPTS_LINK"
+  local clone_dir="$AGENT_SCRIPTS_CLONE"
+  local link_path="$AGENT_SCRIPTS_LINK"
 
-  # If the symlink already exists and points to the right place, refresh it
-  if [[ -L "$target_link" ]]; then
-    local current_target
-    current_target="$(readlink "$target_link")"
-    if [[ "$current_target" == "$target_dir" ]]; then
-      info "steipete/agent-scripts symlink already present at $target_link"
-      if git -C "$target_dir" pull --ff-only >/dev/null 2>&1; then
-        ok "steipete/agent-scripts refreshed (--ff-only)"
-      else
-        warn "steipete/agent-scripts refresh failed — run: git -C $target_dir pull --ff-only"
-      fi
-      return 0
-    else
-      warn "$target_link exists but points to $current_target, not $target_dir — skipping"
-      return 0
-    fi
-  fi
-
-  # If a real directory exists at the link path, don't clobber it
-  if [[ -e "$target_link" && ! -L "$target_link" ]]; then
-    warn "$target_link exists and is not a symlink — skipping steipete/agent-scripts bootstrap"
+  if [[ -L "$clone_dir" ]]; then
+    warn "$clone_dir is a symlink — the clone must be a real checkout there. Skipping."
     return 0
   fi
 
-  # Clone the upstream repo (idempotent: no-op if already present)
-  if [[ -d "$target_dir" && -d "$target_dir/.git" ]]; then
-    info "steipete/agent-scripts already cloned at $target_dir — refreshing"
-    if git -C "$target_dir" pull --ff-only >/dev/null 2>&1; then
-      ok "steipete/agent-scripts refreshed (--ff-only)"
-    else
-      warn "steipete/agent-scripts refresh failed — run: git -C $target_dir pull --ff-only"
-    fi
+  if [[ -d "$clone_dir/.git" || -f "$clone_dir/.git" ]]; then
+    info "steipete/agent-scripts clone already present at $clone_dir"
+    refresh_agent_scripts "$clone_dir"
+  elif [[ -e "$clone_dir" ]]; then
+    warn "$clone_dir exists and is not a git checkout — skipping"
+    return 0
   else
-    info "Cloning steipete/agent-scripts to $target_dir..."
-    if git clone --depth 1 "$STEIPETE_REPO" "$target_dir" 2>/dev/null; then
-      ok "steipete/agent-scripts cloned to $target_dir"
+    info "Cloning steipete/agent-scripts to $clone_dir..."
+    if git clone "$STEIPETE_REPO" "$clone_dir"; then
+      ok "steipete/agent-scripts cloned to $clone_dir"
     else
-      warn "steipete/agent-scripts clone failed — run manually: git clone $STEIPETE_REPO $target_dir"
+      warn "steipete/agent-scripts clone failed — run manually: git clone $STEIPETE_REPO $clone_dir"
       return 0
     fi
   fi
 
-  # Create the symlink agents in this stack should follow
-  mkdir -p "$(dirname "$target_link")"
-  if ln -s "$target_dir" "$target_link" 2>/dev/null; then
-    ok "steipete/agent-scripts symlinked at $target_link -> $target_dir"
+  if [[ -L "$link_path" ]]; then
+    local current_target
+    current_target="$(readlink "$link_path")"
+    if [[ "$current_target" == "$clone_dir" ]]; then
+      ok "symlink already present at $link_path -> $clone_dir"
+    else
+      warn "$link_path points to $current_target, not $clone_dir — skipping"
+    fi
+  elif [[ -e "$link_path" ]]; then
+    warn "$link_path exists and is not a symlink — skipping so the existing checkout is left in place"
   else
-    warn "Could not create symlink $target_link -> $target_dir — create manually"
+    mkdir -p "$(dirname "$link_path")"
+    if ln -s "$clone_dir" "$link_path"; then
+      ok "symlinked $link_path -> $clone_dir"
+    else
+      warn "Could not create symlink $link_path -> $clone_dir — create manually"
+    fi
   fi
 
   info "NOTE: Never run scripts/sync-skills from this installer — it rewrites"
