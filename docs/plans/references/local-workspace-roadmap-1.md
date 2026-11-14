@@ -149,8 +149,12 @@ For the first development batch, assign these sequential slices:
 
 ### Introduce meta-autoresearch after you have a benchmark
 
-The useful idea in `meta-AutoResearcher.md` is measurable experimentation. Start by allowing agents
-to optimize one bounded surface—such as extraction prompts—against a fixed evaluation set.
+The useful idea cited from the missing file `meta-AutoResearcher.md` is measurable experimentation.
+The digested source is now Qu and Lu, arXiv:2603.23420, plus EdwardOptimization/Bilevel-Autoresearch
+branch `experimental/tri-level-pr2`. Start by allowing agents
+to optimize one bounded surface, such as extraction prompts, against a fixed evaluation set. The
+outer loop may rewrite the search rules. It may not edit the verifier. Tri-level is optional: that
+branch's report found no reliable gain over bi-level.
 
 Keep acceptance tests, held-out cases, permissions, and budgets outside the optimizer’s editable
 scope. An outer loop can propose a better search strategy, but promotion should require independent

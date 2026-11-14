@@ -6,7 +6,8 @@
 > Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 Status: planning baseline
 Scope: perpetua-core + oramasys v2 skill architecture
-Source input: attached `05-docs-v2-skills.md`, renumbered into the correct v2 slot after reading `docs/v2/README.md`
+Source input: attached `05-docs-v2-skills.md`, renumbered into the correct v2 slot after reading
+`docs/v2/README.md`
 
 ## Decision
 
@@ -75,6 +76,13 @@ Move model lists and detailed affinity rules to `instructions/affinity-rules.md`
 
 Long descriptions of uditgoenka/karpathy patterns, experiment formats, and result
 logs belong in `references/` or `instructions/`, not in `SKILL.md`.
+
+Renewed 2026-11-14. uditgoenka/autoresearch is the Claude Code plugin and command
+set. karpathy/autoresearch is the original single-track `train.py` loop. Qu and
+Lu, arXiv:2603.23420, are the bilevel mechanism paper (same model on the inner
+and outer loops; Level 2 writes Python and reverts a failed import). The
+`experimental/tri-level-pr2` report recommends bi-level as the default.
+Tri-level (Level 3 patching Level 2) is optional research, not a required stack.
 
 ## Dry-Run Rule
 
