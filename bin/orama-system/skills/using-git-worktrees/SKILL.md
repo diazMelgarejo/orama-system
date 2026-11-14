@@ -118,7 +118,13 @@ Bootstrap handles automatically (no manual steps needed):
 > **Creating one by hand?** `git -C <repo> worktree add <path>` resolves a relative
 > `<path>` from `<repo>`, not your cwd: `worktrees/x` lands inside the checkout and
 > `../x` lands beside it, and neither is where you are standing. Pass an absolute path
-> and confirm `git -C <repo> status` is clean after.
+> and confirm `git -C <repo> status` is clean after. A relative path nests the
+> new checkout under the repository, because Git resolves it from the repo
+> rather than from the shell's current directory.
+>
+> **Linked worktree state:** set `PT_STATE_DIR` to an absolute directory for
+> that worktree. Without it, dispatch reads another checkout's state and the
+> failure looks like a model timeout.
 >
 > **Which base?** An ordinary feature branch starts from a freshly fetched
 > `origin/main` SHA. A board job is different: create the checkout from the row's
@@ -289,6 +295,11 @@ git branch -d <branch>
 
 ⚠️ **Never `rm -rf` the worktree directory** — leaves dangling entry in `git worktree list`.
 
+Removing a worktree does not delete commits. Linked worktrees share one
+object store, so `git worktree remove` drops the checkout and its
+registration only. Delete a branch only after those commits are still
+reachable from a ref you mean to keep, or you intend to drop them.
+
 ---
 
 ## Quick Diagnostics
@@ -337,6 +348,7 @@ cat .worktree-env
   for cleanup.
 - Pass an absolute path when creating a worktree by hand and confirm the repo checkout
   stayed clean.
+- Set `PT_STATE_DIR` on a linked worktree before dispatch.
 
 ### Ask First
 
@@ -346,6 +358,8 @@ cat .worktree-env
 
 - Stash or discard another agent's work in a shared source worktree.
 - Continue from a stale or convenient local branch when the base SHA does not match.
+- Pass a relative path to `git worktree add`. It nests inside the repository.
+- Assume `git worktree remove` deleted the commits. The object store is shared.
 
 ## Related skills
 

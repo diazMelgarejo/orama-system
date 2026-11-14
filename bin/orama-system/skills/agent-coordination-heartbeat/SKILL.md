@@ -81,6 +81,12 @@ Liveness states are defined in `orchestrator/heartbeat_monitor.py`:
 5. **Auto-cleanup**
    Call `cleanup_stale_claims(bus)` or rely on the dashboard path to release claims from DEAD agents.
 
+6. **Quiesce before global cleanup**
+   Stop workers, restarts, and queue mutations before a global cleanup. Only
+   the live claimant may queue-fail. Cleanup can requeue exhausted work, so
+   read the board again and do not treat a requeued exhausted row as fresh
+   work. Do not pulse or queue-fail a claim for an agent you do not control.
+
 ## Boundaries
 
 ### Always Do
@@ -94,7 +100,9 @@ Liveness states are defined in `orchestrator/heartbeat_monitor.py`:
 
 ### Never Do
 - Delete heartbeat events from the GossipBus to hide dead agents.
-- Pulse a heartbeat for an agent you do not control.
+- Pulse a heartbeat, or queue-fail a claim, for an agent you do not control.
+- Run global cleanup while workers, restarts, or queue mutations are still
+  in flight.
 - Hardcode agent credentials or secrets in heartbeat payloads.
 
 ## Parallel-Reviewer Heartbeat Cadence

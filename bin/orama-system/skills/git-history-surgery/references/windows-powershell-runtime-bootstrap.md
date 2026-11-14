@@ -64,3 +64,20 @@ $py = "$env:PERPETUA_TOOLS_ROOT\.venv\Scripts\python.exe"
   separately or use PowerShell-native control flow.
 - If the HTTPS helper error disappears and the next failure is a proxy or
   `127.0.0.1` connection error, Git packaging is fixed; investigate network/proxy.
+
+## Encoding rules
+
+Two encoding rules apply. They cover different cases.
+
+- June rule, general files: write UTF-8 without a BOM.
+- July rule, Windows PowerShell 5.1: a non-ASCII `.ps1` needs a UTF-8 BOM
+  and a real Windows PowerShell 5.1 parse. An ASCII script does not need a
+  BOM.
+
+PowerShell 5.1 `>` and `2>` write UTF-16 LE. `Out-File -Encoding utf8` writes
+a UTF-8 BOM. Redirected process bytes must not go through either path. Build
+`jq` arguments from JSON or a file.
+
+Do not start `start.ps1` from a job object. Bash sourcing and PowerShell
+assignment are different contracts. Load settings with shell exports or
+PowerShell assignment.
