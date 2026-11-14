@@ -131,9 +131,19 @@ def resolve_template(tmpl_path: str, env: Mapping[str, str] | None = None) -> di
 # route with no acceptable choice is reported blocked, never guessed.
 EFFORT_ORDER = ("medium", "high", "low")
 FORBIDDEN_EFFORTS = frozenset({"xhigh", "max"})
-_REJECTED_STATUSES = frozenset({400, 404, 422})  # the provider said "not this model/level"
+_REJECTED_STATUSES = frozenset({400, 404, 422})  # candidate for "not this model/level"
 _HTTP_TIMEOUT_SECONDS = 60  # hard ceiling per call; GLM on W&B answers in 23-30 s
 _PROBE_PROMPT = "Reply with the number 1."
+_SUCCESS_FINISH_REASONS = frozenset({"stop", "length"})
+_REJECTION_HINTS = (
+    "reasoning_effort",
+    "does not support",
+    "unsupported",
+    "not found",
+    "unknown model",
+    "invalid model",
+    "invalid reasoning",
+)
 
 
 class ProbeError(RuntimeError):
@@ -232,17 +242,72 @@ def list_live_models(base_url: str, api_key: str) -> list[str]:
     return ids
 
 
+def _probe_payload(text: str) -> dict[str, Any]:
+    """Parse a probe body as a JSON object, or raise ProbeError without echoing the body."""
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ProbeError("probe response was not valid JSON") from exc
+    if not isinstance(payload, dict):
+        raise ProbeError("probe response was malformed")
+    return payload
+
+
+def _successful_completion(payload: Mapping[str, Any]) -> bool:
+    """True when ``payload`` is a chat completion that finished with content, not an error envelope."""
+    if "error" in payload:
+        return False
+    choices = payload.get("choices")
+    if not isinstance(choices, list) or not choices:
+        return False
+    first = choices[0]
+    if not isinstance(first, dict) or first.get("finish_reason") not in _SUCCESS_FINISH_REASONS:
+        return False
+    message = first.get("message")
+    return isinstance(message, dict) and isinstance(message.get("content"), str)
+
+
+def _rejection_message(error: Any) -> str | None:
+    """Return the provider error text when ``error`` is a string or an object with a string ``message``."""
+    if isinstance(error, str):
+        return error
+    if isinstance(error, dict):
+        message = error.get("message")
+        return message if isinstance(message, str) else None
+    return None
+
+
+def _proven_unsupported(payload: Mapping[str, Any]) -> bool:
+    """True when the JSON names the effort or model as unsupported, invalid, or not found."""
+    if "error" not in payload:
+        return False
+    text = _rejection_message(payload.get("error"))
+    if text is None:
+        return False
+    lowered = text.lower()
+    return any(hint in lowered for hint in _REJECTION_HINTS)
+
+
 def probe_effort(base_url: str, api_key: str, model: str, level: str) -> bool:
-    """Send one tiny billed request with ``reasoning_effort=level``; True on 200, False when the provider rejects it, ProbeError otherwise."""
+    """Send one tiny billed request with ``reasoning_effort=level``.
+
+    True only for HTTP 200 with a real completion; False only for 400/404/422 whose
+    error text clearly rejects the model or effort; ProbeError when qualification
+    is inconclusive. Never prints the key or the response body.
+    """
     if level in FORBIDDEN_EFFORTS:
         raise ValueError(f"refusing to probe forbidden effort level {level!r}")
     body = {"model": model, "messages": [{"role": "user", "content": _PROBE_PROMPT}],
             "max_tokens": 200, "reasoning_effort": level}
-    status, _text = _request(f"{base_url.rstrip('/')}/chat/completions", api_key, body)
+    status, text = _request(f"{base_url.rstrip('/')}/chat/completions", api_key, body)
     if status == 200:
-        return True
+        if _successful_completion(_probe_payload(text)):
+            return True
+        raise ProbeError("probe response was inconclusive")
     if status in _REJECTED_STATUSES:
-        return False
+        if _proven_unsupported(_probe_payload(text)):
+            return False
+        raise ProbeError("probe rejection was inconclusive")
     raise ProbeError(f"probe returned inconclusive HTTP {status}")
 
 

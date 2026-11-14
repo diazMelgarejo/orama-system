@@ -489,7 +489,12 @@ Rule (operator, 2026-11-12): ask for `medium`, else `high`, else `low`; never `x
 `scripts/launch_cline_wandb.py` runs Cline 3.0.74 on this route without touching the operator's
 `~/.cline`: it writes a throwaway config directory with only the W&B entry (a `tokenSource` and
 `updatedAt` that Cline 3.0.74 accepts), calls `cline --config <dir> -P openai-compatible -m <model>
---thinking <effort> ...` and deletes the directory. The key stays out of argv. Defaults:
+--thinking <effort> --plan --auto-approve false ...` and deletes the directory. Review is the
+default. `--implement` omits `--plan`. `--allow-tool-approval` is the only way to pass
+`--auto-approve true`, and it is not implied by `--implement`. Text after `--` is positional
+only; a second `--config`, `--thinking`, provider, model, or approval flag is refused.
+`DEEPSEEK_V4_FLASH_WANDB` must already be exported. The launcher does not parse the env file,
+because that file needs shell interpretation. The key stays out of argv. Defaults:
 `deepseek-ai/DeepSeek-V4.1-Flash-1017` at `high`; `--model` and `--effort` follow the model and
 effort orders above and refuse `xhigh` and `max`. Prefer it over `switch-cline-provider.sh` when two
 routes run side by side, because a separate config directory is what actually isolates the provider

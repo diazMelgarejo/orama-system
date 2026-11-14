@@ -164,7 +164,13 @@ class _Stub(BaseHTTPRequestHandler):
         body = json.loads(self.rfile.read(length))
         self.routes.setdefault("seen", []).append(body)
         code = self.routes.get("status", {}).get(body.get("reasoning_effort"), 200)
-        self._send(code, {"choices": []})
+        payload = self.routes.get("body", {}).get(body.get("reasoning_effort"))
+        if payload is None:
+            if code == 200:
+                payload = {"choices": [{"finish_reason": "stop", "message": {"content": "1"}}]}
+            else:
+                payload = {"error": {"message": "reasoning_effort is unsupported"}}
+        self._send(code, payload)
 
 
 @pytest.fixture
@@ -215,3 +221,44 @@ def test_probe_refuses_forbidden_levels_without_a_request(stub: Any) -> None:
     with pytest.raises(ValueError):
         scp.probe_effort(base, "k", "m1", "max")
     assert "seen" not in routes
+
+
+def test_probe_200_invalid_json_is_inconclusive(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(scp, "_request", lambda *_args, **_kwargs: (200, "not-json"))
+    with pytest.raises(scp.ProbeError):
+        scp.probe_effort("https://example.test/v1", "k", "m1", "medium")
+
+
+def test_probe_200_empty_choices_is_inconclusive(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(scp, "_request", lambda *_args, **_kwargs: (200, json.dumps({"choices": []})))
+    with pytest.raises(scp.ProbeError):
+        scp.probe_effort("https://example.test/v1", "k", "m1", "medium")
+
+
+def test_probe_200_error_object_is_inconclusive(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        scp, "_request",
+        lambda *_args, **_kwargs: (200, json.dumps({"error": {"message": "upstream failed"}})),
+    )
+    with pytest.raises(scp.ProbeError):
+        scp.probe_effort("https://example.test/v1", "k", "m1", "medium")
+
+
+@pytest.mark.parametrize("message", ["bad request", "invalid api key", "model is overloaded"])
+def test_probe_generic_400_is_inconclusive(monkeypatch: pytest.MonkeyPatch, message: str) -> None:
+    monkeypatch.setattr(
+        scp, "_request",
+        lambda *_args, **_kwargs: (400, json.dumps({"error": {"message": message}})),
+    )
+    with pytest.raises(scp.ProbeError):
+        scp.probe_effort("https://example.test/v1", "k", "m1", "medium")
+
+
+def test_probe_proven_unsupported_effort_400_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        scp, "_request",
+        lambda *_args, **_kwargs: (
+            400, json.dumps({"error": {"message": "reasoning_effort is unsupported"}}),
+        ),
+    )
+    assert scp.probe_effort("https://example.test/v1", "k", "m1", "medium") is False
