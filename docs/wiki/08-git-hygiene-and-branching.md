@@ -126,8 +126,8 @@ git config user.email "codex@openai.com"
 | --- | --- |
 | **Primary author** | See the approved primary authors in the official commit identity policy above; the canonical list is `scripts/git/identity-policy.json`, enforced by `scripts/git/check_identity.sh` |
 | **Allowed co-author domains** | `openai.com`, `anthropic.com`, `cursor.com`, `cursor.sh`, `google.com`, `github.com`, `microsoft.com`, `azure.com` (and subdomains) |
-| **Additional allowed AI/vendor domains** | `google.dev`, `perplexity.ai`, `x.ai`, `coderabbit.ai`, `mistral.ai`, `deepseek.com`, `cohere.com`, `meta.com`, `sourcegraph.com`, `devin.ai`, `codeium.com`, `nousresearch.com`, `kimi.ai`, `cline.bot` (and subdomains) |
-| **Allowed co-author name markers** | `codex`, `claude`, `anthropic`, `cursor`, `cursoragent`, `gemini`, `google`, `copilot`, `openai`, `github`, `microsoft`, `perplexity`, `grok`, `coderabbit`, `coderabbitai`, `mistral`, `deepseek`, `cohere`, `llama`, `devin`, `cody`, `codeium`, `windsurf`, `qwen` (in the trailer line) |
+| **Additional allowed AI/vendor domains** | `google.dev`, `perplexity.ai`, `x.ai`, `coderabbit.ai`, `mistral.ai`, `deepseek.com`, `cohere.com`, `meta.com`, `sourcegraph.com`, `devin.ai`, `codeium.com`, `nousresearch.com`, `kimi.ai`, `cline.bot`, `all-hands.dev` (and subdomains) |
+| **Allowed co-author name markers** | `codex`, `claude`, `anthropic`, `cursor`, `cursoragent`, `gemini`, `google`, `copilot`, `openai`, `github`, `microsoft`, `perplexity`, `grok`, `coderabbit`, `coderabbitai`, `mistral`, `deepseek`, `cohere`, `llama`, `devin`, `cody`, `codeium`, `windsurf`, `qwen`, `openhands` (in the trailer line) |
 | **Allowed `@gmail.com` co-authors** | `diazMelgarejo@gmail.com` plus the configured private owner email from local-only configuration |
 | **Rejected** | Any other `Co-authored-by` line with `@gmail.com` (unattributable personal inboxes) |
 
