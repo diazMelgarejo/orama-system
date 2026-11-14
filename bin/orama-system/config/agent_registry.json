@@ -1,15 +1,15 @@
 {
   "version": "1.1.1.0",
   "network_name": "oramasys-agent-network",
-  "description": "Unified oramasys agent network — 7 oramasys stage agents + 4 OpenClaw SOUL agents",
+  "description": "Unified oramasys agent network \u2014 7 oramasys stage agents + 4 OpenClaw SOUL agents",
   "worker_template": {
     "type": "worker",
     "contract": "TaskEnvelope in, WorkerResult out",
     "hard_rules": [
-      "Return compact summary only — no raw session logs in output",
+      "Return compact summary only \u2014 no raw session logs in output",
       "Write artifacts to disk before returning status=done",
       "Set verification_hints for any low-confidence output",
-      "depth is always 0 — workers do not enqueue sub-workers"
+      "depth is always 0 \u2014 workers do not enqueue sub-workers"
     ],
     "default_constraints": [
       "max_tokens:4096",
@@ -18,66 +18,67 @@
   },
   "openclaw_agents": {
     "mac-researcher": {
+      "frugality_tier": 1,
       "soul": "bin/agents/mac-researcher/SOUL.md",
       "provider": "lmstudio-mac",
       "model": "Qwen3.5-9B-MLX-4bit",
       "affinity": "mac",
-      "gateway": "http://127.0.0.1:18789",
-      "frugality_tier": 1
+      "gateway": "http://127.0.0.1:18789"
     },
     "win-researcher": {
+      "frugality_tier": 1,
       "soul": "bin/agents/win-researcher/SOUL.md",
       "provider": "lmstudio-win",
       "model": "qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2",
       "affinity": "win-rtx3080",
-      "gateway": "http://127.0.0.1:18789",
-      "frugality_tier": 1
+      "gateway": "http://127.0.0.1:18789"
     },
     "coder": {
+      "frugality_tier": 1,
       "soul": "bin/agents/coder/SOUL.md",
       "provider": "lmstudio-win",
       "model": "qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2",
       "affinity": "win-rtx3080",
-      "gateway": "http://127.0.0.1:18789",
-      "frugality_tier": 1
+      "gateway": "http://127.0.0.1:18789"
     },
     "priority-subagent": {
+      "frugality_tier": 1,
       "soul": "bin/agents/coder/SOUL.md",
       "provider": "lmstudio-win",
       "model": "qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2",
       "affinity": "win-rtx3080",
-      "gateway": "http://127.0.0.1:18789",
-      "frugality_tier": 1
+      "gateway": "http://127.0.0.1:18789"
     },
     "autoresearcher": {
+      "frugality_tier": 1,
       "soul": "bin/agents/autoresearcher/SOUL.md",
       "provider": "lmstudio-win",
       "model": "qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2",
       "affinity": "win-rtx3080",
-      "gateway": "http://127.0.0.1:18789",
-      "frugality_tier": 1
+      "gateway": "http://127.0.0.1:18789"
     },
     "win-researcher-5080": {
+      "frugality_tier": 1,
       "soul": "bin/agents/win-researcher/SOUL.md",
       "provider": "lmstudio-win-5080",
       "model": "gemma-4-26b-a4b-it-nvfp4",
       "affinity": "win-rtx5080",
       "gateway": "${env:LM_STUDIO_WIN_5080_ENDPOINTS}",
-      "_comment": "3rd fleet node — resolve gateway at runtime via LM_STUDIO_WIN_5080_ENDPOINTS or last_discovery.json; never commit LAN IPs.",
-      "frugality_tier": 1
+      "_comment": "3rd fleet node \u2014 resolve gateway at runtime via LM_STUDIO_WIN_5080_ENDPOINTS or last_discovery.json; never commit LAN IPs."
     },
     "coder-5080": {
+      "frugality_tier": 1,
       "soul": "bin/agents/coder/SOUL.md",
       "provider": "lmstudio-win-5080",
       "model": "gemma-4-26b-a4b-it-nvfp4",
       "affinity": "win-rtx5080",
-      "gateway": "${env:LM_STUDIO_WIN_5080_ENDPOINTS}",
-      "frugality_tier": 1
+      "gateway": "${env:LM_STUDIO_WIN_5080_ENDPOINTS}"
     }
   },
   "agents": [
     {
       "id": "orchestrator",
+      "frugality_tier": 1,
       "type": "orchestrator",
       "affinity": "mac",
       "skill_path": "agents/orchestrator/oramasys-orchestrator.md",
@@ -87,11 +88,11 @@
         "state_manager",
         "message_bus",
         "all_agent_delegators"
-      ],
-      "frugality_tier": 1
+      ]
     },
     {
       "id": "context-agent",
+      "frugality_tier": 1,
       "type": "specialist",
       "affinity": "mac",
       "stage": 1,
@@ -103,11 +104,11 @@
         "documentation_reader",
         "code_analyzer",
         "lessons_db"
-      ],
-      "frugality_tier": 1
+      ]
     },
     {
       "id": "architect-agent",
+      "frugality_tier": 1,
       "type": "specialist",
       "affinity": "mac",
       "stage": 2,
@@ -118,11 +119,11 @@
         "module_decomposer",
         "interface_designer",
         "diagram_generator"
-      ],
-      "frugality_tier": 1
+      ]
     },
     {
       "id": "refiner-agent",
+      "frugality_tier": 1,
       "type": "specialist",
       "affinity": "mac",
       "stage": 3,
@@ -133,11 +134,11 @@
         "complexity_analyzer",
         "redundancy_detector",
         "rubric_evaluator"
-      ],
-      "frugality_tier": 1
+      ]
     },
     {
       "id": "executor-agent",
+      "frugality_tier": 1,
       "type": "worker",
       "affinity": "win",
       "stage": 4,
@@ -149,11 +150,11 @@
         "test_generator",
         "linter",
         "performance_profiler"
-      ],
-      "frugality_tier": 1
+      ]
     },
     {
       "id": "verifier-agent",
+      "frugality_tier": 5,
       "type": "validator",
       "affinity": "mac",
       "stage": 4.5,
@@ -164,11 +165,11 @@
         "test_runner",
         "diff_analyzer",
         "scenario_generator"
-      ],
-      "frugality_tier": 5
+      ]
     },
     {
       "id": "crystallizer-agent",
+      "frugality_tier": 1,
       "type": "documenter",
       "affinity": "mac",
       "stage": 5,
@@ -179,14 +180,14 @@
         "diagram_generator",
         "lessons_db",
         "documentation_writer"
-      ],
-      "frugality_tier": 1
+      ]
     }
   ],
   "autoresearch_agents": {
     "_comment": "Pre-defined agent types for autoresearch swarm (task_type=autoresearch). Spawned by Perpetua-Tools AgentTracker; registered here for oramasys Mode 3 awareness only.",
     "autoresearch-coder": {
       "id": "autoresearch-coder",
+      "frugality_tier": 1,
       "type": "worker",
       "affinity": "win-rtx3080",
       "model_role": "autoresearch-coder",
@@ -194,28 +195,28 @@
         "Call CIDF decide() before editing train.py (rank 2: direct_typing on local file)",
         "Deploy train.py via autoresearch_bridge.deploy_train_py() (scp)",
         "Dispatch run via autoresearch_bridge.run_experiment_on_gpu()",
-        "Flip swarm_state.md GPU: IDLE→BUSY before run, BUSY→IDLE after fetch_run_log()"
+        "Flip swarm_state.md GPU: IDLE\u2192BUSY before run, BUSY\u2192IDLE after fetch_run_log()"
       ],
       "max_instances": 1,
-      "idempotency": "AgentTracker.find_existing('autoresearch-coder', task_hash)",
-      "frugality_tier": 1
+      "idempotency": "AgentTracker.find_existing('autoresearch-coder', task_hash)"
     },
     "autoresearch-evaluator": {
       "id": "autoresearch-evaluator",
+      "frugality_tier": 1,
       "type": "validator",
       "affinity": "mac",
       "model_role": "autoresearch-critic",
       "responsibilities": [
         "Read log.txt via autoresearch_bridge.fetch_run_log()",
-        "Parse val_bpb programmatically — LINT-002 verification_required=True (no visual confirmation)",
+        "Parse val_bpb programmatically \u2014 LINT-002 verification_required=True (no visual confirmation)",
         "Write findings to swarm_state.md evaluator_findings section"
       ],
       "max_instances": 1,
-      "idempotency": "AgentTracker.find_existing('autoresearch-evaluator', task_hash)",
-      "frugality_tier": 1
+      "idempotency": "AgentTracker.find_existing('autoresearch-evaluator', task_hash)"
     },
     "autoresearch-orchestrator": {
       "id": "autoresearch-orchestrator",
+      "frugality_tier": 1,
       "type": "orchestrator",
       "affinity": "mac",
       "model_role": "strategy",
@@ -225,8 +226,7 @@
         "Coordinate coder + evaluator lifecycle via Perpetua-Tools AgentTracker"
       ],
       "max_instances": 1,
-      "idempotency": "AgentTracker.find_existing('autoresearch-orchestrator', task_hash)",
-      "frugality_tier": 1
+      "idempotency": "AgentTracker.find_existing('autoresearch-orchestrator', task_hash)"
     }
   },
   "routing": {
