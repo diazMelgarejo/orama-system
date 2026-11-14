@@ -80,8 +80,11 @@ def test_bigmodel_template_uses_the_correct_name_and_explicit_high() -> None:
     assert data["settings"]["reasoning"]["effort"] == "high"  # default would be max
 
 
-def test_old_bigmodel_name_is_no_longer_a_separate_template() -> None:
-    assert not (_DIR / "bigmodel-glm52.json.tmpl").exists()
+def test_old_bigmodel_name_is_a_compatibility_alias() -> None:
+    alias = _DIR / "bigmodel-glm52.json.tmpl"
+    assert alias.exists()
+    assert alias.resolve() == (_DIR / "bigmodel-glm53-flash.json.tmpl").resolve()
+    assert _load("bigmodel-glm52.json.tmpl")["settings"]["model"] == "glm-5.3-flash"
 
 
 def test_wrapper_keeps_the_old_bigmodel_profile_name_as_an_alias() -> None:
