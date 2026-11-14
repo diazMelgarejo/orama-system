@@ -38,7 +38,8 @@ SSH, does not dispatch the GPU, and does not edit the verifier.
 ## Programs
 
 The inner program proposes, measures, and keeps or reverts. The outer program
-reads the log, rewrites the search, and reverts when the metric drops. Both
+reads the log, rewrites the search, and reverts when the metric rises. A drop is
+an improvement and is kept. Both
 name `launch_cline_wandb.py`. A dry cycle records that name and does not call
 it. A live call needs the operator gate and the explicit arm together.
 

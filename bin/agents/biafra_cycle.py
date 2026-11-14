@@ -41,13 +41,12 @@ def dry_cycle(
     log_dir.mkdir(parents=True, exist_ok=True)
     mode = select_mode(task_type) if seat == "outer" else "inner"
     marker = log_dir / f"{seat}-{mode}.once"
-    if marker.exists():
-        return {"ok": False, "seat": seat, "mode": mode, "reason": "already-ran", "retries": 0, "launched": False}
     if _forbidden(artifact):
         return {"ok": False, "seat": seat, "mode": mode, "reason": "verifier-protected", "retries": 0, "launched": False}
+    if not _claim_once(marker):
+        return {"ok": False, "seat": seat, "mode": mode, "reason": "already-ran", "retries": 0, "launched": False}
     improved = metric_after < metric_before
     decision = "keep" if improved else "revert"
-    marker.write_text("1\n", encoding="utf-8")
     return {
         "ok": True,
         "seat": seat,
@@ -60,6 +59,19 @@ def dry_cycle(
         "gate": os.environ.get(GATE_ENV, ""),
         "armed": os.environ.get(ARM_ENV, ""),
     }
+
+
+def _claim_once(marker: Path) -> bool:
+    """Create the one-cycle marker or lose the race. Existence is checked by the create."""
+    try:
+        fd = os.open(marker, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+    except FileExistsError:
+        return False
+    try:
+        os.write(fd, b"1\n")
+    finally:
+        os.close(fd)
+    return True
 
 
 def launch_allowed() -> bool:
@@ -77,7 +89,12 @@ def launcher_argv(seat: str) -> list[str]:
         / "scripts"
         / "launch_cline_wandb.py"
     )
-    return [sys.executable, str(script), "--program", seat]
+    prompt = (
+        "Inner seat. Propose one change, measure it, and keep it only when the metric falls."
+        if seat == "inner"
+        else "Outer seat. Read the log, propose one search rule, and revert it when the metric rises."
+    )
+    return [sys.executable, str(script), "--", prompt]
 
 
 def run_program(
@@ -95,7 +112,11 @@ def run_program(
     if result.get("ok") and launch_allowed():
         import subprocess
 
-        subprocess.run(result["argv"], check=False)
+        completed = subprocess.run(result["argv"], check=False)
         result["called_launcher"] = True
-        result["launched"] = True
+        result["returncode"] = completed.returncode
+        result["launched"] = completed.returncode == 0
+        if completed.returncode != 0:
+            result["ok"] = False
+            result["reason"] = "launcher-failed"
     return result

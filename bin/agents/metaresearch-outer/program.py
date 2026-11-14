@@ -1,4 +1,4 @@
-"""Outer program: read the log, rewrite the search, revert on a drop. Dry unless the operator arms the launcher."""
+"""Outer program: read the log, rewrite the search, revert when the metric rises. Dry unless the operator arms the launcher."""
 
 from __future__ import annotations
 

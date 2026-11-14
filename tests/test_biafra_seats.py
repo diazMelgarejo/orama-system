@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import sys
+import threading
 from pathlib import Path
 
 import pytest
@@ -67,7 +69,10 @@ def test_programs_name_the_launcher_and_stay_closed(tmp_path: Path, monkeypatch:
     assert inner["called_launcher"] is False
     assert outer["called_launcher"] is False
     assert Path(inner["argv"][1]).name == "launch_cline_wandb.py"
-    assert outer["argv"][-1] == "outer"
+    assert "--program" not in inner["argv"]
+    assert inner["argv"][2] == "--"
+    _launcher().parse_args(inner["argv"][2:])
+    _launcher().parse_args(outer["argv"][2:])
 
 
 def test_armed_program_is_the_only_path_that_calls_the_launcher(
@@ -85,7 +90,56 @@ def test_armed_program_is_the_only_path_that_calls_the_launcher(
     monkeypatch.setattr("subprocess.run", _fake_run)
     result = cycle.run_program("outer", "harden", 0.20, 0.30, tmp_path)
     assert result["called_launcher"] is True
+    assert result["launched"] is True
+    assert result["returncode"] == 0
     assert Path(calls[0][1]).name == "launch_cline_wandb.py"
+
+
+def test_a_failed_launch_is_not_reported_as_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    cycle = _load()
+    monkeypatch.setenv(cycle.GATE_ENV, "approved")
+    monkeypatch.setenv(cycle.ARM_ENV, "1")
+
+    def _fail(argv: list[str], check: bool = False) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(argv, 2)
+
+    monkeypatch.setattr("subprocess.run", _fail)
+    result = cycle.run_program("inner", "harden", 0.20, 0.10, tmp_path)
+    assert result["called_launcher"] is True
+    assert result["launched"] is False
+    assert result["ok"] is False
+    assert result["returncode"] == 2
+    assert result["reason"] == "launcher-failed"
+
+
+def test_concurrent_calls_get_one_cycle(tmp_path: Path) -> None:
+    cycle = _load()
+    barrier = threading.Barrier(8)
+    results: list[dict] = []
+    lock = threading.Lock()
+
+    def _once() -> None:
+        barrier.wait()
+        outcome = cycle.dry_cycle("outer", "harden", 0.20, 0.10, tmp_path)
+        with lock:
+            results.append(outcome)
+
+    threads = [threading.Thread(target=_once) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert sum(item["ok"] is True for item in results) == 1
+    assert sum(item.get("reason") == "already-ran" for item in results) == 7
+
+
+def _launcher():
+    script = ROOT / "bin" / "orama-system" / "skills" / "cline-wandb" / "scripts" / "launch_cline_wandb.py"
+    spec = importlib.util.spec_from_file_location("launch_cline_wandb", script)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
 
 
 def test_registry_and_skill_name_both_modes() -> None:
