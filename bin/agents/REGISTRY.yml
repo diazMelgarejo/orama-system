@@ -33,6 +33,7 @@ roles:
     hermes_profile: orchestrator
     display: Glen
     soul_id: orama.orchestrator
+    frugality_tier: 1
     stage: router
     openclaw_workspace: ${HOME}/.openclaw/agents/orchestrator
     staged_soul: bin/agents/orchestrator/SOUL.md
@@ -45,6 +46,7 @@ roles:
     hermes_profile: context-agent
     display: Cass
     soul_id: orama.context
+    frugality_tier: 1
     stage: 1
     openclaw_workspace: ${HOME}/.openclaw/agents/context-agent
     staged_soul: bin/agents/context/SOUL.md
@@ -57,6 +59,7 @@ roles:
     hermes_profile: architect-agent
     display: Aria
     soul_id: orama.architect
+    frugality_tier: 1
     stage: 2
     openclaw_workspace: ${HOME}/.openclaw/agents/architect-agent
     staged_soul: bin/agents/architect/SOUL.md
@@ -69,6 +72,7 @@ roles:
     hermes_profile: refiner-agent
     display: Sena
     soul_id: orama.refiner
+    frugality_tier: 1
     stage: 3
     openclaw_workspace: ${HOME}/.openclaw/agents/refiner-agent
     staged_soul: bin/agents/refiner/SOUL.md
@@ -83,6 +87,7 @@ roles:
     display: Rourke
     display_alias: Penn
     soul_id: orama.executor
+    frugality_tier: 1
     stage: 4
     openclaw_workspace: ${HOME}/.openclaw/agents/coder
     staged_soul: bin/agents/executor/SOUL.md
@@ -97,6 +102,7 @@ roles:
     hermes_profile: codex-agent
     display: Vera
     soul_id: orama.verifier
+    frugality_tier: 5
     stage: 4.5
     openclaw_workspace: ${HOME}/.openclaw/agents/codex-agent
     staged_soul: bin/agents/verifier/SOUL.md
@@ -110,6 +116,7 @@ roles:
     hermes_profile: crystallizer-agent
     display: Crystal
     soul_id: orama.crystallizer
+    frugality_tier: 1
     stage: 5
     openclaw_workspace: ${HOME}/.openclaw/agents/crystallizer-agent
     staged_soul: bin/agents/crystallizer/SOUL.md
@@ -122,6 +129,7 @@ roles:
     hermes_profile: mac-researcher
     display: Arthur
     soul_id: openclaw.mac-researcher
+    frugality_tier: 1
     stage: research
     openclaw_workspace: ${HOME}/.openclaw/agents/mac-researcher
     staged_soul: bin/agents/mac-researcher/SOUL.md
@@ -134,6 +142,7 @@ roles:
     hermes_profile: win-researcher
     display: Win Researcher
     soul_id: openclaw.win-researcher
+    frugality_tier: 1
     stage: research
     openclaw_workspace: ${HOME}/.openclaw/agents/win-researcher
     staged_soul: bin/agents/win-researcher/SOUL.md
@@ -146,6 +155,7 @@ roles:
     hermes_profile: autoresearcher
     display: Scout
     soul_id: perpetua.autoresearch
+    frugality_tier: 1
     stage: research
     openclaw_workspace: ${HOME}/autoresearch
     staged_soul: bin/agents/autoresearcher/SOUL.md
@@ -158,6 +168,7 @@ roles:
     hermes_profile: autoresearch-inner
     display: Inner seat
     soul_id: perpetua.autoresearch.inner
+    frugality_tier: 1
     stage: research
     occupant: any
     first_occupant: cline-wandb
@@ -173,6 +184,7 @@ roles:
     hermes_profile: metaresearch-outer
     display: Outer seat
     soul_id: perpetua.autoresearch.outer
+    frugality_tier: 1
     stage: research
     occupant: any
     first_occupant: cline-wandb
@@ -188,6 +200,7 @@ roles:
     hermes_profile: coder-win
     display: Rourke
     soul_id: orama.executor
+    frugality_tier: 1
     stage: 4-win-lmstudio
     staged_soul: bin/agents/coder/SOUL.md
     staged_agent_card: bin/agents/coder/agent.md
@@ -200,6 +213,7 @@ roles:
     hermes_profile: cole-agent
     display: Cole
     soul_id: adapter.claude-code
+    frugality_tier: 5
     stage: adapter
     openclaw_workspace: ${HOME}/.openclaw/agents/cole-agent
     staged_soul: bin/agents/cole/SOUL.md
@@ -213,6 +227,7 @@ roles:
     hermes_profile: hermes-monitor
     display: Hermes
     soul_id: adapter.hermes
+    frugality_tier: 1
     stage: adapter
     openclaw_workspace: ${HOME}/.openclaw/agents/hermes-agent
     staged_soul: bin/agents/hermes-monitor/SOUL.md
@@ -227,29 +242,13 @@ roles:
     hermes_profile: gemini-coder
     display: Sage
     soul_id: perpetua.analyzer
+    frugality_tier: 5
     stage: adapter
     openclaw_workspace: ${HOME}/.openclaw/agents/gemini-coder
     staged_soul: bin/agents/sage/SOUL.md
     staged_agent_card: bin/agents/sage/agent.md
     persona_yaml: bin/agents/personas/sage.yaml
 
-  - staging_folder: relay-cursor
-    dispatch_lane: L-Fleet
-    native_hermes_delegate: false
-    openclaw_id: relay-cursor
-    hermes_profile: null
-    harness: cursor
-    display: Relay Cursor Agent
-    soul_id: adapter.cursor-coordinator
-    stage: coordinator
-    staged_soul: bin/agents/relay-cursor/SOUL.md
-    staged_agent_card: bin/agents/relay-cursor/agent.md
-    persona_yaml: bin/agents/personas/relay-cursor.yaml
-    capabilities:
-      - coordination
-      - planning
-      - git-hygiene
-    notes: Cursor coordinator identity; distinct from the Relay Cline external-specialist adapter
 
   - staging_folder: relay
     dispatch_lane: L-Fleet
@@ -258,6 +257,7 @@ roles:
     hermes_profile: cline-agent
     display: Relay
     soul_id: adapter.external-specialist
+    frugality_tier: 5
     stage: adapter
     openclaw_workspace: ${HOME}/.openclaw/agents/cline-agent
     staged_soul: bin/agents/relay/SOUL.md
@@ -270,6 +270,7 @@ roles:
     hermes_profile: null
     display: Wanda
     soul_id: adapter.wanda-wandb
+    frugality_tier: 5
     stage: adapter
     staged_soul: bin/agents/wanda/SOUL.md
     staged_agent_card: bin/agents/wanda/agent.md
@@ -283,11 +284,31 @@ roles:
     hermes_profile: kimi-agent
     display: Nova
     soul_id: adapter.kimi-research
+    frugality_tier: 5
     stage: adapter
     openclaw_workspace: ${HOME}/.openclaw/agents/kimi-agent
     staged_soul: bin/agents/nova/SOUL.md
     staged_agent_card: bin/agents/nova/agent.md
     persona_yaml: bin/agents/personas/nova.yaml
+
+  - staging_folder: relay-cursor
+    dispatch_lane: L-Fleet
+    native_hermes_delegate: false
+    openclaw_id: relay-cursor
+    hermes_profile: null
+    harness: cursor
+    display: Relay Cursor Agent
+    soul_id: adapter.cursor-coordinator
+    frugality_tier: 3
+    stage: coordinator
+    staged_soul: bin/agents/relay-cursor/SOUL.md
+    staged_agent_card: bin/agents/relay-cursor/agent.md
+    persona_yaml: bin/agents/personas/relay-cursor.yaml
+    capabilities:
+      - coordination
+      - planning
+      - git-hygiene
+    notes: Cursor coordinator identity; distinct from the Relay Cline external-specialist adapter
 
   - staging_folder: rex
     dispatch_lane: L-Fleet
@@ -296,6 +317,7 @@ roles:
     hermes_profile: grok-agent
     display: Rex
     soul_id: adapter.grok-fallback
+    frugality_tier: 6
     stage: adapter
     openclaw_workspace: ${HOME}/.openclaw/agents/grok-agent
     staged_soul: bin/agents/rex/SOUL.md
@@ -310,6 +332,7 @@ lifecycle:
     openclaw_id: main
     display: Atlas
     soul_id: perpetua.lifecycle
+    frugality_tier: 1
     stage: lifecycle
     openclaw_workspace: ${HOME}/.alphaclaw/.openclaw/workspace
     hermes_profile: null
