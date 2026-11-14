@@ -79,7 +79,10 @@ Liveness states are defined in `orchestrator/heartbeat_monitor.py`:
    ```
 
 5. **Auto-cleanup**
-   Call `cleanup_stale_claims(bus)` or rely on the dashboard path to release claims from DEAD agents.
+   Quiesce workers, restarts, and queue mutations before
+   `cleanup_stale_claims(bus)`. Only the live claimant may `queue fail`.
+   Cleanup can requeue exhausted work. Do not pulse or fail a claim for an
+   agent you do not control.
 
 6. **Quiesce before global cleanup**
    Pause new restarts and queue mutations before a global cleanup. Let a

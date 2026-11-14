@@ -126,6 +126,10 @@ Bootstrap handles automatically (no manual steps needed):
 > that worktree. Without it, dispatch reads another checkout's state and the
 > failure looks like a model timeout.
 >
+> Every worktree of a repository shares one object store. Removing a worktree
+> does not delete its commits. A linked Perpetua-Tools worktree needs an
+> explicit `PT_STATE_DIR`. Without it, dispatch can look like a model timeout.
+>
 > **Which base?** An ordinary feature branch starts from a freshly fetched
 > `origin/main` SHA. A board job is different: create the checkout from the row's
 > exact `source_ref` and verify `expected_base_sha` before editing (see *Board Jobs

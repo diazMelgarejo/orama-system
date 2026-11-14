@@ -77,9 +77,10 @@ current.
 
 ### Two boards, and drop evidence
 
-`team_broadcast` is not GossipBus. They are two boards. The harness mailbox is
-not wired to the intra-host event log, so a broadcast there is not a
-GossipBus row. Emit coordination events with `GossipBus.emit`.
+`team_broadcast` is a runtime harness mailbox, not GossipBus. They are two
+boards. A post there does not write this board. The harness mailbox is not
+wired to the intra-host event log, so a broadcast there is not a GossipBus
+row. Emit coordination events with `GossipBus.emit`.
 
 Judge a LAN file drop by that drop's own JSON. Report delivery only when
 `ok` is exactly true, `received_at` is present, and `bytes` equals the

@@ -96,6 +96,12 @@ credential was exposed, rotate it before the rewrite.
    git tag pre-expunge-backup-$(date +%Y%m%d-%H%M%S) <current-tip-sha>
    ```
 
+   A later redaction commit is not removal while the branch is unpublished:
+   the patch still contains the value. Replace those commits so the value is
+   absent. A backup tag, `ORIG_HEAD`, and the previous SHA on a reflog reset
+   line keep the old objects reachable. Drop those pointers, then prune. Do
+   not push the backup tag.
+
 ## Scrub sequence
 
 Use placeholders throughout. Never paste the real forbidden string into PR
