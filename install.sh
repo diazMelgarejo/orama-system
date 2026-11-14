@@ -11,6 +11,7 @@
 #   bash install.sh
 #   bash install.sh --project     # install to ./.claude/skills/ instead of global
 #   bash install.sh --with-test-deps  # also install Python deps for pytest/PoCs
+#   bash install.sh --with-agent-scripts  # also bootstrap steipete/agent-scripts (opt-in)
 #   bash install.sh --uninstall   # remove the skill
 
 set -euo pipefail
@@ -25,6 +26,12 @@ SKILL_NAME="orama-system"
 REPO_URL="https://github.com/diazMelgarejo/orama-system"
 BRANCH="main"
 SKILL_SOURCE="bin/orama-system"
+
+# steipete/agent-scripts bootstrap (opt-in, Phase 4)
+STEIPETE_REPO="https://github.com/steipete/agent-scripts"
+AGENT_SCRIPTS_DIR="$HOME/Projects/agent-scripts"
+AGENT_SCRIPTS_LINK="$HOME/.agent-scripts"
+WITH_AGENT_SCRIPTS=0
 
 # Default: global install
 INSTALL_DIR="$HOME/.claude/skills/$SKILL_NAME"
@@ -49,6 +56,9 @@ for arg in "$@"; do
       ;;
     --with-test-deps)
       WITH_TEST_DEPS=1
+      ;;
+    --with-agent-scripts)
+      WITH_AGENT_SCRIPTS=1
       ;;
     --help|-h)
       echo "Usage: install.sh [--project] [--with-test-deps] [--uninstall]"
@@ -183,6 +193,78 @@ elif [[ -f "$HARNESS_DIR/install_hermes_profiles.py" ]]; then
   else
     hermes_sync "idempotent, trusted checkout"
   fi
+fi
+
+# ─── steipete/agent-scripts bootstrap (opt-in, Phase 4) ─────────────────────
+bootstrap_agent_scripts() {
+  info "Bootstrapping steipete/agent-scripts (shared agent rules + skills)..."
+
+  # No-op when git is missing
+  if ! command -v git >/dev/null 2>&1; then
+    warn "git not found on PATH — skipping steipete/agent-scripts bootstrap"
+    return 0
+  fi
+
+  local target_dir="$AGENT_SCRIPTS_DIR"
+  local target_link="$AGENT_SCRIPTS_LINK"
+
+  # If the symlink already exists and points to the right place, refresh it
+  if [[ -L "$target_link" ]]; then
+    local current_target
+    current_target="$(readlink "$target_link")"
+    if [[ "$current_target" == "$target_dir" ]]; then
+      info "steipete/agent-scripts symlink already present at $target_link"
+      if git -C "$target_dir" pull --ff-only >/dev/null 2>&1; then
+        ok "steipete/agent-scripts refreshed (--ff-only)"
+      else
+        warn "steipete/agent-scripts refresh failed — run: git -C $target_dir pull --ff-only"
+      fi
+      return 0
+    else
+      warn "$target_link exists but points to $current_target, not $target_dir — skipping"
+      return 0
+    fi
+  fi
+
+  # If a real directory exists at the link path, don't clobber it
+  if [[ -e "$target_link" && ! -L "$target_link" ]]; then
+    warn "$target_link exists and is not a symlink — skipping steipete/agent-scripts bootstrap"
+    return 0
+  fi
+
+  # Clone the upstream repo (idempotent: no-op if already present)
+  if [[ -d "$target_dir" && -d "$target_dir/.git" ]]; then
+    info "steipete/agent-scripts already cloned at $target_dir — refreshing"
+    if git -C "$target_dir" pull --ff-only >/dev/null 2>&1; then
+      ok "steipete/agent-scripts refreshed (--ff-only)"
+    else
+      warn "steipete/agent-scripts refresh failed — run: git -C $target_dir pull --ff-only"
+    fi
+  else
+    info "Cloning steipete/agent-scripts to $target_dir..."
+    if git clone --depth 1 "$STEIPETE_REPO" "$target_dir" 2>/dev/null; then
+      ok "steipete/agent-scripts cloned to $target_dir"
+    else
+      warn "steipete/agent-scripts clone failed — run manually: git clone $STEIPETE_REPO $target_dir"
+      return 0
+    fi
+  fi
+
+  # Create the symlink agents in this stack should follow
+  mkdir -p "$(dirname "$target_link")"
+  if ln -s "$target_dir" "$target_link" 2>/dev/null; then
+    ok "steipete/agent-scripts symlinked at $target_link -> $target_dir"
+  else
+    warn "Could not create symlink $target_link -> $target_dir — create manually"
+  fi
+
+  info "NOTE: Never run scripts/sync-skills from this installer — it rewrites"
+  info "      ~/.codex/skills and ~/.claude/skills and may collide with existing"
+  info "      orama skill links. Run it manually after reviewing."
+}
+
+if [[ "${WITH_AGENT_SCRIPTS:-0}" == "1" ]]; then
+  bootstrap_agent_scripts
 fi
 
 # ─── Verify ──────────────────────────────────────────────────────────────────
