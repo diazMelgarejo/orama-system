@@ -11,6 +11,10 @@ This branch is stacked on that tip and must not be folded into PR #498.
 **Local corpora counted:** `bin/orama-system/skills/` = 65 directories on
 this branch. Perpetua-Tools `.agent/skills` and `vendor/` mirrors were not
 re-listed file-by-file in this pass; Phase 1 does that before any deletion.
+**Operator brief (binding for this plan):** summon steipete first, cite the
+specific skill or rule, and dedupe the orama and Perpetua corpora in
+deference to that prior art. Coopt and extend only where our card owns a
+contract upstream does not.
 
 ## 1. Decision
 
@@ -39,10 +43,18 @@ README (`AGENTS.MD`, `skills/`, `scripts/`, `hooks/`):
   exposed by tracked relative symlinks. Repo-owned skills stay canonical
   in their own repo.
 
-Operator priority sections (local archives, crawlers, risk labels, review
-gates, stop-and-ask) are not a separate top-level tree in the listing
-fetched today. Treat them as headings inside `AGENTS.MD` until Phase 1
-quotes the real headings. Do not invent section paths.
+Those priority topics are rules inside `AGENTS.MD`, not skill-folder names.
+Quoted from `main` on 2026-11-14. Do not import the surrounding personal
+ops (Peter's Claw signature, `steipete` git identity, named Mac hosts,
+`clawdbot@gmail.com`, Team-server coordinator).
+
+| Brief phrase | Real upstream text | Cite this, not a copy |
+| --- | --- | --- |
+| Local archives | Routing: "Private/history: local archives first." PR/CI: "Discover in the local Gitcrawl archive first." | `AGENTS.MD` Routing and PR/CI. Crawler skills: `discrawl`, `slacrawl`, `wacrawl`, `telecrawl`, `notcrawl`. |
+| macOS / Swift | "macOS app profile/test: sign local bundle…" Computer use falls back to `$peekaboo`. | Skills `swiftui-performance-audit`, `swiftui-view-refactor`, `swiftui-liquid-glass`, `swift-concurrency-expert`, `xcode-sync`, `mac-maintenance`, `peekaboo`. No orama port. |
+| Production guardrails | "Push only when user asks…" "Destructive Git ops need explicit user request." "Team server deployments… require Peter's explicit per-deployment approval." | The rule shape (ask before push, reset, deploy). Our push authority stays our own. |
+| Review gates | "Before every commit/land: `$autoreview` until no accepted/actionable finding." "assume generated code may come from weaker AI." | `github-deep-review` plus `$autoreview`. Our `code-review` and identity hook stay. |
+| Stop and ask | "Conflict/problem: stop + ask." "Audience/destination unclear: ask." "Device/sensitivity/approval unclear: stop + ask." | `AGENTS.MD` Git and Core. Do not replace GossipBus with a second board. |
 
 ## 3. Overlap matrix (name-level, not yet a content merge)
 
@@ -70,8 +82,13 @@ Manual, per machine, skip if missing:
 
 ```text
 git clone https://github.com/steipete/agent-scripts.git ~/Projects/agent-scripts
-# or a symlink the operator already uses, such as ~/.agent-scripts
+ln -s ~/Projects/agent-scripts ~/.agent-scripts
 ```
+
+`~/.agent-scripts` is the path agents in this stack should follow. Upstream's
+own `scripts/sync-skills` assumes `~/Projects/agent-scripts` and rewrites
+`~/.codex/skills` and `~/.claude/skills`. Do not run it in Phase 0. It can
+hide orama skill links that are already on this Mac.
 
 Run upstream `scripts/sync-skills` only after reading its dry-run behavior.
 It rewrites `~/.codex/skills` and `~/.claude/skills`. That can collide with
@@ -83,10 +100,14 @@ the first real sync.
 1. Record upstream `git rev-parse HEAD` and the `AGENTS.MD` headings that
    match local archives, crawlers, risk labels, review gates, and
    stop-and-ask.
-2. List Perpetua-Tools skill roots (`.agent/skills`, `vendor/ecc-tools`,
-   any OpenClaw overlay) the same way as `bin/orama-system/skills/`.
-3. For each row in §3, write one paragraph: same job, or only a shared
-   verb. Attach file paths. No card is retired on a name match alone.
+2. List every skill root, not a sample: `bin/orama-system/skills/` (65),
+   Perpetua-Tools `.agent/skills`, `vendor/ecc-tools` skill trees, and the
+   OpenClaw overlay directories those trees symlink. One row per directory
+   name: summon / keep / shrink. A shared verb is not a same job.
+3. For each §3 row, one paragraph with both file paths. No card is retired
+   on a name match. Retirement requires the deference test: upstream owns
+   the portable workflow, and our card adds no hardware, identity,
+   GossipBus, Telos, CIDF, or OSSF rule.
 
 ### Phase 2 — Pointer layer
 
