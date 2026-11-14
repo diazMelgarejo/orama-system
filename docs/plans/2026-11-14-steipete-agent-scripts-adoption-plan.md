@@ -120,19 +120,85 @@ READ ~/Projects/agent-scripts/AGENTS.MD BEFORE ANYTHING (skip if missing).
 Repo-specific rules stay below that line. Do not vendor `AGENTS.MD`.
 Do not add the clone to `install.sh` or `install.ps1` in this phase.
 
-### Phase 3 — Dedupe candidates
+### Phase 3 — Dedupe candidates (batched)
 
-Only after Phase 1 paragraphs exist:
+Completed 2026-11-14 as a single batched decision (not one card per PR):
 
 - Retire or shrink a local card when upstream is the same job and our card
   has no hardware, identity, GossipBus, Telos, or CIDF rule.
 - Keep a local card when it binds this stack (OSSF, GLM fallback, peer TLS,
   commit identity, coordination board).
-- One card per PR. Each PR names the upstream skill path it defers to.
+
+**Result: 0 retired, 0 shrunk, 11 kept.**
+
+The 11 skills overlapping with upstream portable workflows (fable5-git-rebase-safety,
+git-file-deletion-guard, git-history-surgery, git-pending-push-guard, oramasys-method,
+security, shell-hygiene, stacked-pr-naming, using-git-worktrees, whatsapp-qr-gateway,
+plus firecrawl with no upstream equivalent) were reviewed against the deference test.
+Each adds at least one stack-binding rule (hardware, identity, GossipBus, Telos, CIDF,
+or OSSF) beyond upstream's general guidance, so none qualify for dedupe.
+
+**54 skills summoned** (no upstream equivalent — local-only capabilities binding
+the orama-system stack). **11 skills kept** (overlap upstream but add stack-binding
+rules). **0 skills shrunk.**
+
+54 summoned skills: agent-coordination-heartbeat, agent-methodology, antigravity-agent,
+archive, cline-openclaw-agent, cline-wandb, clinepass-deepseek-flash, code-review,
+codex-mcp-debugging, codex-openclaw-agent, cursor-agent, cursor-pr-body, deep-research,
+ecc-sync, fable5-tier-based-routing, first-run-setup, glm52-fallback, gossip-bus,
+guard-sync-divergence-guard, hardware-affinity-gate, hermes-agent, hermes-harness,
+icloud-escape-move, kimi-agent, local-inference, mcp-install, mcp-orchestration,
+no-sleep-chains, omniroute, openclaw-add-channel, openclaw-add-cron, openclaw-add-script,
+openclaw-add-secret, openclaw-dream-setup, openclaw-new-agent, openclaw-restart,
+openclaw-skills, openclaw-status, openclaw-stow, openrouter-fallback, orama-afrp,
+orama-cidf, orama-gstack, orama-repo-rules, periscope-ecc, perpetua-config,
+perpetua-hardware, perpetua-startup-intelligence, perpetua-tools, pt-orama-harness-integration,
+self-discovery, self-improve, skillify, wanda-wandb.
+
+11 kept skills: fable5-git-rebase-safety, firecrawl, git-file-deletion-guard,
+git-history-surgery, git-pending-push-guard, oramasys-method, security, shell-hygiene,
+stacked-pr-naming, using-git-worktrees, whatsapp-qr-gateway.
+
+### Phase 3.x — Ecosystem integration
+
+How steipete/agent-scripts integrates into the orama + Perpetua-Tools + ECC +
+gstack + gbrain + agentic-stack ecosystem:
+
+**Pointer-first, not copy-first.** Each repo keeps its stack-specific skills
+canonical. steipete/agent-scripts provides shared hard rules (AGENTS.MD) and
+portable skills via symlink. Downstream repos use pointer-style AGENTS.MD:
+
+```text
+READ ~/Projects/agent-scripts/AGENTS.MD BEFORE ANYTHING (skip if missing).
+```
+
+Repo-specific rules stay below that line. Do not vendor AGENTS.MD.
+
+**Repo roles:**
+
+| Repo | Role in ecosystem | steipete integration |
+|------|------------------|---------------------|
+| orama-system | 65 skills, AGENTS.md + CLAUDE.md pointer | Pointer added (Phase 2); all skills kept/summoned |
+| Perpetua-Tools | .agent/skills (14), GossipBus, perpetua_core.db | Pointer to be added to PT AGENTS.md/CLAUDE.md |
+| ECC (everything-claude-code) | vendor/ecc-tools, ../agent-skills sibling | Symlink via upstream sync-skills (dry-run first) |
+| gstack | Not yet present locally | Pointer when present |
+| gbrain | $HOME/code/OpenClaw/gbrain/, 59 skills | Separate project (Garry Tan); no steipete refs; no integration |
+| agentic-stack | Not yet present locally | Pointer when present |
+
+**Sync strategy:** Upstream `scripts/sync-skills` rewrites `~/.codex/skills` and
+`~/.claude/skills`. Do not run it blindly — it can collide with orama skill
+symlinks already on this Mac. Phase 0 stops and asks before the first real sync.
+Run with `--dry-run` first, review, then execute.
+
+**Cross-repo coordination:** GossipBus (orchestrator/gossip_bus.py in PT) remains
+the intra-host coordination bus. steipete AGENTS.MD does not replace GossipBus,
+OSSF, or the commit-identity hook. Each repo's skills stay canonical in their
+own repo; upstream skills are exposed via tracked relative symlinks only.
+
+**Phase 4 prerequisite:** Phases 0–2 must be accepted before Phase 4 (installer)
+is considered. Phase 4 stacks on this plan branch only.
 
 ### Phase 4 — Installer, separate PR
-
-If Phase 0 sync is safe, a later PR may offer an **opt-in** bootstrap:
 
 - No-op when git is missing or the destination exists and is not the
   expected clone or symlink.
