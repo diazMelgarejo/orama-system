@@ -380,3 +380,17 @@ For this deliverable: official pages and exact-tip source were inspected;
 additive patch structure is checked in a scratch Git repository. No authenticated
 inference calls, Cline execution, full-repository tests, paid requests, pushes,
 PR edits, merges or production configuration changes were performed.
+
+## 16. Next implementation (not started)
+
+Status: policy artifact now exists at Perpetua-Tools config/bigmodel-free-first-policy.json
+with implementation_status unimplemented. Runtime is still not implemented.
+
+What must be built before anyone may say free-first is real:
+
+- pure selector/classifier in PT, tested offline, no network
+- Orama profile that references the policy id and does not select glm-5.3-flash in free_only
+- paid profile remains a separate explicit profile
+- runner that classifies results and stops on 1113, recovery_required, and unknown outcome
+- CI parity check that the orama consumer hash matches the PT file
+- qualification lanes still blocked until a later reviewed probe
