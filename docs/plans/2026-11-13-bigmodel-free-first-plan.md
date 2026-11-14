@@ -383,8 +383,15 @@ PR edits, merges or production configuration changes were performed.
 
 ## 16. Next implementation (not started)
 
-Status: policy artifact now exists at Perpetua-Tools config/bigmodel-free-first-policy.json
-with implementation_status unimplemented. Runtime is still not implemented.
+Status: read the policy from the Perpetua-Tools `main` blob
+`config/bigmodel-free-first-policy.json`. A same-named feature branch is not
+the source. If that path is absent on `main`, free-first is unimplemented.
+This plan does not copy the candidate list. Trust `implementation_status` in
+that blob. Runtime qualification stays blocked.
+
+The paired stacks are local-LLM-first, then free-first. The automatic free
+chain ends at the OpenRouter free autorouter. Paid models stay behind a
+per-run human approval. Orama does not select `glm-5.3-flash` in `free_only`.
 
 What must be built before anyone may say free-first is real:
 
@@ -392,5 +399,5 @@ What must be built before anyone may say free-first is real:
 - Orama profile that references the policy id and does not select glm-5.3-flash in free_only
 - paid profile remains a separate explicit profile
 - runner that classifies results and stops on 1113, recovery_required, and unknown outcome
-- CI parity check that the orama consumer hash matches the PT file
+- CI parity check that the orama consumer hash matches the PT main blob
 - qualification lanes still blocked until a later reviewed probe
