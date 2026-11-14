@@ -186,6 +186,7 @@ confirmed identically across raw HTTP smoke tests, the official Python
    out of scope for this pass.
 
 ## Quick Start (historical shared-slot cline; step 3 fails; summon is launch_cline_wandb.py)
+Do not pass a prompt through `cline.cmd`, and do not print a provider settings file.
 
 ```bash
 export REPO_ROOT="$(git rev-parse --show-toplevel)"
