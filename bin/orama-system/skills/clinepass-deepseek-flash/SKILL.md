@@ -410,3 +410,5 @@ This route is a worker lane; the main session owns repository state.
   literals to a cloud worker.
 - Do not force-push, merge, or close PRs from this route. The main session owns
   repository state changes.
+- Do not pass a prompt through `cline.cmd`.
+- Do not print a provider settings file. Its auth block holds live tokens.

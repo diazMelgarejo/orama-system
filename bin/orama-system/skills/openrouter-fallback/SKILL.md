@@ -215,6 +215,9 @@ bash $ORAMA_ROOT/bin/orama-system/skills/openrouter-fallback/setup-openrouter.sh
   keep tracked files free of secrets.
 - Use OpenRouter only after the local and regional models (ClinePass, LM Studio,
   Ollama, glm-5.3-flash) have failed.
+- Treat a cheap or free completion as a claim. Check it against the file,
+  the review thread, and the runbook. Free-tier model ids rot; probe the
+  live list before trusting an id from an older note.
 - Rotate the key through `setup-openrouter.sh`.
 
 ### Ask First
@@ -226,6 +229,8 @@ bash $ORAMA_ROOT/bin/orama-system/skills/openrouter-fallback/setup-openrouter.sh
 - Do not commit the API key or hardcode it in skills, scripts, or docs.
 - Do not make OpenRouter the first choice ahead of local models.
 - Do not print the credential value in logs or output.
+- Do not spend a second session to recover a first session that inverted the
+  runbook or wrote a secret into memory. Fix the runbook claim first.
 
 ## References
 

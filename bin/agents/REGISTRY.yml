@@ -151,6 +151,36 @@ roles:
     staged_soul: bin/agents/autoresearcher/SOUL.md
     staged_agent_card: bin/agents/autoresearcher/agent.md
 
+  - staging_folder: autoresearch-inner
+    dispatch_lane: L-Fleet
+    native_hermes_delegate: false
+    openclaw_id: autoresearch-inner
+    hermes_profile: autoresearch-inner
+    display: Inner seat
+    soul_id: perpetua.autoresearch.inner
+    stage: research
+    occupant: any
+    first_occupant: cline-wandb
+    openclaw_workspace: ${HOME}/autoresearch
+    staged_soul: bin/agents/autoresearch-inner/SOUL.md
+    staged_agent_card: bin/agents/autoresearch-inner/agent.md
+    notes: Level 1. Does not replace Scout.
+
+  - staging_folder: metaresearch-outer
+    dispatch_lane: L-Fleet
+    native_hermes_delegate: false
+    openclaw_id: metaresearch-outer
+    hermes_profile: metaresearch-outer
+    display: Outer seat
+    soul_id: perpetua.autoresearch.outer
+    stage: research
+    occupant: any
+    first_occupant: cline-wandb
+    openclaw_workspace: ${HOME}/autoresearch
+    staged_soul: bin/agents/metaresearch-outer/SOUL.md
+    staged_agent_card: bin/agents/metaresearch-outer/agent.md
+    notes: Level 2 dual-mode. Plugin-loop reading, or GPU-verify reading. Gate required.
+
   - staging_folder: coder
     dispatch_lane: L-Fleet
     native_hermes_delegate: false
