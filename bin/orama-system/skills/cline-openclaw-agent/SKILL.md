@@ -246,7 +246,9 @@ the OpenRouter provider is authenticated (for the lightweight agent model).
 
 On CLI 3.0.49 and later there is no `task` subcommand. Do not pass a prompt
 through `cline.cmd`. Do not print a provider settings file. Its auth block
-holds live tokens. `glm-5.2` and `deepseek-v4-flash` are retired. The default
+holds live tokens. `glm-5.2` and `deepseek-v4-flash` are retired on the live
+ClinePass roster. The model picker no longer lists them. A vendor page that
+still documents hosting is not a selectable model in this program. The default
 coding model is `cline-pass/glm-5.3-flash` and the provider id is `cline-pass`.
 
 ## Related
