@@ -65,6 +65,16 @@ $py = "$env:PERPETUA_TOOLS_ROOT\.venv\Scripts\python.exe"
 - If the HTTPS helper error disappears and the next failure is a proxy or
   `127.0.0.1` connection error, Git packaging is fixed; investigate network/proxy.
 
+## Stable tool paths
+
+Resolve GitHub Desktop Git and the LM Studio Node bundle at runtime, as the
+bootstrap above does. Do not symlink shims into a versioned app install
+directory. An app update changes that directory, and the symlink breaks.
+Keep shims in the stable user bin (`%USERPROFILE%\.lmstudio\bin`).
+
+Do not write a DHCP address into a tracked file. Read the discovery state
+the network watcher refreshes. A missing address is a discovery gap.
+
 ## Encoding rules
 
 Two encoding rules apply. They cover different cases.
