@@ -22,6 +22,17 @@ Do not invoke when:
 Warning: rewriting history does not un-leak a secret. Rotate any secret that ever
 touched a public remote.
 
+## Unpublished commits
+
+Never paste a credential into a command, a patch, a commit message, or a
+report. A redaction patch of an unpublished commit still contains the value.
+Replace the unpublished commits. Do not ship the patch that still carries the
+secret.
+
+A backup tag, `ORIG_HEAD`, and the reflog's previous SHA keep those objects
+reachable. Drop those refs, then prune. Do not push the backup tag. If a live
+credential was exposed, rotate it before the rewrite.
+
 ## Pre-flight
 
 0. On Windows, run the runtime bootstrap in
@@ -84,6 +95,12 @@ touched a public remote.
    git fetch --all --prune
    git tag pre-expunge-backup-$(date +%Y%m%d-%H%M%S) <current-tip-sha>
    ```
+
+   A later redaction commit is not removal while the branch is unpublished:
+   the patch still contains the value. Replace those commits so the value is
+   absent. A backup tag, `ORIG_HEAD`, and the previous SHA on a reflog reset
+   line keep the old objects reachable. Drop those pointers, then prune. Do
+   not push the backup tag.
 
 ## Scrub sequence
 

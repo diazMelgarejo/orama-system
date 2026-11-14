@@ -68,6 +68,11 @@ Match the failure to a known pattern before changing anything.
 | `429` / quota exhaustion | retry storm or missing backoff | count repeated calls and inspect retry spacing |
 | file missing after write / stale diff | race, wrong cwd, or branch drift | re-check path, cwd, git status, and actual file existence |
 | tests still failing after “fix” | wrong hypothesis | isolate the exact failing test and re-derive the bug |
+| config change has no effect | removed or ignored key | compare runs with and without it |
+
+A change that only hides the symptom is a mask. Remove the condition instead.
+A labeled, time-boxed workaround is the exception. Do not hide a resource
+leak, a concurrency bug, or a security check behind a mask.
 
 Diagnosis questions:
 - is this a logic failure, state failure, environment failure, or policy failure?

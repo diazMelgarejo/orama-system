@@ -75,6 +75,21 @@ latency. Never assume WS is live; the channel abstraction
 (`lan_peer_channel.py`) is the only thing that should know which wire is
 current.
 
+### Two boards, and drop evidence
+
+`team_broadcast` is a runtime harness mailbox, not GossipBus. They are two
+boards. A post there does not write this board. The harness mailbox is not
+wired to the intra-host event log, so a broadcast there is not a GossipBus
+row. Emit coordination events with `GossipBus.emit`.
+
+Judge a LAN file drop by that drop's own JSON. Report delivery only when
+`ok` is exactly true, `received_at` is present, and `bytes` equals the
+expected file size. A missing metadata sidecar is normal. Acceptance by the
+portal or the assign script is not proof the peer stored the bytes.
+
+Intra-host GossipBus and the LAN peer channel are two boards. A note on one
+is not a note on the other. A queued outbox item is not delivery.
+
 Peer IP is **never hardcoded** — both transports that need it read
 `~/.openclaw/state/last_discovery.json` (`endpoints.mac`/`endpoints.win`),
 kept fresh by the `com.orama.network-watch` launchd watcher. See
@@ -152,6 +167,8 @@ Full operator playbook: `bin/orama-system/skills/hermes-harness/references/lan-p
 - Reassign authorship silently, spoof another agent's liveness/status, or turn
   review evidence into approval or authorization.
 - Hardcode LAN peer IPs or credentials in payloads.
+- Treat `team_broadcast` as GossipBus, or treat portal acceptance as proof
+  the peer stored the bytes.
 
 ## Examples
 

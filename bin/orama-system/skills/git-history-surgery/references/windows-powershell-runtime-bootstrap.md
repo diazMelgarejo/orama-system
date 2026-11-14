@@ -64,3 +64,36 @@ $py = "$env:PERPETUA_TOOLS_ROOT\.venv\Scripts\python.exe"
   separately or use PowerShell-native control flow.
 - If the HTTPS helper error disappears and the next failure is a proxy or
   `127.0.0.1` connection error, Git packaging is fixed; investigate network/proxy.
+
+## Stable tool paths
+
+Resolve GitHub Desktop Git and the LM Studio Node bundle at runtime, as the
+bootstrap above does. Do not symlink shims into a versioned app install
+directory. An app update changes that directory, and the symlink breaks.
+Keep shims in the stable user bin (`%USERPROFILE%\.lmstudio\bin`).
+
+Do not write a DHCP address into a tracked file. Read the discovery state
+the network watcher refreshes. A missing address is a discovery gap.
+
+## Encoding rules
+
+Two encoding rules apply. They cover different cases.
+
+- June rule, general files: write UTF-8 without a BOM.
+- July rule, Windows PowerShell 5.1: a non-ASCII `.ps1` needs a UTF-8 BOM
+  and a real Windows PowerShell 5.1 parse. An ASCII script does not need a
+  BOM.
+
+PowerShell 5.1 `>` and `2>` write UTF-16 LE. `Out-File -Encoding utf8` writes
+a UTF-8 BOM. Redirected process bytes must not go through either path. Build
+`jq` arguments from JSON or a file. Hand-quoting a jq filter through
+PowerShell breaks the quotes.
+
+Do not start `start.ps1` from a job object. Bash sourcing and PowerShell
+assignment are different contracts. Set each setting under the name the
+launcher reads from the process environment.
+
+- PowerShell session: `$env:PT_PORT = '8000'`. A plain `$PT_PORT = '8000'`
+  does not set the process environment.
+- Local settings file, literal KEY=VALUE lines: `PT_PORT=8000`. Do not prefix
+  the key with `export` or `$env:`.

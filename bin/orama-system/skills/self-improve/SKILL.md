@@ -1,12 +1,25 @@
 ---
 name: self-improve
 version: 1.0.0
-description: Crystallize session learnings through the PT Agentic-Stack frontend and instincts. V1 uses tracked PT `.agent`; v2 runtime persistence is deferred to Anamnesis.
+description: Crystallize session learnings through the PT Agentic-Stack frontend and instincts. V1 uses tracked PT `.agent`; v2 runtime persistence is deferred to Anamnesis. Activates when a session ends or a lesson supersedes an older one.
+compatibility: python>=3.9, orama-system, perpetua-tools
+allowed-tools: bash, file-operations
 user-invocable: true
 trigger: session-end
+triggers:
+  - session end
+  - self-improve
+  - crystallize lessons
+  - lesson supersession
 ---
 
 # Self-Improve — v1.0.0
+
+## When to Use
+
+- At session end, or when the user asks to save session learnings.
+- When a lesson supersedes an older one and the remaining claims must stay
+  visible.
 
 Idempotent session-end skill. In v1, development lessons are written through PT's
 tracked `.agent` pipeline. It reads what happened, proposes minimal additive updates,
@@ -176,12 +189,39 @@ Propose the addition. Present separately for approval (same A/B/C gate). Only up
 
 ---
 
+## Supersession scope
+
+A narrow supersession hides every claim in the old lesson, not only the claim
+it corrects. Recall drops the old id. Read the old lesson before treating the
+new row as the whole rule. Before superseding, copy forward every claim that
+should remain visible. Otherwise the old lesson disappears as a whole.
+
 ## Idempotency Rules
 
 - Never duplicate an entry already in PT `.agent` memory (check for duplicate topics first)
 - Never overwrite existing entries — append only
 - Never bump the skill version number from inside the skill itself
 - If running multiple times in one session, only the last run's learnings are committed
+
+---
+
+## Boundaries
+
+### Always Do
+
+- Wait for explicit approval before writing lesson memory.
+- Copy forward every claim that should remain visible before a narrow
+  supersession.
+
+### Ask First
+
+- Writing a lesson that changes a canonical skill.
+- Committing or pushing crystallized lessons.
+
+### Never Do
+
+- Treat a narrow supersession as hiding only the corrected claim.
+- Commit lesson memory before the user approves the diff.
 
 ---
 

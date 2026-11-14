@@ -488,6 +488,34 @@ test('works', () => { })
 test('test search', () => { })
 ```
 
+### Fix the condition, do not mask the symptom
+
+A change that hides a failure without removing its cause is a mask. After a
+fix, you can say what was wrong and why that condition is gone. A mask leaves
+the condition in place, so removing the mask brings the failure back.
+
+Use a mask only when it is labeled, time-boxed, and tracked, such as a
+workaround for a confirmed upstream bug with a removal date. Do not mask a
+resource leak, a concurrency bug by forcing serialization, or a security
+check.
+
+Classify a flake before changing it:
+
+- Timing race: fails under load, passes when the wait is explicit.
+- State leak: fails after another test, or when the order changes.
+- Resource contention: parallel workers share one file, port, or database.
+- Environment difference: passes in one runtime and fails in another.
+
+Run the failing test alone. If it passes alone, look for leaked state or a
+shared resource. If it fails alone, look for a timing race or an environment
+gap. Release files, servers, and databases after each test. Use a unique temp
+directory. Do not hardcode a shared temp path.
+
+Before a configuration-key change, confirm the key exists in the installed
+version. A removed key is often ignored, so the run looks the same with or
+without it. If the two runs match, the key did nothing. Search upstream issues
+and recent commits before sending a fix for a flake you do not maintain.
+
 ## Code Smell Detection
 
 Watch for these anti-patterns:
