@@ -18,6 +18,9 @@ tri-level did not beat bi-level, so bi-level stays the default and tri-level sta
 research. Scout does not occupy that outer seat. The agent-neutral MetaResearcher role is a separate
 draft: `OpenClaw/references/2026-11-14-metaresearcher-role-plan-DRAFT.md`.
 
+This branch is the documentation of that split. It does not add a bilevel runner, a tri-level
+runner, or a serving grant. The plugin bridge and the single-track loop stay as they are.
+
 ## First Rule: Dry-Run Before Long Runs
 
 For long-running goals, begin with Perpetua dry-run planning. Dry-run receives a goal and returns
