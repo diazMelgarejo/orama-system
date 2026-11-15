@@ -98,6 +98,19 @@ $added = 0
 foreach ($c in $candidates) {
     if (Add-UserPathEntry -Dir $c) { $added++ }
 }
+# LM Studio ships npm.cmd in the shim directory and npx.cmd only inside
+# tools\npm\<version>\package\bin. Readiness requires both on PATH.
+if (-not (Get-Command npx -ErrorAction SilentlyContinue)) {
+    $npmRoot = Join-Path $env:USERPROFILE '.lmstudio\tools\npm'
+    if (Test-Path -LiteralPath $npmRoot) {
+        $npxDir = Get-ChildItem -LiteralPath $npmRoot -Directory -ErrorAction SilentlyContinue |
+            Sort-Object Name -Descending |
+            ForEach-Object { Join-Path $_.FullName 'package\bin' } |
+            Where-Object { Test-Path -LiteralPath (Join-Path $_ 'npx.cmd') } |
+            Select-Object -First 1
+        if ($npxDir) { Add-UserPathEntry -Dir $npxDir | Out-Null }
+    }
+}
 if ($added -eq 0) {
     $scope = if ($SessionOnly) { 'process PATH' } else { 'User PATH' }
     Write-Host "  OK - all existing partner CLI paths already on $scope"

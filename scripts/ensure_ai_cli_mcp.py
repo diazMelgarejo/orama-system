@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -49,10 +50,21 @@ def node_version_supported(version: tuple[int, int, int]) -> bool:
     return major > 22
 
 
+def _command(args: Sequence[str]) -> list[str]:
+    """Resolve a Windows npm/npx shim. CreateProcess cannot run a .cmd file."""
+    argv = list(args)
+    if os.name != "nt" or not argv:
+        return argv
+    exe = shutil.which(argv[0]) or argv[0]
+    if exe.lower().endswith((".cmd", ".bat")):
+        return ["cmd", "/c", exe, *argv[1:]]
+    return [exe, *argv[1:]]
+
+
 def run(args: Sequence[str], *, timeout: int = 30) -> subprocess.CompletedProcess[str]:
     try:
         return subprocess.run(
-            list(args),
+            _command(args),
             text=True,
             capture_output=True,
             timeout=timeout,
