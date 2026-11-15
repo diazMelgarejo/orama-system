@@ -62,6 +62,26 @@ def test_orama_probe_also_checks_declared_deps() -> None:
     assert text.count("Test-VenvDeclaredDeps $VenvPythonMarker -Project 'orama-system'") == 2
 
 
+def test_resilient_candidates_cover_remembered_interpreters() -> None:
+    """Fall back through the shared venv, both PT checkouts, and Hermes."""
+    text = _text()
+    body = _func(text, "Get-ResilientPythonCandidates")
+    assert "ORAMASYS_PYTHON" in body
+    assert r".venvs\oramasys-dev\Scripts\python.exe" in body
+    assert "Perpetua-Tools" in body and "Perplexity-Tools" in body
+    assert r"hermes\hermes-agent\venv\Scripts\python.exe" in body
+    assert "WindowsApps" in body
+    repair = _func(text, "Repair-MissingPip")
+    assert "import ensurepip" in repair and "ensurepip', '--upgrade'" in repair
+    heal = _func(text, "Heal-PtVenv")
+    assert "Repair-MissingPip" in heal and "PtPythonAdopted" in heal
+    assert "Invoke-IdempotentWindowsInstall" in heal
+    install = _func(text, "Invoke-IdempotentWindowsInstall")
+    assert "last resort — idempotent install" in install
+    assert "'-e', '.'" in install
+    assert "checkout .venv unusable" in text
+
+
 def test_read_only_modes_skip_probe() -> None:
     """Preserve read-only launcher behavior."""
     text = _text()
