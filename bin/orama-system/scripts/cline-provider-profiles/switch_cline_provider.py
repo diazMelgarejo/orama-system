@@ -134,7 +134,7 @@ FORBIDDEN_EFFORTS = frozenset({"xhigh", "max"})
 _REJECTED_STATUSES = frozenset({400, 404, 422})  # candidate for "not this model/level"
 _HTTP_TIMEOUT_SECONDS = 60  # hard ceiling per call; GLM on W&B answers in 23-30 s
 _PROBE_PROMPT = "Reply with the number 1."
-_SUCCESS_FINISH_REASONS = frozenset({"stop", "length"})
+_PROBE_ANSWER = "1"
 _REJECTION_HINTS = (
     "reasoning_effort",
     "does not support",
@@ -254,17 +254,20 @@ def _probe_payload(text: str) -> dict[str, Any]:
 
 
 def _successful_completion(payload: Mapping[str, Any]) -> bool:
-    """True when ``payload`` is a chat completion that finished with content, not an error envelope."""
+    """True only for a finished completion whose content is the requested answer."""
     if "error" in payload:
         return False
     choices = payload.get("choices")
     if not isinstance(choices, list) or not choices:
         return False
     first = choices[0]
-    if not isinstance(first, dict) or first.get("finish_reason") not in _SUCCESS_FINISH_REASONS:
+    if not isinstance(first, dict) or first.get("finish_reason") != "stop":
         return False
     message = first.get("message")
-    return isinstance(message, dict) and isinstance(message.get("content"), str)
+    if not isinstance(message, dict):
+        return False
+    content = message.get("content")
+    return isinstance(content, str) and content.strip() == _PROBE_ANSWER
 
 
 def _rejection_message(error: Any) -> str | None:
