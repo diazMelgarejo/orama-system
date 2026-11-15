@@ -105,7 +105,7 @@ function Test-InstallPythonRuns {
     $done = Wait-Job $job -Timeout 8
     $ok = $false
     if ($done -and $job.State -eq 'Completed') { $ok = $true }
-    else { Stop-Job $job -Force -ErrorAction SilentlyContinue }
+    else { Stop-Job $job -ErrorAction SilentlyContinue }
     Remove-Job $job -Force -ErrorAction SilentlyContinue
     return $ok
 }
@@ -174,6 +174,10 @@ $ErrorActionPreference = 'Continue'
 & $VenvPython -c "import pip" 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 0) {
     & $VenvPython -m ensurepip --upgrade --default-pip 2>&1 | Out-Null
+    $ensurepipExit = $LASTEXITCODE
+    if ($ensurepipExit -ne 0) {
+        _Warn "ensurepip --upgrade failed (exit $ensurepipExit); pip may be unavailable in $VenvPath"
+    }
 }
 & $VenvPython -c "import uvicorn, fastapi, httpx, pytest, cryptography, importlib.metadata as m; m.version('orama-system')" 2>&1 | Out-Null
 $alreadyInstalled = ($LASTEXITCODE -eq 0)

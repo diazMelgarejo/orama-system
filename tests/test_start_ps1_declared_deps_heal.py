@@ -102,6 +102,41 @@ def test_file_keeps_bom_and_crlf(path: Path) -> None:
     assert b"\n" not in raw.replace(b"\r\n", b"")
 
 
+def test_installer_warns_when_ensurepip_fails() -> None:
+    """Capture ensurepip's exit before the import probe overwrites $LASTEXITCODE."""
+    text = INSTALL_PS1.read_text(encoding="utf-8-sig")
+    assert "ensurepip --upgrade --default-pip" in text
+    assert "$ensurepipExit = $LASTEXITCODE" in text
+    assert 'ensurepip --upgrade failed (exit $ensurepipExit)' in text
+    assert "Test-InstallPythonRuns" in text
+    assert r"\WindowsApps\\" in text
+    # Windows PowerShell 5.1 Stop-Job has no -Force; -ErrorAction does not
+    # suppress a parameter-binding error under $ErrorActionPreference Stop.
+    assert "Stop-Job $job -ErrorAction SilentlyContinue" in text
+    assert "Stop-Job $job -Force" not in text
+
+
+def test_adopted_shared_interpreter_kept_without_checkout_mapping() -> None:
+    """A healthy PT_PYTHON outside a mapped checkout still replaces a failed venv."""
+    text = _text()
+    assert "healthy shared interpreter" in text
+    assert "Checkout-specific TLS files are checked only when" in text
+    assert "$adoptedRepo -and -not $adoptedHasTls" in text
+    assert "$PtPython = $script:PtPythonAdopted" in text
+
+
+def test_mac_lan_ip_prefers_env_hint_over_cached_reachable() -> None:
+    """A current MAC_IP hint must beat a stale reachable last_discovery.json."""
+    body = _func(_text(), "Resolve-MacLanIp")
+    assert "Prefer a current MAC_IP" in body
+    assert "last_discovery.json is only used when no env hint is set" in body
+    assert "$state.endpoints.mac.reachable" not in body
+    env_idx = body.index("foreach ($var in @('MAC_IP'")
+    cache_idx = body.index("if (-not $macIp)")
+    assert env_idx < cache_idx
+    assert "Join-Path $HOME '.openclaw\\state\\last_discovery.json'" in body[cache_idx:]
+
+
 def _run_ps(body: str, tmp_path: Path) -> subprocess.CompletedProcess[str]:
     """Run an isolated script on either local PowerShell runtime."""
     if POWERSHELL is None:

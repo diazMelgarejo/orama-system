@@ -1144,19 +1144,22 @@ if ($PtDir) {
         if ($portalTlsOn -and $adoptedRepo) {
             $adoptedHasTls = Test-Path (Join-Path $adoptedRepo 'orchestrator\portal_tls_proxy.py')
         }
-        if ($adoptedRepo -and $adoptedHasTls) {
-            $PtPython = $script:PtPythonAdopted
-            if ($adoptedRepo -ne $PtDir) {
-                $PtDir = $adoptedRepo
-                _Info 'path' "PT_DIR switched to healthy checkout: $PtDir"
-            }
-            $PathsNeedRewrite = $true
-        } else {
+        # A healthy shared interpreter (no checkout mapping) is kept on the
+        # existing $PtDir. Checkout-specific TLS files are checked only when
+        # switching $PtDir to the adopted checkout.
+        if ($adoptedRepo -and -not $adoptedHasTls) {
             _Warn 'path' "adopted PT checkout has no portal_tls_proxy.py while Portal TLS is enabled; keeping $PtDir"
             if (Test-Path -LiteralPath $PtVenvPython) {
                 $PtPython = $PtVenvPython
                 $PathsNeedRewrite = $true
             }
+        } else {
+            $PtPython = $script:PtPythonAdopted
+            if ($adoptedRepo -and $adoptedRepo -ne $PtDir) {
+                $PtDir = $adoptedRepo
+                _Info 'path' "PT_DIR switched to healthy checkout: $PtDir"
+            }
+            $PathsNeedRewrite = $true
         }
     } elseif ((Test-Path $PtVenvPython) -and $PtPython -ne $PtVenvPython) {
         $PtPython = $PtVenvPython
@@ -2022,20 +2025,11 @@ function Resolve-MacLanIp {
     .OUTPUTS
     A hashtable with Ip (or the word unresolved) and Source.
     #>
-    # A reachable last_discovery.json wins over a stale MAC_IP hint. Discover
-    # already consumed the hint. Never use a gateway .110 heuristic.
+    # Prefer a current MAC_IP / endpoint hint over a cached reachable flag.
+    # last_discovery.json is only used when no env hint is set. Never use a
+    # gateway .110 heuristic.
     $macIp = $null
     $source = 'unset'
-    $statePath = Join-Path $HOME '.openclaw\state\last_discovery.json'
-    if (Test-Path $statePath) {
-        try {
-            $state = Get-Content $statePath -Raw | ConvertFrom-Json
-            $candidate = $state.endpoints.mac.ip
-            if ($state.endpoints.mac.reachable -and $candidate -and $candidate -notin @('', 'localhost', $TopoLoopback)) {
-                return @{ Ip = [string]$candidate; Source = 'last_discovery.json' }
-            }
-        } catch {}
-    }
 
     foreach ($var in @('MAC_IP', 'LM_STUDIO_MAC_ENDPOINT', 'OLLAMA_MAC_ENDPOINT')) {
         $raw = [Environment]::GetEnvironmentVariable($var, 'Process')

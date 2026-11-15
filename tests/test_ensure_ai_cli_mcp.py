@@ -17,13 +17,34 @@ SPEC.loader.exec_module(mcp)
 
 def test_cmd_shim_with_ampersand_is_quoted(monkeypatch) -> None:
     """cmd /c must not split a shim path that contains &."""
-    shim = r"C:\Users\R&D\.lmstudio\tools\npm\10.9.0\package\bin\npm.cmd"
+    shim = r"fixtures\R&D\npm.cmd"
     monkeypatch.setattr(mcp.os, "name", "nt")
     monkeypatch.setattr(mcp.shutil, "which", lambda _name: shim)
-    argv = mcp._command(["npm", "list", "-g"])
-    assert argv[:2] == ["cmd", "/c"]
-    assert argv[2].startswith('"') and argv[2].endswith('"')
-    assert f'"{shim}"' in argv[2]
+    cmdline = mcp._command(["npm", "list", "-g"])
+    assert isinstance(cmdline, str)
+    assert cmdline.startswith("cmd /c ")
+    assert f'"{shim}"' in cmdline
+
+
+def test_cmd_shim_run_passes_string_not_list2cmdline(monkeypatch) -> None:
+    """subprocess must receive the cmd string so list2cmdline cannot re-escape quotes."""
+    shim = r"fixtures\R&D\npm.cmd"
+    monkeypatch.setattr(mcp.os, "name", "nt")
+    monkeypatch.setattr(mcp.shutil, "which", lambda _name: shim)
+    seen: dict[str, object] = {}
+
+    def fake_run(args, **kwargs):  # noqa: ANN001
+        seen["args"] = args
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    monkeypatch.setattr(mcp.subprocess, "run", fake_run)
+    mcp.run(["npm", "list", "-g"])
+    assert isinstance(seen["args"], str)
+    assert seen["args"].startswith("cmd /c ")
+    assert f'"{shim}"' in seen["args"]
+    # list2cmdline would turn the quoted form into backslash-escaped quotes.
+    broken = subprocess.list2cmdline(["cmd", "/c", f'"{shim} list -g"'])
+    assert '\\"' in broken or broken != seen["args"]
 
 
 @pytest.mark.parametrize(

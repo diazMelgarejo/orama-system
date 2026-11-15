@@ -130,7 +130,7 @@ def test_explicit_mac_ip_equal_to_local_ip_is_refused():
 def test_explicit_mac_ip_accepted_without_evidence():
     """Check that explicit mac ip accepted without evidence."""
     D = _windows_host(env={"MAC_IP": MAC}, probes={f"http://{MAC}:1234": ["plain-model"]})
-    assert D.discover_endpoints()["mac"] == {"ip": MAC, "models": ["plain-model"]}
+    assert D.discover_endpoints()["mac"] == {"ip": MAC, "models": ["plain-model"], "port": 1234}
 
 
 def test_explicit_mac_ip_with_windows_evidence_goes_to_win_peers():

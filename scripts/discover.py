@@ -304,7 +304,20 @@ def _windows_prefix_subnets() -> list[str]:
             continue
         if not isinstance(net, ipaddress.IPv4Network):
             continue
-        pieces = [net] if net.prefixlen >= 24 else list(net.subnets(new_prefix=24))
+        # Bound automatic expansion. A /8 would yield 65,536 /24 prefixes and
+        # hold the discovery lock for hours. Wider than /20: scan only the
+        # interface host's /24 unless an operator configures a narrower mask.
+        ip_str = line.split("/", 1)[0]
+        try:
+            host = ipaddress.IPv4Address(ip_str)
+        except ValueError:
+            continue
+        if net.prefixlen >= 24:
+            pieces = [net]
+        elif net.prefixlen >= 20:
+            pieces = list(net.subnets(new_prefix=24))
+        else:
+            pieces = [ipaddress.ip_network(f"{host}/24", strict=False)]
         for piece in pieces:
             label = ".".join(str(piece.network_address).split(".")[:3])
             if label not in found:
@@ -522,6 +535,10 @@ def _probe_mac_candidate(ip: str, mac_only: set[str], win_only: set[str]) -> dic
         "ip": ip,
         "models": list(lms) if lms else list(ollama),
         "ollama": list(ollama) if ollama else None,
+        # The published port must belong to the backend that supplied the
+        # model list: LM Studio models pair with 1234, Ollama-only models
+        # with 11434. Ollama evidence is preserved on the entry either way.
+        "models_port": LM_STUDIO_PORT if lms else OLLAMA_PORT,
         "mac_strong": strong,
         "mac_weak": any_mac and not strong,
         "mac_evidence": any_mac,
@@ -551,9 +568,11 @@ def _mac_entry(cand: dict) -> dict:
     entry = {"ip": cand["ip"], "models": cand["models"]}
     if cand.get("ollama"):
         entry["ollama"] = cand["ollama"]
-        entry["port"] = OLLAMA_PORT
-    else:
-        entry["port"] = LM_STUDIO_PORT
+    # Port follows the backend that supplied the models (models_port from
+    # _probe_mac_candidate); hand-built candidates fall back to their
+    # ollama flag, then to the LM Studio default.
+    entry["port"] = cand.get("models_port") or (
+        OLLAMA_PORT if cand.get("ollama") else LM_STUDIO_PORT)
     return entry
 
 
@@ -849,7 +868,8 @@ def save_discovery_state(endpoints: dict, tier: int = 1):
             "mac": {"ip": mac.get("ip", ""),
                     "port": int(mac.get("port") or (OLLAMA_PORT if mac.get("ollama") else LM_STUDIO_PORT if mac else OLLAMA_PORT)),
                     "reachable": bool(mac) and not mac.get("stale")},
-            "win": {"ip": win.get("ip", ""), "port": int(win.get("port") or LM_STUDIO_PORT), "reachable": bool(win)},
+            "win": {"ip": win.get("ip", ""), "port": int(win.get("port") or LM_STUDIO_PORT),
+                    "reachable": bool(win) and not win.get("stale")},
             # MVP additive field for a fleet of Windows GPU boxes beyond the
             # single `win` slot (see probe_extra_win_peers). Empty list when
             # $WIN_PEER_IPS is unset — existing single-peer readers are
@@ -918,7 +938,11 @@ def patch_openclaw_json(endpoints: dict):
         # known Windows address) as lmstudio-mac; use the discovered Mac IP only.
         mac_host = str(mac.get("ip") or "")
         if mac_host and mac_host not in _known_windows_ips() and not _is_loopback_host(mac_host):
-            providers.setdefault("lmstudio-mac", {})["baseUrl"] = f"http://{mac_host}:1234/v1"
+            # The selected backend's port: an Ollama-only Mac answers on 11434,
+            # not the LM Studio default. Writing 1234 here would point the
+            # generated inference configuration at a closed port.
+            mac_port = int(mac.get("port") or (OLLAMA_PORT if mac.get("ollama") else LM_STUDIO_PORT))
+            providers.setdefault("lmstudio-mac", {})["baseUrl"] = f"http://{mac_host}:{mac_port}/v1"
             providers["lmstudio-mac"]["models"] = [
                 {"id": m, "name": f"Mac LMS — {m}", "contextWindow": 32768,
                  "maxTokens": 8192, "cost": {"input": 0, "output": 0}}
@@ -937,7 +961,8 @@ def patch_openclaw_json(endpoints: dict):
     elif mac:
         # lmstudio-mac ALWAYS uses localhost — the LAN IP is discovery metadata only.
         # Native Mac processes must never route to themselves via the LAN interface.
-        providers.setdefault("lmstudio-mac", {})["baseUrl"] = "http://localhost:1234/v1"
+        mac_port = int(mac.get("port") or (OLLAMA_PORT if mac.get("ollama") else LM_STUDIO_PORT))
+        providers.setdefault("lmstudio-mac", {})["baseUrl"] = f"http://localhost:{mac_port}/v1"
         providers["lmstudio-mac"]["models"] = [
             {"id": m, "name": f"Mac LMS — {m}", "contextWindow": 32768,
              "maxTokens": 8192, "cost": {"input": 0, "output": 0}}
@@ -947,7 +972,8 @@ def patch_openclaw_json(endpoints: dict):
         win_ip = win["ip"]
         if RUNNING_ON_WINDOWS and win_ip in ("localhost", "127.0.0.1"):
             win_ip = "localhost"
-        providers.setdefault("lmstudio-win", {})["baseUrl"] = f"http://{win_ip}:1234/v1"
+        win_port = int(win.get("port") or LM_STUDIO_PORT)
+        providers.setdefault("lmstudio-win", {})["baseUrl"] = f"http://{win_ip}:{win_port}/v1"
         providers["lmstudio-win"]["models"] = [
             {"id": m, "name": f"Win LMS — {m}", "contextWindow": 32768,
              "maxTokens": 8192, "cost": {"input": 0, "output": 0}}
@@ -985,13 +1011,17 @@ def write_env_lmstudio(endpoints: dict, repo_paths: dict):
     win_ip = (win.get("ip") or "")
     mac_ip = (mac.get("ip") or "")
     # On Windows host, Mac is remote — persist LAN IP for cross-machine routing.
+    # Use the selected backend's port (Ollama-only Mac = 11434), never a
+    # hardcoded LM Studio default that would target a closed port.
+    mac_port = int(mac.get("port") or (OLLAMA_PORT if mac.get("ollama") else LM_STUDIO_PORT))
+    win_port = int(win.get("port") or LM_STUDIO_PORT)
     if RUNNING_ON_WINDOWS:
         # localhost is the Windows box here: never fall back to it as the Mac.
         valid = bool(mac_ip) and mac_ip not in _known_windows_ips() and not _is_loopback_host(mac_ip)
-        mac_url = f"http://{mac_ip}:1234" if valid else ""
+        mac_url = f"http://{mac_ip}:{mac_port}" if valid else ""
     else:
-        mac_url = "http://localhost:1234"
-    win_url = f"http://{win_ip}:1234" if win_ip else ""
+        mac_url = f"http://localhost:{mac_port}"
+    win_url = f"http://{win_ip}:{win_port}" if win_ip else ""
     mac_models = mac.get("models", [])
     win_models = win.get("models", [])
     mac_primary = next((m for m in mac_models if "embed" not in m.lower()), "")
@@ -1021,14 +1051,25 @@ def write_env_lmstudio(endpoints: dict, repo_paths: dict):
 # ── Recovery tiers ────────────────────────────────────────────────────────────
 
 def _state_to_ep(state):
-    """State to ep."""
+    """State to ep, preserving each saved endpoint's port and Ollama evidence.
+
+    Reconstructed records must carry the saved ``port`` (and ``ollama`` flag):
+    otherwise a restore re-saves the LM Studio default for an Ollama-only Mac
+    and the recovered configuration points at a closed port.
+    """
     if not state or not state.get("endpoints"): return None
-    return {
-        "mac": {"ip": state["endpoints"]["mac"]["ip"], "models": state["models"]["mac"]}
-              if state["endpoints"]["mac"]["reachable"] else None,
-        "win": {"ip": state["endpoints"]["win"]["ip"], "models": state["models"]["win"]}
-              if state["endpoints"]["win"]["reachable"] else None,
-    }
+    models = state.get("models") or {}
+    out: dict = {"mac": None, "win": None}
+    for role in ("mac", "win"):
+        saved = state["endpoints"].get(role) or {}
+        if saved.get("reachable") and saved.get("ip"):
+            record = {"ip": saved["ip"], "models": models.get(role, [])}
+            if saved.get("port") is not None:
+                record["port"] = saved["port"]
+            if saved.get("ollama"):
+                record["ollama"] = saved["ollama"]
+            out[role] = record
+    return out
 
 def _load_tier2():
     """Load tier2 (last discovery state)."""
@@ -1202,8 +1243,12 @@ def run_discovery(
             if last:
                 win_known = (_known_windows_ips() | run_win_ips) if RUNNING_ON_WINDOWS else set()
                 for role in ("mac", "win"):
-                    if not endpoints[role] and last["endpoints"][role]["reachable"]:
-                        role_ip = last["endpoints"][role].get("ip", "")
+                    prev = last["endpoints"][role]
+                    # Keep a last-known address even when the prior record is
+                    # already unreachable, so repeated offline probes still
+                    # seed the next try instead of wiping the endpoint.
+                    if not endpoints[role] and prev.get("ip"):
+                        role_ip = prev.get("ip", "")
                         if role == "mac" and (role_ip in win_known or _is_loopback_host(role_ip)):
                             print("⚠️  mac last-good is a known Windows address — not preserving",
                                   file=sys.stderr)
@@ -1211,8 +1256,8 @@ def run_discovery(
                         # Discover already tried this address and it was offline.
                         # Keep it so the next run can try it again, but do not
                         # save it as reachable.
-                        endpoints[role] = {"ip": last["endpoints"][role]["ip"],
-                                           "port": last["endpoints"][role].get("port"),
+                        endpoints[role] = {"ip": prev["ip"],
+                                           "port": prev.get("port"),
                                            "models": last["models"][role],
                                            "stale": True}
                         print(f"⚠️  {role} offline — keeping last address and marking it stale", file=sys.stderr)
@@ -1240,6 +1285,15 @@ def run_discovery(
                         saved["reachable"] = False
                         last["endpoints"][role] = saved
                 print("⚠️  marked offline endpoint(s) stale: " + ", ".join(stale_roles), file=sys.stderr)
+            else:
+                # Same topology and a successful probe: restore reachability so
+                # a recovered peer is not left offline until another change.
+                for role in ("mac", "win"):
+                    live = endpoints.get(role) or {}
+                    saved = (last.get("endpoints") or {}).get(role) or {}
+                    if saved and live and not live.get("stale"):
+                        saved["reachable"] = True
+                        last["endpoints"][role] = saved
             last["timestamp"] = datetime.now(timezone.utc).isoformat()
             if tier != last.get("recovery_tier", 1):
                 last["recovery_tier"] = tier  # reflect actual recovery tier used this run
