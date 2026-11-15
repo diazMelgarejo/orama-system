@@ -2025,20 +2025,11 @@ function Resolve-MacLanIp {
     .OUTPUTS
     A hashtable with Ip (or the word unresolved) and Source.
     #>
-    # A reachable last_discovery.json wins over a stale MAC_IP hint. Discover
-    # already consumed the hint. Never use a gateway .110 heuristic.
+    # Prefer a current MAC_IP / endpoint hint over a cached reachable flag.
+    # last_discovery.json is only used when no env hint is set. Never use a
+    # gateway .110 heuristic.
     $macIp = $null
     $source = 'unset'
-    $statePath = Join-Path $HOME '.openclaw\state\last_discovery.json'
-    if (Test-Path $statePath) {
-        try {
-            $state = Get-Content $statePath -Raw | ConvertFrom-Json
-            $candidate = $state.endpoints.mac.ip
-            if ($state.endpoints.mac.reachable -and $candidate -and $candidate -notin @('', 'localhost', $TopoLoopback)) {
-                return @{ Ip = [string]$candidate; Source = 'last_discovery.json' }
-            }
-        } catch {}
-    }
 
     foreach ($var in @('MAC_IP', 'LM_STUDIO_MAC_ENDPOINT', 'OLLAMA_MAC_ENDPOINT')) {
         $raw = [Environment]::GetEnvironmentVariable($var, 'Process')
