@@ -555,7 +555,11 @@ def test_explicit_mac_ip_equal_to_loopback_is_refused():
 def test_explicit_mac_ip_accepted_without_evidence():
     """Check that explicit mac ip accepted without evidence."""
     D = _windows_peer_host(env={"MAC_IP": MAC_NET_IP}, probes={f"http://{MAC_NET_IP}:1234": ["plain-model"]})
-    assert D.discover_endpoints()["mac"] == {"ip": MAC_NET_IP, "models": ["plain-model"]}
+    assert D.discover_endpoints()["mac"] == {
+        "ip": MAC_NET_IP,
+        "port": 1234,
+        "models": ["plain-model"],
+    }
 
 
 def test_explicit_mac_ip_with_windows_evidence_goes_to_win_peers():
