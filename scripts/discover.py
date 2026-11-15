@@ -1202,10 +1202,13 @@ def run_discovery(
                             print("⚠️  mac last-good is a known Windows address — not preserving",
                                   file=sys.stderr)
                             continue
+                        # Discover already tried this address and it was offline.
+                        # Keep it so the next run can try it again, but do not
+                        # save it as reachable.
                         endpoints[role] = {"ip": last["endpoints"][role]["ip"],
                                            "models": last["models"][role],
                                            "stale": True}
-                        print(f"⚠️  {role} unreachable — preserving last-good as unreachable", file=sys.stderr)
+                        print(f"⚠️  {role} offline — keeping last address and marking it stale", file=sys.stderr)
 
         endpoints = filter_endpoints_for_policy(endpoints)
         endpoints, blocked_peers = filter_endpoints_for_trust(endpoints)
@@ -1219,7 +1222,17 @@ def run_discovery(
 
         new_hash = compute_hash(hash_endpoints)
         last = _load_json(LAST_DISCOVERY_JSON)
+        stale_roles = [role for role in ("mac", "win") if (endpoints.get(role) or {}).get("stale")]
         if last and last.get("hash") == new_hash:
+            # Discover, save, try. The try already failed for stale_roles.
+            # A matching hash must not refresh the old record with reachable true.
+            if stale_roles:
+                for role in stale_roles:
+                    saved = (last.get("endpoints") or {}).get(role) or {}
+                    if saved:
+                        saved["reachable"] = False
+                        last["endpoints"][role] = saved
+                print("⚠️  marked offline endpoint(s) stale: " + ", ".join(stale_roles), file=sys.stderr)
             last["timestamp"] = datetime.now(timezone.utc).isoformat()
             if tier != last.get("recovery_tier", 1):
                 last["recovery_tier"] = tier  # reflect actual recovery tier used this run
@@ -1233,7 +1246,8 @@ def run_discovery(
                     print("🔧 Repairing stale lmstudio-mac (Windows box named as Mac)...", file=sys.stderr)
                     patch_openclaw_json(endpoints)
                     write_env_lmstudio(endpoints, repo_paths)
-            print("✅ No changes. Config is current.", file=sys.stderr)
+            if not stale_roles:
+                print("✅ No changes. Config is current.", file=sys.stderr)
             return 0
 
         print("🔄 Changes detected — updating configs...", file=sys.stderr)
