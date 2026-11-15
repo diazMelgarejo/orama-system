@@ -28,6 +28,23 @@ run() {
   if "$@"; then log "OK $name"; else log "FAIL $name"; FAIL=1; fi
 }
 
+# PyPI occasionally returns truncated wheels on CI runners (IncompleteRead); retry before failing the job.
+pip_install_retry() {
+  local attempts="${PIP_INSTALL_ATTEMPTS:-3}"
+  local delay="${PIP_INSTALL_RETRY_DELAY_SEC:-5}"
+  local n
+  for ((n = 1; n <= attempts; n++)); do
+    if python3 -m pip install "$@"; then
+      return 0
+    fi
+    if (( n < attempts )); then
+      log "WARN pip install failed (attempt $n/$attempts); retrying in ${delay}s"
+      sleep "$delay"
+    fi
+  done
+  return 1
+}
+
 scan_aguara() {
   # v0.27.0 tag, pinned by commit SHA rather than "@latest" — this tool
   # audits supply-chain/agent-surface risk, so it must not itself be a
@@ -69,7 +86,7 @@ scan_aguara() {
 }
 
 scan_agent_audit() {
-  python3 -m pip install -q --upgrade pip
+  pip_install_retry -q --upgrade pip
   # CACHE_DIR/agent-audit, not WORK/agent-audit -- must match the path
   # cached by actions/cache in agent-security.yml exactly, so the clone
   # is actually restored between runs instead of re-cloned every time.
@@ -89,7 +106,7 @@ scan_agent_audit() {
     git clone https://github.com/scadastrangelove/agent-audit "$CACHE_DIR/agent-audit"
     git -C "$CACHE_DIR/agent-audit" checkout --detach "$AGENT_AUDIT_REF"
   fi
-  python3 -m pip install -q -e "$CACHE_DIR/agent-audit"
+  pip_install_retry -q -e "$CACHE_DIR/agent-audit"
 
   run agent-audit agent-audit scan-project "$ROOT" \
     --min-severity high -y --output "$WORK/agent-audit-report"
