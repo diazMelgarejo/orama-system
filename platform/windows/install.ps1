@@ -88,16 +88,47 @@ Write-Host '  orama-system Windows installer  v1.1.1.0' -ForegroundColor Cyan
 Write-Host '═══════════════════════════════════════════════════════════' -ForegroundColor DarkCyan
 Write-Host ''
 
+function Resolve-InstallBasePython {
+    <#
+    .SYNOPSIS
+    Find a real interpreter. The WindowsApps python stub throws, so it is skipped.
+    #>
+    $candidates = @()
+    foreach ($name in @('python', 'python3')) {
+        $cmd = Get-Command $name -ErrorAction SilentlyContinue
+        if ($cmd -and $cmd.Source -notmatch '\\WindowsApps\\') { $candidates += $cmd.Source }
+    }
+    $candidates += $env:ORAMASYS_PYTHON
+    $candidates += (Join-Path $RepoRoot '.venv\Scripts\python.exe')
+    if ($env:USERPROFILE) {
+        $candidates += (Join-Path $env:USERPROFILE '.venvs\oramasys-dev\Scripts\python.exe')
+    }
+    $parent = Split-Path -Parent $RepoRoot
+    $candidates += (Join-Path $parent 'Perpetua-Tools\.venv\Scripts\python.exe')
+    $candidates += (Join-Path $parent 'Perplexity-Tools\.venv\Scripts\python.exe')
+    if ($env:LOCALAPPDATA) {
+        $candidates += (Join-Path $env:LOCALAPPDATA 'hermes\hermes-agent\venv\Scripts\python.exe')
+    }
+    foreach ($candidate in $candidates) {
+        if ($candidate -and (Test-Path -LiteralPath $candidate) -and $candidate -notmatch '\\WindowsApps\\') {
+            return (Resolve-Path -LiteralPath $candidate).Path
+        }
+    }
+    return $null
+}
+
 # ── Python version check ──────────────────────────────────────────────────────
 _Step 'Checking Python...'
+$BasePython = Resolve-InstallBasePython
+if (-not $BasePython) { _Err 'Python not found. Install from https://python.org/downloads/' }
 try {
-    $pyVer = & python --version 2>&1
+    $pyVer = & $BasePython --version 2>&1
     if ($pyVer -match '(\d+)\.(\d+)') {
         $major = [int]$Matches[1]; $minor = [int]$Matches[2]
         if ($major -lt 3 -or ($major -eq 3 -and $minor -lt 10)) {
             _Err "Python 3.10+ required. Found: $pyVer"
         }
-        _OK "Python $pyVer"
+        _OK "Python $pyVer ($BasePython)"
     }
 } catch { _Err 'Python not found. Install from https://python.org/downloads/' }
 
@@ -106,7 +137,7 @@ $VenvPath = Join-Path $RepoRoot '.venv'
 _Step "Checking virtual environment at $VenvPath..."
 if (-not (Test-Path (Join-Path $VenvPath 'Scripts\python.exe'))) {
     _Step 'Creating .venv...'
-    & python -m venv $VenvPath
+    & $BasePython -m venv $VenvPath
     _OK '.venv created'
 } else {
     _OK '.venv already exists'
@@ -114,8 +145,23 @@ if (-not (Test-Path (Join-Path $VenvPath 'Scripts\python.exe'))) {
 
 $VenvPython = Join-Path $VenvPath 'Scripts\python.exe'
 $VenvPip    = Join-Path $VenvPath 'Scripts\pip.exe'
+# uv venvs ship ensurepip but not the pip module. Seed it before pip.exe is required.
+# Idempotent: a venv that already imports the project is left installed.
+$prevEap = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+& $VenvPython -c "import pip" 2>&1 | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    & $VenvPython -m ensurepip --upgrade 2>&1 | Out-Null
+}
+& $VenvPython -c "import uvicorn, fastapi, httpx, importlib.metadata as m; m.version('orama-system')" 2>&1 | Out-Null
+$alreadyInstalled = ($LASTEXITCODE -eq 0)
+$ErrorActionPreference = $prevEap
+if ($alreadyInstalled) {
+    _OK 'orama-system already installed — skipping dependency install'
+}
 
 # ── Install dependencies ──────────────────────────────────────────────────────
+if (-not $alreadyInstalled) {
 _Step 'Installing core requirements...'
 $rootReqs = Join-Path $RepoRoot 'requirements.txt'
 if (Test-Path $rootReqs) {
@@ -176,6 +222,7 @@ if (Test-Path $winReqs) {
     }
 } else {
     _Warn "windows/requirements-windows.txt not found — skipping"
+}
 }
 
 # ── LM Studio port check ──────────────────────────────────────────────────────
