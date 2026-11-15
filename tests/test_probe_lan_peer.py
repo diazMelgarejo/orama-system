@@ -18,6 +18,9 @@ SCRIPT = (
     / "probe_lan_peer.py"
 )
 
+# RFC 5737 TEST-NET-3 — fixture peer host (not a routable LAN literal).
+_MAC_FIXTURE_IP = "203.0.113.9"
+
 
 @pytest.fixture
 def peer_mod(monkeypatch):
@@ -40,9 +43,9 @@ def test_peer_from_discovery_mac_role(peer_mod):
 
 def test_mac_peer_defaults_to_ollama_port(peer_mod):
     """A discovery record that stored port 1234 for the Mac is not the inference port."""
-    discovery = {"endpoints": {"mac": {"ip": "10.0.0.9", "port": 1234}}}
+    discovery = {"endpoints": {"mac": {"ip": _MAC_FIXTURE_IP, "port": 1234}}}
     ip, port = peer_mod.peer_from_discovery(discovery, "win")
-    assert ip == "10.0.0.9"
+    assert ip == _MAC_FIXTURE_IP
     assert port == 11434
 
 
@@ -59,7 +62,7 @@ def test_run_checks_mac_peer_uses_ollama(peer_mod, monkeypatch):
         return 404, "nope"
 
     monkeypatch.setattr(peer_mod, "http_get", fake_get)
-    checks = peer_mod.run_checks("10.0.0.9", 1234, 8443, tokens=[], peer_kind="mac")
+    checks = peer_mod.run_checks(_MAC_FIXTURE_IP, 1234, 8443, tokens=[], peer_kind="mac")
     by_name = {c.name: c.status for c in checks}
     assert by_name["peer-ollama"] == peer_mod.Status.PASS
     assert "peer-lmstudio" not in by_name
