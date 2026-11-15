@@ -36,16 +36,24 @@ def test_templates_exist() -> None:
 @pytest.mark.parametrize("path", _TEMPLATES, ids=lambda p: p.name)
 def test_template_has_an_explicit_allowed_effort(path: Path) -> None:
     data = json.loads(path.read_text())
+    if data.get("financial_mode") == "free_only":
+        assert "effort" not in data["settings"]["reasoning"]
+        return
     effort = data["settings"]["reasoning"].get("effort")
     assert effort in _ALLOWED, f"{path.name}: effort {effort!r} is not one of {sorted(_ALLOWED)}"
 
 
 @pytest.mark.parametrize("path", _TEMPLATES, ids=lambda p: p.name)
 def test_template_resolution_efforts_follow_the_rule(path: Path) -> None:
-    resolution = json.loads(path.read_text()).get("resolution", {})
+    data = json.loads(path.read_text())
+    resolution = data.get("resolution", {})
+    if data.get("financial_mode") == "free_only":
+        assert resolution["models"][0] == data["settings"]["model"]
+        assert "glm-5.3-flash" not in resolution["models"]
+        return
     if resolution:
         assert resolution["efforts"] == ["medium", "high", "low"]
-        assert resolution["models"][0] == json.loads(path.read_text())["settings"]["model"]
+        assert resolution["models"][0] == data["settings"]["model"]
 
 
 @pytest.mark.parametrize("path", _TEMPLATES, ids=lambda p: p.name)

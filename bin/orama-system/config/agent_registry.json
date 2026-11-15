@@ -18,6 +18,7 @@
   },
   "openclaw_agents": {
     "mac-researcher": {
+      "frugality_tier": 1,
       "soul": "bin/agents/mac-researcher/SOUL.md",
       "provider": "lmstudio-mac",
       "model": "Qwen3.5-9B-MLX-4bit",
@@ -25,6 +26,7 @@
       "gateway": "http://127.0.0.1:18789"
     },
     "win-researcher": {
+      "frugality_tier": 1,
       "soul": "bin/agents/win-researcher/SOUL.md",
       "provider": "lmstudio-win",
       "model": "qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2",
@@ -32,6 +34,7 @@
       "gateway": "http://127.0.0.1:18789"
     },
     "coder": {
+      "frugality_tier": 1,
       "soul": "bin/agents/coder/SOUL.md",
       "provider": "lmstudio-win",
       "model": "qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2",
@@ -39,6 +42,7 @@
       "gateway": "http://127.0.0.1:18789"
     },
     "priority-subagent": {
+      "frugality_tier": 1,
       "soul": "bin/agents/coder/SOUL.md",
       "provider": "lmstudio-win",
       "model": "qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2",
@@ -46,6 +50,7 @@
       "gateway": "http://127.0.0.1:18789"
     },
     "autoresearcher": {
+      "frugality_tier": 1,
       "soul": "bin/agents/autoresearcher/SOUL.md",
       "provider": "lmstudio-win",
       "model": "qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2",
@@ -53,6 +58,7 @@
       "gateway": "http://127.0.0.1:18789"
     },
     "win-researcher-5080": {
+      "frugality_tier": 1,
       "soul": "bin/agents/win-researcher/SOUL.md",
       "provider": "lmstudio-win-5080",
       "model": "gemma-4-26b-a4b-it-nvfp4",
@@ -61,6 +67,7 @@
       "_comment": "3rd fleet node \u2014 resolve gateway at runtime via LM_STUDIO_WIN_5080_ENDPOINTS or last_discovery.json; never commit LAN IPs."
     },
     "coder-5080": {
+      "frugality_tier": 1,
       "soul": "bin/agents/coder/SOUL.md",
       "provider": "lmstudio-win-5080",
       "model": "gemma-4-26b-a4b-it-nvfp4",
@@ -71,6 +78,7 @@
   "agents": [
     {
       "id": "orchestrator",
+      "frugality_tier": 1,
       "type": "orchestrator",
       "affinity": "mac",
       "skill_path": "agents/orchestrator/oramasys-orchestrator.md",
@@ -84,6 +92,7 @@
     },
     {
       "id": "context-agent",
+      "frugality_tier": 1,
       "type": "specialist",
       "affinity": "mac",
       "stage": 1,
@@ -99,6 +108,7 @@
     },
     {
       "id": "architect-agent",
+      "frugality_tier": 1,
       "type": "specialist",
       "affinity": "mac",
       "stage": 2,
@@ -113,6 +123,7 @@
     },
     {
       "id": "refiner-agent",
+      "frugality_tier": 1,
       "type": "specialist",
       "affinity": "mac",
       "stage": 3,
@@ -127,6 +138,7 @@
     },
     {
       "id": "executor-agent",
+      "frugality_tier": 1,
       "type": "worker",
       "affinity": "win",
       "stage": 4,
@@ -142,6 +154,7 @@
     },
     {
       "id": "verifier-agent",
+      "frugality_tier": 5,
       "type": "validator",
       "affinity": "mac",
       "stage": 4.5,
@@ -156,6 +169,7 @@
     },
     {
       "id": "crystallizer-agent",
+      "frugality_tier": 1,
       "type": "documenter",
       "affinity": "mac",
       "stage": 5,
@@ -173,6 +187,7 @@
     "_comment": "Pre-defined agent types for autoresearch swarm (task_type=autoresearch). Spawned by Perpetua-Tools AgentTracker; registered here for oramasys Mode 3 awareness only.",
     "autoresearch-coder": {
       "id": "autoresearch-coder",
+      "frugality_tier": 1,
       "type": "worker",
       "affinity": "win-rtx3080",
       "model_role": "autoresearch-coder",
@@ -187,6 +202,7 @@
     },
     "autoresearch-evaluator": {
       "id": "autoresearch-evaluator",
+      "frugality_tier": 1,
       "type": "validator",
       "affinity": "mac",
       "model_role": "autoresearch-critic",
@@ -200,6 +216,7 @@
     },
     "autoresearch-orchestrator": {
       "id": "autoresearch-orchestrator",
+      "frugality_tier": 1,
       "type": "orchestrator",
       "affinity": "mac",
       "model_role": "strategy",
