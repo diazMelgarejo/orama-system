@@ -296,13 +296,14 @@ def test_windows_prefix_subnets_bound_wide_masks(monkeypatch):
     monkeypatch.setattr(D.os, "name", "nt")
 
     def fake_check_output(*_a, **_k):
-        return "10.1.2.3/8\n192.168.1.10/24\n"
+        # TEST-NET-1 / TEST-NET-2 documentation ranges (no RFC1918 literals).
+        return "192.0.2.10/8\n198.51.100.20/24\n"
 
     monkeypatch.setattr(D.subprocess, "check_output", fake_check_output)
     found = D._windows_prefix_subnets()
-    assert "10.1.2" in found
-    assert "192.168.1" in found
-    assert len([p for p in found if p.startswith("10.")]) == 1
+    assert "192.0.2" in found
+    assert "198.51.100" in found
+    assert len([p for p in found if p.startswith("192.")]) == 1
 
 
 def test_perpetua_root_precedence_root_over_legacy(monkeypatch):
