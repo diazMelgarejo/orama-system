@@ -102,6 +102,16 @@ def test_file_keeps_bom_and_crlf(path: Path) -> None:
     assert b"\n" not in raw.replace(b"\r\n", b"")
 
 
+def test_installer_warns_when_ensurepip_fails() -> None:
+    """Capture ensurepip's exit before the import probe overwrites $LASTEXITCODE."""
+    text = INSTALL_PS1.read_text(encoding="utf-8-sig")
+    assert "ensurepip --upgrade --default-pip" in text
+    assert "$ensurepipExit = $LASTEXITCODE" in text
+    assert 'ensurepip --upgrade failed (exit $ensurepipExit)' in text
+    assert "Test-InstallPythonRuns" in text
+    assert r"\WindowsApps\\" in text
+
+
 def _run_ps(body: str, tmp_path: Path) -> subprocess.CompletedProcess[str]:
     """Run an isolated script on either local PowerShell runtime."""
     if POWERSHELL is None:
