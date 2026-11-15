@@ -18,6 +18,9 @@ SCRIPT = (
     / "probe_lan_peer.py"
 )
 
+# RFC 5737 TEST-NET-3 — fixture peer host (not a routable LAN literal).
+_MAC_FIXTURE_IP = "203.0.113.9"
+
 
 @pytest.fixture
 def peer_mod(monkeypatch):
@@ -36,6 +39,48 @@ def test_peer_from_discovery_mac_role(peer_mod):
     ip, port = peer_mod.peer_from_discovery(discovery, "mac")
     assert ip == "10.0.0.50"
     assert port == 1234
+
+
+def test_mac_peer_defaults_to_ollama_port(peer_mod):
+    """A Mac record with no port uses Ollama 11434. A saved port is kept."""
+    discovery = {"endpoints": {"mac": {"ip": _MAC_FIXTURE_IP}}}
+    ip, port = peer_mod.peer_from_discovery(discovery, "win")
+    assert ip == _MAC_FIXTURE_IP
+    assert port == 11434
+    saved = {"endpoints": {"mac": {"ip": _MAC_FIXTURE_IP, "port": 1234}}}
+    assert peer_mod.peer_from_discovery(saved, "win")[1] == 1234
+
+
+def test_win_peer_keeps_discovered_port(peer_mod):
+    """A Windows inference port saved by discovery is not replaced with 1234."""
+    host = "192.0.2.10"
+    discovery = {"endpoints": {"win": {"ip": host, "port": 2345}}}
+    ip, port = peer_mod.peer_from_discovery(discovery, "mac")
+    assert ip == host
+    assert port == 2345
+    missing = {"endpoints": {"win": {"ip": host}}}
+    assert peer_mod.peer_from_discovery(missing, "mac")[1] == 1234
+
+
+def test_run_checks_mac_peer_uses_ollama(peer_mod, monkeypatch):
+    """The Mac peer is probed at Ollama /api/tags, not LM Studio /v1/models."""
+    seen: list[str] = []
+
+    def fake_get(url: str, token: str = "", timeout: int = 8):
+        seen.append(url)
+        if url.endswith("/health"):
+            return 200, '{"status":"ok"}'
+        if url.endswith("/api/tags"):
+            return 200, json.dumps({"models": [{"name": "bge-m3"}]})
+        return 404, "nope"
+
+    monkeypatch.setattr(peer_mod, "http_get", fake_get)
+    checks = peer_mod.run_checks(_MAC_FIXTURE_IP, 11434, 8443, tokens=[], peer_kind="mac")
+    by_name = {c.name: c.status for c in checks}
+    assert by_name["peer-ollama"] == peer_mod.Status.PASS
+    assert "peer-lmstudio" not in by_name
+    assert any(url.endswith(":11434/api/tags") for url in seen)
+    assert not any("/v1/models" in url for url in seen)
 
 
 def test_run_checks_lmstudio_pass(peer_mod, monkeypatch):

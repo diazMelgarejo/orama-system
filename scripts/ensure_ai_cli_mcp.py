@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -49,10 +50,37 @@ def node_version_supported(version: tuple[int, int, int]) -> bool:
     return major > 22
 
 
+def _cmd_quote(part: str) -> str:
+    """Quote one cmd.exe argument. An empty argument and metacharacters stay quoted."""
+    if part == "" or any(ch in part for ch in ' \t"&<>()@^|'):
+        return '"' + part.replace('"', '""') + '"'
+    return part
+
+
+def _command(args: Sequence[str]) -> list[str] | str:
+    """Resolve a Windows npm/npx shim. CreateProcess cannot run a .cmd file.
+
+    cmd /c strips one pair of surrounding quotes. The command is wrapped again
+    so a shim path that contains ``&`` is not split into two commands.
+
+    For ``.cmd``/``.bat`` shims the return value is a single Windows command-line
+    string. Passing a pre-quoted argv list through ``subprocess.list2cmdline``
+    would insert backslashes before those quotes and break ``cmd /c``.
+    """
+    argv = list(args)
+    if os.name != "nt" or not argv:
+        return argv
+    exe = shutil.which(argv[0]) or argv[0]
+    if exe.lower().endswith((".cmd", ".bat")):
+        inner = " ".join(_cmd_quote(part) for part in [exe, *argv[1:]])
+        return f'cmd /c "{inner}"'
+    return [exe, *argv[1:]]
+
+
 def run(args: Sequence[str], *, timeout: int = 30) -> subprocess.CompletedProcess[str]:
     try:
         return subprocess.run(
-            list(args),
+            _command(args),
             text=True,
             capture_output=True,
             timeout=timeout,

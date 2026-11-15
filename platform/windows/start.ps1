@@ -23,7 +23,9 @@
       .\start.ps1 --fleet-status[=text|json] — show fleet topology and exit
       .\start.ps1 --discover  — re-run LAN path discovery, rewrite .paths.ps1, exit
       .\start.ps1 --hardware-policy — validate model↔hardware affinity and exit
-      .\start.ps1 --lan-peer    — set LAN bind env + run peer probe after start
+      .\start.ps1 --lan-peer    — start every service, including the Portal TLS
+                               front end, then run the peer probe. Peers can
+                               reach this host only after that front end is up.
       .\start.ps1 --restart-portal — restart only the Portal and its TLS proxy;
                                PT and orama keep running
       .\start.ps1 --help      — print the option summary
@@ -36,7 +38,8 @@
       8000  Perpetua-Tools  (PT  — Layer 2)
       8001  orama API       (US  — Layer 3 reasoning engine)
       8002  Portal dashboard
-      8443  Portal TLS front end (only with PORTAL_TLS_ENABLED; PORTAL_TLS_PORT)
+      8443  Portal TLS front end (--lan-peer turns it on unless
+            PORTAL_TLS_ENABLED is 0/false/no/off; PORTAL_TLS_PORT)
 
     Service processes are launched detached (scripts\lib\spawn_detached.py), so
     they keep running after this script exits. stdout/stderr are appended to
@@ -759,6 +762,168 @@ function Test-PtVenvHealthy {
     return (Test-VenvDeclaredDeps $Python -Project 'perpetua-tools' -RequireCryptography:$needTls)
 }
 
+function Get-ResilientPythonCandidates {
+    <#
+    .SYNOPSIS
+    Interpreters to try when a checkout .venv fails its health probe.
+    Explicit env wins, then the shared frugal venv, other user venvs, the
+    canonical Perpetua-Tools checkout, the on-disk Perplexity-Tools name, and
+    the Hermes venv. WindowsApps stubs are not real interpreters.
+    #>
+    $raw = @()
+    foreach ($envName in @('ORAMASYS_PYTHON', 'PT_PYTHON', 'US_PYTHON')) {
+        $value = [Environment]::GetEnvironmentVariable($envName, 'Process')
+        if ($value) { $raw += $value }
+    }
+    if ($env:USERPROFILE) {
+        $raw += (Join-Path $env:USERPROFILE '.venvs\oramasys-dev\Scripts\python.exe')
+        $venvsRoot = Join-Path $env:USERPROFILE '.venvs'
+        if (Test-Path -LiteralPath $venvsRoot) {
+            foreach ($dir in (Get-ChildItem -LiteralPath $venvsRoot -Directory -ErrorAction SilentlyContinue)) {
+                $raw += (Join-Path $dir.FullName 'Scripts\python.exe')
+            }
+        }
+    }
+    $parent = Split-Path -Parent $RepoRoot
+    foreach ($name in @('Perpetua-Tools', 'Perplexity-Tools')) {
+        $raw += (Join-Path $parent "$name\.venv\Scripts\python.exe")
+    }
+    if ($env:LOCALAPPDATA) {
+        $raw += (Join-Path $env:LOCALAPPDATA 'hermes\hermes-agent\venv\Scripts\python.exe')
+    }
+    $raw += (Join-Path $RepoRoot '.venv\Scripts\python.exe')
+    foreach ($name in @('python', 'python3')) {
+        $cmd = Get-Command $name -ErrorAction SilentlyContinue
+        if ($cmd -and $cmd.Source -and $cmd.Source -notmatch '\\WindowsApps\\') { $raw += $cmd.Source }
+    }
+    $seen = @{}
+    $out = @()
+    foreach ($item in $raw) {
+        if (-not $item -or $item -match '\\WindowsApps\\') { continue }
+        if (-not (Test-Path -LiteralPath $item)) { continue }
+        $full = (Resolve-Path -LiteralPath $item).Path
+        if ($seen.ContainsKey($full)) { continue }
+        $seen[$full] = $true
+        $out += $full
+    }
+    return $out
+}
+
+function Repair-MissingPip {
+    <#
+    .SYNOPSIS
+    A uv-built venv can import its packages and still have no pip module.
+    Seed pip from ensurepip when that module is present. Do not download anything.
+    #>
+    param([string]$Python)
+    if (-not $Python -or -not (Test-Path -LiteralPath $Python)) { return $false }
+    if ((Bootstrap-RunPython $Python @('-c', 'import pip')) -eq 0) { return $true }
+    if ((Bootstrap-RunPython $Python @('-c', 'import ensurepip')) -ne 0) { return $false }
+    _Info 'bootstrap' "pip module missing — seeding ensurepip ($Python)"
+    return ((Bootstrap-RunPython $Python @('-m', 'ensurepip', '--upgrade')) -eq 0)
+}
+
+function Find-HealthyInterpreter {
+    <#
+    .SYNOPSIS
+    Return the first remembered interpreter that passes the import probe and
+    declared-dependency check. Seeds pip only after the imports already pass,
+    so an unrelated venv is not modified just for appearing on the list.
+    #>
+    param(
+        [string]$Project,
+        [string]$ImportProbe,
+        [string]$Exclude,
+        [switch]$PtProbe
+    )
+    $excludeFull = $null
+    if ($Exclude -and (Test-Path -LiteralPath $Exclude)) {
+        $excludeFull = (Resolve-Path -LiteralPath $Exclude).Path
+    }
+    foreach ($candidate in @(Get-ResilientPythonCandidates)) {
+        $full = (Resolve-Path -LiteralPath $candidate).Path
+        if ($excludeFull -and $full -eq $excludeFull) { continue }
+        $probe = if ($PtProbe) { $PtImportProbe } else { $ImportProbe }
+        if (-not (Bootstrap-TestImports $full $probe)) { continue }
+        $null = Repair-MissingPip -Python $full
+        $healthy = if ($PtProbe) { Test-PtVenvHealthy $full } else {
+            (Test-VenvDeclaredDeps $full -Project $Project)
+        }
+        if ($healthy) { return $full }
+    }
+    return $null
+}
+
+function Get-RepoRootFromVenvPython {
+    <#
+    .SYNOPSIS
+    Map <checkout>\.venv\Scripts\python.exe back to that checkout when it is a PT tree.
+    #>
+    param([string]$Python)
+    $scripts = Split-Path -Parent $Python
+    $venv = Split-Path -Parent $scripts
+    $repo = Split-Path -Parent $venv
+    if ((Split-Path -Leaf $venv) -eq '.venv' -and (Test-Path (Join-Path $repo 'orchestrator\fastapi_app.py'))) {
+        return $repo
+    }
+    return $null
+}
+
+function Get-WindowsInstallBasePython {
+    <#
+    .SYNOPSIS
+    Base interpreter for a last-resort venv create. Prefer one that already has
+    pip, then one that can seed pip with ensurepip. Never the WindowsApps stub.
+    #>
+    $withEnsure = @()
+    foreach ($candidate in @(Get-ResilientPythonCandidates)) {
+        if ((Bootstrap-RunPython $candidate @('-c', 'import pip')) -eq 0) { return $candidate }
+        if ((Bootstrap-RunPython $candidate @('-c', 'import ensurepip')) -eq 0) { $withEnsure += $candidate }
+    }
+    if ($withEnsure.Count -gt 0) { return $withEnsure[0] }
+    return $null
+}
+
+function Invoke-IdempotentWindowsInstall {
+    <#
+    .SYNOPSIS
+    Last resort. Create the checkout venv only when its python is missing, seed
+    pip, then install the project. A second run with a healthy venv does no work.
+    #>
+    param(
+        [string]$VenvDir,
+        [string]$ProjectDir
+    )
+    $venvPy = Join-Path $VenvDir 'Scripts\python.exe'
+    if (-not (Test-Path -LiteralPath $venvPy)) {
+        $base = Get-WindowsInstallBasePython
+        if (-not $base) { return $false }
+        _Info 'bootstrap' "last resort — creating $VenvDir with $base"
+        if ((Bootstrap-RunPython $base @('-m', 'venv', $VenvDir)) -ne 0) {
+            Bootstrap-ShowOutput
+            return $false
+        }
+    }
+    if (-not (Repair-MissingPip -Python $venvPy)) { return $false }
+    if (-not (Test-Path -LiteralPath $ProjectDir)) { return $false }
+    $pyproject = Join-Path $ProjectDir 'pyproject.toml'
+    $reqs = Join-Path $ProjectDir 'requirements.txt'
+    if (-not ((Test-Path -LiteralPath $pyproject) -or (Test-Path -LiteralPath $reqs))) { return $false }
+    _Info 'bootstrap' "last resort — idempotent install in $ProjectDir"
+    Push-Location $ProjectDir
+    try {
+        if (Test-Path -LiteralPath $pyproject) {
+            $code = Bootstrap-RunPython $venvPy @('-m', 'pip', 'install', '--disable-pip-version-check', '-e', '.')
+        } else {
+            $code = Bootstrap-RunPython $venvPy @('-m', 'pip', 'install', '--disable-pip-version-check', '-r', 'requirements.txt')
+        }
+    } finally {
+        Pop-Location
+    }
+    if ($code -ne 0) { Bootstrap-ShowOutput }
+    return ($code -eq 0)
+}
+
 function Heal-PtVenv {
     <#
     .SYNOPSIS
@@ -767,7 +932,14 @@ function Heal-PtVenv {
     param([string]$PtDir)
     $venvDir = Join-Path $PtDir '.venv'
     $venvPy  = Join-Path $venvDir 'Scripts\python.exe'
+    $null = Repair-MissingPip -Python $venvPy
     if (Test-PtVenvHealthy $venvPy) { return }
+    $adoptedPt = Find-HealthyInterpreter -Project 'perpetua-tools' -PtProbe -Exclude $venvPy
+    if ($adoptedPt) {
+        $script:PtPythonAdopted = $adoptedPt
+        _Info 'bootstrap' "PT .venv unusable — using $adoptedPt"
+        return
+    }
     $hasPyproject = Test-Path (Join-Path $PtDir 'pyproject.toml')
     $hasReqs      = Test-Path (Join-Path $PtDir 'requirements.txt')
     if (-not ($hasPyproject -or $hasReqs)) {
@@ -778,11 +950,8 @@ function Heal-PtVenv {
         _Info 'bootstrap' "PT .venv at $venvDir failed its health probe (import probe, pip check on perpetua-tools, cryptography under Portal TLS, or a stray orama-system) — repairing ..."
     } else {
         _Info 'bootstrap' "PT .venv not found — creating one at $venvDir ..."
-        $bootstrapPy = Get-BestPython $RepoRoot
-        $code = Bootstrap-RunPython $bootstrapPy @('-m', 'venv', $venvDir)
-        if ($code -ne 0) {
-            Bootstrap-ShowOutput
-            _Err 'bootstrap' "creating PT .venv failed (exit $code)"
+        if (-not (Invoke-IdempotentWindowsInstall -VenvDir $venvDir -ProjectDir $PtDir)) {
+            _Err 'bootstrap' "last-resort Windows install failed for $PtDir"
             exit 1
         }
     }
@@ -834,6 +1003,28 @@ $VenvPythonMarker = Join-Path $RepoRoot '.venv\Scripts\python.exe'
 # Read-only modes (F23) never install or repair anything.
 if (-not $ReadOnlyMode) {
     if (-not ((Bootstrap-TestImports $VenvPythonMarker $OramaImportProbe) -and (Test-VenvDeclaredDeps $VenvPythonMarker -Project 'orama-system'))) {
+        $probePy = $VenvPythonMarker
+        $null = Repair-MissingPip -Python $probePy
+        $repaired = (Test-Path -LiteralPath $probePy) -and (Bootstrap-TestImports $probePy $OramaImportProbe) -and (Test-VenvDeclaredDeps $probePy -Project 'orama-system')
+        if (-not $repaired) {
+            $adoptedUs = Find-HealthyInterpreter -Project 'orama-system' -ImportProbe $OramaImportProbe -Exclude $probePy
+            if ($adoptedUs) {
+                _Info 'bootstrap' "checkout .venv unusable — using $adoptedUs"
+                $script:UsPythonAdopted = $adoptedUs
+                $VenvPythonMarker = $adoptedUs
+                $repaired = $true
+            }
+        }
+        if (-not $repaired) {
+            _Info 'bootstrap' 'last resort — idempotent Windows install of orama-system'
+            if (Invoke-IdempotentWindowsInstall -VenvDir (Join-Path $RepoRoot '.venv') -ProjectDir $RepoRoot) {
+                $installedPy = $VenvPythonMarker
+                $repaired = (Test-Path -LiteralPath $installedPy) -and (Bootstrap-TestImports $installedPy $OramaImportProbe) -and (Test-VenvDeclaredDeps $installedPy -Project 'orama-system')
+            }
+        }
+        if ($repaired) {
+            _Info 'bootstrap' 'orama interpreter ready'
+        } else {
         $InstallScript = Join-Path $ScriptDir 'install.ps1'
         if ($env:ORAMA_BOOTSTRAP_ACTIVE -eq '1') {
             # install.ps1 itself launches 'start.ps1 --discover'; never recurse.
@@ -854,6 +1045,7 @@ if (-not $ReadOnlyMode) {
             _Info 'bootstrap' 'install.ps1 complete — continuing start.ps1'
         } else {
             _Warn 'bootstrap' "install.ps1 not found at $InstallScript — Python detection below may fail"
+        }
         }
     }
 }
@@ -928,6 +1120,7 @@ if (-not $PtDir) {
     $PtDir = Find-PtDir
     _Info 'path' "PT_DIR discovered: $PtDir"
 }
+if ((Get-Variable -Name UsPythonAdopted -Scope Script -ErrorAction SilentlyContinue) -and $script:UsPythonAdopted) { $UsPython = $script:UsPythonAdopted }
 if (-not $UsPython) {
     $UsPython = Get-BestPython $RepoRoot
 }
@@ -942,8 +1135,33 @@ if ($PtDir) {
     # $PtPython from an older .paths.ps1 written before PT had a venv —
     # otherwise a stale cache silently keeps using the dep-less system
     # Python forever and PT never starts, no matter how many times the
-    # bootstrap above (re)creates the venv.
-    if ((Test-Path $PtVenvPython) -and $PtPython -ne $PtVenvPython) {
+    # bootstrap above (re)creates the venv. An adopted interpreter from
+    # another remembered location wins over a checkout .venv that just failed.
+    if ((Get-Variable -Name PtPythonAdopted -Scope Script -ErrorAction SilentlyContinue) -and $script:PtPythonAdopted) {
+        $adoptedRepo = Get-RepoRootFromVenvPython $script:PtPythonAdopted
+        $portalTlsOn = ("$($env:PORTAL_TLS_ENABLED)").Trim().ToLowerInvariant() -in @('1', 'true', 'yes', 'on')
+        $adoptedHasTls = $true
+        if ($portalTlsOn -and $adoptedRepo) {
+            $adoptedHasTls = Test-Path (Join-Path $adoptedRepo 'orchestrator\portal_tls_proxy.py')
+        }
+        # A healthy shared interpreter (no checkout mapping) is kept on the
+        # existing $PtDir. Checkout-specific TLS files are checked only when
+        # switching $PtDir to the adopted checkout.
+        if ($adoptedRepo -and -not $adoptedHasTls) {
+            _Warn 'path' "adopted PT checkout has no portal_tls_proxy.py while Portal TLS is enabled; keeping $PtDir"
+            if (Test-Path -LiteralPath $PtVenvPython) {
+                $PtPython = $PtVenvPython
+                $PathsNeedRewrite = $true
+            }
+        } else {
+            $PtPython = $script:PtPythonAdopted
+            if ($adoptedRepo -and $adoptedRepo -ne $PtDir) {
+                $PtDir = $adoptedRepo
+                _Info 'path' "PT_DIR switched to healthy checkout: $PtDir"
+            }
+            $PathsNeedRewrite = $true
+        }
+    } elseif ((Test-Path $PtVenvPython) -and $PtPython -ne $PtVenvPython) {
         $PtPython = $PtVenvPython
         $PathsNeedRewrite = $true
     }
@@ -993,10 +1211,19 @@ $PortalPort = if ($env:PORTAL_PORT) { [int]$env:PORTAL_PORT } else { 8002 }
 $PortalUrl  = "http://localhost:$PortalPort"
 
 if ($LanPeer) {
-    if (-not $env:PORTAL_BIND_LAN) { $env:PORTAL_BIND_LAN = '1' }
+    $portalTlsChoice = ("$($env:PORTAL_TLS_ENABLED)").Trim().ToLowerInvariant()
+    if ($portalTlsChoice -in @('0', 'false', 'no', 'off')) {
+        if (-not $env:PORTAL_BIND_LAN) { $env:PORTAL_BIND_LAN = '1' }
+        _Info 'lan-peer' 'PORTAL_TLS_ENABLED is off; the portal stays on plain HTTP'
+    } else {
+        # Peers reach this host on the TLS port. Turn that front end on now,
+        # before any service is started, instead of leaving it for a later run.
+        $env:PORTAL_TLS_ENABLED = '1'
+        _Info 'lan-peer' 'startup includes the Portal TLS front end so peers can reach this host'
+    }
     if (-not $env:ORAMA_BIND_LAN)  { $env:ORAMA_BIND_LAN  = '1' }
     if (-not $env:PT_BIND_LAN)     { $env:PT_BIND_LAN     = '1' }
-    _Info 'lan-peer' 'LAN bind env set (services bind 0.0.0.0 on Windows)'
+    _Info 'lan-peer' 'LAN bind env set (PT and orama bind 0.0.0.0; the portal TLS port is the peer entry)'
 }
 
 $PtHost     = Get-BindHost 'PT_BIND_LAN' 'PT_HOST'
@@ -1798,8 +2025,9 @@ function Resolve-MacLanIp {
     .OUTPUTS
     A hashtable with Ip (or the word unresolved) and Source.
     #>
-    # Priority: operator env → fresh last_discovery.json → openclaw.json (legacy)
-    # Never use gateway .110 heuristic or hardcoded fallbacks.
+    # Prefer a current MAC_IP / endpoint hint over a cached reachable flag.
+    # last_discovery.json is only used when no env hint is set. Never use a
+    # gateway .110 heuristic.
     $macIp = $null
     $source = 'unset'
 
@@ -2201,6 +2429,19 @@ if ($PortalTlsEnabled) {
     # regardless of PORTAL_BIND_LAN / PORTAL_HOST.
     $PortalHost = [System.Net.IPAddress]::Loopback.IPAddressToString
     Write-Host "  Portal TLS enabled: Portal binds loopback only; TLS front end on port $PortalTlsPort"
+    if (-not (Test-PortLoopbackOnly $PortalPort)) {
+        $portalOwner = Get-PidOnPort $PortalPort
+        if ($portalOwner -and (Life-PidMatches ([int]$portalOwner) '^pythonw?[0-9.]*$' 'portal_server')) {
+            Write-Host "  Portal on port $PortalPort is plain HTTP on the LAN; restarting it on loopback before the TLS front end"
+            Stop-Process -Id ([int]$portalOwner) -Force -ErrorAction SilentlyContinue
+            $portalFreeBy = (Get-Date).AddSeconds(10)
+            while ((Get-Date) -lt $portalFreeBy -and (Get-PidOnPort $PortalPort)) {
+                Start-Sleep -Milliseconds 250
+            }
+            $portalPidFile = Join-Path $LogDir 'portal.pid'
+            if (Test-Path $portalPidFile) { Remove-Item -LiteralPath $portalPidFile -Force -ErrorAction SilentlyContinue }
+        }
+    }
 }
 $svc = Start-OramaService -Name 'Portal' -Port $PortalPort -WorkDir $RepoRoot `
     -Cmd @($UsPython, '-m', 'uvicorn', 'orama_system.portal_server:app',

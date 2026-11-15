@@ -40,6 +40,8 @@ def test_windows_launcher_reaches_shared_gate_through_partner_cli_hook() -> None
     ensure = _text("scripts/ensure_requirements.ps1")
     assert 'ensure-partner-cli-paths.ps1' in start
     assert 'scripts\\ensure_ai_cli_mcp.py' in partner
+    assert '.lmstudio\\tools\\npm' in partner
+    assert 'npx.cmd' in partner
     assert 'scripts\\ensure_ai_cli_mcp.py' in ensure
 
 

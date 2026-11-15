@@ -89,7 +89,21 @@ scan_agent_audit() {
     git clone https://github.com/scadastrangelove/agent-audit "$CACHE_DIR/agent-audit"
     git -C "$CACHE_DIR/agent-audit" checkout --detach "$AGENT_AUDIT_REF"
   fi
-  python3 -m pip install -q -e "$CACHE_DIR/agent-audit"
+  # A broken download (IncompleteRead while fetching hatchling) is a runner
+  # network blip. Retry the editable install before failing the scan.
+  installed=0
+  for attempt in 1 2 3; do
+    if python3 -m pip install -q -e "$CACHE_DIR/agent-audit"; then
+      installed=1
+      break
+    fi
+    log "agent-audit install failed (attempt ${attempt}); retrying"
+    sleep $((attempt * 2))
+  done
+  if [[ "$installed" -ne 1 ]]; then
+    echo "agent-audit install failed after 3 attempts" >&2
+    return 1
+  fi
 
   run agent-audit agent-audit scan-project "$ROOT" \
     --min-severity high -y --output "$WORK/agent-audit-report"

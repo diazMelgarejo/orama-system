@@ -62,6 +62,26 @@ def test_orama_probe_also_checks_declared_deps() -> None:
     assert text.count("Test-VenvDeclaredDeps $VenvPythonMarker -Project 'orama-system'") == 2
 
 
+def test_resilient_candidates_cover_remembered_interpreters() -> None:
+    """Fall back through the shared venv, both PT checkouts, and Hermes."""
+    text = _text()
+    body = _func(text, "Get-ResilientPythonCandidates")
+    assert "ORAMASYS_PYTHON" in body
+    assert r".venvs\oramasys-dev\Scripts\python.exe" in body
+    assert "Perpetua-Tools" in body and "Perplexity-Tools" in body
+    assert r"hermes\hermes-agent\venv\Scripts\python.exe" in body
+    assert "WindowsApps" in body
+    repair = _func(text, "Repair-MissingPip")
+    assert "import ensurepip" in repair and "ensurepip', '--upgrade'" in repair
+    heal = _func(text, "Heal-PtVenv")
+    assert "Repair-MissingPip" in heal and "PtPythonAdopted" in heal
+    assert "Invoke-IdempotentWindowsInstall" in heal
+    install = _func(text, "Invoke-IdempotentWindowsInstall")
+    assert "last resort — idempotent install" in install
+    assert "'-e', '.'" in install
+    assert "checkout .venv unusable" in text
+
+
 def test_read_only_modes_skip_probe() -> None:
     """Preserve read-only launcher behavior."""
     text = _text()
@@ -80,6 +100,41 @@ def test_file_keeps_bom_and_crlf(path: Path) -> None:
     raw = path.read_bytes()
     assert raw.startswith(b"\xef\xbb\xbf")
     assert b"\n" not in raw.replace(b"\r\n", b"")
+
+
+def test_installer_warns_when_ensurepip_fails() -> None:
+    """Capture ensurepip's exit before the import probe overwrites $LASTEXITCODE."""
+    text = INSTALL_PS1.read_text(encoding="utf-8-sig")
+    assert "ensurepip --upgrade --default-pip" in text
+    assert "$ensurepipExit = $LASTEXITCODE" in text
+    assert 'ensurepip --upgrade failed (exit $ensurepipExit)' in text
+    assert "Test-InstallPythonRuns" in text
+    assert r"\WindowsApps\\" in text
+    # Windows PowerShell 5.1 Stop-Job has no -Force; -ErrorAction does not
+    # suppress a parameter-binding error under $ErrorActionPreference Stop.
+    assert "Stop-Job $job -ErrorAction SilentlyContinue" in text
+    assert "Stop-Job $job -Force" not in text
+
+
+def test_adopted_shared_interpreter_kept_without_checkout_mapping() -> None:
+    """A healthy PT_PYTHON outside a mapped checkout still replaces a failed venv."""
+    text = _text()
+    assert "healthy shared interpreter" in text
+    assert "Checkout-specific TLS files are checked only when" in text
+    assert "$adoptedRepo -and -not $adoptedHasTls" in text
+    assert "$PtPython = $script:PtPythonAdopted" in text
+
+
+def test_mac_lan_ip_prefers_env_hint_over_cached_reachable() -> None:
+    """A current MAC_IP hint must beat a stale reachable last_discovery.json."""
+    body = _func(_text(), "Resolve-MacLanIp")
+    assert "Prefer a current MAC_IP" in body
+    assert "last_discovery.json is only used when no env hint is set" in body
+    assert "$state.endpoints.mac.reachable" not in body
+    env_idx = body.index("foreach ($var in @('MAC_IP'")
+    cache_idx = body.index("if (-not $macIp)")
+    assert env_idx < cache_idx
+    assert "Join-Path $HOME '.openclaw\\state\\last_discovery.json'" in body[cache_idx:]
 
 
 def _run_ps(body: str, tmp_path: Path) -> subprocess.CompletedProcess[str]:
@@ -293,3 +348,18 @@ def test_installer_requires_editable_project(tmp_path: Path, metadata: bool, exi
         assert ("pyproject.toml" if not metadata else "editable install failed") in r.stderr
         if exit_code == 37:
             assert "37" in r.stderr
+
+
+def test_lan_peer_startup_opens_the_tls_front_end() -> None:
+    """--lan-peer turns the TLS front end on before services start, and replaces a LAN-bound portal."""
+    text = _text()
+    lan = text.index("if ($LanPeer) {")
+    services = text.index("# ── 1. Perpetua-Tools")
+    block = text[lan:services]
+    assert "$env:PORTAL_TLS_ENABLED = '1'" in block
+    assert "'0', 'false', 'no', 'off'" in block
+    portal = text.index("# ── 3. Portal")
+    tls = text.index("# ── 4. Portal TLS front end")
+    restart = text[portal:tls]
+    assert "restarting it on loopback before the TLS front end" in restart
+    assert "portal_server" in restart
