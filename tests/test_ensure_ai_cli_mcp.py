@@ -17,7 +17,7 @@ SPEC.loader.exec_module(mcp)
 
 def test_cmd_shim_with_ampersand_is_quoted(monkeypatch) -> None:
     """cmd /c must not split a shim path that contains &."""
-    shim = r"C:\Users\R&D\.lmstudio\tools\npm\10.9.0\package\bin\npm.cmd"
+    shim = r"C:\lmstudio\R&D\tools\npm\10.9.0\package\bin\npm.cmd"
     monkeypatch.setattr(mcp.os, "name", "nt")
     monkeypatch.setattr(mcp.shutil, "which", lambda _name: shim)
     argv = mcp._command(["npm", "list", "-g"])
