@@ -251,6 +251,7 @@ def test_save_discovery_state_marks_stale_win_unreachable(tmp_path, monkeypatch)
     monkeypatch.setattr(D, "STATE_DIR", tmp_path)
     monkeypatch.setattr(D, "DISCOVERY_JSON", tmp_path / "discovery.json")
     monkeypatch.setattr(D, "LAST_DISCOVERY_JSON", tmp_path / "last_discovery.json")
+    monkeypatch.setattr(D, "RECOVERY_SOURCE_TXT", tmp_path / "recovery_source.txt")
     D.save_discovery_state(
         {
             "mac": {"ip": "192.0.2.9", "port": 11434, "models": [], "stale": True},
