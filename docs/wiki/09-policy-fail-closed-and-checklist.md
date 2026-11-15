@@ -45,3 +45,35 @@ python -m pytest tests/ -q
 
 - [Session log entry](../LESSONS.md#2026-05-04--codex--priority-execution-p1-p6-checklist-and-fail-closed-hardening)
 - [Wiki index](README.md)
+
+
+---
+
+## Addendum (2026-11-15) - One validated snapshot: unavailable security config is not permission
+
+A qualification-gate loader caught `OSError`/`ValueError` and returned `None`, which the gate
+treated as "no catalog configured" and ALLOWED dispatch. A reviewer reproduced all four catalog
+candidates being dispatched after a loader failure raised *between* route assembly and the gate:
+production read the policy twice, and the second read failing silently disabled the gate.
+
+**Rules (fail-secure):**
+
+1. Load ONE validated snapshot before route assembly. On failure, refuse dispatch (503) -
+   unavailable security configuration must not become permission (OWASP fail-secure principle).
+2. Hand the SAME snapshot object to every consumer (route assembly and the gate) through an
+   additive keyword-only parameter. Two independent reads of one security document are a TOCTOU
+   window even when both usually succeed. Legacy callers that pass no snapshot keep their
+   previous behavior; the enforcement boundary lives in the handler.
+3. Gate-denied candidates skip their availability probe entirely - record the blocked entry and
+   continue. A denied candidate reaching its backend probe is a real leak (a denied Ollama-backed
+   cloud candidate hit a one-shot cloud probe this way).
+4. Request schemas must not carry gate-exemption fields (`dispatch_mode`): an internal exemption
+   must not be caller-reachable.
+5. Registry reachability flags (live-derived `online`) are probe inputs, not qualification
+   verdicts - only the catalog row's explicit `online` flag is a dispatch kill switch, or the
+   probe-failure fallback is silently defeated.
+
+Regression shape: failing-first tests for each loader-failure mode (FileNotFoundError,
+ValueError), a probe-spy asserting zero calls for denied candidates, and an object-identity
+assertion that route assembly received the handler's snapshot with a zero registry re-read count.
+PT #514 round 2; 137 passed / 0 failed across the eight affected suites.

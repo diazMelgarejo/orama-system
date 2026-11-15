@@ -79,3 +79,40 @@ curl -s http://localhost:11434/api/tags | python3 -c "import sys,json; print([m[
 
 - [Session log 2026-04-07](../LESSONS.md#2026-04-07--claude--idempotent-installs-subprocess-permissions--model-auto-discovery)
 - Commits: `3c9a4a8` (UTS bootstrap), `23bd01d` (UTS capture_output), `ffb1be0` (PT model discovery), `d9e4f50` (PT tracker)
+
+
+---
+
+## Addendum (2026-11-15) - Transient PyPI failures: retry EVERY install, not just the one that failed
+
+The agent-audit security-scan job died on `IncompleteRead` (PyPI truncated wheel) - a runner
+network blip, not a code defect. Three independent fixes then fragmented across three branches:
+an inline 3-attempt loop on one call site (merged), a reusable helper on another branch covering
+two call sites, and a superseded test patch. The census that ended the fragmentation found the
+real number: **the script had 8 `pip install` call sites and the fixes protected 3**.
+
+**Rule: classify the failure class first (transient infrastructure vs code defect), then census
+EVERY exposure point in the file and protect all of them with one shared helper.**
+
+```bash
+# Env-tunable so a flaky runner day needs no script edit; delay grows linearly per attempt.
+pip_install_retry() {
+  local attempts="${PIP_INSTALL_ATTEMPTS:-3}"
+  local delay="${PIP_INSTALL_RETRY_DELAY_SEC:-5}"
+  local n
+  for ((n = 1; n <= attempts; n++)); do
+    if python3 -m pip install "$@"; then return 0; fi
+    if (( n < attempts )); then
+      log "WARN pip install failed (attempt ${n}/${attempts}); retrying in $((delay * n))s"
+      sleep "$((delay * n))"
+    fi
+  done
+  return 1
+}
+```
+
+Keep the owning scan's explicit guarded failure at its critical site
+(`if ! pip_install_retry -q -e ...; then echo "... failed after attempts" >&2; return 1; fi`)
+and convert every bare `python3 -m pip install` to the helper. Smoke-test the helper with a
+stubbed `python3` (fail twice then succeed -> rc 0 after exactly 3 calls; always-fail with
+`PIP_INSTALL_ATTEMPTS=2` -> rc 1 after exactly 2 calls) before pushing. Synthesis PR: #516.

@@ -134,3 +134,22 @@ git status --porcelain
 
 - **Canonical copy** (Perpetua-Tools): [wiki/10-line-endings-and-encoding.md](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/wiki/10-line-endings-and-encoding.md) — edit there first, mirror here.
 - Same portable-path / mojibake discipline as [wiki README](README.md) conventions and [08-git-hygiene-and-branching.md](08-git-hygiene-and-branching.md).
+
+
+---
+
+## Addendum (2026-11-15) - PowerShell 5.1 byte fidelity
+
+Verified empirically on Windows PowerShell 5.1.26100.9818:
+
+1. **ASCII scripts need no BOM.** An ASCII-only `.ps1` without a BOM parses and runs correctly.
+2. **Non-ASCII `.ps1` needs a UTF-8 BOM and a real 5.1 parse.** The identical non-ASCII script:
+   without BOM, 5.1 mis-decodes it (mojibake); with BOM, correct output. Note this refines the
+   "UTF-8 without BOM, always" rule above: it holds for the repository tree; a `.ps1` that must
+   run under Windows PowerShell 5.1 and carries non-ASCII text is the documented exception
+   (generate the BOM at generation time; keep the tree LF).
+3. **Process bytes must never pass through PowerShell redirection.** A native process emitting
+   10 exact UTF-8 bytes: through `>` the file received 22 bytes (UTF-16LE, mangled); through
+   `Out-File -Encoding utf8` it received 16 bytes (BOM + CRLF added). Raw byte capture must
+   bypass PowerShell redirection entirely (cmd /c redirect, python subprocess capture, or
+   Tee-Object-free patterns).
