@@ -88,15 +88,38 @@ Write-Host '  orama-system Windows installer  v1.1.1.0' -ForegroundColor Cyan
 Write-Host '═══════════════════════════════════════════════════════════' -ForegroundColor DarkCyan
 Write-Host ''
 
+function Test-InstallPythonRuns {
+    <#
+    .SYNOPSIS
+    True when the path is a Python 3.10+ interpreter. A WindowsApps path is kept
+    when it runs, and skipped when it is the uninstalled Store stub.
+    #>
+    param([string]$Path)
+    if (-not $Path -or -not (Test-Path -LiteralPath $Path)) { return $false }
+    if ($Path -notmatch '\\WindowsApps\\') { return $true }
+    $job = Start-Job -ScriptBlock {
+        param($Candidate)
+        & $Candidate -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)"
+        if ($LASTEXITCODE -ne 0) { throw "python exit $LASTEXITCODE" }
+    } -ArgumentList $Path
+    $done = Wait-Job $job -Timeout 8
+    $ok = $false
+    if ($done -and $job.State -eq 'Completed') { $ok = $true }
+    else { Stop-Job $job -Force -ErrorAction SilentlyContinue }
+    Remove-Job $job -Force -ErrorAction SilentlyContinue
+    return $ok
+}
+
 function Resolve-InstallBasePython {
     <#
     .SYNOPSIS
-    Find a real interpreter. The WindowsApps python stub throws, so it is skipped.
+    Find a real interpreter. An uninstalled WindowsApps stub is skipped after a
+    run probe; a Store alias that actually runs is kept.
     #>
     $candidates = @()
     foreach ($name in @('python', 'python3')) {
         $cmd = Get-Command $name -ErrorAction SilentlyContinue
-        if ($cmd -and $cmd.Source -notmatch '\\WindowsApps\\') { $candidates += $cmd.Source }
+        if ($cmd -and $cmd.Source) { $candidates += $cmd.Source }
     }
     $candidates += $env:ORAMASYS_PYTHON
     $candidates += (Join-Path $RepoRoot '.venv\Scripts\python.exe')
@@ -110,7 +133,7 @@ function Resolve-InstallBasePython {
         $candidates += (Join-Path $env:LOCALAPPDATA 'hermes\hermes-agent\venv\Scripts\python.exe')
     }
     foreach ($candidate in $candidates) {
-        if ($candidate -and (Test-Path -LiteralPath $candidate) -and $candidate -notmatch '\\WindowsApps\\') {
+        if ($candidate -and (Test-InstallPythonRuns $candidate)) {
             return (Resolve-Path -LiteralPath $candidate).Path
         }
     }
@@ -144,16 +167,15 @@ if (-not (Test-Path (Join-Path $VenvPath 'Scripts\python.exe'))) {
 }
 
 $VenvPython = Join-Path $VenvPath 'Scripts\python.exe'
-$VenvPip    = Join-Path $VenvPath 'Scripts\pip.exe'
 # uv venvs ship ensurepip but not the pip module. Seed it before pip.exe is required.
 # Idempotent: a venv that already imports the project is left installed.
 $prevEap = $ErrorActionPreference
 $ErrorActionPreference = 'Continue'
 & $VenvPython -c "import pip" 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 0) {
-    & $VenvPython -m ensurepip --upgrade 2>&1 | Out-Null
+    & $VenvPython -m ensurepip --upgrade --default-pip 2>&1 | Out-Null
 }
-& $VenvPython -c "import uvicorn, fastapi, httpx, importlib.metadata as m; m.version('orama-system')" 2>&1 | Out-Null
+& $VenvPython -c "import uvicorn, fastapi, httpx, pytest, cryptography, importlib.metadata as m; m.version('orama-system')" 2>&1 | Out-Null
 $alreadyInstalled = ($LASTEXITCODE -eq 0)
 $ErrorActionPreference = $prevEap
 if ($alreadyInstalled) {
@@ -170,7 +192,7 @@ if (Test-Path $rootReqs) {
     # under 'Continue' and judge success by the exit code instead.
     $prevEap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
-    $coreOut = & $VenvPip install -r $rootReqs --quiet --disable-pip-version-check 2>&1
+    $coreOut = & $VenvPython -m pip install -r $rootReqs --quiet --disable-pip-version-check 2>&1
     $coreExit = $LASTEXITCODE
     $ErrorActionPreference = $prevEap
     if ($coreExit -ne 0) {
@@ -212,7 +234,7 @@ if (Test-Path $winReqs) {
     # whole fresh-install bootstrap chain that start.ps1 now depends on.
     $prevEap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
-    & $VenvPip install -r $winReqs --quiet 2>&1 | Out-Null
+    & $VenvPython -m pip install -r $winReqs --quiet 2>&1 | Out-Null
     $winReqsExit = $LASTEXITCODE
     $ErrorActionPreference = $prevEap
     if ($winReqsExit -eq 0) {
