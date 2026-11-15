@@ -23,7 +23,9 @@
       .\start.ps1 --fleet-status[=text|json] — show fleet topology and exit
       .\start.ps1 --discover  — re-run LAN path discovery, rewrite .paths.ps1, exit
       .\start.ps1 --hardware-policy — validate model↔hardware affinity and exit
-      .\start.ps1 --lan-peer    — set LAN bind env + run peer probe after start
+      .\start.ps1 --lan-peer    — start every service, including the Portal TLS
+                               front end, then run the peer probe. Peers can
+                               reach this host only after that front end is up.
       .\start.ps1 --restart-portal — restart only the Portal and its TLS proxy;
                                PT and orama keep running
       .\start.ps1 --help      — print the option summary
@@ -36,7 +38,8 @@
       8000  Perpetua-Tools  (PT  — Layer 2)
       8001  orama API       (US  — Layer 3 reasoning engine)
       8002  Portal dashboard
-      8443  Portal TLS front end (only with PORTAL_TLS_ENABLED; PORTAL_TLS_PORT)
+      8443  Portal TLS front end (--lan-peer turns it on unless
+            PORTAL_TLS_ENABLED is 0/false/no/off; PORTAL_TLS_PORT)
 
     Service processes are launched detached (scripts\lib\spawn_detached.py), so
     they keep running after this script exits. stdout/stderr are appended to
@@ -788,6 +791,11 @@ function Get-ResilientPythonCandidates {
     if ($env:LOCALAPPDATA) {
         $raw += (Join-Path $env:LOCALAPPDATA 'hermes\hermes-agent\venv\Scripts\python.exe')
     }
+    $raw += (Join-Path $RepoRoot '.venv\Scripts\python.exe')
+    foreach ($name in @('python', 'python3')) {
+        $cmd = Get-Command $name -ErrorAction SilentlyContinue
+        if ($cmd -and $cmd.Source -and $cmd.Source -notmatch '\\WindowsApps\\') { $raw += $cmd.Source }
+    }
     $seen = @{}
     $out = @()
     foreach ($item in $raw) {
@@ -1130,13 +1138,26 @@ if ($PtDir) {
     # bootstrap above (re)creates the venv. An adopted interpreter from
     # another remembered location wins over a checkout .venv that just failed.
     if ((Get-Variable -Name PtPythonAdopted -Scope Script -ErrorAction SilentlyContinue) -and $script:PtPythonAdopted) {
-        $PtPython = $script:PtPythonAdopted
         $adoptedRepo = Get-RepoRootFromVenvPython $script:PtPythonAdopted
-        if ($adoptedRepo -and $adoptedRepo -ne $PtDir) {
-            $PtDir = $adoptedRepo
-            _Info 'path' "PT_DIR switched to healthy checkout: $PtDir"
+        $portalTlsOn = ("$($env:PORTAL_TLS_ENABLED)").Trim().ToLowerInvariant() -in @('1', 'true', 'yes', 'on')
+        $adoptedHasTls = $true
+        if ($portalTlsOn -and $adoptedRepo) {
+            $adoptedHasTls = Test-Path (Join-Path $adoptedRepo 'orchestrator\portal_tls_proxy.py')
         }
-        $PathsNeedRewrite = $true
+        if ($adoptedRepo -and $adoptedHasTls) {
+            $PtPython = $script:PtPythonAdopted
+            if ($adoptedRepo -ne $PtDir) {
+                $PtDir = $adoptedRepo
+                _Info 'path' "PT_DIR switched to healthy checkout: $PtDir"
+            }
+            $PathsNeedRewrite = $true
+        } else {
+            _Warn 'path' "adopted PT checkout has no portal_tls_proxy.py while Portal TLS is enabled; keeping $PtDir"
+            if (Test-Path -LiteralPath $PtVenvPython) {
+                $PtPython = $PtVenvPython
+                $PathsNeedRewrite = $true
+            }
+        }
     } elseif ((Test-Path $PtVenvPython) -and $PtPython -ne $PtVenvPython) {
         $PtPython = $PtVenvPython
         $PathsNeedRewrite = $true
@@ -1187,10 +1208,19 @@ $PortalPort = if ($env:PORTAL_PORT) { [int]$env:PORTAL_PORT } else { 8002 }
 $PortalUrl  = "http://localhost:$PortalPort"
 
 if ($LanPeer) {
-    if (-not $env:PORTAL_BIND_LAN) { $env:PORTAL_BIND_LAN = '1' }
+    $portalTlsChoice = ("$($env:PORTAL_TLS_ENABLED)").Trim().ToLowerInvariant()
+    if ($portalTlsChoice -in @('0', 'false', 'no', 'off')) {
+        if (-not $env:PORTAL_BIND_LAN) { $env:PORTAL_BIND_LAN = '1' }
+        _Info 'lan-peer' 'PORTAL_TLS_ENABLED is off; the portal stays on plain HTTP'
+    } else {
+        # Peers reach this host on the TLS port. Turn that front end on now,
+        # before any service is started, instead of leaving it for a later run.
+        $env:PORTAL_TLS_ENABLED = '1'
+        _Info 'lan-peer' 'startup includes the Portal TLS front end so peers can reach this host'
+    }
     if (-not $env:ORAMA_BIND_LAN)  { $env:ORAMA_BIND_LAN  = '1' }
     if (-not $env:PT_BIND_LAN)     { $env:PT_BIND_LAN     = '1' }
-    _Info 'lan-peer' 'LAN bind env set (services bind 0.0.0.0 on Windows)'
+    _Info 'lan-peer' 'LAN bind env set (PT and orama bind 0.0.0.0; the portal TLS port is the peer entry)'
 }
 
 $PtHost     = Get-BindHost 'PT_BIND_LAN' 'PT_HOST'
@@ -2405,6 +2435,19 @@ if ($PortalTlsEnabled) {
     # regardless of PORTAL_BIND_LAN / PORTAL_HOST.
     $PortalHost = [System.Net.IPAddress]::Loopback.IPAddressToString
     Write-Host "  Portal TLS enabled: Portal binds loopback only; TLS front end on port $PortalTlsPort"
+    if (-not (Test-PortLoopbackOnly $PortalPort)) {
+        $portalOwner = Get-PidOnPort $PortalPort
+        if ($portalOwner -and (Life-PidMatches ([int]$portalOwner) '^pythonw?[0-9.]*$' 'portal_server')) {
+            Write-Host "  Portal on port $PortalPort is plain HTTP on the LAN; restarting it on loopback before the TLS front end"
+            Stop-Process -Id ([int]$portalOwner) -Force -ErrorAction SilentlyContinue
+            $portalFreeBy = (Get-Date).AddSeconds(10)
+            while ((Get-Date) -lt $portalFreeBy -and (Get-PidOnPort $PortalPort)) {
+                Start-Sleep -Milliseconds 250
+            }
+            $portalPidFile = Join-Path $LogDir 'portal.pid'
+            if (Test-Path $portalPidFile) { Remove-Item -LiteralPath $portalPidFile -Force -ErrorAction SilentlyContinue }
+        }
+    }
 }
 $svc = Start-OramaService -Name 'Portal' -Port $PortalPort -WorkDir $RepoRoot `
     -Cmd @($UsPython, '-m', 'uvicorn', 'orama_system.portal_server:app',

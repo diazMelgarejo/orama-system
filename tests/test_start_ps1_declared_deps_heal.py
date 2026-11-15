@@ -313,3 +313,18 @@ def test_installer_requires_editable_project(tmp_path: Path, metadata: bool, exi
         assert ("pyproject.toml" if not metadata else "editable install failed") in r.stderr
         if exit_code == 37:
             assert "37" in r.stderr
+
+
+def test_lan_peer_startup_opens_the_tls_front_end() -> None:
+    """--lan-peer turns the TLS front end on before services start, and replaces a LAN-bound portal."""
+    text = _text()
+    lan = text.index("if ($LanPeer) {")
+    services = text.index("# ── 1. Perpetua-Tools")
+    block = text[lan:services]
+    assert "$env:PORTAL_TLS_ENABLED = '1'" in block
+    assert "'0', 'false', 'no', 'off'" in block
+    portal = text.index("# ── 3. Portal")
+    tls = text.index("# ── 4. Portal TLS front end")
+    restart = text[portal:tls]
+    assert "restarting it on loopback before the TLS front end" in restart
+    assert "portal_server" in restart
