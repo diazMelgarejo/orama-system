@@ -535,6 +535,10 @@ def _probe_mac_candidate(ip: str, mac_only: set[str], win_only: set[str]) -> dic
         "ip": ip,
         "models": list(lms) if lms else list(ollama),
         "ollama": list(ollama) if ollama else None,
+        # The published port must belong to the backend that supplied the
+        # model list: LM Studio models pair with 1234, Ollama-only models
+        # with 11434. Ollama evidence is preserved on the entry either way.
+        "models_port": LM_STUDIO_PORT if lms else OLLAMA_PORT,
         "mac_strong": strong,
         "mac_weak": any_mac and not strong,
         "mac_evidence": any_mac,
@@ -564,9 +568,11 @@ def _mac_entry(cand: dict) -> dict:
     entry = {"ip": cand["ip"], "models": cand["models"]}
     if cand.get("ollama"):
         entry["ollama"] = cand["ollama"]
-        entry["port"] = OLLAMA_PORT
-    else:
-        entry["port"] = LM_STUDIO_PORT
+    # Port follows the backend that supplied the models (models_port from
+    # _probe_mac_candidate); hand-built candidates fall back to their
+    # ollama flag, then to the LM Studio default.
+    entry["port"] = cand.get("models_port") or (
+        OLLAMA_PORT if cand.get("ollama") else LM_STUDIO_PORT)
     return entry
 
 
