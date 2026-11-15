@@ -50,14 +50,26 @@ def node_version_supported(version: tuple[int, int, int]) -> bool:
     return major > 22
 
 
+def _cmd_quote(part: str) -> str:
+    """Quote one cmd.exe argument. An empty argument and metacharacters stay quoted."""
+    if part == "" or any(ch in part for ch in ' \t"&<>()@^|'):
+        return '"' + part.replace('"', '""') + '"'
+    return part
+
+
 def _command(args: Sequence[str]) -> list[str]:
-    """Resolve a Windows npm/npx shim. CreateProcess cannot run a .cmd file."""
+    """Resolve a Windows npm/npx shim. CreateProcess cannot run a .cmd file.
+
+    cmd /c strips one pair of surrounding quotes. The command is wrapped again
+    so a shim path that contains ``&`` is not split into two commands.
+    """
     argv = list(args)
     if os.name != "nt" or not argv:
         return argv
     exe = shutil.which(argv[0]) or argv[0]
     if exe.lower().endswith((".cmd", ".bat")):
-        return ["cmd", "/c", exe, *argv[1:]]
+        inner = " ".join(_cmd_quote(part) for part in [exe, *argv[1:]])
+        return ["cmd", "/c", f'"{inner}"']
     return [exe, *argv[1:]]
 
 
