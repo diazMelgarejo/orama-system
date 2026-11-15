@@ -246,6 +246,65 @@ def test_no_write_when_hash_unchanged(tmp_path, monkeypatch):
         assert f.stat().st_mtime == mtime, f"{f} should not have been rewritten"
 
 
+def test_save_discovery_state_marks_stale_win_unreachable(tmp_path, monkeypatch):
+    """A stale Windows backfill must not be saved as reachable."""
+    monkeypatch.setattr(D, "STATE_DIR", tmp_path)
+    monkeypatch.setattr(D, "DISCOVERY_JSON", tmp_path / "discovery.json")
+    monkeypatch.setattr(D, "LAST_DISCOVERY_JSON", tmp_path / "last_discovery.json")
+    D.save_discovery_state(
+        {
+            "mac": {"ip": "192.0.2.9", "port": 11434, "models": [], "stale": True},
+            "win": {"ip": "192.0.2.10", "port": 2345, "models": [], "stale": True},
+        },
+        tier=1,
+    )
+    state = json.loads((tmp_path / "discovery.json").read_text())
+    assert state["endpoints"]["mac"]["reachable"] is False
+    assert state["endpoints"]["win"]["reachable"] is False
+    assert state["endpoints"]["win"]["port"] == 2345
+
+
+def test_matching_hash_restores_reachability_after_recovery(tmp_path, monkeypatch):
+    """A successful probe with the same topology flips reachable back to true."""
+    monkeypatch.setattr(D, "STATE_DIR", tmp_path)
+    monkeypatch.setattr(D, "BACKUPS_DIR", tmp_path / "backups")
+    monkeypatch.setattr(D, "ARCHIVE_DIR", tmp_path / "archive")
+    monkeypatch.setattr(D, "DISCOVERY_JSON", tmp_path / "discovery.json")
+    monkeypatch.setattr(D, "LAST_DISCOVERY_JSON", tmp_path / "last_discovery.json")
+    monkeypatch.setattr(D, "RECOVERY_SOURCE_TXT", tmp_path / "recovery_source.txt")
+    monkeypatch.setattr(D, "OPENCLAW_JSON", tmp_path / "openclaw.json")
+    monkeypatch.setattr(discovery_trust, "OPENCLAW_STATE", tmp_path / "last_discovery.json")
+    monkeypatch.setattr(discovery_trust, "KNOWN_PEERS", tmp_path / "known-peers.json")
+    (tmp_path / "openclaw.json").write_text("{}")
+    (tmp_path / "backups").mkdir()
+    (tmp_path / "archive").mkdir()
+    live = {"mac": {"ip": "192.0.2.9", "port": 11434, "models": ["m1"]}, "win": None}
+    D.save_discovery_state(live, tier=1)
+    # Simulate a prior offline mark with the same hash.
+    last = json.loads((tmp_path / "last_discovery.json").read_text())
+    last["endpoints"]["mac"]["reachable"] = False
+    (tmp_path / "last_discovery.json").write_text(json.dumps(last))
+    (tmp_path / "discovery.json").write_text(json.dumps(last))
+    monkeypatch.setattr(D, "discover_endpoints", lambda: live)
+    assert D.run_discovery(force=True) == 0
+    state = json.loads((tmp_path / "last_discovery.json").read_text())
+    assert state["endpoints"]["mac"]["reachable"] is True
+
+
+def test_windows_prefix_subnets_bound_wide_masks(monkeypatch):
+    """A /8 interface expands only to the host /24, not 65k prefixes."""
+    monkeypatch.setattr(D.os, "name", "nt")
+
+    def fake_check_output(*_a, **_k):
+        return "10.1.2.3/8\n192.168.1.10/24\n"
+
+    monkeypatch.setattr(D.subprocess, "check_output", fake_check_output)
+    found = D._windows_prefix_subnets()
+    assert "10.1.2" in found
+    assert "192.168.1" in found
+    assert len([p for p in found if p.startswith("10.")]) == 1
+
+
 def test_perpetua_root_precedence_root_over_legacy(monkeypatch):
     """Check that perpetua root precedence root over legacy."""
     monkeypatch.setenv("PERPETUA_TOOLS_ROOT", "/tmp/pt-root")

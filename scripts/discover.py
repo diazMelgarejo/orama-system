@@ -304,7 +304,20 @@ def _windows_prefix_subnets() -> list[str]:
             continue
         if not isinstance(net, ipaddress.IPv4Network):
             continue
-        pieces = [net] if net.prefixlen >= 24 else list(net.subnets(new_prefix=24))
+        # Bound automatic expansion. A /8 would yield 65,536 /24 prefixes and
+        # hold the discovery lock for hours. Wider than /20: scan only the
+        # interface host's /24 unless an operator configures a narrower mask.
+        ip_str = line.split("/", 1)[0]
+        try:
+            host = ipaddress.IPv4Address(ip_str)
+        except ValueError:
+            continue
+        if net.prefixlen >= 24:
+            pieces = [net]
+        elif net.prefixlen >= 20:
+            pieces = list(net.subnets(new_prefix=24))
+        else:
+            pieces = [ipaddress.ip_network(f"{host}/24", strict=False)]
         for piece in pieces:
             label = ".".join(str(piece.network_address).split(".")[:3])
             if label not in found:
@@ -849,7 +862,8 @@ def save_discovery_state(endpoints: dict, tier: int = 1):
             "mac": {"ip": mac.get("ip", ""),
                     "port": int(mac.get("port") or (OLLAMA_PORT if mac.get("ollama") else LM_STUDIO_PORT if mac else OLLAMA_PORT)),
                     "reachable": bool(mac) and not mac.get("stale")},
-            "win": {"ip": win.get("ip", ""), "port": int(win.get("port") or LM_STUDIO_PORT), "reachable": bool(win)},
+            "win": {"ip": win.get("ip", ""), "port": int(win.get("port") or LM_STUDIO_PORT),
+                    "reachable": bool(win) and not win.get("stale")},
             # MVP additive field for a fleet of Windows GPU boxes beyond the
             # single `win` slot (see probe_extra_win_peers). Empty list when
             # $WIN_PEER_IPS is unset — existing single-peer readers are
@@ -1202,8 +1216,12 @@ def run_discovery(
             if last:
                 win_known = (_known_windows_ips() | run_win_ips) if RUNNING_ON_WINDOWS else set()
                 for role in ("mac", "win"):
-                    if not endpoints[role] and last["endpoints"][role]["reachable"]:
-                        role_ip = last["endpoints"][role].get("ip", "")
+                    prev = last["endpoints"][role]
+                    # Keep a last-known address even when the prior record is
+                    # already unreachable, so repeated offline probes still
+                    # seed the next try instead of wiping the endpoint.
+                    if not endpoints[role] and prev.get("ip"):
+                        role_ip = prev.get("ip", "")
                         if role == "mac" and (role_ip in win_known or _is_loopback_host(role_ip)):
                             print("⚠️  mac last-good is a known Windows address — not preserving",
                                   file=sys.stderr)
@@ -1211,8 +1229,8 @@ def run_discovery(
                         # Discover already tried this address and it was offline.
                         # Keep it so the next run can try it again, but do not
                         # save it as reachable.
-                        endpoints[role] = {"ip": last["endpoints"][role]["ip"],
-                                           "port": last["endpoints"][role].get("port"),
+                        endpoints[role] = {"ip": prev["ip"],
+                                           "port": prev.get("port"),
                                            "models": last["models"][role],
                                            "stale": True}
                         print(f"⚠️  {role} offline — keeping last address and marking it stale", file=sys.stderr)
@@ -1240,6 +1258,15 @@ def run_discovery(
                         saved["reachable"] = False
                         last["endpoints"][role] = saved
                 print("⚠️  marked offline endpoint(s) stale: " + ", ".join(stale_roles), file=sys.stderr)
+            else:
+                # Same topology and a successful probe: restore reachability so
+                # a recovered peer is not left offline until another change.
+                for role in ("mac", "win"):
+                    live = endpoints.get(role) or {}
+                    saved = (last.get("endpoints") or {}).get(role) or {}
+                    if saved and live and not live.get("stale"):
+                        saved["reachable"] = True
+                        last["endpoints"][role] = saved
             last["timestamp"] = datetime.now(timezone.utc).isoformat()
             if tier != last.get("recovery_tier", 1):
                 last["recovery_tier"] = tier  # reflect actual recovery tier used this run
