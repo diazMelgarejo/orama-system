@@ -932,7 +932,11 @@ def patch_openclaw_json(endpoints: dict):
         # known Windows address) as lmstudio-mac; use the discovered Mac IP only.
         mac_host = str(mac.get("ip") or "")
         if mac_host and mac_host not in _known_windows_ips() and not _is_loopback_host(mac_host):
-            providers.setdefault("lmstudio-mac", {})["baseUrl"] = f"http://{mac_host}:1234/v1"
+            # The selected backend's port: an Ollama-only Mac answers on 11434,
+            # not the LM Studio default. Writing 1234 here would point the
+            # generated inference configuration at a closed port.
+            mac_port = int(mac.get("port") or (OLLAMA_PORT if mac.get("ollama") else LM_STUDIO_PORT))
+            providers.setdefault("lmstudio-mac", {})["baseUrl"] = f"http://{mac_host}:{mac_port}/v1"
             providers["lmstudio-mac"]["models"] = [
                 {"id": m, "name": f"Mac LMS — {m}", "contextWindow": 32768,
                  "maxTokens": 8192, "cost": {"input": 0, "output": 0}}
@@ -951,7 +955,8 @@ def patch_openclaw_json(endpoints: dict):
     elif mac:
         # lmstudio-mac ALWAYS uses localhost — the LAN IP is discovery metadata only.
         # Native Mac processes must never route to themselves via the LAN interface.
-        providers.setdefault("lmstudio-mac", {})["baseUrl"] = "http://localhost:1234/v1"
+        mac_port = int(mac.get("port") or (OLLAMA_PORT if mac.get("ollama") else LM_STUDIO_PORT))
+        providers.setdefault("lmstudio-mac", {})["baseUrl"] = f"http://localhost:{mac_port}/v1"
         providers["lmstudio-mac"]["models"] = [
             {"id": m, "name": f"Mac LMS — {m}", "contextWindow": 32768,
              "maxTokens": 8192, "cost": {"input": 0, "output": 0}}
@@ -961,7 +966,8 @@ def patch_openclaw_json(endpoints: dict):
         win_ip = win["ip"]
         if RUNNING_ON_WINDOWS and win_ip in ("localhost", "127.0.0.1"):
             win_ip = "localhost"
-        providers.setdefault("lmstudio-win", {})["baseUrl"] = f"http://{win_ip}:1234/v1"
+        win_port = int(win.get("port") or LM_STUDIO_PORT)
+        providers.setdefault("lmstudio-win", {})["baseUrl"] = f"http://{win_ip}:{win_port}/v1"
         providers["lmstudio-win"]["models"] = [
             {"id": m, "name": f"Win LMS — {m}", "contextWindow": 32768,
              "maxTokens": 8192, "cost": {"input": 0, "output": 0}}
@@ -999,13 +1005,17 @@ def write_env_lmstudio(endpoints: dict, repo_paths: dict):
     win_ip = (win.get("ip") or "")
     mac_ip = (mac.get("ip") or "")
     # On Windows host, Mac is remote — persist LAN IP for cross-machine routing.
+    # Use the selected backend's port (Ollama-only Mac = 11434), never a
+    # hardcoded LM Studio default that would target a closed port.
+    mac_port = int(mac.get("port") or (OLLAMA_PORT if mac.get("ollama") else LM_STUDIO_PORT))
+    win_port = int(win.get("port") or LM_STUDIO_PORT)
     if RUNNING_ON_WINDOWS:
         # localhost is the Windows box here: never fall back to it as the Mac.
         valid = bool(mac_ip) and mac_ip not in _known_windows_ips() and not _is_loopback_host(mac_ip)
-        mac_url = f"http://{mac_ip}:1234" if valid else ""
+        mac_url = f"http://{mac_ip}:{mac_port}" if valid else ""
     else:
-        mac_url = "http://localhost:1234"
-    win_url = f"http://{win_ip}:1234" if win_ip else ""
+        mac_url = f"http://localhost:{mac_port}"
+    win_url = f"http://{win_ip}:{win_port}" if win_ip else ""
     mac_models = mac.get("models", [])
     win_models = win.get("models", [])
     mac_primary = next((m for m in mac_models if "embed" not in m.lower()), "")
@@ -1035,14 +1045,25 @@ def write_env_lmstudio(endpoints: dict, repo_paths: dict):
 # ── Recovery tiers ────────────────────────────────────────────────────────────
 
 def _state_to_ep(state):
-    """State to ep."""
+    """State to ep, preserving each saved endpoint's port and Ollama evidence.
+
+    Reconstructed records must carry the saved ``port`` (and ``ollama`` flag):
+    otherwise a restore re-saves the LM Studio default for an Ollama-only Mac
+    and the recovered configuration points at a closed port.
+    """
     if not state or not state.get("endpoints"): return None
-    return {
-        "mac": {"ip": state["endpoints"]["mac"]["ip"], "models": state["models"]["mac"]}
-              if state["endpoints"]["mac"]["reachable"] else None,
-        "win": {"ip": state["endpoints"]["win"]["ip"], "models": state["models"]["win"]}
-              if state["endpoints"]["win"]["reachable"] else None,
-    }
+    models = state.get("models") or {}
+    out: dict = {"mac": None, "win": None}
+    for role in ("mac", "win"):
+        saved = state["endpoints"].get(role) or {}
+        if saved.get("reachable") and saved.get("ip"):
+            record = {"ip": saved["ip"], "models": models.get(role, [])}
+            if saved.get("port") is not None:
+                record["port"] = saved["port"]
+            if saved.get("ollama"):
+                record["ollama"] = saved["ollama"]
+            out[role] = record
+    return out
 
 def _load_tier2():
     """Load tier2 (last discovery state)."""
