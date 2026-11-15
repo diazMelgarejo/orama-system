@@ -7,7 +7,7 @@ Idempotent: writes nothing if state hash is unchanged.
 """
 
 from __future__ import annotations
-import argparse, asyncio, hashlib, ipaddress, json, logging, os, re, shutil, socket, sys, time
+import argparse, asyncio, hashlib, ipaddress, json, logging, os, re, shutil, socket, subprocess, sys, time
 import urllib.error, urllib.request
 from urllib.parse import urlsplit
 from datetime import datetime, timezone
@@ -275,6 +275,43 @@ async def scan_subnet_async(subnet: str, port: int, exclude: set):
              if f"{subnet}.{i}" not in exclude]
     return [ip for ip in await asyncio.gather(*tasks) if ip]
 
+def _windows_prefix_subnets() -> list[str]:
+    """Each /24 inside this host's IPv4 prefixes. A /22 must not collapse to one octet."""
+    if os.name != "nt":
+        return []
+    try:
+        out = subprocess.check_output(
+            [
+                "powershell", "-NoProfile", "-Command",
+                "Get-NetIPAddress -AddressFamily IPv4 | "
+                "Where-Object { $_.IPAddress -notlike '127.*' -and $_.PrefixOrigin -ne 'WellKnown' } | "
+                "ForEach-Object { $_.IPAddress + '/' + $_.PrefixLength }",
+            ],
+            text=True,
+            timeout=20,
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    found: list[str] = []
+    for line in out.splitlines():
+        line = line.strip()
+        if "/" not in line:
+            continue
+        try:
+            net = ipaddress.ip_network(line, strict=False)
+        except ValueError:
+            continue
+        if not isinstance(net, ipaddress.IPv4Network):
+            continue
+        pieces = [net] if net.prefixlen >= 24 else list(net.subnets(new_prefix=24))
+        for piece in pieces:
+            label = ".".join(str(piece.network_address).split(".")[:3])
+            if label not in found:
+                found.append(label)
+    return found
+
+
 def get_local_subnets() -> list[str]:
     """Get local subnets."""
     subnets = []
@@ -298,6 +335,9 @@ def get_local_subnets() -> list[str]:
                             subnets.append(f"{net_parts[0]}.{net_parts[1]}.{base_octet2 + j}")
     except Exception:
         pass
+    for extra in _windows_prefix_subnets():
+        if extra not in subnets:
+            subnets.append(extra)
     return list(set(subnets))
 
 def _lan_ip_on_subnet(subnet_prefix: str | None = None) -> str | None:
@@ -801,7 +841,8 @@ def save_discovery_state(endpoints: dict, tier: int = 1):
         "hash": compute_hash(endpoints),
         "recovery_tier": tier,
         "endpoints": {
-            "mac": {"ip": mac.get("ip", ""), "port": OLLAMA_PORT, "reachable": bool(mac)},
+            "mac": {"ip": mac.get("ip", ""), "port": OLLAMA_PORT,
+                    "reachable": bool(mac) and not mac.get("stale")},
             "win": {"ip": win.get("ip", ""), "port": LM_STUDIO_PORT, "reachable": bool(win)},
             # MVP additive field for a fleet of Windows GPU boxes beyond the
             # single `win` slot (see probe_extra_win_peers). Empty list when
@@ -1162,8 +1203,9 @@ def run_discovery(
                                   file=sys.stderr)
                             continue
                         endpoints[role] = {"ip": last["endpoints"][role]["ip"],
-                                           "models": last["models"][role]}
-                        print(f"⚠️  {role} unreachable — preserving last-good", file=sys.stderr)
+                                           "models": last["models"][role],
+                                           "stale": True}
+                        print(f"⚠️  {role} unreachable — preserving last-good as unreachable", file=sys.stderr)
 
         endpoints = filter_endpoints_for_policy(endpoints)
         endpoints, blocked_peers = filter_endpoints_for_trust(endpoints)
