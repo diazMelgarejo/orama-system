@@ -18,15 +18,12 @@ def load_profile(path: Path | None = None) -> dict[str, Any]:
 _CONTINUABLE = frozenset({"model_unavailable", "capability_ineligible", "rejected"})
 
 
-def classify_outcome(
+def _structural_class(
     http_status: int | None,
     structured_code: Any = None,
     execution_state: str | None = None,
-    outcome: str | None = None,
 ) -> str:
-    """Map one result to a class. 1113 is a billing stop, not a throttle."""
-    if isinstance(outcome, str) and outcome:
-        return outcome
+    """Classify the transport and execution signals, ignoring any label."""
     state = (execution_state or "").lower()
     if state in {"recovery", "partial", "tool_effects", "cancelled"}:
         return "recovery_required"
@@ -49,7 +46,28 @@ def classify_outcome(
         return "rejected"
     if http_status is not None and http_status >= 500:
         return "outcome_unknown"
-    return "outcome_unknown"
+    return ""
+
+
+def classify_outcome(
+    http_status: int | None,
+    structured_code: Any = None,
+    execution_state: str | None = None,
+    outcome: str | None = None,
+) -> str:
+    """Map one result to a class. A terminal signal beats a continuable label.
+
+    Partial execution, billing code 1113, credentials, throttle, and unknown
+    execution stop even when the row also says ``rejected``. An explicit
+    outcome is used only when no terminal signal is present. A bare 404 or
+    422 is not, by itself, a proven model miss.
+    """
+    structural = _structural_class(http_status, structured_code, execution_state)
+    if structural and structural not in _CONTINUABLE:
+        return structural
+    if isinstance(outcome, str) and outcome:
+        return outcome
+    return structural or "outcome_unknown"
 
 
 def next_model(
@@ -70,13 +88,19 @@ def next_model(
         raise ValueError("free_only profile selected a paid model")
     settled: set[Any] = set()
     for row in ledger or []:
+        explicit = row.get("outcome")
         klass = classify_outcome(
             row.get("http_status"),
             row.get("code"),
             row.get("execution_state"),
-            row.get("outcome"),
+            explicit if isinstance(explicit, str) else None,
         )
-        if klass not in _CONTINUABLE:
+        proven_miss = (
+            isinstance(explicit, str)
+            and explicit in _CONTINUABLE
+            and klass in _CONTINUABLE
+        )
+        if not proven_miss:
             return None
         if row.get("model_id"):
             settled.add(row.get("model_id"))
