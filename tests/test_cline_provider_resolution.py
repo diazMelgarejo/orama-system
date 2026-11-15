@@ -229,6 +229,24 @@ def test_probe_200_invalid_json_is_inconclusive(monkeypatch: pytest.MonkeyPatch)
         scp.probe_effort("https://example.test/v1", "k", "m1", "medium")
 
 
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"choices": [{"finish_reason": "stop", "message": {"content": ""}}]},
+        {"choices": [{"finish_reason": "length", "message": {"content": "1"}}]},
+        {"choices": [{"finish_reason": "stop", "message": {"content": "2"}}]},
+    ],
+)
+def test_probe_200_without_the_requested_answer_is_inconclusive(
+    monkeypatch: pytest.MonkeyPatch, payload: dict[str, Any]
+) -> None:
+    monkeypatch.setattr(
+        scp, "_request", lambda *_args, **_kwargs: (200, json.dumps(payload))
+    )
+    with pytest.raises(scp.ProbeError):
+        scp.probe_effort("https://example.test/v1", "k", "m1", "medium")
+
+
 def test_probe_200_empty_choices_is_inconclusive(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(scp, "_request", lambda *_args, **_kwargs: (200, json.dumps({"choices": []})))
     with pytest.raises(scp.ProbeError):

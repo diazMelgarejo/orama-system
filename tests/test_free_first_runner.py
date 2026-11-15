@@ -37,7 +37,45 @@ def test_1113_stops_before_the_next_free_model() -> None:
         profile,
         [{"model_id": "glm-4.7-flash", "http_status": 429, "code": ""}],
     )
-    assert throttled == "glm-4.5-flash"
+    assert throttled is None
+    missed = runner.next_model(
+        profile,
+        [{"model_id": "glm-4.7-flash", "outcome": "model_unavailable"}],
+    )
+    assert missed == "glm-4.5-flash"
+    assert runner.next_model(
+        profile,
+        [{"model_id": "glm-4.7-flash", "http_status": 404}],
+    ) is None
+    assert runner.next_model(
+        profile,
+        [{"model_id": "glm-4.7-flash", "http_status": 422}],
+    ) is None
+    assert runner.next_model(
+        profile,
+        [{
+            "model_id": "glm-4.7-flash",
+            "outcome": "rejected",
+            "execution_state": "partial",
+        }],
+    ) is None
+    assert runner.next_model(
+        profile,
+        [{
+            "model_id": "glm-4.7-flash",
+            "outcome": "rejected",
+            "http_status": 429,
+            "code": "1113",
+        }],
+    ) is None
+    assert runner.next_model(
+        profile,
+        [{"model_id": "glm-4.7-flash", "outcome": "success"}],
+    ) is None
+    assert runner.next_model(
+        profile,
+        [{"model_id": "glm-4.7-flash", "http_status": 401}],
+    ) is None
 
 
 def test_policy_pin_matches_the_sibling_blob_when_present() -> None:

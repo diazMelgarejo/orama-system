@@ -15,16 +15,59 @@ def load_profile(path: Path | None = None) -> dict[str, Any]:
     return json.loads((path or _PROFILE).read_text(encoding="utf-8"))
 
 
-def classify_outcome(http_status: int | None, structured_code: Any = None) -> str:
-    """1113 is a billing stop. A plain 429 is a throttle, not that stop."""
+_CONTINUABLE = frozenset({"model_unavailable", "capability_ineligible", "rejected"})
+
+
+def _structural_class(
+    http_status: int | None,
+    structured_code: Any = None,
+    execution_state: str | None = None,
+) -> str:
+    """Classify the transport and execution signals, ignoring any label."""
+    state = (execution_state or "").lower()
+    if state in {"recovery", "partial", "tool_effects", "cancelled"}:
+        return "recovery_required"
+    if state in {"safety", "policy_rejection"}:
+        return "safety_blocked"
+    if state in {"timeout", "network", "interrupted"}:
+        return "outcome_unknown"
     code = str(structured_code) if structured_code is not None else ""
     if http_status == 429 and code == "1113":
         return "billing_or_entitlement_blocked"
+    if http_status in {401, 403}:
+        return "credentials_blocked"
     if http_status == 429:
         return "throttled"
     if http_status == 200:
         return "success"
-    return "rejected"
+    if http_status == 404:
+        return "model_unavailable"
+    if http_status == 422:
+        return "rejected"
+    if http_status is not None and http_status >= 500:
+        return "outcome_unknown"
+    return ""
+
+
+def classify_outcome(
+    http_status: int | None,
+    structured_code: Any = None,
+    execution_state: str | None = None,
+    outcome: str | None = None,
+) -> str:
+    """Map one result to a class. A terminal signal beats a continuable label.
+
+    Partial execution, billing code 1113, credentials, throttle, and unknown
+    execution stop even when the row also says ``rejected``. An explicit
+    outcome is used only when no terminal signal is present. A bare 404 or
+    422 is not, by itself, a proven model miss.
+    """
+    structural = _structural_class(http_status, structured_code, execution_state)
+    if structural and structural not in _CONTINUABLE:
+        return structural
+    if isinstance(outcome, str) and outcome:
+        return outcome
+    return structural or "outcome_unknown"
 
 
 def next_model(
@@ -33,18 +76,34 @@ def next_model(
 ) -> str | None:
     """Return the next free model, or None when the chain must stop.
 
-    `free_only` never returns a paid id. Billing code 1113 stops the chain
-    even if free models remain.
+    `free_only` never returns a paid id. Success, billing, credentials,
+    throttle, and uncertain execution stop the chain. A proven miss of one
+    model is the only reason to try the next free id. `glm-4.7-flash` stays
+    first when the ledger is empty.
     """
     if profile.get("financial_mode") != "free_only":
         raise ValueError("free-first runner requires financial_mode free_only")
     models = list(profile.get("resolution", {}).get("models") or [])
     if _PAID_STOP in models or profile.get("settings", {}).get("model") == _PAID_STOP:
         raise ValueError("free_only profile selected a paid model")
+    settled: set[Any] = set()
     for row in ledger or []:
-        if classify_outcome(row.get("http_status"), row.get("code")) == "billing_or_entitlement_blocked":
+        explicit = row.get("outcome")
+        klass = classify_outcome(
+            row.get("http_status"),
+            row.get("code"),
+            row.get("execution_state"),
+            explicit if isinstance(explicit, str) else None,
+        )
+        proven_miss = (
+            isinstance(explicit, str)
+            and explicit in _CONTINUABLE
+            and klass in _CONTINUABLE
+        )
+        if not proven_miss:
             return None
-    settled = {row.get("model_id") for row in (ledger or [])}
+        if row.get("model_id"):
+            settled.add(row.get("model_id"))
     for model_id in models:
         if model_id not in settled:
             return model_id
