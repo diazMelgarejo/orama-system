@@ -38,6 +38,35 @@ def test_peer_from_discovery_mac_role(peer_mod):
     assert port == 1234
 
 
+def test_mac_peer_defaults_to_ollama_port(peer_mod):
+    """A discovery record that stored port 1234 for the Mac is not the inference port."""
+    discovery = {"endpoints": {"mac": {"ip": "10.0.0.9", "port": 1234}}}
+    ip, port = peer_mod.peer_from_discovery(discovery, "win")
+    assert ip == "10.0.0.9"
+    assert port == 11434
+
+
+def test_run_checks_mac_peer_uses_ollama(peer_mod, monkeypatch):
+    """The Mac peer is probed at Ollama /api/tags, not LM Studio /v1/models."""
+    seen: list[str] = []
+
+    def fake_get(url: str, token: str = "", timeout: int = 8):
+        seen.append(url)
+        if url.endswith("/health"):
+            return 200, '{"status":"ok"}'
+        if url.endswith("/api/tags"):
+            return 200, json.dumps({"models": [{"name": "bge-m3"}]})
+        return 404, "nope"
+
+    monkeypatch.setattr(peer_mod, "http_get", fake_get)
+    checks = peer_mod.run_checks("10.0.0.9", 1234, 8443, tokens=[], peer_kind="mac")
+    by_name = {c.name: c.status for c in checks}
+    assert by_name["peer-ollama"] == peer_mod.Status.PASS
+    assert "peer-lmstudio" not in by_name
+    assert any(url.endswith(":11434/api/tags") for url in seen)
+    assert not any("/v1/models" in url for url in seen)
+
+
 def test_run_checks_lmstudio_pass(peer_mod, monkeypatch):
     """With a healthy portal and LM Studio, health and models pass and status is skipped without tokens."""
     def fake_get(url: str, token: str = "", timeout: int = 8):

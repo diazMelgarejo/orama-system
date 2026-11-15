@@ -555,7 +555,7 @@ def discover_endpoints() -> dict:
 
     Windows host (RUNNING_ON_WINDOWS=True):
       localhost:1234  → win  (the local LM Studio GGUF box)
-      $MAC_IP:1234    → mac  (the remote Mac MLX box, if reachable)
+      $MAC_IP:11434   → mac  (the remote Mac Ollama box, if reachable)
     """
     result = {"mac": None, "win": None}
 
@@ -600,7 +600,7 @@ def discover_endpoints() -> dict:
                       file=sys.stderr)
                 _note_win(cand)
             else:
-                print(f"  ⚠️  Mac LM Studio not reachable at {mac_ip}:1234 ($MAC_IP) — trying cache", file=sys.stderr)
+                print(f"  ⚠️  Mac not reachable at {mac_ip} on Ollama :11434 or LM Studio :1234 ($MAC_IP) — trying cache", file=sys.stderr)
         if not result["mac"]:
             # Last-known-good mac IP from cache (needs Mac evidence).
             last = _load_json(LAST_DISCOVERY_JSON)
@@ -623,18 +623,25 @@ def discover_endpoints() -> dict:
             if not subnets:
                 subnets = [win_lan.rsplit(".", 1)[0] if win_lan else SUBNET]
             cands: list[dict] = []
+            seen_ips: set[str] = set()
             for subnet in subnets:
-                for ip in sorted(asyncio.run(scan_subnet_async(subnet, LM_STUDIO_PORT, exclude)),
-                                 key=_ip_sort_key):
-                    cand = _probe_mac_candidate(ip, policy_mac, policy_win)
-                    if cand:
-                        cands.append(cand)
+                for port in (OLLAMA_PORT, LM_STUDIO_PORT):
+                    for ip in sorted(
+                        asyncio.run(scan_subnet_async(subnet, port, exclude)),
+                        key=_ip_sort_key,
+                    ):
+                        if ip not in seen_ips:
+                            seen_ips.add(ip)
+            for ip in sorted(seen_ips, key=_ip_sort_key):
+                cand = _probe_mac_candidate(ip, policy_mac, policy_win)
+                if cand:
+                    cands.append(cand)
             ranked = sorted((c for c in cands if _mac_tier(c) is not None),
                             key=lambda c: (_mac_tier(c), _ip_sort_key(c["ip"])))
             if ranked:
                 best = ranked[0]
                 result["mac"] = _mac_entry(best)
-                print(f"  ℹ️  Mac LM Studio found at {best['ip']} (subnet scan)", file=sys.stderr)
+                print(f"  ℹ️  Mac found at {best['ip']} (subnet scan, Ollama :11434 preferred)", file=sys.stderr)
             for cand in cands:
                 if cand["win_evidence"] and not cand["mac_strong"] and cand["ip"] != (result["mac"] or {}).get("ip"):
                     _note_win(cand)
@@ -794,7 +801,7 @@ def save_discovery_state(endpoints: dict, tier: int = 1):
         "hash": compute_hash(endpoints),
         "recovery_tier": tier,
         "endpoints": {
-            "mac": {"ip": mac.get("ip", ""), "port": LM_STUDIO_PORT, "reachable": bool(mac)},
+            "mac": {"ip": mac.get("ip", ""), "port": OLLAMA_PORT, "reachable": bool(mac)},
             "win": {"ip": win.get("ip", ""), "port": LM_STUDIO_PORT, "reachable": bool(win)},
             # MVP additive field for a fleet of Windows GPU boxes beyond the
             # single `win` slot (see probe_extra_win_peers). Empty list when

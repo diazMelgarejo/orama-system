@@ -133,16 +133,23 @@ def local_role() -> str:
 
 
 def peer_from_discovery(discovery: dict[str, Any], role: str) -> tuple[str, int]:
-    """Return the peer host and LM Studio port for a role from discovery data, using the WIN_IP or MAC_IP env fallback when the recorded host is empty or loopback."""
+    """Return the peer host and its inference port.
+
+    The Windows peer is LM Studio on port 1234. The Mac peer is Ollama on
+    port 11434. A discovery record that stored 1234 for the Mac is not the
+    Mac inference port.
+    """
     endpoints = discovery.get("endpoints") or {}
     if role == "mac":
         peer = endpoints.get("win") or {}
         fallback_ip = os.environ.get("WIN_IP", "").strip()
+        default_port = 1234
     else:
         peer = endpoints.get("mac") or {}
         fallback_ip = os.environ.get("MAC_IP", "").strip()
+        default_port = 11434
     ip = str(peer.get("ip") or "").strip()
-    port = int(peer.get("port") or 1234)
+    port = default_port
     if ip in ("", "localhost", "127.0.0.1") and fallback_ip:
         ip = fallback_ip
     return ip, port
@@ -467,8 +474,14 @@ def run_checks(
     timeout: int = 8,
     status_timeout: int = 30,
     ws_timeout: int = 10,
+    peer_kind: str = "win",
 ) -> list[Check]:
-    """Run the peer checks (portal health, authenticated status, LM Studio models, WebSocket) and return their results; a single failure Check when no peer host is known."""
+    """Run the peer checks and return their results.
+
+    ``peer_kind`` is the peer's role. A Windows peer is checked at LM Studio
+    (``/v1/models``). A Mac peer is checked at Ollama (``/api/tags`` on port
+    11434). ``lms_port`` is the Windows LM Studio port only.
+    """
     if not peer_ip:
         return [Check("peer-ip", Status.FAIL, "no peer IP in discovery or env")]
 
@@ -531,16 +544,23 @@ def run_checks(
     else:
         checks.append(Check("portal-status", Status.SKIP, "no control-plane token candidates (env or PT .state)"))
 
-    models_url = f"http://{peer_ip}:{lms_port}/v1/models"
+    if peer_kind == "mac":
+        models_url = f"http://{peer_ip}:11434/api/tags"
+        check_name = "peer-ollama"
+        count_key = "models"
+    else:
+        models_url = f"http://{peer_ip}:{lms_port}/v1/models"
+        check_name = "peer-lmstudio"
+        count_key = "data"
     code, body = http_get(models_url, timeout=timeout)
     if code == 200:
         try:
-            count = len(json.loads(body).get("data", []))
-            checks.append(Check("peer-lmstudio", Status.PASS, f"{count} models at {models_url}"))
+            count = len(json.loads(body).get(count_key, []))
+            checks.append(Check(check_name, Status.PASS, f"{count} models at {models_url}"))
         except json.JSONDecodeError:
-            checks.append(Check("peer-lmstudio", Status.PASS, models_url))
+            checks.append(Check(check_name, Status.PASS, models_url))
     else:
-        checks.append(Check("peer-lmstudio", Status.FAIL, f"{models_url} — http {code}"))
+        checks.append(Check(check_name, Status.FAIL, f"{models_url} — http {code}"))
 
     checks.append(check_ws_peer(peer_ip, portal_port, tokens, timeout=ws_timeout))
 
@@ -585,6 +605,7 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
 
     role = local_role()
+    peer_kind = "win" if role == "mac" else "mac"
     discovery = load_discovery()
     peer_ip, lms_port = peer_from_discovery(discovery, role)
     if args.peer_ip:
@@ -624,6 +645,7 @@ def main(argv: list[str] | None = None) -> int:
         timeout=args.timeout,
         status_timeout=args.status_timeout,
         ws_timeout=args.ws_timeout,
+        peer_kind=peer_kind,
     )
 
     payload = {
