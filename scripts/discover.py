@@ -551,6 +551,9 @@ def _mac_entry(cand: dict) -> dict:
     entry = {"ip": cand["ip"], "models": cand["models"]}
     if cand.get("ollama"):
         entry["ollama"] = cand["ollama"]
+        entry["port"] = OLLAMA_PORT
+    else:
+        entry["port"] = LM_STUDIO_PORT
     return entry
 
 
@@ -808,8 +811,10 @@ def compute_hash(endpoints: dict) -> str:
     )
     key = json.dumps({
         "mac_ip": mac.get("ip", ""),
+        "mac_port": mac.get("port", ""),
         "mac_models": sorted(mac.get("models", [])),
         "win_ip": win.get("ip", ""),
+        "win_port": win.get("port", ""),
         "win_models": sorted(win.get("models", [])),
         "win_peers": win_peers,
     }, sort_keys=True)
@@ -841,9 +846,10 @@ def save_discovery_state(endpoints: dict, tier: int = 1):
         "hash": compute_hash(endpoints),
         "recovery_tier": tier,
         "endpoints": {
-            "mac": {"ip": mac.get("ip", ""), "port": OLLAMA_PORT,
+            "mac": {"ip": mac.get("ip", ""),
+                    "port": int(mac.get("port") or (OLLAMA_PORT if mac.get("ollama") else LM_STUDIO_PORT if mac else OLLAMA_PORT)),
                     "reachable": bool(mac) and not mac.get("stale")},
-            "win": {"ip": win.get("ip", ""), "port": LM_STUDIO_PORT, "reachable": bool(win)},
+            "win": {"ip": win.get("ip", ""), "port": int(win.get("port") or LM_STUDIO_PORT), "reachable": bool(win)},
             # MVP additive field for a fleet of Windows GPU boxes beyond the
             # single `win` slot (see probe_extra_win_peers). Empty list when
             # $WIN_PEER_IPS is unset — existing single-peer readers are
@@ -1206,6 +1212,7 @@ def run_discovery(
                         # Keep it so the next run can try it again, but do not
                         # save it as reachable.
                         endpoints[role] = {"ip": last["endpoints"][role]["ip"],
+                                           "port": last["endpoints"][role].get("port"),
                                            "models": last["models"][role],
                                            "stale": True}
                         print(f"⚠️  {role} offline — keeping last address and marking it stale", file=sys.stderr)

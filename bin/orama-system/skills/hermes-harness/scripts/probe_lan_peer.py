@@ -135,9 +135,9 @@ def local_role() -> str:
 def peer_from_discovery(discovery: dict[str, Any], role: str) -> tuple[str, int]:
     """Return the peer host and its inference port.
 
-    The Windows peer is LM Studio on port 1234. The Mac peer is Ollama on
-    port 11434. A discovery record that stored 1234 for the Mac is not the
-    Mac inference port.
+    The Windows peer defaults to LM Studio port 1234. The Mac peer defaults
+    to Ollama port 11434. A port saved by discovery is the one that answered,
+    so it is used for either peer.
     """
     endpoints = discovery.get("endpoints") or {}
     if role == "mac":
@@ -149,7 +149,11 @@ def peer_from_discovery(discovery: dict[str, Any], role: str) -> tuple[str, int]
         fallback_ip = os.environ.get("MAC_IP", "").strip()
         default_port = 11434
     ip = str(peer.get("ip") or "").strip()
-    port = default_port
+    try:
+        discovered = int(peer.get("port") or 0)
+    except (TypeError, ValueError):
+        discovered = 0
+    port = discovered or default_port
     if ip in ("", "localhost", "127.0.0.1") and fallback_ip:
         ip = fallback_ip
     return ip, port
@@ -479,8 +483,9 @@ def run_checks(
     """Run the peer checks and return their results.
 
     ``peer_kind`` is the peer's role. A Windows peer is checked at LM Studio
-    (``/v1/models``). A Mac peer is checked at Ollama (``/api/tags`` on port
-    11434). ``lms_port`` is the Windows LM Studio port only.
+    (``/v1/models``) on ``lms_port`` (default 1234). A Mac peer is checked at
+    the port discovery saved: 11434 uses Ollama ``/api/tags``, and any other
+    saved port, including 1234, uses that listener.
     """
     if not peer_ip:
         return [Check("peer-ip", Status.FAIL, "no peer IP in discovery or env")]
@@ -545,9 +550,15 @@ def run_checks(
         checks.append(Check("portal-status", Status.SKIP, "no control-plane token candidates (env or PT .state)"))
 
     if peer_kind == "mac":
-        models_url = f"http://{peer_ip}:11434/api/tags"
-        check_name = "peer-ollama"
-        count_key = "models"
+        model_port = lms_port or 11434
+        if model_port == 11434:
+            models_url = f"http://{peer_ip}:{model_port}/api/tags"
+            check_name = "peer-ollama"
+            count_key = "models"
+        else:
+            models_url = f"http://{peer_ip}:{model_port}/v1/models"
+            check_name = "peer-lmstudio"
+            count_key = "data"
     else:
         models_url = f"http://{peer_ip}:{lms_port}/v1/models"
         check_name = "peer-lmstudio"

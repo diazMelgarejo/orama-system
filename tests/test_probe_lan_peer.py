@@ -42,11 +42,24 @@ def test_peer_from_discovery_mac_role(peer_mod):
 
 
 def test_mac_peer_defaults_to_ollama_port(peer_mod):
-    """A discovery record that stored port 1234 for the Mac is not the inference port."""
-    discovery = {"endpoints": {"mac": {"ip": _MAC_FIXTURE_IP, "port": 1234}}}
+    """A Mac record with no port uses Ollama 11434. A saved port is kept."""
+    discovery = {"endpoints": {"mac": {"ip": _MAC_FIXTURE_IP}}}
     ip, port = peer_mod.peer_from_discovery(discovery, "win")
     assert ip == _MAC_FIXTURE_IP
     assert port == 11434
+    saved = {"endpoints": {"mac": {"ip": _MAC_FIXTURE_IP, "port": 1234}}}
+    assert peer_mod.peer_from_discovery(saved, "win")[1] == 1234
+
+
+def test_win_peer_keeps_discovered_port(peer_mod):
+    """A Windows inference port saved by discovery is not replaced with 1234."""
+    host = "192.0.2.10"
+    discovery = {"endpoints": {"win": {"ip": host, "port": 2345}}}
+    ip, port = peer_mod.peer_from_discovery(discovery, "mac")
+    assert ip == host
+    assert port == 2345
+    missing = {"endpoints": {"win": {"ip": host}}}
+    assert peer_mod.peer_from_discovery(missing, "mac")[1] == 1234
 
 
 def test_run_checks_mac_peer_uses_ollama(peer_mod, monkeypatch):
@@ -62,7 +75,7 @@ def test_run_checks_mac_peer_uses_ollama(peer_mod, monkeypatch):
         return 404, "nope"
 
     monkeypatch.setattr(peer_mod, "http_get", fake_get)
-    checks = peer_mod.run_checks(_MAC_FIXTURE_IP, 1234, 8443, tokens=[], peer_kind="mac")
+    checks = peer_mod.run_checks(_MAC_FIXTURE_IP, 11434, 8443, tokens=[], peer_kind="mac")
     by_name = {c.name: c.status for c in checks}
     assert by_name["peer-ollama"] == peer_mod.Status.PASS
     assert "peer-lmstudio" not in by_name
