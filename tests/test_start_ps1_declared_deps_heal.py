@@ -110,6 +110,19 @@ def test_installer_warns_when_ensurepip_fails() -> None:
     assert 'ensurepip --upgrade failed (exit $ensurepipExit)' in text
     assert "Test-InstallPythonRuns" in text
     assert r"\WindowsApps\\" in text
+    # Windows PowerShell 5.1 Stop-Job has no -Force; -ErrorAction does not
+    # suppress a parameter-binding error under $ErrorActionPreference Stop.
+    assert "Stop-Job $job -ErrorAction SilentlyContinue" in text
+    assert "Stop-Job $job -Force" not in text
+
+
+def test_adopted_shared_interpreter_kept_without_checkout_mapping() -> None:
+    """A healthy PT_PYTHON outside a mapped checkout still replaces a failed venv."""
+    text = _text()
+    assert "healthy shared interpreter" in text
+    assert "Checkout-specific TLS files are checked only when" in text
+    assert "$adoptedRepo -and -not $adoptedHasTls" in text
+    assert "$PtPython = $script:PtPythonAdopted" in text
 
 
 def _run_ps(body: str, tmp_path: Path) -> subprocess.CompletedProcess[str]:

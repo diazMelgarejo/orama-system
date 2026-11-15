@@ -105,7 +105,7 @@ function Test-InstallPythonRuns {
     $done = Wait-Job $job -Timeout 8
     $ok = $false
     if ($done -and $job.State -eq 'Completed') { $ok = $true }
-    else { Stop-Job $job -Force -ErrorAction SilentlyContinue }
+    else { Stop-Job $job -ErrorAction SilentlyContinue }
     Remove-Job $job -Force -ErrorAction SilentlyContinue
     return $ok
 }

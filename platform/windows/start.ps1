@@ -1144,19 +1144,22 @@ if ($PtDir) {
         if ($portalTlsOn -and $adoptedRepo) {
             $adoptedHasTls = Test-Path (Join-Path $adoptedRepo 'orchestrator\portal_tls_proxy.py')
         }
-        if ($adoptedRepo -and $adoptedHasTls) {
-            $PtPython = $script:PtPythonAdopted
-            if ($adoptedRepo -ne $PtDir) {
-                $PtDir = $adoptedRepo
-                _Info 'path' "PT_DIR switched to healthy checkout: $PtDir"
-            }
-            $PathsNeedRewrite = $true
-        } else {
+        # A healthy shared interpreter (no checkout mapping) is kept on the
+        # existing $PtDir. Checkout-specific TLS files are checked only when
+        # switching $PtDir to the adopted checkout.
+        if ($adoptedRepo -and -not $adoptedHasTls) {
             _Warn 'path' "adopted PT checkout has no portal_tls_proxy.py while Portal TLS is enabled; keeping $PtDir"
             if (Test-Path -LiteralPath $PtVenvPython) {
                 $PtPython = $PtVenvPython
                 $PathsNeedRewrite = $true
             }
+        } else {
+            $PtPython = $script:PtPythonAdopted
+            if ($adoptedRepo -and $adoptedRepo -ne $PtDir) {
+                $PtDir = $adoptedRepo
+                _Info 'path' "PT_DIR switched to healthy checkout: $PtDir"
+            }
+            $PathsNeedRewrite = $true
         }
     } elseif ((Test-Path $PtVenvPython) -and $PtPython -ne $PtVenvPython) {
         $PtPython = $PtVenvPython
