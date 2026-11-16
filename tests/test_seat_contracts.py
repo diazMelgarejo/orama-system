@@ -514,3 +514,29 @@ def test_8_the_schema_matches_the_allowlist_and_the_soul_is_honest(sc) -> None:
     assert set(schema["properties"]) == set(sc.CARD_FIELDS)
     soul = (ROOT / "bin/agents/metaresearch-outer/SOUL.md").read_text()
     assert "owner_slices" in soul and "touches Phylax, Telos or Agate policy" not in soul
+
+
+# --- CodeRabbit comment on seat_contracts.py line 30 (real review, PR 519): huge integers -----
+
+
+@pytest.mark.parametrize("huge", [10**400, -10**400, 2**1024])
+def test_huge_integers_are_refused_not_raised(sc, huge: int) -> None:
+    assert sc.is_finite_number(huge) is False
+    assert any("delta" in e for e in sc.validate_mechanism_card(_card(delta=huge)))
+    assert any("metric_before" in e for e in sc.validate_trace_entry(_entry(metric_before=huge)))
+    assert any("metric_after" in e for e in sc.validate_trace_entry(_entry(metric_after=huge)))
+
+
+def test_stall_report_counts_a_huge_metric_as_invalid_not_a_crash(sc) -> None:
+    report = sc.stall_report([_entry(metric_after=10**400)] * 3, window=3)
+    assert report["invalid"] == 3 and report["stalled"] is False
+
+
+def test_the_cycle_refuses_a_huge_metric(tmp_path: Path) -> None:
+    cycle = _load(CYCLE, "biafra_cycle")
+    r = cycle.dry_cycle("inner", "harden", 10**400, 0.5, tmp_path)
+    assert r["ok"] is False and r["reason"] == "non-finite-metric" and r["launched"] is False
+
+
+def test_large_but_representable_numbers_are_still_measurements(sc) -> None:
+    assert all(sc.is_finite_number(v) for v in (10**15, 10**308, 1.7976931348623157e308, -3, 0.25))
