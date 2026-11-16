@@ -127,3 +127,37 @@ Keep the owning scan's explicit guarded failure at its critical site
 and convert every bare `python3 -m pip install` to the helper. Smoke-test the helper with a
 stubbed `python3` (fail twice then succeed -> rc 0 after exactly 3 calls; always-fail with
 `PIP_INSTALL_ATTEMPTS=2` -> rc 1 after exactly 2 calls) before pushing. Synthesis PR: #516.
+
+## Addendum (2026-11-17) - Python venv resolution and the default environment
+
+Verified on the Mac peer: uv 0.13.8, uv-managed CPython 3.13.18 with SQLite 3.53.1.
+
+- **Lookup rule (PEP 405).** CPython activates a venv only when `pyvenv.cfg` is beside, or one
+  directory above, the **invoked** executable path. Symlinks are not dereferenced for this
+  lookup. A venv's own `bin/python3 -> python -> <base>` works because it is invoked from
+  `<env>/bin`. A link from another directory (`~/.local/bin/python3 -> <env>/bin/python3`)
+  runs the bare base interpreter with none of the env's packages. Enter an env through
+  `exec "<env>/bin/python3" "$@"`.
+- **Anchor `home` on the minor-version link.** `uv venv --python 3.13.18` and
+  `uv sync --python 3.13.18` write `home = …/uv/python/cpython-3.13.18-<platform>/bin`, which
+  dangles when uv removes that patch. Ten venvs broke this way (3.13.7, 3.12.11). Pass the link
+  instead: `--python ~/.local/share/uv/python/cpython-3.13-<platform>/bin/python3.13`. `uv venv`,
+  `uv sync` and `python -m venv` invoked that way all write `home = …/cpython-3.13-<platform>/bin`.
+- **User site differs by build.** The framework CPython uses
+  `~/Library/Python/3.13/lib/python/site-packages`; the standalone build uses
+  `~/.local/lib/python3.13/site-packages`. A venv with
+  `include-system-site-packages = false` disables user site entirely.
+- **Changing the default `python3` is a dependency migration.** Freeze the old set
+  (`python3 -m pip freeze --all`, dropping dead `-e` paths) into a rebuild file, and install it
+  into the env before repointing.
+- **Swap safely.** Build the replacement beside the old one, verify it (`sys.version_info`,
+  `sqlite3.sqlite_version >= 3.51.3`, critical imports, a real CLI), repoint by writing a temp
+  file and `mv -f` (atomic `rename(2)`), and delete the old one last.
+- **Source-only packages.** `netifaces==0.11.0` has no cp313 wheel and its C build fails. The
+  drop-in `netifaces-plus` keeps `import netifaces` (callers: `scripts/discover.py`,
+  `scripts/ip_detection_solution.py`).
+- **Tooling caveats.** `uv python install --default` (experimental) writes the `python` and
+  `python3` links and overwrites wrappers. Existing shells may keep a cached command path; run
+  `rehash` or open a new shell.
+
+Elegance exhibit: [fragment-synthesis Exhibit B](../../bin/orama-system/skills/oramasys-method/references/fragment-synthesis.md#exhibit-b--fix-at-the-resolution-layer-mac-default-python-2026-11-17).

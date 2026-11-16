@@ -50,6 +50,32 @@ suite 12 passed / 1 skipped. **Outcome:** PR #516 (head `8f8a0fb`), CI 31/31 che
 (30 SUCCESS / 1 skipped / 1 neutral, 0 failures); PRs #509 and #511 closed as superseded with
 absorption credit.
 
+## Exhibit B — fix at the resolution layer (Mac default Python, 2026-11-17)
+
+Operator earmark: the second designated example of elegance, beside Exhibit A (PR #516). It
+applies the same method to an environment problem rather than a CI fragment.
+
+- **Classify the failure.** It was a dependency migration hidden inside an interpreter change.
+  Making uv CPython 3.13.18 (SQLite 3.53.1) the default `python3` dropped the old default's 229
+  packages, and the board CLI failed on `aiosqlite`.
+- **Census the exposure.** Every caller of bare `python3`: one launchd job (pinned to
+  `/usr/bin/python3`, so unaffected), the Claude hooks (standard library only), and the many
+  agent instructions that run `python3 scripts/...` (affected). There were also ten venvs whose
+  `pyvenv.cfg` `home` pointed at removed uv patch directories.
+- **Synthesize instead of picking a side.** Reverting would lose the SQLite fix. Reinstalling
+  packages into a managed base would pollute it. Rewriting callers would touch dozens of
+  instructions. The synthesis: `python3` becomes an `exec` wrapper into one venv built from the
+  uv **minor-version link** (`home` survives 3.13.x patch upgrades), filled from one rebuild
+  file.
+- **Replace before remove, then verify.** The replacement env was built beside the old one and
+  verified (version, SQLite floor, imports, board CLI). The wrappers were repointed by atomic
+  rename, and only then was the old env deleted. Rollback is deleting two wrappers.
+
+Mechanics and the failure table:
+[wiki 02, Python venv resolution](../../../../../docs/wiki/02-idempotent-installs.md#addendum-2026-11-17---python-venv-resolution-and-the-default-environment)
+and the Perpetua-Tools card
+`.agent/memory/semantic/PYTHON_VENV_RESOLUTION_AND_DEFAULT_ENV_DOMAIN_KNOWLEDGE_2026-11-17.md`.
+
 ## Anti-patterns
 
 - Stacking fragments linearly because each one "works" — the stack sequences partial coverage
