@@ -596,3 +596,43 @@ def test_a_fixed_wall_name_reports_e_owner_even_when_it_is_not_identifier_shaped
 def test_owner_errors_never_raises(sc) -> None:
     for bad in (None, 5, "kungfu", [], [None], [5], [["x"]], {"a": 1}):
         assert isinstance(sc._owner_errors(bad), list)
+
+
+# --- turn 3: degenerate identifiers and the blank-entry message (defects reported by the outer seat,
+# --- reproduced by the reviewer) ------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "name", ["a.", "a/", "a//b", "a/../b", "a/./b", "a/.", "a/.hidden", "a/b/", "a/b."],
+)
+def test_degenerate_identifiers_are_refused(sc, name: str) -> None:
+    errors = sc.validate_mechanism_card(_card(owner_slices=[name]))
+    assert any("repository identifiers" in e for e in errors), name
+
+
+@pytest.mark.parametrize("name", ["a", "1", "org/repo.name", "a.b.c", "x-y_z", "a/b/c"])
+def test_short_and_dotted_but_valid_identifiers_are_accepted(sc, name: str) -> None:
+    assert sc.validate_mechanism_card(_card(owner_slices=[name])) == []
+
+
+@pytest.mark.parametrize("owners", [["", "orama-system"], ["   "], [" "]])
+def test_a_blank_entry_is_not_blamed_on_the_list(sc, owners) -> None:
+    msg = " ".join(sc._owner_errors(owners))
+    assert msg and "non-empty list" not in msg and "entries" in msg
+
+
+@pytest.mark.parametrize("owners", [[], "kungfu", None])
+def test_an_empty_or_missing_list_is_still_blamed_on_the_list(sc, owners) -> None:
+    assert "non-empty list" in " ".join(sc._owner_errors(owners))
+
+
+def test_the_identifier_error_names_the_entry_but_stays_bounded(sc) -> None:
+    assert "a//b" in " ".join(sc._owner_errors(["a//b"]))
+    huge = "x/" * 3000
+    msg = " ".join(sc._owner_errors([huge, huge]))
+    assert len(msg) < 400, len(msg)
+
+
+@pytest.mark.parametrize("bad", [[123], [None], [True], [b"kungfu"], [["kungfu"]]])
+def test_non_string_entries_are_refused_without_raising(sc, bad) -> None:
+    assert sc._owner_errors(bad)

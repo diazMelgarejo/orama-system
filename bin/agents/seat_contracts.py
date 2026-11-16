@@ -91,18 +91,32 @@ def _owner_errors(owners: Any) -> list[str]:
 
     The fixed-wall check runs first, so a disguised wall name reports E_OWNER even when it also
     fails the identifier shape. Every remaining entry must be a repository identifier: letters,
-    digits and . _ - / only, starting with a letter or digit, at most 64 characters.
+    digits and . _ - / only, starting with a letter or digit, at most 64 characters, with no empty,
+    dot, or dot-prefixed path segment and no trailing dot or slash.
     """
-    if not (isinstance(owners, list) and owners and all(_text(o) for o in owners)):
+    if not isinstance(owners, list) or not owners:
         return ["owner_slices must be a non-empty list"]
-    folded = {o: _owner_folded(o) for o in owners}
-    walls = sorted({w for f in folded.values() if f for w in FIXED_WALLS if w in f})
-    if walls or any(f is None or f == "" for f in folded.values()):
+    if any(not _text(o) for o in owners):
+        return ["owner_slices entries must be non-empty text"]
+    folded = [_owner_folded(o) for o in owners]
+    walls = sorted({w for f in folded if f for w in FIXED_WALLS if w in f})
+    if walls or any(f is None or f == "" for f in folded):
         reason = f"fixed-wall owner(s): {', '.join(walls)}" if walls else "non-ASCII or empty owner name"
         return [f"E_OWNER: a mechanism may not touch {reason}"]
-    offenders = [o for o in owners if not _OWNER_SHAPE.fullmatch(o)]
+    offenders = [
+        o
+        for o in owners
+        if not (
+            _OWNER_SHAPE.fullmatch(o)
+            and all(part and not part.startswith(".") for part in o.split("/"))
+            and not o.endswith(".")
+        )
+    ]
     if offenders:
-        return ["owner_slices must be repository identifiers: " + ", ".join(repr(o[:72]) for o in offenders)]
+        return [
+            "owner_slices must be repository identifiers: "
+            + ", ".join(repr(o[:72]) for o in offenders)
+        ]
     return []
 
 
