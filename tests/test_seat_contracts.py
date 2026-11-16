@@ -236,3 +236,63 @@ def test_biafra_persona_exists_and_keeps_the_hard_limits() -> None:
     soul = (ROOT / "bin/agents/metaresearch-outer/SOUL.md").read_text()
     assert "Biafra" in soul
     assert "never starts" in soul
+
+
+# --- model and effort policy (operator clarification 2026-11-17) ---------------------------
+
+
+def test_default_effort_ladder_is_medium_then_high_then_low(sc) -> None:
+    assert sc.EFFORT_LADDER == ("medium", "high", "low")
+    assert sc.select_effort(("low", "high", "medium")) == "medium"
+    assert sc.select_effort(("low", "high")) == "high"
+    assert sc.select_effort(("low",)) == "low"
+
+
+@pytest.mark.parametrize("supported", [(), ("xhigh", "max"), ("max",)])
+def test_effort_never_selects_xhigh_or_max(sc, supported) -> None:
+    assert sc.select_effort(supported) is None
+
+
+def test_free_turn_runs_the_default_ladder_with_no_approval(sc) -> None:
+    plan = sc.plan_turn("outer", platform="anthropic", paid_approved=False, supported=("high", "low"))
+    assert plan == {
+        "tier": "default", "model": None, "effort": "high", "human_gated": False, "auto_run": True,
+    }
+
+
+@pytest.mark.parametrize("approved", [None, 0, 1, "yes", "true"])
+def test_only_a_literal_true_approves_a_paid_preference(sc, approved) -> None:
+    plan = sc.plan_turn("outer", platform="anthropic", paid_approved=approved)
+    assert plan["tier"] == "default" and plan["auto_run"] is True
+
+
+@pytest.mark.parametrize(
+    ("seat", "platform", "model", "effort"),
+    [
+        ("outer", "anthropic", "Claude Fable 5.2", "high"),
+        ("inner", "anthropic", "Claude Opus 5.5", "medium"),
+        ("outer", "openai", "GPT-6 Astra", "high"),
+        ("inner", "openai", "GPT-6.1 Sol", "medium"),
+    ],
+)
+def test_preferred_paid_models_need_explicit_approval(sc, seat, platform, model, effort) -> None:
+    plan = sc.plan_turn(seat, platform=platform, paid_approved=True)
+    assert plan == {
+        "tier": "preferred", "model": model, "effort": effort, "human_gated": True, "auto_run": False,
+    }
+    assert sc.plan_turn(seat, platform=platform, paid_approved=False)["tier"] == "default"
+
+
+def test_unknown_platform_falls_back_even_when_approved(sc) -> None:
+    assert sc.plan_turn("outer", platform="other", paid_approved=True)["tier"] == "default"
+
+
+def test_no_preferred_effort_is_xhigh_or_max(sc) -> None:
+    assert all(effort in sc.EFFORT_LADDER for _model, effort in sc.PREFERRED_PAID.values())
+
+
+def test_policy_text_is_in_the_plan_and_the_persona() -> None:
+    plan = (ROOT / "docs/v2/76-biafra-outer-seat-canonical-plan.md").read_text()
+    assert "human-gated" in plan and "Fable 5.2" in plan and "free W&B" in plan
+    persona = yaml.safe_load((ROOT / "bin/agents/personas/biafra.yaml").read_text())
+    assert any("human-gated" in rule for rule in persona["hard_rules"])

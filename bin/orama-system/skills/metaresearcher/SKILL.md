@@ -80,7 +80,10 @@ Biafra is the canonical agent for this seat; the ids stay `metaresearch-outer` a
   Phylax, Telos or Agate as an owner is refused before any measurement (`E_OWNER`). The JSON Schema in
   `docs/v2/references/biafra/` is shape-only.
 - **Pins:** the evaluator digest from `evaluator_digest(...)` goes in every receipt.
-- **Effort:** explicit, medium else high else low, never xhigh or max, for every occupant.
+- **Model and effort (always explicit):** preferred and human-gated, Claude Fable 5.2 high or
+  GPT-6 Astra high for Biafra, run only after explicit approval. Default and automatic, medium else
+  high else low and never xhigh or max, on free W&B turns and as the fallback when no paid permission
+  is granted. `plan_turn` in `seat_contracts.py` encodes both tiers.
 - **Live cycle:** the gate and the arm are both required, and the operator names provider, budget,
   request limit and deadline first. Plan: `docs/v2/76-biafra-outer-seat-canonical-plan.md`.
 

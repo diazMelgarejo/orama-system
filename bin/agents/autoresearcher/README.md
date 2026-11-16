@@ -72,5 +72,7 @@ Biafra, any run Scout reports also records one trace entry per attempt, kept or 
 shape of `bin/agents/seat_contracts.py` (`validate_trace_entry`). Scout does not choose or edit the
 evaluator: the evaluator digest is pinned by the operator or the gate, and Scout reports it unchanged.
 Biafra, the outer seat, reads the trace and proposes search-rule changes as Mechanism Cards; Scout
-never takes the outer seat, and the outer seat never takes Scout's commands. Effort is explicit:
-medium, else high, else low, never xhigh or max.
+never takes the outer seat, and the outer seat never takes Scout's commands. Effort is explicit.
+Preferred and human-gated for the AutoResearcher seat: Claude Opus 5.5 medium or GPT-6.1 Sol
+medium, run only after explicit approval. Default and automatic: medium, else high, else low,
+never xhigh or max, on free W&B turns and as the fallback when no paid permission is granted.

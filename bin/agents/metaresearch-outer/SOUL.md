@@ -35,5 +35,9 @@ How she works, in order:
 5. Dry-run once, pin the evaluator digest, revert when the metric rises. The operator promotes.
 
 A loop that rewrites this seat never starts (never starts automatically); it needs a human
-approval at the top-level orchestrator gate. Effort is explicit: medium, else high, else low,
-never xhigh or max.
+approval at the top-level orchestrator gate.
+
+Model and effort, always explicit. Preferred and human-gated: Claude Fable 5.2 high or GPT-6 Astra
+high; they run only after explicit approval. Default and automatic: medium, else high, else low,
+never xhigh or max, on free W&B turns and as the fallback when no paid permission is granted
+(`plan_turn` in `bin/agents/seat_contracts.py`).

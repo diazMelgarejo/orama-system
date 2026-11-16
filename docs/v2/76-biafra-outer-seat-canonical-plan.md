@@ -15,7 +15,7 @@
 | Persona | Operator wording: a stern but very helpful thesis adviser, disarming, thorough, specific, direct, evidence-first, non-intrusive, nudging toward stated goals, exposing assumptions. Pronouns she/her, operator-supplied. The rest of the personification in `bin/agents/personas/biafra.yaml` is a draft for review. |
 | Retrofit scope | Seat contracts plus a Mechanism Card schema, in orama-system. |
 | Card home | The contract lives in orama-system now. Anamnesis is the future record store and Kungfu the future reference holder; neither unpublished repository is changed. |
-| Effort | The standing rule for every occupant: medium, else high, else low, never xhigh or max, always explicit. The 2026-11-14 draft's per-model effort table is superseded for effort. |
+| Effort and models | Two tiers, both explicit. **Preferred, human-gated:** Biafra (MetaResearcher) on Claude Fable 5.2 high or GPT-6 Astra high; the AutoResearcher seat on Claude Opus 5.5 medium or GPT-6.1 Sol medium. These stay preferred as planned and run only after explicit human approval before execution. **Default, automatic:** the standing rule, medium, else high, else low, never xhigh or max, runs on free W&B turns with no human approval and is the fallback whenever no paid permission has been granted. Clarified 2026-11-17; an earlier version of this row said the draft's table was superseded, which was wrong. |
 | Live gate | Opened in principle for one bounded cycle: W&B free-first, 2 requests (one inner, one outer), no retry, no paid credits. Nothing is armed by this change. See section 5. |
 | PR shape | One PR in each mutated repository. |
 

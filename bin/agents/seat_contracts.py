@@ -21,6 +21,18 @@ CARD_STATUSES = ("candidate", "reviewed", "graduated")
 FIXED_WALLS = frozenset({"phylax", "telos", "agate"})
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
 
+# Model and effort policy (operator clarification 2026-11-17).
+# The ladder is the default: it runs on free W&B turns with no human approval, and it is the
+# fallback whenever no paid permission has been granted. xhigh and max are never selected.
+EFFORT_LADDER = ("medium", "high", "low")
+# Preferred paid occupants are human-gated: they run only after explicit approval.
+PREFERRED_PAID: dict[tuple[str, str], tuple[str, str]] = {
+    ("outer", "anthropic"): ("Claude Fable 5.2", "high"),
+    ("inner", "anthropic"): ("Claude Opus 5.5", "medium"),
+    ("outer", "openai"): ("GPT-6 Astra", "high"),
+    ("inner", "openai"): ("GPT-6.1 Sol", "medium"),
+}
+
 
 def _finite(value: Any) -> bool:
     """True for a real finite number; bool, str, NaN and inf are not measurements."""
@@ -152,3 +164,34 @@ def validate_mechanism_card(card: Mapping[str, Any]) -> list[str]:
     elif not isinstance(card["dry_run_receipt"], Mapping):
         errors.append("dry_run_receipt must be an object")
     return errors
+
+
+def select_effort(supported: Iterable[str] = EFFORT_LADDER) -> str | None:
+    """First of medium, high, low that the provider supports; None if none (never xhigh/max)."""
+    offered = set(supported)
+    return next((effort for effort in EFFORT_LADDER if effort in offered), None)
+
+
+def plan_turn(
+    seat: str,
+    platform: str | None = None,
+    paid_approved: Any = False,
+    supported: Iterable[str] = EFFORT_LADDER,
+) -> dict[str, Any]:
+    """Choose the model tier and effort for one turn.
+
+    A preferred paid model is returned only for a literal `paid_approved is True` and a known
+    seat/platform pair, and it is marked human-gated and not auto-run. Everything else gets the
+    default ladder, which runs automatically with no model pinned.
+    """
+    preferred = PREFERRED_PAID.get((seat, platform or ""))
+    if paid_approved is True and preferred is not None:
+        model, effort = preferred
+        return {"tier": "preferred", "model": model, "effort": effort, "human_gated": True, "auto_run": False}
+    return {
+        "tier": "default",
+        "model": None,
+        "effort": select_effort(supported),
+        "human_gated": False,
+        "auto_run": True,
+    }
