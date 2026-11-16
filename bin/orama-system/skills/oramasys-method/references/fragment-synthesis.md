@@ -41,7 +41,7 @@ One PyPI `IncompleteRead` failure on the agent-audit security-scan job produced 
 The census then found the coverage gap: the script had **8** `pip install` call sites and the
 two fixes together protected **3** — the skill-scanner and mcp-scanner upgrade and package
 installs carry the same blip exposure neither side touched. The synthesis applied the shared
-helper to **8 of 8** sites, kept the guarded failure, and preserved the workflow pins, cache
+helper to **6 of 6** sites, kept the guarded failure, and preserved the workflow pins, cache
 keys and trigger scope.
 
 **Verification:** `bash -n` clean; behavioral smoke test with a stubbed pip (recovery on the

@@ -89,7 +89,7 @@ The agent-audit security-scan job died on `IncompleteRead` (PyPI truncated wheel
 network blip, not a code defect. Three independent fixes then fragmented across three branches:
 an inline 3-attempt loop on one call site (merged), a reusable helper on another branch covering
 two call sites, and a superseded test patch. The census that ended the fragmentation found the
-real number: **the script had 8 `pip install` call sites and the fixes protected 3**.
+real number: **the script had 6 `pip install` call sites and the fixes protected 2** — the agent-audit editable install was double-counted because both fixes covered it. Erratum to the originally published figures (8/3); the coverage gap that mattered (4 unprotected sites) is unchanged.
 
 **Rule: classify the failure class first (transient infrastructure vs code defect), then census
 EVERY exposure point in the file and protect all of them with one shared helper.**
