@@ -13,7 +13,7 @@ harmonizing them.
    and immediately exposes which fragments are alternatives vs complements.
 2. **Census every exposure point**, not just the site that happened to fail. A point fix protects
    one instance of the class; the census tells you the real blast radius of the synthesis
-   (fragments covering 3 of 8 sites is the signal that neither side saw the whole problem).
+   (fragments covering 2 of 6 sites is the signal that neither side saw the whole problem).
 3. **Classify each fragment per integrative-merge**: complementary capability, duplicated intent,
    or superseded (already merged elsewhere). Map every hunk to a disposition: keep / absorb /
    retire.
@@ -33,15 +33,15 @@ harmonizing them.
 One PyPI `IncompleteRead` failure on the agent-audit security-scan job produced three fragments:
 
 | Fragment | Where | Idea | Disposition in the synthesis |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Inline 3-attempt loop, linear backoff, explicit guarded failure + message | main `db536e15` (merged via #508) | failure accounting + backoff | **absorbed**: backoff folded into the helper; guarded failure kept verbatim |
 | Reusable env-configurable `pip_install_retry()` | PR #509 | reusability + tunability | **absorbed**: the helper is the synthesis core |
 | Test-expectation fix (port key) | PR #511 | correct assertions | **retired**: identical fix merged via #508 (`4b92735`) |
 
-The census then found the coverage gap: the script had **8** `pip install` call sites and the
-two fixes together protected **3** — the skill-scanner and mcp-scanner upgrade and package
+The census then found the coverage gap: the script had **6** `pip install` call sites and the
+two fixes together protected **2** — the skill-scanner and mcp-scanner upgrade and package
 installs carry the same blip exposure neither side touched. The synthesis applied the shared
-helper to **8 of 8** sites, kept the guarded failure, and preserved the workflow pins, cache
+helper to **6 of 6** sites, kept the guarded failure, and preserved the workflow pins, cache
 keys and trigger scope.
 
 **Verification:** `bash -n` clean; behavioral smoke test with a stubbed pip (recovery on the
@@ -49,6 +49,32 @@ third attempt; env-tunable attempt count honored; linear backoff logged); workfl
 suite 12 passed / 1 skipped. **Outcome:** PR #516 (head `8f8a0fb`), CI 31/31 checks green
 (30 SUCCESS / 1 skipped / 1 neutral, 0 failures); PRs #509 and #511 closed as superseded with
 absorption credit.
+
+## Exhibit B — fix at the resolution layer (Mac default Python, 2026-11-17)
+
+Operator earmark: the second designated example of elegance, beside Exhibit A (PR #516). It
+applies the same method to an environment problem rather than a CI fragment.
+
+- **Classify the failure.** It was a dependency migration hidden inside an interpreter change.
+  Making uv CPython 3.13.18 (SQLite 3.53.1) the default `python3` dropped the old default's 229
+  packages, and the board CLI failed on `aiosqlite`.
+- **Census the exposure.** Every caller of bare `python3`: one launchd job (pinned to
+  `/usr/bin/python3`, so unaffected), the Claude hooks (standard library only), and the many
+  agent instructions that run `python3 scripts/...` (affected). There were also ten venvs whose
+  `pyvenv.cfg` `home` pointed at removed uv patch directories.
+- **Synthesize instead of picking a side.** Reverting would lose the SQLite fix. Reinstalling
+  packages into a managed base would pollute it. Rewriting callers would touch dozens of
+  instructions. The synthesis: `python3` becomes an `exec` wrapper into one venv built from the
+  uv **minor-version link** (`home` survives 3.13.x patch upgrades), filled from one rebuild
+  file.
+- **Replace before remove, then verify.** The replacement env was built beside the old one and
+  verified (version, SQLite floor, imports, board CLI). The wrappers were repointed by atomic
+  rename, and only then was the old env deleted. Rollback is deleting two wrappers.
+
+Mechanics and the failure table:
+[wiki 02, Python venv resolution](../../../../../docs/wiki/02-idempotent-installs.md#addendum-2026-11-17---python-venv-resolution-and-the-default-environment)
+and the Perpetua-Tools card
+`.agent/memory/semantic/PYTHON_VENV_RESOLUTION_AND_DEFAULT_ENV_DOMAIN_KNOWLEDGE_2026-11-17.md`.
 
 ## Anti-patterns
 
