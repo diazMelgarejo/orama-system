@@ -33,7 +33,7 @@ harmonizing them.
 One PyPI `IncompleteRead` failure on the agent-audit security-scan job produced three fragments:
 
 | Fragment | Where | Idea | Disposition in the synthesis |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Inline 3-attempt loop, linear backoff, explicit guarded failure + message | main `db536e15` (merged via #508) | failure accounting + backoff | **absorbed**: backoff folded into the helper; guarded failure kept verbatim |
 | Reusable env-configurable `pip_install_retry()` | PR #509 | reusability + tunability | **absorbed**: the helper is the synthesis core |
 | Test-expectation fix (port key) | PR #511 | correct assertions | **retired**: identical fix merged via #508 (`4b92735`) |

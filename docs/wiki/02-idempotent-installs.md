@@ -1,6 +1,7 @@
 # 02. Idempotent Installs — Execute Bits, capture_output, Model Discovery
 
-**TL;DR:** `npm install -g` does not guarantee execute bits; `PermissionError` is not `CalledProcessError`; never hardcode model names — query the backend at runtime.
+**TL;DR:** `npm install -g` does not guarantee execute bits; `PermissionError` is not
+`CalledProcessError`; never hardcode model names — query the backend at runtime.
 
 ---
 
@@ -8,15 +9,19 @@
 
 Three separate issues in bootstrap/install flows:
 
-1. **`capture_output=True` hides all subprocess output** — install appears frozen; user cannot see progress or errors
-2. **`npm install -g` missing execute bit** — `shutil.which("openclaw")` finds the binary, but `subprocess.run(["openclaw", ...])` raises `PermissionError: [Errno 13]` because `+x` was not set
-3. **Hardcoded model names** — LM Studio returns `400 Bad Request` and Ollama returns `404 Not Found` when the configured model isn't loaded
+1. **`capture_output=True` hides all subprocess output** — install appears frozen; user cannot see
+   progress or errors
+2. **`npm install -g` missing execute bit** — `shutil.which("openclaw")` finds the binary, but
+   `subprocess.run(["openclaw", ...])` raises `PermissionError: [Errno 13]` because `+x` was not set
+3. **Hardcoded model names** — LM Studio returns `400 Bad Request` and Ollama returns `404 Not
+   Found` when the configured model isn't loaded
 
 ---
 
 ## Fix
 
 ### Execute bit
+
 ```python
 import stat, shutil
 from pathlib import Path
@@ -27,6 +32,7 @@ if path and not (Path(path).stat().st_mode & stat.S_IXUSR):
 ```
 
 ### Exception handling
+
 ```python
 try:
     subprocess.run(["openclaw", "--version"], check=True)
@@ -37,6 +43,7 @@ except PermissionError:
 ```
 
 ### Runtime model discovery
+
 ```python
 def _resolve_lmstudio_model(host, port, preferred):
     r = httpx.get(f"http://{host}:{port}/v1/models", timeout=5)
@@ -69,7 +76,8 @@ curl -s http://localhost:11434/api/tags | python3 -c "import sys,json; print([m[
 1. **Never use `capture_output=True` in bootstrap/install subprocess calls**
 2. **After any `npm install -g`, verify and fix execute bits** before running the binary
 3. **Catch `PermissionError` separately from `CalledProcessError`** in every subprocess block
-4. **Never hardcode model names** — query `/v1/models` or `/api/tags` at runtime; fall back to first available
+4. **Never hardcode model names** — query `/v1/models` or `/api/tags` at runtime; fall back to first
+   available
 5. **Keep `AgentTracker.agents.json` on a distinct path** from routing/config state files
 6. **All `_load()` methods for typed records must `isinstance(v, dict)`** before `**v` unpacking
 
@@ -78,8 +86,8 @@ curl -s http://localhost:11434/api/tags | python3 -c "import sys,json; print([m[
 ## Related
 
 - [Session log 2026-04-07](../LESSONS.md#2026-04-07--claude--idempotent-installs-subprocess-permissions--model-auto-discovery)
-- Commits: `3c9a4a8` (UTS bootstrap), `23bd01d` (UTS capture_output), `ffb1be0` (PT model discovery), `d9e4f50` (PT tracker)
-
+- Commits: `3c9a4a8` (UTS bootstrap), `23bd01d` (UTS capture_output), `ffb1be0` (PT model
+  discovery), `d9e4f50` (PT tracker)
 
 ---
 
@@ -89,7 +97,10 @@ The agent-audit security-scan job died on `IncompleteRead` (PyPI truncated wheel
 network blip, not a code defect. Three independent fixes then fragmented across three branches:
 an inline 3-attempt loop on one call site (merged), a reusable helper on another branch covering
 two call sites, and a superseded test patch. The census that ended the fragmentation found the
-real number: **the script had 6 `pip install` call sites and the fixes protected 2** — the agent-audit editable install was double-counted because both fixes covered it. Erratum to the originally published figures (8/3); the coverage gap that mattered (4 unprotected sites) is unchanged.
+real number: **the script had 6 `pip install` call sites and the fixes protected 2** — the
+agent-audit editable install was double-counted because both fixes covered it. Erratum to the
+originally published figures (8/3); the coverage gap that mattered (4 unprotected sites) is
+unchanged.
 
 **Rule: classify the failure class first (transient infrastructure vs code defect), then census
 EVERY exposure point in the file and protect all of them with one shared helper.**
