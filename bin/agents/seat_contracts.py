@@ -54,7 +54,13 @@ PREFERRED_PAID: dict[tuple[str, str], tuple[str, str]] = {
 
 
 def _finite(value: Any) -> bool:
-    """True for a real finite number; bool, str, NaN and inf are not measurements."""
+    """True for a real number that is finite after conversion to float.
+
+    bool, str, None, NaN and inf are not measurements. An int whose magnitude exceeds the largest
+    double (about 1.8e308) is refused instead of raising: every consumer computes in doubles, so
+    it is not a usable measurement. Ints up to that bound are accepted, including the band above
+    2**53 where the conversion loses precision.
+    """
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return False
     try:

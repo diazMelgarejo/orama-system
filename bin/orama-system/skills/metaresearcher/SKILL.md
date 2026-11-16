@@ -76,10 +76,14 @@ Biafra is the canonical agent for this seat; the ids stay `metaresearch-outer` a
 
 - **Reads:** trace entries from `bin/agents/seat_contracts.py`. She never writes the inner trace.
 - **Stall rule:** `stall_report(trace, window=3)`. No stall, no proposal.
-- **Writes:** a Mechanism Card candidate, validated by `validate_mechanism_card`. A card naming
-  Phylax, Telos or Agate as an owner is refused before any measurement (`E_OWNER`). The JSON Schema in
+- **Writes:** a Mechanism Card candidate, validated by `validate_mechanism_card`. Pass it to
+  `dry_cycle` or `live_cycle` as `mechanism_card`: a card naming Phylax, Telos or Agate as an owner
+  is then refused (`invalid-card`, `E_OWNER`) before any measurement or launch. A caller that
+  omits the card is not checked, and the result says `card_checked: false`. The JSON Schema in
   `docs/v2/references/biafra/` is shape-only.
-- **Pins:** the evaluator digest from `evaluator_digest(...)` goes in every receipt.
+- **Pins:** the evaluator digest from `evaluator_digest(...)` goes in every receipt. Not yet
+  enforced (open gap G3): the card's digest is not compared with its dry-run receipt, and a
+  graduated card's receipt needs no `trace`.
 - **Model and effort (always explicit):** preferred and human-gated, Claude Fable 5.2 high or
   GPT-6 Astra high for Biafra, run only after explicit approval. Default and automatic, medium else
   high else low and never xhigh or max, on free W&B turns and as the fallback when no paid permission

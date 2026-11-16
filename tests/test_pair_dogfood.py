@@ -148,3 +148,14 @@ def test_a_second_pair_cycle_in_the_same_directories_does_not_retry(tmp_path: Pa
     cycle = _load(ROOT / "bin/agents/biafra_cycle.py", "biafra_cycle")
     again = cycle.dry_cycle("outer", "harden", 0.26, 0.19, tmp_path / "one" / "outer", "search-rule", first["digest"])
     assert again["ok"] is False and again["reason"] == "already-ran" and again["retries"] == 0
+
+
+def test_the_saved_live_cycle_artifacts_are_valid() -> None:
+    sc = _load(ROOT / "bin/agents/seat_contracts.py", "seat_contracts")
+    base = ROOT / "docs/v2/references/biafra/live-cycle-2026-11-17"
+    rows = [json.loads(line) for line in (base / "ledger.jsonl").read_text().splitlines() if line.strip()]
+    assert [r["seat"] for r in rows] == ["inner", "outer"]
+    assert all(sc.validate_trace_entry(r) == [] for r in rows)
+    card = json.loads((base / "mechanism-card-candidate.json").read_text())
+    assert sc.validate_mechanism_card(card) == []
+    assert card["evidence_ids"] == [rows[0]["attempt_id"]] and card["status"] == "candidate"

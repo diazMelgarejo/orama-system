@@ -47,10 +47,12 @@ that cannot encode ownership must not be mistaken for safety.
 | --- | --- | --- |
 | G1 | Biafra has no ledger to read. Anamnesis is a scaffold and its runtime capture fails closed. | Open. Trace entries are specified, not stored. A reader adapter waits for Anamnesis. |
 | G2 | Kungfu is an unpublished local draft with an unevaluable O1–O3 gate. | Open. Mechanism Cards reference atoms by id only. |
-| G3 | The evaluator digest is computed by `evaluator_digest()` but nothing yet pins it at run start. | Open. Needs a place the operator or gate writes it. Proposal, not decided. |
+| G3 | The evaluator digest is computed by `evaluator_digest()` but nothing yet pins it at run start, and `validate_mechanism_card` never compares a card's digest with its dry-run receipt. Accepted today although it should not be: (1) a graduated card whose receipt has no `trace`; (2) a graduated card whose receipt `trace.evaluator_digest` differs from the card's; (3) a graduated card whose digest was never pinned by anything. | Open. Needs a place the operator or gate writes the pin, and a decision on what the digest covers. Not implemented on purpose. |
 | G4 | Stall window defaults to 3 consecutive reverts. | Operator to confirm or change. |
 | G5 | The 2026-06-05 rule that `oramasys/*` is reference-only versus later direct PRs there. | Not touched here; no `oramasys/*` repository is mutated. |
 | G6 | Persona elaboration beyond the operator's wording. | Draft, for review. One boundary was added: Biafra questions the work's assumptions and does not diagnose the person. |
+| G8 | `_finite` accepts integers up to about 1.8e308, including the band above 2**53 where conversion to float loses precision. A transport that serialises the raw integer (JSON can carry 10**400) may accept a value this validator refuses. | Assumption recorded; the docstring states it. Operator to confirm that every consumer computes in doubles. |
+| G9 | The fixed-wall card check runs only when a caller passes `mechanism_card`. A caller that omits it is not checked. | Reported as `card_checked: false` so checked and unchecked are distinguishable. Making the card mandatory is a decision for the operator. |
 | G7 | Provider state for the live cycle (W&B model order and effort acceptance, BigModel balance) was last seen on 2026-11-12. | Must be re-probed before arming. |
 
 ## 5. Live cycle (one, bounded, not armed by this change)
@@ -139,3 +141,16 @@ same-day provider re-probe.
 The first version of this dogfood surfaced no new defect. The eight review defects it depends on
 (Scout's seat id, constant attempt ids, silent no-trace default, marker claimed before validation,
 metric guard, digest pinning, card consistency, owner and field checks) were fixed first, test-first.
+
+## 10. First real-world live pair turn (2026-11-17)
+
+After the operator pointed out that live turns exist to test real-world situations, the loop was
+aimed at the four real CodeRabbit comments on pull request 519 instead of an invented corpus. The
+inner seat fixed comment 2, the outer seat triaged comments 3 and 4 and proposed a rule, and the
+useful parts were incorporated after vetting. Details, the vetting table and the saved ledger and
+card are in `docs/v2/references/biafra/live-cycle-2026-11-17/`.
+
+Request accounting, stated plainly: two requests earlier in the day (the first failed on a known
+400, the second produced the review), possibly one cut-off request from a synthetic first attempt
+that was stopped (its marker existed), and two in the real loop. The operator approved one live
+pair loop; the cut-off attempt is the only count that is uncertain.

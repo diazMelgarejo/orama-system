@@ -163,3 +163,62 @@ def test_an_evaluator_that_raises_is_reported(cycle, tmp_path, monkeypatch) -> N
 def test_both_programs_expose_run_live(name: str) -> None:
     module = _load(ROOT / "bin/agents" / name / "program.py", name.replace("-", "_") + "_p")
     assert callable(module.run_live)
+
+
+# --- Biafra's triage of CodeRabbit comment 3: wire the card check into measurement (real turn) ---
+
+PHYLAX_CARD = {
+    "version": 1, "mechanism_id": "m-test", "revision": 1, "parent": None, "hypothesis": "h",
+    "evidence_ids": ["a-1"], "inner_metric": "m", "held_out_metric": "h", "evaluator_digest": DIGEST,
+    "dry_run_receipt": {}, "delta": -1.0, "reverted": False, "scope_record": {"authorizes": "nothing"},
+    "owner_slices": ["kungfu"], "status": "candidate",
+}
+
+
+def _card(**over):
+    card = dict(PHYLAX_CARD)
+    card.update(over)
+    return card
+
+
+def test_dry_cycle_refuses_a_fixed_wall_card_before_measurement(cycle, tmp_path: Path) -> None:
+    r = cycle.dry_cycle("outer", "harden", 0.3, 0.1, tmp_path, evaluator_digest=DIGEST,
+                        mechanism_card=_card(owner_slices=["phylax"]))
+    assert r["ok"] is False and r["reason"] == "invalid-card" and r["launched"] is False
+    assert any("E_OWNER" in e for e in r["errors"])
+    assert not list(tmp_path.glob("*.once"))  # the attempt was not consumed
+
+
+def test_dry_cycle_runs_with_a_valid_card_and_says_it_was_checked(cycle, tmp_path: Path) -> None:
+    r = cycle.dry_cycle("outer", "harden", 0.3, 0.1, tmp_path, evaluator_digest=DIGEST, mechanism_card=_card())
+    assert r["ok"] is True and r["card_checked"] is True
+
+
+def test_the_no_card_path_is_unchanged_and_says_nothing_was_checked(cycle, tmp_path: Path) -> None:
+    r = cycle.dry_cycle("outer", "harden", 0.3, 0.1, tmp_path, evaluator_digest=DIGEST)
+    assert r["ok"] is True and r["card_checked"] is False
+
+
+def test_live_cycle_refuses_a_fixed_wall_card_before_any_launch(cycle, tmp_path, monkeypatch) -> None:
+    _arm(monkeypatch, cycle)
+    calls: list = []
+    monkeypatch.setattr(cycle.subprocess, "run", _fake_run(calls=calls))
+    r = cycle.live_cycle(**_kwargs(tmp_path, mechanism_card=_card(owner_slices=["telos"])))
+    assert r["ok"] is False and r["reason"] == "invalid-card" and calls == []
+    assert not list(tmp_path.glob("*.once"))
+
+
+def test_live_cycle_with_a_valid_card_reports_it_was_checked(cycle, tmp_path, monkeypatch) -> None:
+    _arm(monkeypatch, cycle)
+    monkeypatch.setattr(cycle.subprocess, "run", _fake_run())
+    r = cycle.live_cycle(**_kwargs(tmp_path, mechanism_card=_card()))
+    assert r["ok"] is True and r["card_checked"] is True
+    r2 = cycle.live_cycle(**_kwargs(tmp_path / "b"))
+    assert r2["ok"] is True and r2["card_checked"] is False
+
+
+@pytest.mark.parametrize("name", ["autoresearch-inner", "metaresearch-outer"])
+def test_the_programs_pass_the_card_through(name: str, tmp_path: Path) -> None:
+    module = _load(ROOT / "bin/agents" / name / "program.py", name.replace("-", "_") + "_card")
+    r = module.run("harden", 0.3, 0.1, tmp_path, evaluator_digest=DIGEST, mechanism_card=_card(owner_slices=["agate"]))
+    assert r["ok"] is False and r["reason"] == "invalid-card"

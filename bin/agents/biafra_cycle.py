@@ -60,13 +60,16 @@ def dry_cycle(
     hypothesis: str = "dry cycle",
     metric_name: str = "metric",
     attempt_id: str | None = None,
+    mechanism_card: dict | None = None,
 ) -> dict:
     """Run one cycle. A lower metric is better. A second call does not retry.
 
     With `evaluator_digest` the result carries a validated trace entry and `recorded: true`.
     Without it the cycle still runs but reports `recorded: false` and a warning. Everything that
     can refuse the attempt is checked before the one-cycle marker is claimed, so a refusal never
-    consumes the single attempt.
+    consumes the single attempt. A `mechanism_card`, when given, is validated first and a card that
+    names a fixed-wall owner is refused (`invalid-card`) before anything is measured; without one
+    the result says `card_checked: false`, so a reviewer can tell checked from unchecked.
     """
     contracts = _contracts()
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -80,6 +83,10 @@ def dry_cycle(
         return refuse("non-finite-metric")
     if _forbidden(artifact):
         return refuse("verifier-protected")
+    if mechanism_card is not None:
+        card_errors = contracts.validate_mechanism_card(mechanism_card)
+        if card_errors:
+            return refuse("invalid-card", errors=card_errors)
     decision = "keep" if metric_after < metric_before else "revert"
     trace = None
     if evaluator_digest is not None:
@@ -104,6 +111,7 @@ def dry_cycle(
     result = {
         "trace": trace,
         "recorded": trace is not None,
+        "card_checked": mechanism_card is not None,
         "ok": True,
         "seat": seat,
         "mode": mode,
@@ -183,11 +191,12 @@ def run_program(
     hypothesis: str = "dry cycle",
     metric_name: str = "metric",
     attempt_id: str | None = None,
+    mechanism_card: dict | None = None,
 ) -> dict:
     """One dry cycle. The launcher runs only when the operator gate and the arm are both set."""
     result = dry_cycle(
         seat, task_type, metric_before, metric_after, log_dir, artifact, evaluator_digest,
-        hypothesis, metric_name, attempt_id,
+        hypothesis, metric_name, attempt_id, mechanism_card,
     )
     result["argv"] = launcher_argv(seat)
     result["called_launcher"] = False
@@ -218,6 +227,7 @@ def live_cycle(
     attempt_id: str | None = None,
     effort: str | None = None,
     timeout_s: int = LIVE_TIMEOUT_S,
+    mechanism_card: dict | None = None,
 ) -> dict:
     """One live attempt: launch the seat's model once, evaluate its answer, record the trace.
 
@@ -246,6 +256,10 @@ def live_cycle(
         return refuse("verifier-protected")
     if not isinstance(prompt, str) or not prompt.strip():
         return refuse("empty-prompt")
+    if mechanism_card is not None:
+        card_errors = contracts.validate_mechanism_card(mechanism_card)
+        if card_errors:
+            return refuse("invalid-card", errors=card_errors)
     argv = launcher_argv(seat, prompt=prompt, effort=effort)
     if not _claim_once(marker):
         return refuse("already-ran")
@@ -262,7 +276,10 @@ def live_cycle(
             stderr=(completed.stderr or "")[-300:],
         )
     answer = extract_answer(completed.stdout or "")
-    base = {"seat": seat, "mode": mode, "retries": 0, "launched": True, "called_launcher": True, "answer": answer}
+    base = {
+        "seat": seat, "mode": mode, "retries": 0, "launched": True, "called_launcher": True,
+        "answer": answer, "card_checked": mechanism_card is not None,
+    }
     try:
         measured = evaluate(answer)
         metric_after = measured["metric_after"]

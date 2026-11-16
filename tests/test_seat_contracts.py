@@ -540,3 +540,19 @@ def test_the_cycle_refuses_a_huge_metric(tmp_path: Path) -> None:
 
 def test_large_but_representable_numbers_are_still_measurements(sc) -> None:
     assert all(sc.is_finite_number(v) for v in (10**15, 10**308, 1.7976931348623157e308, -3, 0.25))
+
+
+def test_the_representable_boundary_is_pinned(sc) -> None:
+    import sys
+
+    top = int(sys.float_info.max)
+    assert sc.is_finite_number(top) is True
+    assert sc.is_finite_number(-top) is True
+    assert sc.is_finite_number(2 * top) is False
+    assert sc.is_finite_number(-2 * top) is False
+    assert sc.is_finite_number(2**1024 - 2**970) is False
+
+
+def test_the_finite_helper_states_its_real_domain() -> None:
+    text = (ROOT / "bin/agents/seat_contracts.py").read_text()
+    assert "after conversion to float" in text
