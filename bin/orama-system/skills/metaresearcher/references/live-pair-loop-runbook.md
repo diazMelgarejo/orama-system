@@ -20,6 +20,22 @@ pay-as-you-go; stop the loop on any `402` or `429`. `live_cycle` reports a faile
 either as `provider-payment-required` or `provider-rate-limited` with `stop: true`, spends the
 attempt and never retries. The match is on the launcher's text and is best effort.
 
+### Monthly budget and the spend guard
+
+The operator set an estimated ceiling of 90 dollars a month of "free" use so the account stays
+inside the free allowance and well under the 100-dollar default cap. `bin/agents/spend_ledger.py`
+keeps a local, append-only estimate and `live_cycle(..., spend_ledger=<path>, budget_usd=90)` refuses
+before any launch (`budget-exhausted`, `stop: true`) when this month's estimate plus a conservative
+projection would pass the budget. A ledger without a budget is refused, and a corrupt row stops the
+loop instead of being skipped. Sizes are characters over four; the rates are the highest non-Pro
+DeepSeek per-million-token rates on the provider's pricing page (0.50 input, 1.50 output), and the
+projection assumes 40 thousand output tokens because the reasoning stream is billed. Only sizes are
+stored, never prompts or answers. This is an estimate: the Billing page is the truth.
+
+Position on 2026-11-17: the live requests made so far are estimated at about 0.15 dollars (0.17 percent
+of the budget) from a retroactive upper-bound reconstruction, with the thinking stream assumed at nine
+times the answer.
+
 ## Principles
 
 1. **Test on real work with the real evaluator.** A live turn exists to meet real-world conditions:
@@ -46,7 +62,7 @@ attempt and never retries. The match is on the launcher's text and is best effor
 | The evaluator is safe | Candidates run through `bin/agents/sandbox_run.py` only |
 | Gate and arm | `BIAFRA_ORCHESTRATOR_GATE=approved` and `BIAFRA_ALLOW_LAUNCH=1` set for that one command only |
 | Provider re-probe | Same-day read-only model list; abort before any completion if the model is missing |
-| Budget | The operator names provider, request count and deadline; the operator-certified Free plan only unless told otherwise; see Billing basis |
+| Budget | Operator ceiling: an estimated 90 dollars a month of list-price usage, kept under the Free plan's 100-dollar cap; pass `spend_ledger` and `budget_usd` to `live_cycle`; see Billing basis |
 | Effort | Explicit; medium, else high, else low; the V4.1 models reject `medium`, so `high` |
 
 ## What goes in a seat's prompt

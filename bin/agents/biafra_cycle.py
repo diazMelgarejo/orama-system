@@ -12,6 +12,7 @@ import os
 import re
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 PRIMARY_MODE = "plugin-loop"
@@ -31,6 +32,16 @@ def _contracts():
     """Load the shared seat contracts by path, as the programs load this module."""
     path = Path(__file__).resolve().parent / "seat_contracts.py"
     spec = importlib.util.spec_from_file_location("seat_contracts", path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+def _spend():
+    """Load the spend ledger module by path, as the contracts are loaded."""
+    path = Path(__file__).resolve().parent / "spend_ledger.py"
+    spec = importlib.util.spec_from_file_location("spend_ledger", path)
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(module)
@@ -225,6 +236,19 @@ def run_program(
     return result
 
 
+def _record_spend(spend, ledger, when, seat, mode, input_chars, output_chars, outcome):
+    """Append a size-only estimate row and return its dollars, or None when no ledger is in use."""
+    if spend is None:
+        return None
+    usd = spend.estimate_usd(input_chars, output_chars)
+    spend.append(ledger, {
+        "ts": when.isoformat(), "seat": seat, "mode": mode, "input_chars": input_chars,
+        "output_chars": output_chars, "estimated_usd": usd, "estimated": True, "outcome": outcome,
+        "rates_usd_per_m": {"input": spend.INPUT_USD_PER_M, "output": spend.OUTPUT_USD_PER_M},
+    })
+    return usd
+
+
 def live_cycle(
     seat: str,
     task_type: str,
@@ -240,6 +264,9 @@ def live_cycle(
     effort: str | None = None,
     timeout_s: int = LIVE_TIMEOUT_S,
     mechanism_card: dict | None = None,
+    spend_ledger: Path | None = None,
+    budget_usd: float | None = None,
+    now: datetime | None = None,
 ) -> dict:
     """One live attempt: launch the seat's model once, evaluate its answer, record the trace.
 
@@ -272,6 +299,21 @@ def live_cycle(
         card_errors = contracts.validate_mechanism_card(mechanism_card)
         if card_errors:
             return refuse("invalid-card", errors=card_errors)
+    spend = _spend() if spend_ledger is not None else None
+    when = now or datetime.now(timezone.utc)
+    if spend is not None:
+        if budget_usd is None:
+            return refuse("budget-required")
+        projected = spend.estimate_usd(len(prompt), spend.ASSUMED_OUTPUT_CHARS)
+        try:
+            verdict = spend.check_budget(spend_ledger, budget_usd, projected, when)
+        except ValueError as exc:
+            return refuse("ledger-invalid", error=str(exc), stop=True)
+        if not verdict["ok"]:
+            return refuse(
+                "budget-exhausted", stop=True, month_total_usd=verdict["month_total_usd"],
+                projected_usd=verdict["projected_usd"], budget_usd=verdict["budget_usd"],
+            )
     argv = launcher_argv(seat, prompt=prompt, effort=effort)
     if not _claim_once(marker):
         return refuse("already-ran")
@@ -281,7 +323,14 @@ def live_cycle(
             argv, capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=timeout_s, check=False,
         )
     except subprocess.TimeoutExpired:
-        return refuse("launcher-timeout", spent=True)
+        return refuse("launcher-timeout", spent=True, estimated_usd=_record_spend(
+            spend, spend_ledger, when, seat, mode, len(prompt), 0, "timeout"))
+    estimated = _record_spend(
+        spend, spend_ledger, when, seat, mode, len(prompt),
+        len(completed.stdout or "") + len(completed.stderr or ""),
+        "ok" if completed.returncode == 0 else "failed",
+    )
+    extra_spend = {} if estimated is None else {"estimated_usd": estimated}
     if completed.returncode != 0:
         tail = (completed.stderr or "")[-300:]
         stop_reason = _provider_stop(f"{completed.stderr or ''}\n{completed.stdout or ''}")
@@ -289,15 +338,16 @@ def live_cycle(
             # Never retry and never activate pay-as-you-go: report and stop the loop.
             return refuse(
                 stop_reason, spent=True, stop=True, returncode=completed.returncode,
-                called_launcher=True, stderr=tail,
+                called_launcher=True, stderr=tail, **extra_spend,
             )
         return refuse(
             "launcher-failed", spent=True, returncode=completed.returncode, called_launcher=True, stderr=tail,
+            **extra_spend,
         )
     answer = extract_answer(completed.stdout or "")
     base = {
         "seat": seat, "mode": mode, "retries": 0, "launched": True, "called_launcher": True,
-        "answer": answer, "card_checked": mechanism_card is not None,
+        "answer": answer, "card_checked": mechanism_card is not None, **extra_spend,
     }
     try:
         measured = evaluate(answer)

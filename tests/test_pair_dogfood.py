@@ -185,3 +185,9 @@ def test_the_runbook_states_the_billing_basis_and_the_stop_rule() -> None:
     for needle in ("pay-as-you-go", "402", "429", "Billing page", "operator-certified"):
         assert needle in text, needle
     assert "free-tier W&B" not in text
+
+
+def test_the_runbook_states_the_monthly_budget_and_the_guard() -> None:
+    text = (ROOT / "bin/orama-system/skills/metaresearcher/references/live-pair-loop-runbook.md").read_text()
+    for needle in ("90 dollars", "spend_ledger", "budget_usd", "budget-exhausted", "the Billing page is the truth"):
+        assert needle in text, needle
