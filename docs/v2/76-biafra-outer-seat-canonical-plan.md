@@ -75,17 +75,50 @@ already exists. The result is data until a non-maker reviews it.
 `python3 -m pytest tests/test_seat_contracts.py tests/test_biafra_seats.py tests/test_agent_frugality_tiers.py`
 and the repository hygiene and markdown checks named in the PR.
 
-## 8. Live check log, 2026-11-17
+## 8. Correct W&B defaults, references and live check log (2026-11-17)
+
+### 8.1 Defaults used from now on
+
+| Item | Default | Source |
+| --- | --- | --- |
+| Model order | `deepseek-ai/DeepSeek-V4.1-Flash-1017`, then `deepseek-ai/DeepSeek-V4.1-Flash`, then `deepseek-ai/DeepSeek-V4-Flash-0731` | [launcher](https://github.com/diazMelgarejo/orama-system/blob/main/bin/orama-system/skills/cline-wandb/scripts/launch_cline_wandb.py), [stale-reference ledger](https://github.com/diazMelgarejo/orama-system/blob/main/docs/stale-reference-ledger-2026-11-12.md) |
+| Effort | Ladder medium, else high, else low, never xhigh or max. The V4.1 models reject `medium` (HTTP 400 "Invalid request") and accept `high` and `low`, so the free default turn is V4.1-Flash-1017 at **high**. V4-Flash-0731 accepts `medium`. | `lesson_d4ff6f4278ad` |
+| Absent ids | The bare `DeepSeek-V4-Flash` id is 404; W&B serves no `deepseek-flash` alias | launcher docstring, `lesson_d4ff6f4278ad` |
+| Cline provider entry | `tokenSource` `manual`; `updatedAt` in milliseconds with a trailing `Z`. A "invalid model ID" error from Cline 3.0.74 is stale metadata, not a bad model | `lesson_8e02c7fd391d`, ledger |
+| Key handling | Shell-source the operator env file before reading `DEEPSEEK_V4_FLASH_WANDB`; a raw parse gives 401. No CoreWeave team or project string | `lesson_e6e7c89409ea`, `lesson_2c1aad86632a` |
+| Cline flags | Plan mode, `--auto-approve false`, positional prompt (no `task` subcommand) | `lesson_d581163a2d66`, launcher |
+| Route | `launch_cline_wandb.py`; ClinePass DeepSeek keeps its own wrapper | `lesson_8d873e4e2f73`, [PR 496](https://github.com/diazMelgarejo/orama-system/pull/496) |
+
+Lessons are in the Perpetua-Tools
+[LESSONS.md](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/.agent/memory/semantic/LESSONS.md)
+(source rows in `lessons.jsonl` beside it). `plan_turn` and `default_wandb_turn` in
+`bin/agents/seat_contracts.py` encode these defaults, and a test pins them to the launcher.
+
+### 8.2 How Cline on W&B reached parity with Wanda
+
+2026-11-10 positional prompt, plan mode, `cline-pass` provider id; 2026-11-12 model churn, the
+medium-effort 400 and the strict 3.0.74 provider entry were isolated by bisecting an isolated
+config; 2026-11-13 key sourcing and the launcher fix (PR 496). `lesson_8d873e4e2f73` records one
+identical-prompt probe: Cline answered four tasks and was faster on each; Wanda matched the format
+on three and returned a `second_largest` function that stopped mid-line. That is one probe of
+four tasks, not a benchmark.
+
+### 8.3 Live check log
 
 - Models listed live from W&B Inference (read-only, HTTP 200, 24 models): `V4.1-Flash-1017`,
-  generic `V4.1-Flash`, `V4-Flash-0731`, `V4-Pro-0813` and `GLM-5.3-Flash` are present; the bare
+  `V4.1-Flash`, `V4-Flash-0731`, `V4-Pro-0813` and `GLM-5.3-Flash` are present; the bare
   `V4-Flash` id is absent. The Codex CLI lists `gpt-6-astra` and `gpt-6.1-sol`.
 - Aliases that break the effort rule and must not be used: `claude-ultra` (default effort `max`)
   and `codex-ultra` (default effort `ultra`).
-- Effort probe: one request, `V4.1-Flash-1017` at `medium`, carrying a review of the local draft
-  branches. Result: `error: Invalid request`, no output, no retry. This is consistent with the
-  launcher's note that V4.1 rejects `medium`, but the error text does not say why, so it is not
-  proof. One of the two approved requests is used; the next ladder step (`high`) would be the second.
-- The same pass found three validator defects, fixed test-first: a fixed-wall owner hidden in a
-  longer name (`oramasys/phylax`, fullwidth or zero-width look-alikes), a crash on non-object input,
-  and a bare string treated as a set of letters by `select_effort`.
+- First effort probe: `V4.1-Flash-1017` at `medium` returned `error: Invalid request`, no retry.
+  This repeated the deterministic 400 already recorded in `lesson_d4ff6f4278ad`; the request was
+  avoidable. One of the two approved requests was used.
+- The same pass found three validator defects (a fixed-wall owner hidden in a longer name, a crash
+  on non-object input, a bare string read as a set of letters), fixed test-first. A later security
+  review found the first owner fix incomplete (accents, glued names, Cyrillic look-alikes); it was
+  hardened to normalize first, then match substrings, and to refuse non-ASCII names.
+
+### 8.4 Open
+
+Wanda's soul card lists the Cline CLI as forbidden for the W&B route, while `lesson_8d873e4e2f73`
+routes W&B DeepSeek through Cline. Which governs is the operator's decision; neither is edited here.

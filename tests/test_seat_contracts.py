@@ -351,3 +351,62 @@ def test_owner_names_are_checked_one_at_a_time(sc) -> None:
 @pytest.mark.parametrize("owner", ["---", "___", "​​ "])
 def test_an_owner_with_no_identity_is_refused(sc, owner: str) -> None:
     assert sc.validate_mechanism_card(_card(owner_slices=[owner]))
+
+
+# --- correct W&B defaults and cited references (operator request 2026-11-17) ---------------
+
+V1017 = "deepseek-ai/DeepSeek-V4.1-Flash-1017"
+V41 = "deepseek-ai/DeepSeek-V4.1-Flash"
+V0731 = "deepseek-ai/DeepSeek-V4-Flash-0731"
+
+
+def test_wandb_model_order_matches_the_launcher(sc) -> None:
+    source = (ROOT / "bin/orama-system/skills/cline-wandb/scripts/launch_cline_wandb.py").read_text()
+    assert f'DEFAULT_MODEL = "{sc.WANDB_MODEL_ORDER[0]}"' in source
+    assert sc.WANDB_MODEL_ORDER == (V1017, V41, V0731)
+    assert "never xhigh or max" in source
+
+
+def test_v41_models_reject_medium_and_v4_flash_0731_accepts_it(sc) -> None:
+    assert "medium" not in sc.WANDB_EFFORTS[V1017]
+    assert "medium" not in sc.WANDB_EFFORTS[V41]
+    assert sc.select_effort(sc.WANDB_EFFORTS[V0731]) == "medium"
+    assert set(sc.WANDB_EFFORTS) == set(sc.WANDB_MODEL_ORDER)
+
+
+def test_the_free_default_turn_is_v41_1017_at_high(sc) -> None:
+    plan = sc.plan_turn("outer", platform="anthropic", paid_approved=False)
+    assert plan == {
+        "tier": "default", "provider": "wandb", "model": V1017, "effort": "high",
+        "human_gated": False, "auto_run": True,
+    }
+
+
+def test_the_fallback_walks_the_model_order_then_the_effort_ladder(sc) -> None:
+    assert sc.default_wandb_turn(unavailable=(V1017,))["model"] == V41
+    third = sc.default_wandb_turn(unavailable=(V1017, V41))
+    assert (third["model"], third["effort"]) == (V0731, "medium")
+
+
+def test_no_available_wandb_model_is_reported_not_guessed(sc) -> None:
+    plan = sc.default_wandb_turn(unavailable=sc.WANDB_MODEL_ORDER)
+    assert plan["model"] is None and plan["effort"] is None
+    assert plan["reason"] == "no-wandb-model-available"
+
+
+def test_default_turns_never_select_xhigh_or_max(sc) -> None:
+    for blocked in ((), (V1017,), (V1017, V41)):
+        assert sc.default_wandb_turn(unavailable=blocked)["effort"] in sc.EFFORT_LADDER
+
+
+def test_the_plan_cites_correct_references_and_defaults() -> None:
+    plan = (ROOT / "docs/v2/76-biafra-outer-seat-canonical-plan.md").read_text()
+    for needle in (
+        "https://github.com/diazMelgarejo/orama-system/blob/main/bin/orama-system/skills/cline-wandb/scripts/launch_cline_wandb.py",
+        "https://github.com/diazMelgarejo/orama-system/blob/main/docs/stale-reference-ledger-2026-11-12.md",
+        "https://github.com/diazMelgarejo/orama-system/pull/496",
+        "https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/.agent/memory/semantic/LESSONS.md",
+        "lesson_d4ff6f4278ad", "lesson_8e02c7fd391d", "lesson_8d873e4e2f73",
+        "DeepSeek-V4.1-Flash-1017", "high",
+    ):
+        assert needle in plan, needle

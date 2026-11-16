@@ -26,6 +26,19 @@ _HEX64 = re.compile(r"^[0-9a-f]{64}$")
 # The ladder is the default: it runs on free W&B turns with no human approval, and it is the
 # fallback whenever no paid permission has been granted. xhigh and max are never selected.
 EFFORT_LADDER = ("medium", "high", "low")
+# W&B Inference defaults, live-verified 2026-11-12 (see docs/v2/76 section 8 for sources).
+# Model order, first available wins; the V4.1 models reject medium with HTTP 400, so the ladder
+# lands on high for them. V4-Flash-0731 accepts medium. Mirrors launch_cline_wandb.py (tested).
+WANDB_MODEL_ORDER = (
+    "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+    "deepseek-ai/DeepSeek-V4.1-Flash",
+    "deepseek-ai/DeepSeek-V4-Flash-0731",
+)
+WANDB_EFFORTS: dict[str, tuple[str, ...]] = {
+    "deepseek-ai/DeepSeek-V4.1-Flash-1017": ("high", "low"),
+    "deepseek-ai/DeepSeek-V4.1-Flash": ("high", "low"),
+    "deepseek-ai/DeepSeek-V4-Flash-0731": ("medium", "high", "low"),
+}
 # Preferred paid occupants are human-gated: they run only after explicit approval.
 PREFERRED_PAID: dict[tuple[str, str], tuple[str, str]] = {
     ("outer", "anthropic"): ("Claude Fable 5.2", "high"),
@@ -197,22 +210,41 @@ def select_effort(supported: Iterable[str] = EFFORT_LADDER) -> str | None:
     return next((effort for effort in EFFORT_LADDER if effort in offered), None)
 
 
+def default_wandb_turn(unavailable: Iterable[str] = ()) -> dict[str, Any]:
+    """The free default turn: first available W&B model in order, effort from its own ladder."""
+    skipped = set(unavailable)
+    for model in WANDB_MODEL_ORDER:
+        if model not in skipped:
+            return {
+                "tier": "default", "provider": "wandb", "model": model,
+                "effort": select_effort(WANDB_EFFORTS[model]),
+                "human_gated": False, "auto_run": True,
+            }
+    return {
+        "tier": "default", "provider": "wandb", "model": None, "effort": None,
+        "reason": "no-wandb-model-available", "human_gated": False, "auto_run": False,
+    }
+
+
 def plan_turn(
     seat: str,
     platform: str | None = None,
     paid_approved: Any = False,
-    supported: Iterable[str] = EFFORT_LADDER,
+    supported: Iterable[str] | None = None,
 ) -> dict[str, Any]:
     """Choose the model tier and effort for one turn.
 
     A preferred paid model is returned only for a literal `paid_approved is True` and a known
     seat/platform pair, and it is marked human-gated and not auto-run. Everything else gets the
-    default ladder, which runs automatically with no model pinned.
+    free default: with no `supported` argument, the W&B default turn (model order, then that
+    model's effort ladder); with an explicit `supported`, the plain ladder and no model pinned.
     """
     preferred = PREFERRED_PAID.get((seat, platform or ""))
     if paid_approved is True and preferred is not None:
         model, effort = preferred
         return {"tier": "preferred", "model": model, "effort": effort, "human_gated": True, "auto_run": False}
+    if supported is None:
+        return default_wandb_turn()
     return {
         "tier": "default",
         "model": None,
