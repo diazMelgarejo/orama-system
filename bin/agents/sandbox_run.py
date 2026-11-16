@@ -11,6 +11,7 @@ A name filter is not a sandbox. This module gives two independent controls:
 from __future__ import annotations
 
 import ast
+import builtins
 import os
 import shutil
 import signal
@@ -21,7 +22,6 @@ from pathlib import Path
 from typing import Iterable
 
 _PATH = "/usr/bin:/bin"
-_DEFAULT_DENY_READ = (".ssh", ".aws", ".gnupg", ".config", ".openclaw", ".claude", ".gbrain", ".netrc", ".npmrc")
 
 
 class SandboxUnavailable(RuntimeError):
@@ -59,21 +59,55 @@ def _sbpl_quote(path: Path) -> str:
     return '"' + str(path).replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
-def sandbox_profile(root: Path, deny_read: Iterable[Path]) -> str:
-    """macOS sandbox profile: allow by default, then deny network, outside writes and secret reads."""
+_SYSTEM_READ = ("/usr/lib", "/System", "/private/var/db/dyld", "/Library/Frameworks", "/usr/share")
+_DEV_READ = ("/dev/null", "/dev/urandom", "/dev/random", "/dev/dtracehelper")
+
+
+def sandbox_profile(
+    root: Path,
+    read_roots: Iterable[Path] = (),
+    exec_paths: Iterable[Path] = (),
+    deny_read: Iterable[Path] = (),
+) -> str:
+    """Deny-by-default macOS profile.
+
+    Allowed: reading system libraries, the listed read roots and the scratch root; writing only the
+    scratch root and /dev/null; executing only the listed interpreter paths. Everything else is denied,
+    including network, Apple Events, other mach services and launching any other program. `deny_read`
+    is layered on top for paths that sit inside an allowed root.
+    """
+    q = _sbpl_quote
     lines = [
         "(version 1)",
-        "(allow default)",
+        "(deny default)",
         "(deny network*)",
-        f'(deny file-write* (require-not (require-any (subpath {_sbpl_quote(root)}) (literal "/dev/null"))))',
+        "(allow sysctl-read)",
+        "(allow process-fork)",
+        "(allow signal (target self))",
+        "(allow file-read-metadata)",
+        '(allow file-read-data (literal "/"))',  # path resolution needs the root entry; nothing below it
     ]
-    lines += [f"(deny file-read* (subpath {_sbpl_quote(Path(p))}))" for p in deny_read]
+    reads = [Path(p) for p in _SYSTEM_READ] + [Path(root)] + [Path(p) for p in read_roots]
+    lines.append("(allow file-read* " + " ".join(f"(subpath {q(p)})" for p in reads)
+                 + " " + " ".join(f"(literal {q(Path(p))})" for p in _DEV_READ) + ")")
+    lines.append(f'(allow file-write* (subpath {q(Path(root))}) (literal "/dev/null"))')
+    for exe in exec_paths:
+        lines.append(f"(allow process-exec (literal {q(Path(exe))}))")
+    lines += [f"(deny file-read* (subpath {q(Path(p))}))" for p in deny_read]
     return "\n".join(lines)
 
 
-def _default_deny_read() -> list[Path]:
-    home = Path(os.path.expanduser("~"))
-    return [home / name for name in _DEFAULT_DENY_READ]
+def _interpreter_paths() -> tuple[list[Path], list[Path]]:
+    """Read roots and exec paths the current interpreter needs, as real paths."""
+    exe = Path(sys.executable)
+    roots = {Path(sys.prefix).resolve(), Path(sys.base_prefix).resolve(), exe.resolve().parent.parent}
+    try:
+        import site
+        roots.update(Path(p).resolve() for p in site.getsitepackages())
+    except Exception:  # site may be unavailable in odd builds; the prefixes above still apply
+        pass
+    execs = {exe, exe.resolve()}
+    return sorted(roots), sorted(execs)
 
 
 def run_isolated(
@@ -93,8 +127,12 @@ def run_isolated(
     env = scrubbed_env(home=root, tmpdir=tmp)
     cmd = list(argv)
     if use_sandbox:
-        denied = list(_default_deny_read() if deny_read is None else deny_read)
-        cmd = ["/usr/bin/sandbox-exec", "-p", sandbox_profile(root, denied), *argv]
+        roots, execs = _interpreter_paths()
+        cmd = [
+            "/usr/bin/sandbox-exec", "-p",
+            sandbox_profile(root, roots, execs, deny_read=list(deny_read or [])),
+            *argv,
+        ]
     proc = subprocess.Popen(
         cmd, cwd=root, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         text=True, start_new_session=True,
@@ -119,6 +157,7 @@ _SAFE_ATTRS = frozenset({
     "join", "strip", "lstrip", "rstrip", "lower", "upper", "casefold", "isascii", "isalnum", "isdigit",
     "isalpha", "values", "items", "keys", "get", "append", "add", "translate", "replace", "count", "find",
 })
+_BUILTIN_NAMES = frozenset(dir(builtins))
 _ALLOWED_NODES = (
     ast.FunctionDef, ast.arguments, ast.arg, ast.Return, ast.Assign, ast.AnnAssign, ast.AugAssign, ast.If,
     ast.For, ast.Expr, ast.BoolOp, ast.BinOp, ast.UnaryOp, ast.Compare, ast.Call, ast.Attribute,
@@ -130,12 +169,27 @@ _ALLOWED_NODES = (
 )
 
 
+def _bound_names(func: ast.FunctionDef) -> set[str]:
+    names: set[str] = set()
+    for node in ast.walk(func):
+        if isinstance(node, ast.arg):
+            names.add(node.arg)
+        elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
+            names.add(node.id)
+        elif isinstance(node, ast.FunctionDef) and node is not func:
+            names.add(node.name)
+    return names
+
+
 def vet_allowlist(source: str, target: str, allowed_names: Iterable[str]) -> list[str]:
     """Reasons to reject `source`; empty means it uses only the allowlisted subset.
 
     The source must be exactly one top-level function named `target`. Only listed node types,
     builtins, attribute names and the caller's `allowed_names` may appear. No import, lambda,
     while loop, global, try, with, class, dunder or underscore-prefixed attribute is allowed.
+    Parameters may not have defaults and may not be variadic, and no parameter, assigned or
+    comprehension name may shadow any builtin: a name bound in the function is never a way to
+    make a builtin readable, because binding a builtin's name is itself refused.
     """
     try:
         tree = ast.parse(source)
@@ -147,13 +201,15 @@ def vet_allowlist(source: str, target: str, allowed_names: Iterable[str]) -> lis
     func = tree.body[0]
     if func.decorator_list:
         problems.append("decorators are not allowed")
-    local = {a.arg for a in ast.walk(func.args) if isinstance(a, ast.arg)}
-    for node in ast.walk(func):
-        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
-            local.add(node.id)
-        elif isinstance(node, ast.FunctionDef) and node is not func:
-            local.add(node.name)
-    permitted = local | set(allowed_names) | _SAFE_BUILTINS
+    a = func.args
+    if a.defaults or any(d is not None for d in a.kw_defaults):
+        problems.append("parameter defaults are not allowed")
+    if a.vararg or a.kwarg:
+        problems.append("variadic parameters are not allowed")
+    bound = _bound_names(func)
+    for name in sorted(bound & _BUILTIN_NAMES):
+        problems.append(f"binding a builtin name is not allowed: {name}")
+    permitted = bound | set(allowed_names) | _SAFE_BUILTINS
     for node in ast.walk(func):
         if not isinstance(node, _ALLOWED_NODES):
             problems.append(f"node not allowed: {type(node).__name__}")

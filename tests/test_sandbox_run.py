@@ -187,3 +187,78 @@ def test_a_nested_helper_function_is_allowed(sb) -> None:
         return bool(_OWNER_SHAPE.fullmatch(o))
     return [o for o in owners if not ok(o)]'''
     assert sb.vet_allowlist(src, target="_owner_errors", allowed_names=NAMES) == []
+
+
+# --- security review follow-up: scope-aware vet --------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "src",
+    [
+        "def _owner_errors(owners, getattr=getattr):\n    return getattr(owners, 'x')",
+        "def _owner_errors(owners, eval=eval):\n    return eval('1')",
+        "def _owner_errors(owners, g=len):\n    return []",             # any default is refused
+        "def _owner_errors(owners, *, k=1):\n    return []",            # keyword-only default
+        "def _owner_errors(*owners):\n    return []",                   # varargs
+        "def _owner_errors(owners, **kw):\n    return []",              # kwargs
+        "def _owner_errors(owners, open):\n    return []",              # parameter shadows a builtin
+        "def _owner_errors(owners):\n    type = 1\n    return []",     # assignment shadows a builtin
+        "def _owner_errors(owners):\n    def getattr(x):\n        return x\n    return []",
+        "def _owner_errors(owners):\n    return [vars for vars in owners]",  # comprehension target
+    ],
+)
+def test_the_vet_refuses_shadowing_and_defaults(sb, src: str) -> None:
+    assert sb.vet_allowlist(src, target="_owner_errors", allowed_names=NAMES), src
+
+
+# --- security review follow-up: deny-by-default sandbox --------------------------------------------
+
+
+@needs_sandbox
+def test_the_profile_is_deny_by_default(sb, tmp_path) -> None:
+    profile = sb.sandbox_profile(tmp_path, read_roots=[], exec_paths=[])
+    assert "(deny default)" in profile and "(allow default)" not in profile
+    assert "(deny network*)" in profile
+
+
+@needs_sandbox
+def test_an_unlisted_home_file_cannot_be_read(sb, tmp_path) -> None:
+    canary = tmp_path.parent / f"unlisted-{tmp_path.name}.txt"
+    canary.write_text("top-secret")
+    code = f"""
+        from pathlib import Path
+        try:
+            print(Path({str(canary)!r}).read_text())
+        except OSError:
+            print("BLOCKED")
+    """
+    try:
+        r = sb.run_isolated(_py(code), cwd=tmp_path, timeout=30)
+    finally:
+        canary.unlink(missing_ok=True)
+    assert "BLOCKED" in r.stdout and "top-secret" not in r.stdout
+
+
+@needs_sandbox
+@pytest.mark.parametrize("tool", ["/usr/bin/osascript", "/usr/bin/open", "/bin/echo", "/usr/bin/curl"])
+def test_the_child_cannot_launch_other_programs(sb, tmp_path, tool: str) -> None:
+    code = f"""
+        import subprocess
+        try:
+            r = subprocess.run([{tool!r}, "-e", "1"], capture_output=True, timeout=10)
+            print("RAN", r.returncode)
+        except (OSError, subprocess.SubprocessError) as exc:
+            print("DENIED", type(exc).__name__)
+    """
+    r = sb.run_isolated(_py(code), cwd=tmp_path, timeout=30)
+    assert "DENIED" in r.stdout and "RAN" not in r.stdout, r.stdout + r.stderr
+
+
+@needs_sandbox
+def test_python_and_pytest_still_run_inside_the_sandbox(sb, tmp_path) -> None:
+    r = sb.run_isolated([sys.executable, "-I", "-m", "pytest", "--version"], cwd=tmp_path, timeout=60)
+    assert r.returncode == 0 and "pytest" in (r.stdout + r.stderr).lower(), r.stdout + r.stderr
+    (tmp_path / "test_x.py").write_text("def test_ok():\n    assert 1 + 1 == 2\n")
+    r2 = sb.run_isolated([sys.executable, "-I", "-m", "pytest", "-q", "-p", "no:cacheprovider", "test_x.py"],
+                         cwd=tmp_path, timeout=60)
+    assert r2.returncode == 0 and "1 passed" in r2.stdout, r2.stdout + r2.stderr
