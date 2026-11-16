@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Mechanism Card",
+  "type": "object",
+  "description": "Shape only. The authority is validate_mechanism_card in bin/agents/seat_contracts.py; a green schema check does not make a card safe (it does not encode fixed-wall ownership, metric agreement or graduation rules).",
+  "required": [
+    "version",
+    "mechanism_id",
+    "revision",
+    "parent",
+    "hypothesis",
+    "evidence_ids",
+    "inner_metric",
+    "held_out_metric",
+    "evaluator_digest",
+    "dry_run_receipt",
+    "delta",
+    "reverted",
+    "scope_record",
+    "owner_slices",
+    "status"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "mechanism_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "parent": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "hypothesis": {
+      "type": "string",
+      "minLength": 1
+    },
+    "evidence_ids": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "inner_metric": {
+      "type": "string"
+    },
+    "held_out_metric": {
+      "type": "string"
+    },
+    "evaluator_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "dry_run_receipt": {
+      "type": "object"
+    },
+    "delta": {
+      "type": "number"
+    },
+    "reverted": {
+      "type": "boolean"
+    },
+    "scope_record": {
+      "type": "object",
+      "properties": {
+        "authorizes": {
+          "const": "nothing"
+        }
+      },
+      "required": [
+        "authorizes"
+      ]
+    },
+    "owner_slices": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    },
+    "status": {
+      "enum": [
+        "candidate",
+        "reviewed",
+        "graduated"
+      ]
+    }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "mechanism_id": "m-bbbbbbbbbbbb",
+  "revision": 2,
+  "parent": "m-bbbbbbbbbbbb",
+  "hypothesis": "Repeat reverts on the same artifact mean the proposal rule is stale.",
+  "evidence_ids": [
+    "a-001",
+    "a-002"
+  ],
+  "inner_metric": "val_bpb",
+  "held_out_metric": "val_bpb_heldout",
+  "evaluator_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "dry_run_receipt": {
+    "ok": true,
+    "retries": 0,
+    "launched": false
+  },
+  "delta": -0.01,
+  "reverted": false,
+  "scope_record": {
+    "authorizes": "nothing"
+  },
+  "owner_slices": [
+    "kungfu"
+  ],
+  "status": "graduated"
+}

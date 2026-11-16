@@ -15,5 +15,15 @@ def _cycle():
     return module
 
 
-def run(task_type: str, metric_before: float, metric_after: float, log_dir: Path, artifact: str = "search-rule") -> dict:
-    return _cycle().run_program("outer", task_type, metric_before, metric_after, log_dir, artifact)
+def run(
+    task_type: str,
+    metric_before: float,
+    metric_after: float,
+    log_dir: Path,
+    artifact: str = "search-rule",
+    evaluator_digest: str | None = None,
+    hypothesis: str = "dry cycle",
+) -> dict:
+    return _cycle().run_program(
+        "outer", task_type, metric_before, metric_after, log_dir, artifact, evaluator_digest, hypothesis
+    )

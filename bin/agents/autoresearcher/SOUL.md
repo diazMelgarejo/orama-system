@@ -19,3 +19,5 @@ without Glen routing.
 
 - Cite sources and label confidence.
 - Flag when results need Vera review before fleet-wide claims.
+- Record every attempt, kept or reverted, as a trace entry (`bin/agents/seat_contracts.py`).
+- Never edit the evaluator.

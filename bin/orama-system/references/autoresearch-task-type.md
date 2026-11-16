@@ -20,3 +20,10 @@ For local setup work inside Perpetua-Tools, the Perplexity client now exposes op
 ```bash
 python scripts/test_perplexity.py --validate --base-url https://api.perplexity.ai --timeout 30
 ```
+
+## Seats and contracts (added 2026-11-17)
+
+Scout and the inner seat produce trace entries; Biafra (the outer seat, `metaresearch-outer`) reads
+them and proposes Mechanism Cards. Contracts: `bin/agents/seat_contracts.py`. Plan:
+`docs/v2/76-biafra-outer-seat-canonical-plan.md`. Bi-level stays the default; tri-level is optional
+and never starts without a human approval at the top-level orchestrator gate.

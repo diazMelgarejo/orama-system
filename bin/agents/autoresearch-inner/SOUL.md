@@ -12,3 +12,8 @@ promotion rule.
 This seat does not rename Scout. Scout's dual-mode doctrine stays on
 `bin/agents/autoresearcher/README.md`: the Claude Code plugin, and the GPU
 verify substrate for an ML experiment.
+
+Seat contract: every attempt is recorded as a trace entry
+(`bin/agents/seat_contracts.py`: seat, attempt_id, hypothesis, artifact, metric before and after,
+keep or revert, pinned evaluator digest). Reverted attempts are recorded too. Biafra, the outer seat,
+reads this trace and never rewrites it.

@@ -285,10 +285,13 @@ orama-system/docs/v2/
 ├── 70-portal-knowledge-hitl-development-ladder.md  ← PR #368/#371 Class-0 knowledge, MCP `search_docs`, and A2A `message/send` stay public; swarm launch/approve/cancel stay operator-token fail-closed; HITL preview tokens; v2.2–v2.5 themes deferred (does not supersede 16/20/39/53/03/23/45/50/27)
 ├── 71-operator-provisioning-and-autonomous-tier-adr.md  ← APPROVED POLICY, NOT DEPLOYED: operator-provisioned Phylax recovery grants and the C4 autonomous tier (Level 0: 6/hour, Level 1: 12/hour behind an evidence-gated isolated-issuer activation); a passive UNKNOWN hold never issues, legacy NULL-owner holds refuse autonomous recovery, serving path is verify-only and seed-free; document owner `orama-system`, implementers `oramasys/phylax` and `oramasys/oramasys`; drafted as `56-` in `oramasys/oramasys` PR #34, which becomes a link-only pointer to this file (does not supersede 03/32/45/60)
 ├── 72-task6-operator-provisioning-and-autonomous-tier-plan.md  ← canonical Task 6 implementation plan for ADR 71 (drafted as `57-` in `oramasys/oramasys` PR #34, which becomes a link-only pointer); the ADR controls policy
-└── 73-alexandria-repository.md  ← APPROVED 2026-07-10 as ADR 41 (moved here from `oramasys/oramasys`, renumbered because `41-` is taken): `oramasys/alexandria` documentation-only repository policy; see the Alexandria mentions in `references/` for the migration plans that assume it
+├── 73-alexandria-repository.md  ← APPROVED 2026-07-10 as ADR 41 (moved here from `oramasys/oramasys`, renumbered because `41-` is taken): `oramasys/alexandria` documentation-only repository policy; see the Alexandria mentions in `references/` for the migration plans that assume it
+└── 76-biafra-outer-seat-canonical-plan.md  ← APPROVED 2026-11-17: Biafra ratified as the canonical agent for the MetaResearcher outer seat (additive ids), seat contracts and Mechanism Card schema, retrofit readiness for Anamnesis and Kungfu, one bounded live cycle not armed; extends 25
 ```
 
-> **Numbering (2026-11-06):** `74-` is occupied. Check the current tree before choosing the next slot.
+> **Numbering (2026-11-06, updated 2026-11-17):** `74-` and `75-` are occupied; `76-` is the
+> Biafra plan.
+> Check the current tree before choosing the next slot.
 > Before adding a new doc here, run `ls docs/v2/ | grep '^[0-9]' | sort -V | tail -1` to confirm the
 > highest existing number, claim `highest + 1`, and update this line. Each PR that adds a doc
 > MUST update this line — git conflict on it is the coordination signal for parallel agents.

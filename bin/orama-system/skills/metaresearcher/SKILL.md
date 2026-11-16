@@ -11,6 +11,8 @@ triggers:
   - biafra
   - outer seat
   - dual-mode outer loop
+  - mechanism card
+  - stall report
 ---
 
 # MetaResearcher
@@ -66,3 +68,19 @@ it. A live call needs the operator gate and the explicit arm together.
 
 The dry cycle lives in `bin/agents/biafra_cycle.py`. The Perpetua plan
 records `adopted-not-started` and starts neither mode.
+
+## Biafra, contracts and effort (ratified 2026-11-17)
+
+Biafra is the canonical agent for this seat; the ids stay `metaresearch-outer` and
+`perpetua.autoresearch.outer`. Persona: `bin/agents/personas/biafra.yaml`.
+
+- **Reads:** trace entries from `bin/agents/seat_contracts.py`. She never writes the inner trace.
+- **Stall rule:** `stall_report(trace, window=3)`. No stall, no proposal.
+- **Writes:** a Mechanism Card candidate, validated by `validate_mechanism_card`. A card naming
+  Phylax, Telos or Agate as an owner is refused before any measurement (`E_OWNER`). The JSON Schema in
+  `docs/v2/references/biafra/` is shape-only.
+- **Pins:** the evaluator digest from `evaluator_digest(...)` goes in every receipt.
+- **Effort:** explicit, medium else high else low, never xhigh or max, for every occupant.
+- **Live cycle:** the gate and the arm are both required, and the operator names provider, budget,
+  request limit and deadline first. Plan: `docs/v2/76-biafra-outer-seat-canonical-plan.md`.
+

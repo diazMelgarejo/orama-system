@@ -6,6 +6,8 @@ plugin-loop reading, and GPU-verify reading. It does not take Scout's commands.
 
 from __future__ import annotations
 
+import importlib.util
+import math
 import os
 import sys
 from pathlib import Path
@@ -23,6 +25,16 @@ def select_mode(task_type: str) -> str:
     return PRIMARY_MODE
 
 
+def _contracts():
+    """Load the shared seat contracts by path, as the programs load this module."""
+    path = Path(__file__).resolve().parent / "seat_contracts.py"
+    spec = importlib.util.spec_from_file_location("seat_contracts", path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
 def _forbidden(path: str) -> bool:
     parts = Path(path).parts
     name = Path(path).name
@@ -36,18 +48,43 @@ def dry_cycle(
     metric_after: float,
     log_dir: Path,
     artifact: str = "search-rule",
+    evaluator_digest: str | None = None,
+    hypothesis: str = "dry cycle",
 ) -> dict:
-    """Run one cycle. A lower metric is better. A second call does not retry."""
+    """Run one cycle. A lower metric is better. A second call does not retry.
+
+    With `evaluator_digest` the result also carries a validated trace entry for the ledger.
+    """
     log_dir.mkdir(parents=True, exist_ok=True)
     mode = select_mode(task_type) if seat == "outer" else "inner"
     marker = log_dir / f"{seat}-{mode}.once"
+    if not (math.isfinite(metric_before) and math.isfinite(metric_after)):
+        return {"ok": False, "seat": seat, "mode": mode, "reason": "non-finite-metric", "retries": 0, "launched": False}
     if _forbidden(artifact):
         return {"ok": False, "seat": seat, "mode": mode, "reason": "verifier-protected", "retries": 0, "launched": False}
     if not _claim_once(marker):
         return {"ok": False, "seat": seat, "mode": mode, "reason": "already-ran", "retries": 0, "launched": False}
     improved = metric_after < metric_before
     decision = "keep" if improved else "revert"
+    trace = None
+    if evaluator_digest is not None:
+        trace = {
+            "version": 1,
+            "seat": seat,
+            "attempt_id": f"{seat}-{mode}-dry-1",
+            "hypothesis": hypothesis,
+            "artifact": artifact,
+            "metric_name": "metric",
+            "metric_before": metric_before,
+            "metric_after": metric_after,
+            "decision": decision,
+            "evaluator_digest": evaluator_digest,
+        }
+        problems = _contracts().validate_trace_entry(trace)
+        if problems:
+            return {"ok": False, "seat": seat, "mode": mode, "reason": "invalid-trace", "errors": problems, "retries": 0, "launched": False}
     return {
+        "trace": trace,
         "ok": True,
         "seat": seat,
         "mode": mode,
@@ -104,9 +141,13 @@ def run_program(
     metric_after: float,
     log_dir: Path,
     artifact: str = "search-rule",
+    evaluator_digest: str | None = None,
+    hypothesis: str = "dry cycle",
 ) -> dict:
     """One dry cycle. The launcher runs only when the operator gate and the arm are both set."""
-    result = dry_cycle(seat, task_type, metric_before, metric_after, log_dir, artifact)
+    result = dry_cycle(
+        seat, task_type, metric_before, metric_after, log_dir, artifact, evaluator_digest, hypothesis
+    )
     result["argv"] = launcher_argv(seat)
     result["called_launcher"] = False
     if result.get("ok") and launch_allowed():
