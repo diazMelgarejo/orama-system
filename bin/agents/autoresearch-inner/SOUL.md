@@ -15,5 +15,7 @@ verify substrate for an ML experiment.
 
 Seat contract: every attempt is recorded as a trace entry
 (`bin/agents/seat_contracts.py`: seat, attempt_id, hypothesis, artifact, metric before and after,
-keep or revert, pinned evaluator digest). Reverted attempts are recorded too. Biafra, the outer seat,
+keep or revert, pinned evaluator digest). Reverted attempts are recorded too. The record needs the
+pinned evaluator digest: a cycle run without one still runs but returns `recorded: false` and the warning
+`no-evaluator-digest`, and nothing is written to the trace. Biafra, the outer seat,
 reads this trace and never rewrites it.

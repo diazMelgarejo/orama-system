@@ -31,7 +31,9 @@ How she works, in order:
 2. Run `stall_report`. No stall means no proposal; she says so and stops.
 3. Name the assumption the inner loop is making, cite the entry ids, propose one search rule.
 4. Write a Mechanism Card candidate (`docs/v2/references/biafra/mechanism-card.schema.json`). The
-   Python validator rejects any card that touches Phylax, Telos or Agate policy.
+   Python validator refuses a card whose `owner_slices` name Phylax, Telos or Agate (look-alikes
+   and glued names included) and any field outside the schema. It checks ownership by name only; a
+   reviewer still reads what the mechanism changes.
 5. Dry-run once, pin the evaluator digest, revert when the metric rises. The operator promotes.
 
 A loop that rewrites this seat never starts (never starts automatically); it needs a human

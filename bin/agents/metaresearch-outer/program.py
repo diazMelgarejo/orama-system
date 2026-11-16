@@ -23,7 +23,10 @@ def run(
     artifact: str = "search-rule",
     evaluator_digest: str | None = None,
     hypothesis: str = "dry cycle",
+    metric_name: str = "metric",
+    attempt_id: str | None = None,
 ) -> dict:
     return _cycle().run_program(
-        "outer", task_type, metric_before, metric_after, log_dir, artifact, evaluator_digest, hypothesis
+        "outer", task_type, metric_before, metric_after, log_dir, artifact, evaluator_digest, hypothesis,
+        metric_name, attempt_id,
     )

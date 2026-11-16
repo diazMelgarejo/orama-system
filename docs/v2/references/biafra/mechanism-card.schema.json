@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Mechanism Card",
   "type": "object",
-  "description": "Shape only. The authority is validate_mechanism_card in bin/agents/seat_contracts.py; a green schema check does not make a card safe (it does not encode fixed-wall ownership, metric agreement or graduation rules).",
+  "description": "Shape only. The authority is validate_mechanism_card in bin/agents/seat_contracts.py. The validator also enforces what a schema cannot: fixed-wall owner names (normalized, ASCII only), reverted agreeing with the sign of delta, and a real dry-run receipt before reviewed or graduated. Unknown fields are refused here and there.",
   "required": [
     "version",
     "mechanism_id",
@@ -95,5 +95,5 @@
       ]
     }
   },
-  "additionalProperties": true
+  "additionalProperties": false
 }

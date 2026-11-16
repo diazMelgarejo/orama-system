@@ -410,3 +410,107 @@ def test_the_plan_cites_correct_references_and_defaults() -> None:
         "DeepSeek-V4.1-Flash-1017", "high",
     ):
         assert needle in plan, needle
+
+
+# --- the eight verified review defects (loop round 1) -------------------------------------
+
+
+def test_1_scout_is_a_legal_seat_and_distinct_from_the_inner_seat(sc) -> None:
+    assert sc.validate_trace_entry(_entry(seat="inner-scout")) == []
+    assert "inner-scout" in sc.SEATS and "inner" in sc.SEATS and "outer" in sc.SEATS
+    registry = yaml.safe_load((ROOT / "bin/agents/REGISTRY.yml").read_text())
+    seats = {r["seat"] for r in registry["roles"] if "seat" in r}
+    assert seats <= set(sc.SEATS)
+
+
+def test_2_attempt_ids_differ_between_attempts(tmp_path: Path) -> None:
+    cycle = _load(CYCLE, "biafra_cycle")
+    a = cycle.dry_cycle("inner", "harden", 0.2, 0.1, tmp_path / "a", evaluator_digest=DIGEST)
+    b = cycle.dry_cycle("inner", "harden", 0.2, 0.1, tmp_path / "b", evaluator_digest=DIGEST)
+    c = cycle.dry_cycle("inner", "harden", 0.2, 0.3, tmp_path / "c", evaluator_digest=DIGEST)
+    ids = {a["trace"]["attempt_id"], b["trace"]["attempt_id"], c["trace"]["attempt_id"]}
+    assert len(ids) == 3
+    assert "dry-1" not in a["trace"]["attempt_id"]
+
+
+def test_2_metric_name_and_attempt_id_can_be_supplied(tmp_path: Path) -> None:
+    cycle = _load(CYCLE, "biafra_cycle")
+    r = cycle.dry_cycle(
+        "inner", "harden", 0.2, 0.1, tmp_path, evaluator_digest=DIGEST,
+        metric_name="val_bpb", attempt_id="run-7",
+    )
+    assert r["trace"]["metric_name"] == "val_bpb" and r["trace"]["attempt_id"] == "run-7"
+
+
+def test_3_a_cycle_without_a_digest_says_it_recorded_nothing(tmp_path: Path) -> None:
+    cycle = _load(CYCLE, "biafra_cycle")
+    r = cycle.dry_cycle("inner", "harden", 0.2, 0.1, tmp_path)
+    assert r["ok"] is True and r["trace"] is None
+    assert r["recorded"] is False and r["warning"] == "no-evaluator-digest"
+    r2 = cycle.dry_cycle("inner", "harden", 0.2, 0.1, tmp_path / "x", evaluator_digest=DIGEST)
+    assert r2["recorded"] is True and "warning" not in r2
+
+
+def test_3_the_soul_cards_state_the_conditional_contract() -> None:
+    for rel in ("bin/agents/autoresearch-inner/SOUL.md", "bin/agents/autoresearcher/README.md"):
+        text = (ROOT / rel).read_text()
+        assert "recorded: false" in text or "recorded:false" in text, rel
+
+
+def test_4_a_bad_digest_does_not_consume_the_single_attempt(tmp_path: Path) -> None:
+    cycle = _load(CYCLE, "biafra_cycle")
+    bad = cycle.dry_cycle("inner", "harden", 0.2, 0.1, tmp_path, evaluator_digest="A" * 64)
+    assert bad["ok"] is False and bad["reason"] == "invalid-trace"
+    good = cycle.dry_cycle("inner", "harden", 0.2, 0.1, tmp_path, evaluator_digest=DIGEST)
+    assert good["ok"] is True, good
+
+
+@pytest.mark.parametrize("bad", [None, "0.1", True, False, [1]])
+def test_5_non_numeric_metrics_are_refused_not_raised(tmp_path: Path, bad) -> None:
+    cycle = _load(CYCLE, "biafra_cycle")
+    for args in ((bad, 0.5), (0.5, bad)):
+        r = cycle.dry_cycle("inner", "harden", *args, tmp_path / str(id(args)))
+        assert r["ok"] is False and r["reason"] == "non-finite-metric"
+        assert r["launched"] is False
+
+
+def test_6_a_digest_with_a_trailing_newline_is_refused(sc) -> None:
+    assert sc.validate_trace_entry(_entry(evaluator_digest=DIGEST + "\n"))
+    assert sc.validate_mechanism_card(_card(evaluator_digest=DIGEST + "\n"))
+
+
+def test_6_an_empty_verifier_set_has_no_digest(sc, tmp_path: Path) -> None:
+    with pytest.raises(ValueError):
+        sc.evaluator_digest([])
+    with pytest.raises(ValueError):
+        sc.evaluator_digest([tmp_path])  # a directory is not a verifier file
+
+
+def test_7_reverted_and_delta_must_agree(sc) -> None:
+    assert any("reverted" in e for e in sc.validate_mechanism_card(_card(reverted=True, delta=-0.5)))
+    assert any("reverted" in e for e in sc.validate_mechanism_card(_card(reverted=False, delta=0.5)))
+    assert sc.validate_mechanism_card(_card(reverted=True, delta=0.5)) == []
+    assert sc.validate_mechanism_card(_card(reverted=False, delta=-0.5)) == []
+
+
+def test_7_graduated_cannot_be_a_reverted_card(sc) -> None:
+    errors = sc.validate_mechanism_card(_card(status="graduated", reverted=True, delta=1.5))
+    assert any("graduated" in e for e in errors)
+
+
+@pytest.mark.parametrize("status", ["reviewed", "graduated"])
+def test_7_reviewed_and_graduated_need_a_real_dry_run(sc, status: str) -> None:
+    assert any("dry_run_receipt" in e for e in sc.validate_mechanism_card(_card(status=status, dry_run_receipt={})))
+
+
+def test_8_unknown_card_fields_are_refused(sc) -> None:
+    errors = sc.validate_mechanism_card(_card(targets=["oramasys/phylax/admission.py"]))
+    assert any("unknown" in e for e in errors)
+
+
+def test_8_the_schema_matches_the_allowlist_and_the_soul_is_honest(sc) -> None:
+    schema = json.loads((ROOT / "docs/v2/references/biafra/mechanism-card.schema.json").read_text())
+    assert schema["additionalProperties"] is False
+    assert set(schema["properties"]) == set(sc.CARD_FIELDS)
+    soul = (ROOT / "bin/agents/metaresearch-outer/SOUL.md").read_text()
+    assert "owner_slices" in soul and "touches Phylax, Telos or Agate policy" not in soul

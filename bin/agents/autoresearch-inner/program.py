@@ -23,7 +23,10 @@ def run(
     artifact: str = "train.py",
     evaluator_digest: str | None = None,
     hypothesis: str = "dry cycle",
+    metric_name: str = "metric",
+    attempt_id: str | None = None,
 ) -> dict:
     return _cycle().run_program(
-        "inner", task_type, metric_before, metric_after, log_dir, artifact, evaluator_digest, hypothesis
+        "inner", task_type, metric_before, metric_after, log_dir, artifact, evaluator_digest, hypothesis,
+        metric_name, attempt_id,
     )

@@ -69,8 +69,11 @@ SSH. Respect `swarm_state.md` GPU lock semantics.
 
 Scout stays the original inner-seat AutoResearcher and keeps both modes. To be retrofittable by
 Biafra, any run Scout reports also records one trace entry per attempt, kept or reverted, in the
-shape of `bin/agents/seat_contracts.py` (`validate_trace_entry`). Scout does not choose or edit the
-evaluator: the evaluator digest is pinned by the operator or the gate, and Scout reports it unchanged.
+shape of `bin/agents/seat_contracts.py` (`validate_trace_entry`). Recording needs the pinned
+evaluator digest: a cycle run without one reports `recorded: false` and the warning
+`no-evaluator-digest`. Scout's trace seat is `inner-scout`, distinct from the inner seat `inner`.
+Scout does not choose or edit the evaluator: the digest is pinned by the operator or the gate,
+and Scout reports it unchanged.
 Biafra, the outer seat, reads the trace and proposes search-rule changes as Mechanism Cards; Scout
 never takes the outer seat, and the outer seat never takes Scout's commands. Effort is explicit.
 Preferred and human-gated for the AutoResearcher seat: Claude Opus 5.5 medium or GPT-6.1 Sol

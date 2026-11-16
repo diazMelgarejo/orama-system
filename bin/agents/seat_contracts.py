@@ -15,12 +15,17 @@ from typing import Any, Iterable, Mapping, Sequence
 
 TRACE_VERSION = 1
 CARD_VERSION = 1
-SEATS = ("inner", "outer")
+SEATS = ("inner", "inner-scout", "outer")
 DECISIONS = ("keep", "revert")
 CARD_STATUSES = ("candidate", "reviewed", "graduated")
+CARD_FIELDS = (
+    "version", "mechanism_id", "revision", "parent", "hypothesis", "evidence_ids",
+    "inner_metric", "held_out_metric", "evaluator_digest", "dry_run_receipt",
+    "delta", "reverted", "scope_record", "owner_slices", "status",
+)
 # Owners whose policy neither researcher seat may touch. Matched case-insensitively.
 FIXED_WALLS = frozenset({"phylax", "telos", "agate"})
-_HEX64 = re.compile(r"^[0-9a-f]{64}$")
+_HEX64 = re.compile(r"[0-9a-f]{64}")  # used with fullmatch: `$` would accept a trailing newline
 
 # Model and effort policy (operator clarification 2026-11-17).
 # The ladder is the default: it runs on free W&B turns with no human approval, and it is the
@@ -73,14 +78,25 @@ def _owner_folded(owner: str) -> str | None:
     return folded if folded.isascii() else None
 
 
+def is_finite_number(value: Any) -> bool:
+    """Public form of the measurement test used by the cycle: no bool, str, None, NaN or inf."""
+    return _finite(value)
+
+
 def _text(value: Any) -> bool:
     return isinstance(value, str) and bool(value.strip())
 
 
 def evaluator_digest(paths: Iterable[Path]) -> str:
     """Digest of the verifier files, bound to their names, so an edit changes the pin."""
+    files = sorted(Path(p) for p in paths)
+    if not files:
+        raise ValueError("evaluator_digest needs at least one verifier file")
+    not_files = [str(f) for f in files if not f.is_file()]
+    if not_files:
+        raise ValueError(f"not a verifier file: {', '.join(not_files)}")
     h = hashlib.sha256()
-    for path in sorted(Path(p) for p in paths):
+    for path in files:
         h.update(path.name.encode("utf-8") + b"\0")
         h.update(path.read_bytes() + b"\0")
     return h.hexdigest()
@@ -112,7 +128,7 @@ def validate_trace_entry(entry: Mapping[str, Any]) -> list[str]:
             errors.append(f"{key} must be a finite number")
     if entry["decision"] not in DECISIONS:
         errors.append("decision must be keep or revert")
-    if not (isinstance(entry["evaluator_digest"], str) and _HEX64.match(entry["evaluator_digest"])):
+    if not (isinstance(entry["evaluator_digest"], str) and _HEX64.fullmatch(entry["evaluator_digest"])):
         errors.append("evaluator_digest must be 64 lowercase hex")
     if not errors:
         expected = "keep" if entry["metric_after"] < entry["metric_before"] else "revert"
@@ -143,14 +159,12 @@ def validate_mechanism_card(card: Mapping[str, Any]) -> list[str]:
     if not isinstance(card, Mapping):
         return ["card must be an object"]
     errors: list[str] = []
-    required = (
-        "version", "mechanism_id", "revision", "parent", "hypothesis", "evidence_ids",
-        "inner_metric", "held_out_metric", "evaluator_digest", "dry_run_receipt",
-        "delta", "reverted", "scope_record", "owner_slices", "status",
-    )
-    for key in required:
+    for key in CARD_FIELDS:
         if key not in card:
             errors.append(f"missing {key}")
+    extra = sorted(str(k) for k in card if k not in CARD_FIELDS)
+    if extra:
+        errors.append(f"unknown field(s): {', '.join(extra)}")
     if errors:
         return errors
     if card["version"] != CARD_VERSION:
@@ -168,7 +182,7 @@ def validate_mechanism_card(card: Mapping[str, Any]) -> list[str]:
     ids = card["evidence_ids"]
     if not (isinstance(ids, list) and ids and all(_text(i) for i in ids)):
         errors.append("evidence_ids must be a non-empty list of ledger entry ids")
-    if not (isinstance(card["evaluator_digest"], str) and _HEX64.match(card["evaluator_digest"])):
+    if not (isinstance(card["evaluator_digest"], str) and _HEX64.fullmatch(card["evaluator_digest"])):
         errors.append("evaluator_digest must be 64 lowercase hex")
     if not _finite(card["delta"]):
         errors.append("delta must be a finite number")
@@ -188,19 +202,25 @@ def validate_mechanism_card(card: Mapping[str, Any]) -> list[str]:
                 f"fixed-wall owner(s): {', '.join(walls)}" if walls else "non-ASCII or empty owner name"
             )
             errors.append(f"E_OWNER: a mechanism may not touch {reason}")
-    if card["status"] not in CARD_STATUSES:
+    if _finite(card["delta"]) and isinstance(card["reverted"], bool):
+        # delta is metric_after - metric_before on a lower-is-better metric.
+        if card["reverted"] and card["delta"] < 0:
+            errors.append("reverted is true but delta shows an improvement")
+        if not card["reverted"] and card["delta"] >= 0:
+            errors.append("reverted is false but delta shows no improvement")
+    status = card["status"]
+    if status not in CARD_STATUSES:
         errors.append("status must be candidate, reviewed or graduated")
-    elif card["status"] == "graduated":
-        receipt = card["dry_run_receipt"]
-        if not (
-            isinstance(receipt, Mapping)
-            and receipt.get("ok") is True
-            and receipt.get("retries") == 0
-            and receipt.get("launched") is False
-        ):
-            errors.append("dry_run_receipt must show ok, no retries and no launch before graduation")
-    elif not isinstance(card["dry_run_receipt"], Mapping):
+        return errors
+    receipt = card["dry_run_receipt"]
+    if not isinstance(receipt, Mapping):
         errors.append("dry_run_receipt must be an object")
+    elif status in ("reviewed", "graduated") and not (
+        receipt.get("ok") is True and receipt.get("retries") == 0 and receipt.get("launched") is False
+    ):
+        errors.append(f"dry_run_receipt must show ok, no retries and no launch before {status}")
+    if status == "graduated" and card["reverted"] is True:
+        errors.append("a reverted card cannot be graduated")
     return errors
 
 

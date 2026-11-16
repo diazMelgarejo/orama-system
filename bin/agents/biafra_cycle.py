@@ -6,8 +6,8 @@ plugin-loop reading, and GPU-verify reading. It does not take Scout's commands.
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
-import math
 import os
 import sys
 from pathlib import Path
@@ -41,6 +41,12 @@ def _forbidden(path: str) -> bool:
     return "tests" in parts or name.startswith("test_")
 
 
+def _attempt_id(seat: str, mode: str, log_dir: Path, *parts: object) -> str:
+    """A run-varying, deterministic id: the same call in the same directory cannot run twice."""
+    basis = "|".join([seat, mode, str(log_dir.resolve()), *map(repr, parts)])
+    return f"{seat}-{mode}-{hashlib.sha256(basis.encode()).hexdigest()[:12]}"
+
+
 def dry_cycle(
     seat: str,
     task_type: str,
@@ -50,41 +56,52 @@ def dry_cycle(
     artifact: str = "search-rule",
     evaluator_digest: str | None = None,
     hypothesis: str = "dry cycle",
+    metric_name: str = "metric",
+    attempt_id: str | None = None,
 ) -> dict:
     """Run one cycle. A lower metric is better. A second call does not retry.
 
-    With `evaluator_digest` the result also carries a validated trace entry for the ledger.
+    With `evaluator_digest` the result carries a validated trace entry and `recorded: true`.
+    Without it the cycle still runs but reports `recorded: false` and a warning. Everything that
+    can refuse the attempt is checked before the one-cycle marker is claimed, so a refusal never
+    consumes the single attempt.
     """
+    contracts = _contracts()
     log_dir.mkdir(parents=True, exist_ok=True)
     mode = select_mode(task_type) if seat == "outer" else "inner"
     marker = log_dir / f"{seat}-{mode}.once"
-    if not (math.isfinite(metric_before) and math.isfinite(metric_after)):
-        return {"ok": False, "seat": seat, "mode": mode, "reason": "non-finite-metric", "retries": 0, "launched": False}
+
+    def refuse(reason: str, **extra: object) -> dict:
+        return {"ok": False, "seat": seat, "mode": mode, "reason": reason, "retries": 0, "launched": False, **extra}
+
+    if not (contracts.is_finite_number(metric_before) and contracts.is_finite_number(metric_after)):
+        return refuse("non-finite-metric")
     if _forbidden(artifact):
-        return {"ok": False, "seat": seat, "mode": mode, "reason": "verifier-protected", "retries": 0, "launched": False}
-    if not _claim_once(marker):
-        return {"ok": False, "seat": seat, "mode": mode, "reason": "already-ran", "retries": 0, "launched": False}
-    improved = metric_after < metric_before
-    decision = "keep" if improved else "revert"
+        return refuse("verifier-protected")
+    decision = "keep" if metric_after < metric_before else "revert"
     trace = None
     if evaluator_digest is not None:
         trace = {
             "version": 1,
             "seat": seat,
-            "attempt_id": f"{seat}-{mode}-dry-1",
+            "attempt_id": attempt_id
+            or _attempt_id(seat, mode, log_dir, artifact, metric_name, metric_before, metric_after, hypothesis),
             "hypothesis": hypothesis,
             "artifact": artifact,
-            "metric_name": "metric",
+            "metric_name": metric_name,
             "metric_before": metric_before,
             "metric_after": metric_after,
             "decision": decision,
             "evaluator_digest": evaluator_digest,
         }
-        problems = _contracts().validate_trace_entry(trace)
+        problems = contracts.validate_trace_entry(trace)
         if problems:
-            return {"ok": False, "seat": seat, "mode": mode, "reason": "invalid-trace", "errors": problems, "retries": 0, "launched": False}
-    return {
+            return refuse("invalid-trace", errors=problems)
+    if not _claim_once(marker):
+        return refuse("already-ran")
+    result = {
         "trace": trace,
+        "recorded": trace is not None,
         "ok": True,
         "seat": seat,
         "mode": mode,
@@ -96,6 +113,9 @@ def dry_cycle(
         "gate": os.environ.get(GATE_ENV, ""),
         "armed": os.environ.get(ARM_ENV, ""),
     }
+    if trace is None:
+        result["warning"] = "no-evaluator-digest"
+    return result
 
 
 def _claim_once(marker: Path) -> bool:
@@ -143,10 +163,13 @@ def run_program(
     artifact: str = "search-rule",
     evaluator_digest: str | None = None,
     hypothesis: str = "dry cycle",
+    metric_name: str = "metric",
+    attempt_id: str | None = None,
 ) -> dict:
     """One dry cycle. The launcher runs only when the operator gate and the arm are both set."""
     result = dry_cycle(
-        seat, task_type, metric_before, metric_after, log_dir, artifact, evaluator_digest, hypothesis
+        seat, task_type, metric_before, metric_after, log_dir, artifact, evaluator_digest,
+        hypothesis, metric_name, attempt_id,
     )
     result["argv"] = launcher_argv(seat)
     result["called_launcher"] = False
