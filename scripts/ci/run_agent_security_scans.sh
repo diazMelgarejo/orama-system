@@ -28,6 +28,26 @@ run() {
   if "$@"; then log "OK $name"; else log "FAIL $name"; FAIL=1; fi
 }
 
+# PyPI occasionally returns truncated wheels on CI runners (IncompleteRead
+# while fetching build dependencies). Retry installs before failing the job.
+# Attempts and delay are env-tunable so a flaky runner day can be tuned
+# without editing this script; the delay grows linearly per attempt.
+pip_install_retry() {
+  local attempts="${PIP_INSTALL_ATTEMPTS:-3}"
+  local delay="${PIP_INSTALL_RETRY_DELAY_SEC:-5}"
+  local n
+  for ((n = 1; n <= attempts; n++)); do
+    if python3 -m pip install "$@"; then
+      return 0
+    fi
+    if (( n < attempts )); then
+      log "WARN pip install failed (attempt ${n}/${attempts}); retrying in $((delay * n))s"
+      sleep "$((delay * n))"
+    fi
+  done
+  return 1
+}
+
 scan_aguara() {
   # v0.27.0 tag, pinned by commit SHA rather than "@latest" — this tool
   # audits supply-chain/agent-surface risk, so it must not itself be a
@@ -69,7 +89,7 @@ scan_aguara() {
 }
 
 scan_agent_audit() {
-  python3 -m pip install -q --upgrade pip
+  pip_install_retry -q --upgrade pip
   # CACHE_DIR/agent-audit, not WORK/agent-audit -- must match the path
   # cached by actions/cache in agent-security.yml exactly, so the clone
   # is actually restored between runs instead of re-cloned every time.
@@ -90,18 +110,10 @@ scan_agent_audit() {
     git -C "$CACHE_DIR/agent-audit" checkout --detach "$AGENT_AUDIT_REF"
   fi
   # A broken download (IncompleteRead while fetching hatchling) is a runner
-  # network blip. Retry the editable install before failing the scan.
-  installed=0
-  for attempt in 1 2 3; do
-    if python3 -m pip install -q -e "$CACHE_DIR/agent-audit"; then
-      installed=1
-      break
-    fi
-    log "agent-audit install failed (attempt ${attempt}); retrying"
-    sleep $((attempt * 2))
-  done
-  if [[ "$installed" -ne 1 ]]; then
-    echo "agent-audit install failed after 3 attempts" >&2
+  # network blip. Retry the editable install before failing the scan; the
+  # explicit failure here keeps the agent-audit scan's own accounting.
+  if ! pip_install_retry -q -e "$CACHE_DIR/agent-audit"; then
+    echo "agent-audit install failed after ${PIP_INSTALL_ATTEMPTS:-3} attempts" >&2
     return 1
   fi
 
@@ -110,8 +122,8 @@ scan_agent_audit() {
 }
 
 scan_skill_scanner() {
-  python3 -m pip install -q --upgrade pip
-  python3 -m pip install -q cisco-ai-skill-scanner
+  pip_install_retry -q --upgrade pip
+  pip_install_retry -q cisco-ai-skill-scanner
 
   for path in "${SCAN_ROOTS[@]}"; do
     scan_root="$ROOT/$path"
@@ -138,8 +150,8 @@ scan_skill_scanner() {
 }
 
 scan_mcp_scanner() {
-  python3 -m pip install -q --upgrade pip
-  python3 -m pip install -q cisco-ai-mcp-scanner
+  pip_install_retry -q --upgrade pip
+  pip_install_retry -q cisco-ai-mcp-scanner
 
   if [[ ! -f config/mac-orchestrator.json ]]; then
     log "FAIL mcp-scanner-config (config/mac-orchestrator.json missing)"
