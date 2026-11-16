@@ -47,7 +47,7 @@ cutover refusal and routing, not this race.
 
 | Task | Owner and parent row | Deliverable and acceptance | Needs |
 | --- | --- | --- | --- |
-| L-1r | PT, C2/C5 (master row C5a) | Failing-first real-process schedule: pause a worker past the DEAD threshold, run cleanup, let another agent claim, resume the paused worker and attempt complete and an external effect; include the same-agent-name reclaim case. Write the expected outcome before code: refusal, or a recorded hold for anything that cannot be fenced. Before V1-2: hold, refuse or explicit operator confirmation only, because no generation exists to fence with. After V1-2: the persistent generation fences the resumed worker. Reuse the exact `find_agent_heartbeats` scoring (I-3); record the changed cleanup outcome in the contract-migration ledger (I-2); POSIX and native Windows evidence (D3) | L-1a; V1-2 for the generation step |
+| L-1r | PT, C2/C5 (master row C5a) | Failing-first real-process schedule: pause a worker past the DEAD threshold, run cleanup, let another agent claim, resume the paused worker and attempt complete and an external effect; include the same-agent-name reclaim case. Write the expected outcome before code: refusal, or a recorded hold for anything that cannot be fenced. Before V1-2: hold, refuse or explicit operator confirmation only, because no generation exists to fence with. After V1-2: the persistent generation fences the resumed worker. Reuse the exact `find_agent_heartbeats` scoring (I-3); record the changed cleanup outcome in the contract-migration ledger (I-2); POSIX and native Windows evidence (D3) | C5, L-1a; V1-2 for the generation step |
 
 Order: L-1r's pre-generation step may land after L-1a. Its generation step lands after V1-2 and
 before V1-4. It stays separate from V1-3, L-1b and V1-4, so a recovery or cutover change cannot
@@ -73,8 +73,21 @@ Per lane, from `orchestrator/control_plane_auth.py` at Perpetua-Tools main `3496
   variables, and that the worker's OS identity is denied reading `.state/control_plane_token`.
   The denials must be real on both hosts.
 - **Section 11 adds:** until the slice-A premise decision (V1-0, A-V1, P-H1), a worker with the
-  lane token or the token file has that lane's operator capability. Inbound lane scoping is
-  correct but is not worker isolation.
+  lane token or the token file has that lane's operator capability. Lane scoping is not worker
+  isolation either way.
+
+The two services differ, so state each separately:
+
+| Service | Inbound acceptance, from the source |
+| --- | --- |
+| Perpetua-Tools (`orchestrator/control_plane_auth.py`, `accepted_control_plane_tokens`) | Lane-scoped even in joint mode: scope `pt` accepts the PT lane only, scope `orama` the Orama lane only; the peer token is never accepted inbound. |
+| orama-system (`src/utils/control_plane_auth.py`, `accepted_control_plane_tokens`, used by `token_matches_control_plane(..., scope="orama")` in `src/orama_system/portal_server.py`) | **Not lane-scoped in joint mode:** when both lanes have keys it accepts the union, so a PT-lane token authorizes Orama portal requests and the reverse. With a single lane configured it falls back to the other lane's tokens ("Legacy" branch). The peer token is not accepted inbound. |
+
+The earlier sentence "inbound lane scoping is correct" (review 2026-11-16, O2) was verified for
+the PT implementation only. For the Orama service, the V1-0 inventory must record this joint-mode
+cross-lane acceptance as part of the credential inventory, and the V1-4 rehearsal covers both
+lane variables for a launched worker. Whether to tighten the Orama check is a separate design
+decision for its owner; this amendment changes no code.
 
 ## 4. Model tiers for execution (O3)
 

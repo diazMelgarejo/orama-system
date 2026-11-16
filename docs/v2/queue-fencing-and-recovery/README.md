@@ -73,7 +73,7 @@ for their own premise decision.
 | A-V1 | PT, new C2 child | Gated (needs V1-0) |
 | P-H1 | Phylax and Telos, C3a child | Gated (slice-A premise decision, still open) |
 | K-Q | PT memory writers | Gated (needs verification) |
-| L-1r | PT, C2/C5 (added 2026-11-16, [amendment](amendment-2026-11-16-review-synthesis.md)) | Gated (pre-generation step needs L-1a; generation step needs V1-2) |
+| L-1r | PT, C2/C5 (added 2026-11-16, [amendment](amendment-2026-11-16-review-synthesis.md)) | Gated (needs C5 and L-1a; the generation step also needs V1-2) |
 
 ## 5. Contents of this directory
 
