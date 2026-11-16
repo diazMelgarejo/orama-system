@@ -85,6 +85,18 @@ def _owner_folded(owner: str) -> str | None:
     return folded if folded.isascii() else None
 
 
+def _owner_errors(owners: Any) -> list[str]:
+    """Errors for a card's owner_slices; empty means acceptable. Pure; never raises."""
+    if not (isinstance(owners, list) and owners and all(_text(o) for o in owners)):
+        return ["owner_slices must be a non-empty list"]
+    folded = {o: _owner_folded(o) for o in owners}
+    walls = sorted({w for f in folded.values() if f for w in FIXED_WALLS if w in f})
+    if walls or any(f is None or f == "" for f in folded.values()):
+        reason = f"fixed-wall owner(s): {', '.join(walls)}" if walls else "non-ASCII or empty owner name"
+        return [f"E_OWNER: a mechanism may not touch {reason}"]
+    return []
+
+
 def is_finite_number(value: Any) -> bool:
     """Public form of the measurement test used by the cycle: no bool, str, None, NaN or inf."""
     return _finite(value)
@@ -198,17 +210,7 @@ def validate_mechanism_card(card: Mapping[str, Any]) -> list[str]:
     scope = card["scope_record"]
     if not (isinstance(scope, Mapping) and scope.get("authorizes") == "nothing"):
         errors.append("scope_record.authorizes must be 'nothing'")
-    owners = card["owner_slices"]
-    if not (isinstance(owners, list) and owners and all(_text(o) for o in owners)):
-        errors.append("owner_slices must be a non-empty list")
-    else:
-        folded = {o: _owner_folded(o) for o in owners}
-        walls = sorted({w for f in folded.values() if f for w in FIXED_WALLS if w in f})
-        if walls or any(f is None or f == "" for f in folded.values()):
-            reason = (
-                f"fixed-wall owner(s): {', '.join(walls)}" if walls else "non-ASCII or empty owner name"
-            )
-            errors.append(f"E_OWNER: a mechanism may not touch {reason}")
+    errors.extend(_owner_errors(card["owner_slices"]))
     if _finite(card["delta"]) and isinstance(card["reverted"], bool):
         # delta is metric_after - metric_before on a lower-is-better metric.
         if card["reverted"] and card["delta"] < 0:
