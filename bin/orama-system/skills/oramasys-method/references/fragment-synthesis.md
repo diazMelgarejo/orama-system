@@ -13,7 +13,7 @@ harmonizing them.
    and immediately exposes which fragments are alternatives vs complements.
 2. **Census every exposure point**, not just the site that happened to fail. A point fix protects
    one instance of the class; the census tells you the real blast radius of the synthesis
-   (fragments covering 3 of 8 sites is the signal that neither side saw the whole problem).
+   (fragments covering 2 of 6 sites is the signal that neither side saw the whole problem).
 3. **Classify each fragment per integrative-merge**: complementary capability, duplicated intent,
    or superseded (already merged elsewhere). Map every hunk to a disposition: keep / absorb /
    retire.
@@ -38,8 +38,8 @@ One PyPI `IncompleteRead` failure on the agent-audit security-scan job produced 
 | Reusable env-configurable `pip_install_retry()` | PR #509 | reusability + tunability | **absorbed**: the helper is the synthesis core |
 | Test-expectation fix (port key) | PR #511 | correct assertions | **retired**: identical fix merged via #508 (`4b92735`) |
 
-The census then found the coverage gap: the script had **8** `pip install` call sites and the
-two fixes together protected **3** — the skill-scanner and mcp-scanner upgrade and package
+The census then found the coverage gap: the script had **6** `pip install` call sites and the
+two fixes together protected **2** — the skill-scanner and mcp-scanner upgrade and package
 installs carry the same blip exposure neither side touched. The synthesis applied the shared
 helper to **6 of 6** sites, kept the guarded failure, and preserved the workflow pins, cache
 keys and trigger scope.
