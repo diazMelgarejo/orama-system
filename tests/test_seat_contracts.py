@@ -556,3 +556,43 @@ def test_the_representable_boundary_is_pinned(sc) -> None:
 def test_the_finite_helper_states_its_real_domain() -> None:
     text = (ROOT / "bin/agents/seat_contracts.py").read_text()
     assert "after conversion to float" in text
+
+
+# --- defect observed in the first real live turn: the outer seat's card had a sentence as owner ---
+
+REAL_SENTENCE = (
+    "the repository that owns bin/agents/seat_contracts.py and "
+    "bin/orama-system/skills/metaresearcher/SKILL.md"
+)
+
+
+@pytest.mark.parametrize(
+    "owners",
+    [
+        [REAL_SENTENCE], ["orama system repo"], ["kungfu and anamnesis"], [" kungfu"], ["kungfu "],
+        ["kungfu\n"], ["kun\tgfu"], ["a" * 65], ["kungfu,anamnesis"], ["kungfu", "the other repo"],
+    ],
+)
+def test_owner_slices_must_be_repository_identifiers(sc, owners) -> None:
+    errors = sc.validate_mechanism_card(_card(owner_slices=owners))
+    assert any("owner_slices" in e for e in errors), owners
+
+
+@pytest.mark.parametrize(
+    "owners",
+    [["kungfu"], ["orama-system"], ["perpetua-tools"], ["anamnesis", "alexandria"],
+     ["diazMelgarejo/orama-system"], ["perpetua-core"], ["a.b_c-d"], ["a" * 64]],
+)
+def test_ordinary_repository_names_are_accepted(sc, owners) -> None:
+    assert sc.validate_mechanism_card(_card(owner_slices=owners)) == []
+
+
+def test_a_fixed_wall_name_reports_e_owner_even_when_it_is_not_identifier_shaped(sc) -> None:
+    for name in ("Ｐhylax", "ph​ylax", "Рhylax", "Phýlax", "agate/fit", "xtelosx"):
+        errors = sc.validate_mechanism_card(_card(owner_slices=[name]))
+        assert any("E_OWNER" in e for e in errors), name
+
+
+def test_owner_errors_never_raises(sc) -> None:
+    for bad in (None, 5, "kungfu", [], [None], [5], [["x"]], {"a": 1}):
+        assert isinstance(sc._owner_errors(bad), list)

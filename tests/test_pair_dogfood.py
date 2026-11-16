@@ -157,5 +157,8 @@ def test_the_saved_live_cycle_artifacts_are_valid() -> None:
     assert [r["seat"] for r in rows] == ["inner", "outer"]
     assert all(sc.validate_trace_entry(r) == [] for r in rows)
     card = json.loads((base / "mechanism-card-candidate.json").read_text())
-    assert sc.validate_mechanism_card(card) == []
+    # The card is kept verbatim. Its owner_slices is a sentence, the defect turn 1 exposed and turn 2
+    # fixed, so the repaired validator now refuses exactly that and nothing else.
+    errors = sc.validate_mechanism_card(card)
+    assert len(errors) == 1 and "owner_slices must be repository identifiers" in errors[0]
     assert card["evidence_ids"] == [rows[0]["attempt_id"]] and card["status"] == "candidate"

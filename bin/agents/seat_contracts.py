@@ -25,6 +25,7 @@ CARD_FIELDS = (
 )
 # Owners whose policy neither researcher seat may touch. Matched case-insensitively.
 FIXED_WALLS = frozenset({"phylax", "telos", "agate"})
+_OWNER_SHAPE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,63}")  # used with fullmatch
 _HEX64 = re.compile(r"[0-9a-f]{64}")  # used with fullmatch: `$` would accept a trailing newline
 
 # Model and effort policy (operator clarification 2026-11-17).
@@ -86,7 +87,12 @@ def _owner_folded(owner: str) -> str | None:
 
 
 def _owner_errors(owners: Any) -> list[str]:
-    """Errors for a card's owner_slices; empty means acceptable. Pure; never raises."""
+    """Errors for a card's owner_slices; empty means acceptable. Pure; never raises.
+
+    The fixed-wall check runs first, so a disguised wall name reports E_OWNER even when it also
+    fails the identifier shape. Every remaining entry must be a repository identifier: letters,
+    digits and . _ - / only, starting with a letter or digit, at most 64 characters.
+    """
     if not (isinstance(owners, list) and owners and all(_text(o) for o in owners)):
         return ["owner_slices must be a non-empty list"]
     folded = {o: _owner_folded(o) for o in owners}
@@ -94,6 +100,9 @@ def _owner_errors(owners: Any) -> list[str]:
     if walls or any(f is None or f == "" for f in folded.values()):
         reason = f"fixed-wall owner(s): {', '.join(walls)}" if walls else "non-ASCII or empty owner name"
         return [f"E_OWNER: a mechanism may not touch {reason}"]
+    offenders = [o for o in owners if not _OWNER_SHAPE.fullmatch(o)]
+    if offenders:
+        return ["owner_slices must be repository identifiers: " + ", ".join(repr(o[:72]) for o in offenders)]
     return []
 
 

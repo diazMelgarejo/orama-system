@@ -31,8 +31,9 @@ comments on orama-system pull request 519, on the pair's own code.
 | `_finite` should state its real domain | **Accepted.** The docstring now says so. |
 
 Weak spots in the card itself: `owner_slices` holds a sentence, not a repository id, and
-`held_out_metric` names a metric that does not exist. The validator accepts both because it checks
-shape and fixed-wall names, not meaning. The file is kept verbatim for provenance.
+`held_out_metric` names a metric that does not exist. The validator accepted both in turn 1. Turn 2
+(below) fixed the first: the card file is kept verbatim and the repaired validator now refuses it.
+The invented metric name is still accepted; no metric registry exists yet.
 
 ## Her rule for resolving reviewer comments
 
