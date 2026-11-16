@@ -9,6 +9,8 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import os
+import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -136,8 +138,21 @@ def launch_allowed() -> bool:
     return os.environ.get(GATE_ENV) == "approved" and os.environ.get(ARM_ENV) == "1"
 
 
-def launcher_argv(seat: str) -> list[str]:
-    """Name the W&B summon. Naming it is not a call."""
+EFFORTS = ("medium", "high", "low")  # never xhigh or max; mirrors launch_cline_wandb.py
+_DIM_SPAN = re.compile(r"\x1b\[2m.*?\x1b\[0m", re.S)
+_ANSI = re.compile(r"\x1b\[[0-9;]*m")
+LIVE_TIMEOUT_S = 900
+
+
+def extract_answer(raw: str) -> str:
+    """The model's answer from launcher output: drop the dim thinking spans, then ANSI codes."""
+    return _ANSI.sub("", _DIM_SPAN.sub("", raw))
+
+
+def launcher_argv(seat: str, prompt: str | None = None, effort: str | None = None) -> list[str]:
+    """Name the W&B summon. Naming it is not a call. `effort` is explicit or left to the launcher."""
+    if effort is not None and effort not in EFFORTS:
+        raise ValueError(f"effort must be one of {EFFORTS}, got {effort!r}")
     script = (
         Path(__file__).resolve().parents[1]
         / "orama-system"
@@ -146,12 +161,15 @@ def launcher_argv(seat: str) -> list[str]:
         / "scripts"
         / "launch_cline_wandb.py"
     )
-    prompt = (
+    default = (
         "Inner seat. Propose one change, measure it, and keep it only when the metric falls."
         if seat == "inner"
         else "Outer seat. Read the log, propose one search rule, and revert it when the metric rises."
     )
-    return [sys.executable, str(script), "--", prompt]
+    argv = [sys.executable, str(script)]
+    if effort is not None:
+        argv += ["--effort", effort]
+    return [*argv, "--", prompt if prompt is not None else default]
 
 
 def run_program(
@@ -184,3 +202,87 @@ def run_program(
             result["ok"] = False
             result["reason"] = "launcher-failed"
     return result
+
+
+def live_cycle(
+    seat: str,
+    task_type: str,
+    prompt: str,
+    log_dir: Path,
+    evaluate,
+    metric_before: float,
+    artifact: str = "search-rule",
+    evaluator_digest: str | None = None,
+    hypothesis: str = "live cycle",
+    metric_name: str = "metric",
+    attempt_id: str | None = None,
+    effort: str | None = None,
+    timeout_s: int = LIVE_TIMEOUT_S,
+) -> dict:
+    """One live attempt: launch the seat's model once, evaluate its answer, record the trace.
+
+    Needs the operator gate and the arm together. Every refusal that can be known up front happens
+    before the one-attempt marker is claimed; once a request is made the attempt is spent and is
+    never retried. `evaluate(answer)` is the fixed evaluator and returns {"metric_after": number}.
+    """
+    contracts = _contracts()
+    log_dir.mkdir(parents=True, exist_ok=True)
+    mode = select_mode(task_type) if seat == "outer" else "inner"
+    marker = log_dir / f"{seat}-{mode}-live.once"
+
+    def refuse(reason: str, **extra: object) -> dict:
+        return {
+            "ok": False, "seat": seat, "mode": mode, "reason": reason, "retries": 0,
+            "launched": False, "called_launcher": False, **extra,
+        }
+
+    if not launch_allowed():
+        return refuse("gate-closed")
+    if evaluator_digest is None:
+        return refuse("no-evaluator-digest")
+    if not contracts.is_finite_number(metric_before):
+        return refuse("non-finite-metric")
+    if _forbidden(artifact):
+        return refuse("verifier-protected")
+    if not isinstance(prompt, str) or not prompt.strip():
+        return refuse("empty-prompt")
+    argv = launcher_argv(seat, prompt=prompt, effort=effort)
+    if not _claim_once(marker):
+        return refuse("already-ran")
+
+    try:
+        completed = subprocess.run(
+            argv, capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=timeout_s, check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return refuse("launcher-timeout", spent=True)
+    if completed.returncode != 0:
+        return refuse(
+            "launcher-failed", spent=True, returncode=completed.returncode, called_launcher=True,
+            stderr=(completed.stderr or "")[-300:],
+        )
+    answer = extract_answer(completed.stdout or "")
+    base = {"seat": seat, "mode": mode, "retries": 0, "launched": True, "called_launcher": True, "answer": answer}
+    try:
+        measured = evaluate(answer)
+        metric_after = measured["metric_after"]
+        if not contracts.is_finite_number(metric_after):
+            raise ValueError("metric_after is not a finite number")
+    except Exception as exc:  # the request is spent; report instead of raising
+        return {"ok": False, "reason": "evaluation-failed", "error": f"{type(exc).__name__}: {exc}",
+                "recorded": False, "trace": None, **base}
+    decision = "keep" if metric_after < metric_before else "revert"
+    trace = {
+        "version": 1, "seat": seat,
+        "attempt_id": attempt_id
+        or _attempt_id(seat, mode, log_dir, artifact, metric_name, metric_before, metric_after, hypothesis),
+        "hypothesis": hypothesis, "artifact": artifact, "metric_name": metric_name,
+        "metric_before": metric_before, "metric_after": metric_after, "decision": decision,
+        "evaluator_digest": evaluator_digest,
+    }
+    problems = contracts.validate_trace_entry(trace)
+    if problems:
+        return {"ok": False, "reason": "invalid-trace", "errors": problems, "recorded": False, "trace": None, **base}
+    return {"ok": True, "decision": decision, "recorded": True, "trace": trace,
+            "detail": measured.get("detail"), **base}
+

@@ -30,3 +30,9 @@ def run(
         "inner", task_type, metric_before, metric_after, log_dir, artifact, evaluator_digest, hypothesis,
         metric_name, attempt_id,
     )
+
+
+def run_live(task_type: str, prompt: str, log_dir: Path, evaluate, metric_before: float, **kwargs) -> dict:
+    """One live attempt for this seat. Needs the operator gate and the arm; see `live_cycle`."""
+    return _cycle().live_cycle("inner", task_type, prompt, log_dir, evaluate, metric_before, **kwargs)
+
