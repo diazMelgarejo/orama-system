@@ -178,16 +178,29 @@ def test_every_saved_ledger_row_is_valid_and_the_reverted_turn_is_recorded() -> 
     assert len(ids) == len(set(ids))
 
 
-
 def test_the_runbook_states_the_billing_basis_and_the_stop_rule() -> None:
     text = (ROOT / "bin/orama-system/skills/metaresearcher/references/live-pair-loop-runbook.md").read_text()
     assert "https://docs.coreweave.com/products/inference/serverless/usage-limits" in text
-    for needle in ("pay-as-you-go", "402", "429", "Billing page", "operator-certified"):
+    assert "https://docs.coreweave.com/support/inference/articles/api-error-code-402-you-exceeded-your-cur" in text
+    for needle in ("pay-as-you-go", "402", "429", "Billing page", "attest", "two causes", "max_retries"):
         assert needle in text, needle
     assert "free-tier W&B" not in text
+    assert "a `402` means it was reached" not in text
 
 
-def test_the_runbook_states_the_monthly_budget_and_the_guard() -> None:
+def test_the_runbook_points_at_the_shared_guard_and_not_a_private_ledger() -> None:
     text = (ROOT / "bin/orama-system/skills/metaresearcher/references/live-pair-loop-runbook.md").read_text()
-    for needle in ("90 dollars", "spend_ledger", "budget_usd", "budget-exhausted", "the Billing page is the truth"):
+    for needle in (
+        "90 dollars", "spend_guard", "PERPETUA_TOOLS_ROOT", "provider_limits verify", "attestation-required",
+        "budget-exhausted", "the Billing page is the truth", "orchestrator/cost_guard.py",
+    ):
+        assert needle in text, needle
+    for gone in ("spend_ledger", "budget_usd"):
+        assert gone not in text, gone
+
+
+def test_the_plan_states_both_402_causes_and_the_attestation_requirement() -> None:
+    text = (ROOT / "docs/v2/76-biafra-outer-seat-canonical-plan.md").read_text()
+    assert "a `402` means the cap was reached" not in text
+    for needle in ("two causes", "attest", "pay-as-you-go is inactive", "Perpetua-Tools", "provider_limits"):
         assert needle in text, needle

@@ -5,36 +5,52 @@ names the evidence it came from. Where the evidence is thin, it says so.
 
 ## Billing basis
 
-The operator certified that the W&B account is on the Free plan, with no payment method charged.
-The official page, [Usage information and limits](https://docs.coreweave.com/products/inference/serverless/usage-limits)
-(last modified 2026-11-09), says: Serverless Inference is priced per token; the plan allowance is
-used first; on the Free plan inference stops when the allowance is used up until pay-as-you-go is
-activated; billing is monthly and only after activation; activation does not charge a card; the
-default Free cap is 100 dollars a month once active and a `402` means it was reached. The limits
-that apply are concurrency limits per project and user (`429`) and location limits (`403`). The page
-documents no per-hour or per-day request limits.
+The spend guard is shared: the logic, the provider policy and the budget state live in Perpetua-Tools
+(the runtime and state authority) and every agent uses them. Provider facts are not trusted from memory:
+`python3 -m orchestrator.provider_limits verify wandb-inference` fetches the official references named in
+`config/provider-policies/wandb-inference.json` and reports each fact as confirmed, drift or
+unreachable (13 of 13 confirmed on 2026-11-17).
 
-The plan, the remaining allowance and whether pay-as-you-go is active appear only on the account's
-Billing page, which an agent cannot open, so the certification is the evidence. Rules: never activate
-pay-as-you-go; stop the loop on any `402` or `429`. `live_cycle` reports a failed launch that matches
-either as `provider-payment-required` or `provider-rate-limited` with `stop: true`, spends the
-attempt and never retries. The match is on the launcher's text and is best effort.
+What the official pages say ([Usage information and limits](https://docs.coreweave.com/products/inference/serverless/usage-limits),
+last modified 2026-11-09, and the
+[402 article](https://docs.coreweave.com/support/inference/articles/api-error-code-402-you-exceeded-your-cur)):
+Serverless Inference is priced per token; the plan allowance is used first; on the Free plan inference stops
+when the allowance is used up until pay-as-you-go is activated; billing is monthly and only after activation;
+activation does not charge a card; the default Free cap is 100 dollars a month once active. A `402`
+("You exceeded your current quota") has two causes: the allowance is used up while pay-as-you-go is inactive
+(Free and Academic plans), or the spending cap was reached. Concurrency limits per project and user return
+`429`; location limits return `403`. No per-hour or per-day request limits are documented.
 
-### Monthly budget and the spend guard
+A Free account can have pay-as-you-go active without a card yet charged, and then turns can bill up to the
+cap. So "free with no payment method charged" is not enough. Before any live request the operator must
+**attest** that the plan is Free, pay-as-you-go is inactive and allowance remains. Only the operator can read
+the Billing page, so only the operator writes the attestation:
+`python3 -m orchestrator.provider_limits attest wandb-inference --plan-free --payg-inactive
+--allowance-remaining --by <name> --confirm "I read the provider Billing page myself"`. It expires after
+seven days. An agent must never run it. Without a fresh attestation the guard refuses every live request
+(`attestation-required`).
 
-The operator set an estimated ceiling of 90 dollars a month of "free" use so the account stays
-inside the free allowance and well under the 100-dollar default cap. `bin/agents/spend_ledger.py`
-keeps a local, append-only estimate and `live_cycle(..., spend_ledger=<path>, budget_usd=90)` refuses
-before any launch (`budget-exhausted`, `stop: true`) when this month's estimate plus a conservative
-projection would pass the budget. A ledger without a budget is refused, and a corrupt row stops the
-loop instead of being skipped. Sizes are characters over four; the rates are the highest non-Pro
-DeepSeek per-million-token rates on the provider's pricing page (0.50 input, 1.50 output), and the
-projection assumes 40 thousand output tokens because the reasoning stream is billed. Only sizes are
-stored, never prompts or answers. This is an estimate: the Billing page is the truth.
+Rules: never activate pay-as-you-go; stop the loop on any `402` or `429`; one call is one request, so the
+provider client is built with `max_retries=0` (the OpenAI SDK retries a 429 twice by default).
+`live_cycle` reports a failed launch matching either code as `provider-payment-required` or
+`provider-rate-limited` with `stop: true`, spends the attempt and never retries; the shared classifier decides.
 
-Position on 2026-11-17: the live requests made so far are estimated at about 0.15 dollars (0.17 percent
-of the budget) from a retroactive upper-bound reconstruction, with the thinking stream assumed at nine
-times the answer.
+### Monthly budget and the shared guard
+
+The operator set an estimated ceiling of 90 dollars a month of "free" use, kept under the 100-dollar cap. The
+guard is Perpetua-Tools' `orchestrator/cost_guard.py` `CostGuard` in its monthly mode (atomic reserve, commit
+and rollback), configured by the provider policy and used from orama through `bin/agents/spend_guard.py`:
+set `PERPETUA_TOOLS_ROOT`, build `SpendGuard()`, pass it as `live_cycle(..., spend_guard=guard)`. `live_cycle`
+refuses before any launch with the guard's reason (`attestation-required`, `budget-exhausted`; `stop: true`),
+reserves a conservative projection, and settles the estimated actual cost afterwards, including for failed and
+timed-out requests. With no checkout, no policy or no attestation, it fails closed. Only sizes are stored in
+the audit rows, never prompts or answers. Sizes are characters over four; the rates are an upper bound (0.50
+input and 1.50 output dollars per million tokens, the highest non-Pro DeepSeek rates on the pricing page), and
+the projection assumes 40 thousand output tokens because the reasoning stream is billed. The estimate is not
+billing: the Billing page is the truth.
+
+Position on 2026-11-17: the live requests made so far are estimated at about 0.15 dollars (0.17 percent of the
+budget), reconstructed as an upper bound and seeded into the guard's state.
 
 ## Principles
 
@@ -62,7 +78,7 @@ times the answer.
 | The evaluator is safe | Candidates run through `bin/agents/sandbox_run.py` only |
 | Gate and arm | `BIAFRA_ORCHESTRATOR_GATE=approved` and `BIAFRA_ALLOW_LAUNCH=1` set for that one command only |
 | Provider re-probe | Same-day read-only model list; abort before any completion if the model is missing |
-| Budget | Operator ceiling: an estimated 90 dollars a month of list-price usage, kept under the Free plan's 100-dollar cap; pass `spend_ledger` and `budget_usd` to `live_cycle`; see Billing basis |
+| Budget | Operator ceiling: an estimated 90 dollars a month of list-price usage, under the Free plan's 100-dollar cap; pass `spend_guard` (the adapter to the shared guard in Perpetua-Tools) to `live_cycle`; see Billing basis |
 | Effort | Explicit; medium, else high, else low; the V4.1 models reject `medium`, so `high` |
 
 ## What goes in a seat's prompt

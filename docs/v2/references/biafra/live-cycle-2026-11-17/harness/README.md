@@ -18,7 +18,8 @@ supported tool.
 3. Measure the baseline, and check that a reference answer scores 0 before any request.
 4. Export the provider key variable in the shell for that command only, and set the gate and arm
    variables on the same command line.
-5. Pass `spend_ledger` and `budget_usd` to `run_live` so the monthly guard applies.
+5. Set `PERPETUA_TOOLS_ROOT`, build `SpendGuard()` from `bin/agents/spend_guard.py` and pass it to `run_live`
+   as `spend_guard`; the operator must have attested (see the runbook) or every request is refused.
 
 The scoring must go through `bin/agents/sandbox_run.py`. Never run a candidate with the provider key
 in its environment. See the runbook at

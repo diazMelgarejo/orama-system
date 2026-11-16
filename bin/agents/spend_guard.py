@@ -1,0 +1,113 @@
+"""Orama's adapter to the shared spend guard that lives in Perpetua-Tools.
+
+Perpetua-Tools is the runtime and state authority (budget state, provider policies, attestations);
+orama-system is stateless and consumes it. The adapter loads Perpetua-Tools'
+`orchestrator/provider_limits.py` and `orchestrator/cost_guard.py` from PERPETUA_TOOLS_ROOT and adds
+no spend logic of its own. It fails closed: with no checkout, no policy or no valid operator
+attestation, a live request is refused. The estimate is not billing; the provider's Billing page is.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import importlib.util
+import os
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+DEFAULT_PROVIDER = "wandb-inference"
+
+
+class SpendGuardUnavailable(RuntimeError):
+    """The shared guard cannot be loaded. A caller that asked for a budget must not proceed."""
+
+
+def _load(root: Path, rel: str, name: str):
+    path = root / rel
+    if not path.is_file():
+        raise SpendGuardUnavailable(f"{rel} not found under {root}")
+    spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:
+        raise SpendGuardUnavailable(f"cannot load {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+class SpendGuard:
+    """Preflight, settle and release one provider's spend through Perpetua-Tools' CostGuard."""
+
+    def __init__(
+        self,
+        provider: str = DEFAULT_PROVIDER,
+        pt_root: str | Path | None = None,
+        state_dir: str | Path | None = None,
+        now: Any = None,
+    ) -> None:
+        raw = pt_root or os.environ.get("PERPETUA_TOOLS_ROOT")
+        if not raw:
+            raise SpendGuardUnavailable("PERPETUA_TOOLS_ROOT is not set")
+        root = Path(raw).expanduser().resolve()
+        self.pl = _load(root, "orchestrator/provider_limits.py", "pt_provider_limits")
+        self.cg = _load(root, "orchestrator/cost_guard.py", "pt_cost_guard")
+        try:
+            self.policy = self.pl.load_policy(provider)
+        except self.pl.ProviderPolicyError as exc:
+            raise SpendGuardUnavailable(str(exc)) from exc
+        self.provider = provider
+        self._now = now or (lambda: datetime.now(timezone.utc))
+        spend = Path(state_dir) if state_dir else self.pl.spend_dir()
+        self.guard = self.cg.CostGuard(
+            state_dir=str(spend), budget_file=f"{provider}-budget.json", period=self.policy["budget"]["period"]
+        )
+        ceiling = float(self.policy["budget"]["operator_estimate_ceiling_usd"])
+        if self.guard.snapshot()["daily_budget"] != ceiling:
+            self.guard.set_budget(ceiling)  # the policy file is the source of truth for the ceiling
+        self.audit_path = spend / f"{provider}-spend-audit.jsonl"
+
+    def _attestation(self) -> Any:
+        import json
+
+        path = self.pl.attestation_path(self.provider)
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return None
+        except (OSError, ValueError):
+            return {}
+
+    def preflight(self, prompt_chars: int) -> dict:
+        """Check the operator attestation, then reserve the projected cost against the budget."""
+        status = self.pl.attestation_status(self.policy, self._attestation(), self._now())
+        if not status["ok"]:
+            return {"ok": False, "reason": "attestation-required", "stop": True, "reasons": status["reasons"]}
+        projected = self.pl.projected_usd(self.policy, prompt_chars)
+        try:
+            reservation = asyncio.run(self.guard.reserve(projected))
+        except self.cg.BudgetExceededError as exc:
+            return {"ok": False, "reason": "budget-exhausted", "stop": True, "error": str(exc),
+                    "projected_usd": projected}
+        return {"ok": True, "reservation": reservation, "projected_usd": projected}
+
+    def settle(self, reservation: str, input_chars: int, output_chars: int, outcome: str, seat: str, mode: str) -> float:
+        """Commit the estimated actual cost and append a size-only audit row. Returns the estimate."""
+        usd = self.pl.estimate_usd(self.policy, input_chars, output_chars)
+        asyncio.run(self.guard.commit(reservation, usd))
+        self.pl.append_audit(self.audit_path, {
+            "ts": self._now().isoformat(), "seat": seat, "mode": mode, "input_chars": input_chars,
+            "output_chars": output_chars, "estimated_usd": usd, "estimated": True, "outcome": outcome,
+            "provider": self.provider, "policy_id": self.policy["policy_id"],
+        })
+        return usd
+
+    def release(self, reservation: str) -> None:
+        asyncio.run(self.guard.rollback(reservation))
+
+    def classify(self, text: Any) -> str | None:
+        return self.pl.classify_failure(self.policy, text)
+
+    def snapshot(self) -> dict:
+        return self.guard.snapshot()
