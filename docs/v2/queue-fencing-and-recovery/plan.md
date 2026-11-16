@@ -356,3 +356,10 @@ commits. Reply to each inline thread with the real fixing SHA.
 4. Release owner assembles the tests, migrations, rollback and POSIX and native Windows receipts;
    the operator completes exact-head C3d and the distinct R6/R7/R8 gates. Missing evidence stays
    blocked, not checked.
+
+## 13. Dated amendment pointer (2026-11-16)
+
+Additive; the text above is unchanged. The operator accepted three additions, and an independent
+reviewer verified them: task L-1r (the cleanup runtime liveness race, decision record I-1), a
+per-lane credential inventory for V1-0 and V1-4, and model tiers for section 12 step 3. See
+[amendment-2026-11-16-review-synthesis.md](amendment-2026-11-16-review-synthesis.md).
