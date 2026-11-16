@@ -262,3 +262,55 @@ def test_python_and_pytest_still_run_inside_the_sandbox(sb, tmp_path) -> None:
     r2 = sb.run_isolated([sys.executable, "-I", "-m", "pytest", "-q", "-p", "no:cacheprovider", "test_x.py"],
                          cwd=tmp_path, timeout=60)
     assert r2.returncode == 0 and "1 passed" in r2.stdout, r2.stdout + r2.stderr
+
+
+# --- security review follow-up: read roots must never be broad ---------------------------------
+
+
+def test_the_computed_read_roots_are_never_home_root_or_an_ancestor_of_home(sb) -> None:
+    home = Path.home().resolve()
+    roots, _execs = sb._interpreter_paths()
+    assert roots
+    for r in roots:
+        assert r != Path("/") and r != home and r not in home.parents, r
+
+
+@pytest.mark.parametrize("bad", ["/", "/Users", "HOME", "HOME_PARENT", "/private", "/usr", "/Library"])
+def test_a_broad_read_root_is_refused(sb, bad: str) -> None:
+    home = Path.home().resolve()
+    root = {"HOME": home, "HOME_PARENT": home.parent}.get(bad, Path(bad))
+    with pytest.raises(sb.SandboxUnavailable):
+        sb.check_read_roots([root])
+
+
+def test_ordinary_roots_are_accepted(sb) -> None:
+    home = Path.home().resolve()
+    sb.check_read_roots([home / ".local/share/python-default-3.13", Path("/Library/Frameworks/Python.framework/Versions/3.13")])
+
+
+def test_a_broad_interpreter_layout_fails_closed(sb, tmp_path, monkeypatch) -> None:
+    home = Path.home().resolve()
+    monkeypatch.setattr(sb.sys, "prefix", str(home))
+    monkeypatch.setattr(sb.sys, "base_prefix", str(home))
+    with pytest.raises(sb.SandboxUnavailable):
+        sb.run_isolated(_py("print(1)"), cwd=tmp_path, timeout=5)
+
+
+def test_secret_locations_are_denied_by_default_even_inside_an_allowed_root(sb, tmp_path) -> None:
+    home = Path.home().resolve()
+    profile = sb.sandbox_profile(tmp_path, [home / ".local"], [], deny_read=sb.default_deny_read())
+    for name in (".ssh", ".aws", ".gnupg", ".config", ".openclaw", ".claude", ".gbrain", ".netrc", ".npmrc"):
+        assert str(home / name) in profile, name
+
+
+def test_caller_denials_are_merged_with_the_defaults(sb) -> None:
+    extra = Path("/private/tmp/extra-secret")
+    merged = sb.merge_deny_read([extra])
+    assert extra in merged and (Path.home() / ".ssh") in merged
+    assert sb.merge_deny_read(None) == sb.default_deny_read()
+
+
+def test_read_roots_are_exact_directories_not_a_parent_of_the_binary(sb) -> None:
+    roots, execs = sb._interpreter_paths()
+    exe = Path(sys.executable).resolve()
+    assert exe.parent.parent not in roots or exe.parent.parent == Path(sys.base_prefix).resolve()

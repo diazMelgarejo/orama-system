@@ -22,6 +22,8 @@ from pathlib import Path
 from typing import Iterable
 
 _PATH = "/usr/bin:/bin"
+_SECRET_DIRS = (".ssh", ".aws", ".gnupg", ".config", ".openclaw", ".claude", ".gbrain", ".netrc", ".npmrc")
+_MIN_ROOT_DEPTH = 3  # a read root must be at least three components deep, e.g. /opt/homebrew/opt
 
 
 class SandboxUnavailable(RuntimeError):
@@ -97,15 +99,40 @@ def sandbox_profile(
     return "\n".join(lines)
 
 
+def default_deny_read() -> list[Path]:
+    """Secret locations under the user's home, denied on top of every allowed read root."""
+    home = Path(os.path.expanduser("~"))
+    return [home / name for name in _SECRET_DIRS]
+
+
+def merge_deny_read(extra: Iterable[Path] | None) -> list[Path]:
+    """The default secret denials followed by any caller-supplied ones, without duplicates."""
+    merged = default_deny_read()
+    for p in extra or []:
+        if Path(p) not in merged:
+            merged.append(Path(p))
+    return merged
+
+
+def check_read_roots(roots: Iterable[Path]) -> None:
+    """Refuse a read root that is `/`, the home folder, an ancestor of home, or too shallow."""
+    home = Path(os.path.expanduser("~")).resolve()
+    for root in roots:
+        r = Path(root).resolve()
+        if r == Path("/") or r == home or r in home.parents or len(r.parts) < _MIN_ROOT_DEPTH + 1:
+            raise SandboxUnavailable(f"read root is too broad to allow: {r}")
+
+
 def _interpreter_paths() -> tuple[list[Path], list[Path]]:
-    """Read roots and exec paths the current interpreter needs, as real paths."""
+    """Exact read roots and exec paths the current interpreter needs, as real paths."""
+    import sysconfig
+
     exe = Path(sys.executable)
-    roots = {Path(sys.prefix).resolve(), Path(sys.base_prefix).resolve(), exe.resolve().parent.parent}
-    try:
-        import site
-        roots.update(Path(p).resolve() for p in site.getsitepackages())
-    except Exception:  # site may be unavailable in odd builds; the prefixes above still apply
-        pass
+    roots = {Path(sys.prefix).resolve(), Path(sys.base_prefix).resolve()}
+    for key in ("stdlib", "platstdlib", "purelib", "platlib"):
+        value = sysconfig.get_paths().get(key)
+        if value:
+            roots.add(Path(value).resolve())
     execs = {exe, exe.resolve()}
     return sorted(roots), sorted(execs)
 
@@ -128,9 +155,10 @@ def run_isolated(
     cmd = list(argv)
     if use_sandbox:
         roots, execs = _interpreter_paths()
+        check_read_roots(roots)
         cmd = [
             "/usr/bin/sandbox-exec", "-p",
-            sandbox_profile(root, roots, execs, deny_read=list(deny_read or [])),
+            sandbox_profile(root, roots, execs, deny_read=merge_deny_read(deny_read)),
             *argv,
         ]
     proc = subprocess.Popen(
