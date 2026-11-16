@@ -207,6 +207,7 @@ router; CIDF is the content-insertion guard; CRG is code-review-graph.
 
 - `references/5-stage-methodology.md` — full 5-stage process + 6 directives
 - `references/integrative-merge.md` — **PR merge / conflict harmonization (additive, never-delete)**
+- `references/fragment-synthesis.md` — **one failure, several partial fixes: classify, census, synthesize on a trial branch, retire** (worked example: PR #516)
 - [`../stacked-pr-naming/SKILL.md`](../stacked-pr-naming/SKILL.md) — stacked branch/PR naming; card under git-history-surgery `references/`
 - `references/search-frugality.md` — gbrain + gstack + CRG decision tree
 - `references/graceful-degradation.md` — unified fallback ladders (oramasys + PT model selection)
