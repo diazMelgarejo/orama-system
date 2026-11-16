@@ -324,3 +324,30 @@ def test_non_mapping_input_is_an_error_not_a_crash(sc, bad) -> None:
 def test_a_bare_string_is_one_effort_not_a_set_of_letters(sc) -> None:
     assert sc.select_effort("medium") == "medium"
     assert sc.select_effort("xhigh") is None
+
+
+# --- security review follow-up: normalize first, then substring, reject non-ASCII -----------
+
+
+@pytest.mark.parametrize(
+    "owner",
+    ["Phýlax", "phylaxpolicy", "xtelosx", "my_agate_adapter", "Рhylax", "phуlax", "pḣylax"],
+)
+def test_owner_check_survives_accents_glued_names_and_lookalikes(sc, owner: str) -> None:
+    errors = sc.validate_mechanism_card(_card(owner_slices=["kungfu", owner]))
+    assert any("E_OWNER" in e for e in errors), owner
+
+
+def test_over_refusal_is_deliberate_and_documented(sc) -> None:
+    # "propagate" contains "agate"; fail-closed is the intent, so it is refused.
+    assert any("E_OWNER" in e for e in sc.validate_mechanism_card(_card(owner_slices=["propagate"])))
+
+
+def test_owner_names_are_checked_one_at_a_time(sc) -> None:
+    # "pery" + "lax" must not combine across entries into a false match.
+    assert sc.validate_mechanism_card(_card(owner_slices=["phy", "lax"])) == []
+
+
+@pytest.mark.parametrize("owner", ["---", "___", "​​ "])
+def test_an_owner_with_no_identity_is_refused(sc, owner: str) -> None:
+    assert sc.validate_mechanism_card(_card(owner_slices=[owner]))

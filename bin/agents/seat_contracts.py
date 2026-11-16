@@ -44,16 +44,20 @@ def _finite(value: Any) -> bool:
     )
 
 
-def _owner_tokens(owner: str) -> set[str]:
-    """Normalized word tokens of an owner name, so a fixed wall cannot hide in a longer name.
+def _owner_folded(owner: str) -> str | None:
+    """Fold an owner name for the fixed-wall check; None means it is not plain ASCII afterwards.
 
-    NFKC folds look-alikes (fullwidth letters), format characters such as zero-width spaces are
-    removed, and the result is split on anything that is not a letter or digit. Over-refusal is
-    deliberate: a name that contains a wall's name is treated as touching that wall.
+    NFKC folds compatibility look-alikes (fullwidth letters), format characters (zero-width
+    spaces) are removed, NFKD then strips combining marks (accents), and the result is
+    casefolded with every non-alphanumeric removed. Any character still outside ASCII
+    (for example a Cyrillic look-alike) fails closed instead of being tokenized around.
     """
     folded = unicodedata.normalize("NFKC", owner)
-    folded = "".join(c for c in folded if unicodedata.category(c) != "Cf").casefold()
-    return set(re.findall(r"[a-z0-9]+", folded))
+    folded = "".join(c for c in folded if unicodedata.category(c) != "Cf")
+    folded = unicodedata.normalize("NFKD", folded)
+    folded = "".join(c for c in folded if unicodedata.category(c) != "Mn").casefold()
+    folded = re.sub(r"[\W_]+", "", folded)
+    return folded if folded.isascii() else None
 
 
 def _text(value: Any) -> bool:
@@ -164,9 +168,13 @@ def validate_mechanism_card(card: Mapping[str, Any]) -> list[str]:
     if not (isinstance(owners, list) and owners and all(_text(o) for o in owners)):
         errors.append("owner_slices must be a non-empty list")
     else:
-        walls = sorted(set().union(*(_owner_tokens(o) for o in owners)) & FIXED_WALLS)
-        if walls:
-            errors.append(f"E_OWNER: a mechanism may not touch fixed-wall owner(s): {', '.join(walls)}")
+        folded = {o: _owner_folded(o) for o in owners}
+        walls = sorted({w for f in folded.values() if f for w in FIXED_WALLS if w in f})
+        if walls or any(f is None or f == "" for f in folded.values()):
+            reason = (
+                f"fixed-wall owner(s): {', '.join(walls)}" if walls else "non-ASCII or empty owner name"
+            )
+            errors.append(f"E_OWNER: a mechanism may not touch {reason}")
     if card["status"] not in CARD_STATUSES:
         errors.append("status must be candidate, reviewed or graduated")
     elif card["status"] == "graduated":
