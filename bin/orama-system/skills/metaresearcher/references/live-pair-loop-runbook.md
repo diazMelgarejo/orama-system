@@ -3,6 +3,23 @@
 Status: interim. It is written from four live turns on one day and will change. Every rule below
 names the evidence it came from. Where the evidence is thin, it says so.
 
+## Billing basis
+
+The operator certified that the W&B account is on the Free plan, with no payment method charged.
+The official page, [Usage information and limits](https://docs.coreweave.com/products/inference/serverless/usage-limits)
+(last modified 2026-11-09), says: Serverless Inference is priced per token; the plan allowance is
+used first; on the Free plan inference stops when the allowance is used up until pay-as-you-go is
+activated; billing is monthly and only after activation; activation does not charge a card; the
+default Free cap is 100 dollars a month once active and a `402` means it was reached. The limits
+that apply are concurrency limits per project and user (`429`) and location limits (`403`). The page
+documents no per-hour or per-day request limits.
+
+The plan, the remaining allowance and whether pay-as-you-go is active appear only on the account's
+Billing page, which an agent cannot open, so the certification is the evidence. Rules: never activate
+pay-as-you-go; stop the loop on any `402` or `429`. `live_cycle` reports a failed launch that matches
+either as `provider-payment-required` or `provider-rate-limited` with `stop: true`, spends the
+attempt and never retries. The match is on the launcher's text and is best effort.
+
 ## Principles
 
 1. **Test on real work with the real evaluator.** A live turn exists to meet real-world conditions:
@@ -29,7 +46,7 @@ names the evidence it came from. Where the evidence is thin, it says so.
 | The evaluator is safe | Candidates run through `bin/agents/sandbox_run.py` only |
 | Gate and arm | `BIAFRA_ORCHESTRATOR_GATE=approved` and `BIAFRA_ALLOW_LAUNCH=1` set for that one command only |
 | Provider re-probe | Same-day read-only model list; abort before any completion if the model is missing |
-| Budget | The operator names provider, request count and deadline; the free tier only unless told otherwise |
+| Budget | The operator names provider, request count and deadline; the operator-certified Free plan only unless told otherwise; see Billing basis |
 | Effort | Explicit; medium, else high, else low; the V4.1 models reject `medium`, so `high` |
 
 ## What goes in a seat's prompt
@@ -78,7 +95,7 @@ Write the reviewer's own inputs as tests first and watch them fail. Apply the ca
 edit the vetting called for, run the touched suites, stage named files, commit, and check
 `git log -1` (a hook can reject a commit silently).
 
-## Results so far (all free-tier W&B, `DeepSeek-V4.1-Flash-1017`, high effort)
+## Results so far (all on the operator-certified W&B Free plan, `DeepSeek-V4.1-Flash-1017`, high effort)
 
 | Turn | Seat | Task | Result |
 | --- | --- | --- | --- |

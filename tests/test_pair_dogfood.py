@@ -177,3 +177,11 @@ def test_every_saved_ledger_row_is_valid_and_the_reverted_turn_is_recorded() -> 
     ids = [json.loads(line)["attempt_id"] for p in base.glob("ledger*.jsonl") for line in p.read_text().splitlines()]
     assert len(ids) == len(set(ids))
 
+
+
+def test_the_runbook_states_the_billing_basis_and_the_stop_rule() -> None:
+    text = (ROOT / "bin/orama-system/skills/metaresearcher/references/live-pair-loop-runbook.md").read_text()
+    assert "https://docs.coreweave.com/products/inference/serverless/usage-limits" in text
+    for needle in ("pay-as-you-go", "402", "429", "Billing page", "operator-certified"):
+        assert needle in text, needle
+    assert "free-tier W&B" not in text

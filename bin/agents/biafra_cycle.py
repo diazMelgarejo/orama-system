@@ -150,6 +150,18 @@ EFFORTS = ("medium", "high", "low")  # never xhigh or max; mirrors launch_cline_
 _DIM_SPAN = re.compile(r"\x1b\[2m.*?\x1b\[0m", re.S)
 _ANSI = re.compile(r"\x1b\[[0-9;]*m")
 LIVE_TIMEOUT_S = 900
+# Provider limit signals in a FAILED launch. Best effort: matched on the launcher's text, not guaranteed.
+_PAYMENT = re.compile(r"\b402\b|payment required|spending cap|exceeded your current|insufficient (?:credit|fund)", re.I)
+_RATE = re.compile(r"\b429\b|too many requests|rate.?limit|concurrency limit", re.I)
+
+
+def _provider_stop(text: str) -> str | None:
+    """Reason for a payment or rate-limit failure, or None. Payment wins over rate limit."""
+    if _PAYMENT.search(text):
+        return "provider-payment-required"
+    if _RATE.search(text):
+        return "provider-rate-limited"
+    return None
 
 
 def extract_answer(raw: str) -> str:
@@ -271,9 +283,16 @@ def live_cycle(
     except subprocess.TimeoutExpired:
         return refuse("launcher-timeout", spent=True)
     if completed.returncode != 0:
+        tail = (completed.stderr or "")[-300:]
+        stop_reason = _provider_stop(f"{completed.stderr or ''}\n{completed.stdout or ''}")
+        if stop_reason:
+            # Never retry and never activate pay-as-you-go: report and stop the loop.
+            return refuse(
+                stop_reason, spent=True, stop=True, returncode=completed.returncode,
+                called_launcher=True, stderr=tail,
+            )
         return refuse(
-            "launcher-failed", spent=True, returncode=completed.returncode, called_launcher=True,
-            stderr=(completed.stderr or "")[-300:],
+            "launcher-failed", spent=True, returncode=completed.returncode, called_launcher=True, stderr=tail,
         )
     answer = extract_answer(completed.stdout or "")
     base = {

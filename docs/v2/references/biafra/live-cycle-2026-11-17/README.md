@@ -1,8 +1,9 @@
 # First real-world live pair turn (2026-11-17)
 
-Operator-approved: one live pair loop on W&B Inference, free tier, `DeepSeek-V4.1-Flash-1017` at
-`high`, no retry, gate and arm set for the single command only. The task is real: four CodeRabbit
-comments on orama-system pull request 519, on the pair's own code.
+Operator-approved: one live pair loop on W&B Inference on the operator-certified Free plan
+(billing basis in the runbook), `DeepSeek-V4.1-Flash-1017` at `high`, no retry, gate and arm set for
+the single command only. The task is real: four CodeRabbit comments on orama-system pull request
+519, on the pair's own code.
 
 | File | What it is |
 | --- | --- |

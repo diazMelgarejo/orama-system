@@ -222,3 +222,62 @@ def test_the_programs_pass_the_card_through(name: str, tmp_path: Path) -> None:
     module = _load(ROOT / "bin/agents" / name / "program.py", name.replace("-", "_") + "_card")
     r = module.run("harden", 0.3, 0.1, tmp_path, evaluator_digest=DIGEST, mechanism_card=_card(owner_slices=["agate"]))
     assert r["ok"] is False and r["reason"] == "invalid-card"
+
+
+# --- billing and rate-limit signals: stop, never retry, never activate pay-as-you-go ----------------
+
+
+def _fake_run_err(stderr: str, stdout: str = "", returncode: int = 1, calls=None):
+    def run(argv, **kwargs):
+        if calls is not None:
+            calls.append(argv)
+        return subprocess.CompletedProcess(argv, returncode, stdout=stdout, stderr=stderr)
+
+    return run
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "error: 402 Payment Required",
+        "API error code 402: you exceeded your current spending cap",
+        "HTTP 402",
+        "Error: payment required",
+        "you have exceeded your current quota",
+    ],
+)
+def test_a_402_style_failure_is_a_payment_stop(cycle, tmp_path, monkeypatch, text: str) -> None:
+    _arm(monkeypatch, cycle)
+    calls: list = []
+    monkeypatch.setattr(cycle.subprocess, "run", _fake_run_err(text, calls=calls))
+    r = cycle.live_cycle(**_kwargs(tmp_path))
+    assert r["ok"] is False and r["reason"] == "provider-payment-required" and r["stop"] is True
+    assert r["retries"] == 0 and len(calls) == 1
+    again = cycle.live_cycle(**_kwargs(tmp_path))
+    assert again["reason"] == "already-ran" and len(calls) == 1
+
+
+@pytest.mark.parametrize(
+    "text", ["429 Concurrency limit reached for requests", "HTTP 429 Too Many Requests", "rate limit exceeded"],
+)
+def test_a_429_style_failure_is_a_rate_limit_stop(cycle, tmp_path, monkeypatch, text: str) -> None:
+    _arm(monkeypatch, cycle)
+    monkeypatch.setattr(cycle.subprocess, "run", _fake_run_err("", stdout=text))
+    r = cycle.live_cycle(**_kwargs(tmp_path))
+    assert r["ok"] is False and r["reason"] == "provider-rate-limited" and r["stop"] is True
+
+
+def test_an_ordinary_launcher_failure_is_not_a_stop(cycle, tmp_path, monkeypatch) -> None:
+    _arm(monkeypatch, cycle)
+    monkeypatch.setattr(cycle.subprocess, "run", _fake_run_err("error: Invalid request"))
+    r = cycle.live_cycle(**_kwargs(tmp_path))
+    assert r["reason"] == "launcher-failed" and not r.get("stop")
+
+
+def test_a_successful_answer_that_merely_mentions_a_limit_is_not_misread(cycle, tmp_path, monkeypatch) -> None:
+    _arm(monkeypatch, cycle)
+    monkeypatch.setattr(
+        cycle.subprocess, "run", _fake_run(stdout="ANSWER: note the 429 and 402 status codes in the docs", returncode=0),
+    )
+    r = cycle.live_cycle(**_kwargs(tmp_path))
+    assert r["ok"] is True and "stop" not in r

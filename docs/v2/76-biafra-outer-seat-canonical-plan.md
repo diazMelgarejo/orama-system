@@ -166,3 +166,14 @@ denylist. `bin/agents/sandbox_run.py` now provides a scrubbed environment, a den
 kernel sandbox, an allowlist vet and refusal of broad read roots, with tests for each denial. The
 interim runbook is `bin/orama-system/skills/metaresearcher/references/live-pair-loop-runbook.md`.
 Request count for the real loop: eight, plus two review requests and one cut-off attempt earlier.
+
+## 12. Billing basis for the live W&B turns (2026-11-17)
+
+A side agent noted the live requests had been called free-tier without checking billing. The
+operator certified that the account is on the Free plan with no payment method charged. The official
+documentation was read: Free-plan inference stops when its allowance is used up until pay-as-you-go
+is activated, billing is monthly and only after activation, and a `402` means the cap was reached;
+limits that apply are concurrency (`429`) and location (`403`). Full text and the stop rule are in
+`bin/orama-system/skills/metaresearcher/references/live-pair-loop-runbook.md` under Billing basis.
+`live_cycle` now stops on a `402` or `429` and never retries. The Billing page is the only place the
+plan state can be confirmed, and an agent cannot open it.
