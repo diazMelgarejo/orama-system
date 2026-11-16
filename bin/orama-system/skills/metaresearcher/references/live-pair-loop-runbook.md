@@ -143,3 +143,8 @@ blocks commands naming `node_modules` or `.venv` paths is not to be worked aroun
 
 What the evaluator digest covers (G3); whether the card check must be mandatory (G9); the stall
 window; Wanda's soul card versus the W&B Cline route; a registry of declared metrics (G10).
+
+## Saved harness
+
+Sanitized copies of the evaluators and drivers used in the live turns are in
+`docs/v2/references/biafra/live-cycle-2026-11-17/harness/`, with a README on how to rebuild a turn.
