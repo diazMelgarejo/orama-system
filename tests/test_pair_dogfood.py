@@ -162,3 +162,18 @@ def test_the_saved_live_cycle_artifacts_are_valid() -> None:
     errors = sc.validate_mechanism_card(card)
     assert len(errors) == 1 and "owner_slices must be repository identifiers" in errors[0]
     assert card["evidence_ids"] == [rows[0]["attempt_id"]] and card["status"] == "candidate"
+
+
+def test_every_saved_ledger_row_is_valid_and_the_reverted_turn_is_recorded() -> None:
+    sc = _load(ROOT / "bin/agents/seat_contracts.py", "seat_contracts")
+    base = ROOT / "docs/v2/references/biafra/live-cycle-2026-11-17"
+    seen = {}
+    for path in sorted(base.glob("ledger*.jsonl")):
+        rows = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+        assert rows and all(sc.validate_trace_entry(r) == [] for r in rows), path.name
+        seen[path.name] = [r["decision"] for r in rows]
+    assert seen["ledger-turn-3-reverted.jsonl"] == ["revert"]
+    assert seen["ledger-turn-3b.jsonl"] == ["keep"]
+    ids = [json.loads(line)["attempt_id"] for p in base.glob("ledger*.jsonl") for line in p.read_text().splitlines()]
+    assert len(ids) == len(set(ids))
+

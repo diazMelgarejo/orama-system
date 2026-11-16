@@ -51,3 +51,17 @@ It shows the pair working on real feedback: a real reviewer's defect was reprodu
 inner seat, judged by the outer seat, and the useful parts were incorporated after checking. It does
 not prove the outer seat's search rule improves later attempts; that needs a second inner attempt
 under her rule. Replies to the reviewer wait for a push the operator approves.
+
+## Turns 2 and 3 (same day)
+
+| Turn | Task | Ledger | Result |
+| --- | --- | --- | --- |
+| 2 | Sentence accepted as `owner_slices` (observed in turn 1) | `ledger-turn-2.jsonl` | inner 10 to 0, kept; outer card valid |
+| 3 | Degenerate identifiers and a misleading blank-entry message | `ledger-turn-3-reverted.jsonl` | reverted, 10 to 6639: the model assumed a helper returned text |
+| 3b | Same task, helper source shown in the prompt | `ledger-turn-3b.jsonl` | 10 to 0, kept |
+
+What the turns exposed, and what was done: the prompt must show helper source (turn 3); the outer
+seat's chosen task in turn 2 rested on a `delta()` helper that does not exist, so it was rejected;
+the first three candidates had run on the operator's machine before anyone read them, with the
+provider key in the scorer's environment, so scoring now goes through `bin/agents/sandbox_run.py`.
+The runbook is `bin/orama-system/skills/metaresearcher/references/live-pair-loop-runbook.md`.

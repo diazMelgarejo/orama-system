@@ -154,3 +154,15 @@ Request accounting, stated plainly: two requests earlier in the day (the first f
 400, the second produced the review), possibly one cut-off request from a synthetic first attempt
 that was stopped (its marker existed), and two in the real loop. The operator approved one live
 pair loop; the cut-off attempt is the only count that is uncertain.
+
+## 11. Turns 2 and 3, the sandbox and the runbook (2026-11-17)
+
+Two further real turns ran on defects the first turn exposed. The inner seat fixed a sentence being
+accepted as `owner_slices` (turn 2) and degenerate identifiers such as `a/../b` (turn 3b); turn 3
+was reverted because the prompt did not show a helper's return type, and the prompt now includes
+helper source. A side agent and an automated security review found that candidates were scored
+on the operator's machine with the provider key in the scorer's environment, guarded only by a name
+denylist. `bin/agents/sandbox_run.py` now provides a scrubbed environment, a deny-by-default
+kernel sandbox, an allowlist vet and refusal of broad read roots, with tests for each denial. The
+interim runbook is `bin/orama-system/skills/metaresearcher/references/live-pair-loop-runbook.md`.
+Request count for the real loop: eight, plus two review requests and one cut-off attempt earlier.

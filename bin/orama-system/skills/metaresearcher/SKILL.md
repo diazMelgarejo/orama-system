@@ -92,4 +92,5 @@ Biafra is the canonical agent for this seat; the ids stay `metaresearch-outer` a
   model order are in `docs/v2/76-biafra-outer-seat-canonical-plan.md` section 8.
 - **Live cycle:** the gate and the arm are both required, and the operator names provider, budget,
   request limit and deadline first. Plan: `docs/v2/76-biafra-outer-seat-canonical-plan.md`.
-
+- **Runbook:** `references/live-pair-loop-runbook.md` (interim) holds the checklist, the sandbox
+  rules for model-written code, how to vet a seat's output and the results of the live turns so far.
