@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import math
 import re
+import unicodedata
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
@@ -43,6 +44,18 @@ def _finite(value: Any) -> bool:
     )
 
 
+def _owner_tokens(owner: str) -> set[str]:
+    """Normalized word tokens of an owner name, so a fixed wall cannot hide in a longer name.
+
+    NFKC folds look-alikes (fullwidth letters), format characters such as zero-width spaces are
+    removed, and the result is split on anything that is not a letter or digit. Over-refusal is
+    deliberate: a name that contains a wall's name is treated as touching that wall.
+    """
+    folded = unicodedata.normalize("NFKC", owner)
+    folded = "".join(c for c in folded if unicodedata.category(c) != "Cf").casefold()
+    return set(re.findall(r"[a-z0-9]+", folded))
+
+
 def _text(value: Any) -> bool:
     return isinstance(value, str) and bool(value.strip())
 
@@ -58,6 +71,8 @@ def evaluator_digest(paths: Iterable[Path]) -> str:
 
 def validate_trace_entry(entry: Mapping[str, Any]) -> list[str]:
     """Return error strings; empty means valid. A lower metric is better."""
+    if not isinstance(entry, Mapping):
+        return ["entry must be an object"]
     errors: list[str] = []
     required = (
         "version", "seat", "attempt_id", "hypothesis", "artifact",
@@ -108,6 +123,8 @@ def stall_report(trace: Sequence[Mapping[str, Any]], window: int = 3) -> dict[st
 
 def validate_mechanism_card(card: Mapping[str, Any]) -> list[str]:
     """Return error strings; empty means valid. Never mutates `card`."""
+    if not isinstance(card, Mapping):
+        return ["card must be an object"]
     errors: list[str] = []
     required = (
         "version", "mechanism_id", "revision", "parent", "hypothesis", "evidence_ids",
@@ -147,7 +164,7 @@ def validate_mechanism_card(card: Mapping[str, Any]) -> list[str]:
     if not (isinstance(owners, list) and owners and all(_text(o) for o in owners)):
         errors.append("owner_slices must be a non-empty list")
     else:
-        walls = sorted({o.strip().lower() for o in owners} & FIXED_WALLS)
+        walls = sorted(set().union(*(_owner_tokens(o) for o in owners)) & FIXED_WALLS)
         if walls:
             errors.append(f"E_OWNER: a mechanism may not touch fixed-wall owner(s): {', '.join(walls)}")
     if card["status"] not in CARD_STATUSES:
@@ -168,7 +185,7 @@ def validate_mechanism_card(card: Mapping[str, Any]) -> list[str]:
 
 def select_effort(supported: Iterable[str] = EFFORT_LADDER) -> str | None:
     """First of medium, high, low that the provider supports; None if none (never xhigh/max)."""
-    offered = set(supported)
+    offered = {supported} if isinstance(supported, str) else set(supported)
     return next((effort for effort in EFFORT_LADDER if effort in offered), None)
 
 

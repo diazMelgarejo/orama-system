@@ -296,3 +296,31 @@ def test_policy_text_is_in_the_plan_and_the_persona() -> None:
     assert "human-gated" in plan and "Fable 5.2" in plan and "free W&B" in plan
     persona = yaml.safe_load((ROOT / "bin/agents/personas/biafra.yaml").read_text())
     assert any("human-gated" in rule for rule in persona["hard_rules"])
+
+
+# --- defects found by the live review pass (2026-11-17) -------------------------------------
+
+
+@pytest.mark.parametrize(
+    "owner",
+    ["oramasys/phylax", "phylax.admission", "phylax-policy", "Ｐhylax", "ph​ylax", "TELOS_endpoint", "agate/fit"],
+)
+def test_fixed_wall_owner_cannot_be_hidden_in_a_longer_name(sc, owner: str) -> None:
+    errors = sc.validate_mechanism_card(_card(owner_slices=["kungfu", owner]))
+    assert any("E_OWNER" in e for e in errors), owner
+
+
+@pytest.mark.parametrize("owner", ["kungfu", "anamnesis", "alexandria", "perpetua-core"])
+def test_ordinary_owners_are_not_refused(sc, owner: str) -> None:
+    assert sc.validate_mechanism_card(_card(owner_slices=[owner])) == []
+
+
+@pytest.mark.parametrize("bad", [None, 5, 1.5, True])
+def test_non_mapping_input_is_an_error_not_a_crash(sc, bad) -> None:
+    assert sc.validate_trace_entry(bad) == ["entry must be an object"]
+    assert sc.validate_mechanism_card(bad) == ["card must be an object"]
+
+
+def test_a_bare_string_is_one_effort_not_a_set_of_letters(sc) -> None:
+    assert sc.select_effort("medium") == "medium"
+    assert sc.select_effort("xhigh") is None

@@ -74,3 +74,18 @@ already exists. The result is data until a non-maker reviews it.
 
 `python3 -m pytest tests/test_seat_contracts.py tests/test_biafra_seats.py tests/test_agent_frugality_tiers.py`
 and the repository hygiene and markdown checks named in the PR.
+
+## 8. Live check log, 2026-11-17
+
+- Models listed live from W&B Inference (read-only, HTTP 200, 24 models): `V4.1-Flash-1017`,
+  generic `V4.1-Flash`, `V4-Flash-0731`, `V4-Pro-0813` and `GLM-5.3-Flash` are present; the bare
+  `V4-Flash` id is absent. The Codex CLI lists `gpt-6-astra` and `gpt-6.1-sol`.
+- Aliases that break the effort rule and must not be used: `claude-ultra` (default effort `max`)
+  and `codex-ultra` (default effort `ultra`).
+- Effort probe: one request, `V4.1-Flash-1017` at `medium`, carrying a review of the local draft
+  branches. Result: `error: Invalid request`, no output, no retry. This is consistent with the
+  launcher's note that V4.1 rejects `medium`, but the error text does not say why, so it is not
+  proof. One of the two approved requests is used; the next ladder step (`high`) would be the second.
+- The same pass found three validator defects, fixed test-first: a fixed-wall owner hidden in a
+  longer name (`oramasys/phylax`, fullwidth or zero-width look-alikes), a crash on non-object input,
+  and a bare string treated as a set of letters by `select_effort`.
