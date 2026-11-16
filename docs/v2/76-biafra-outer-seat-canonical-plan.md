@@ -122,3 +122,20 @@ four tasks, not a benchmark.
 
 Wanda's soul card lists the Cline CLI as forbidden for the W&B route, while `lesson_8d873e4e2f73`
 routes W&B DeepSeek through Cline. Which governs is the operator's decision; neither is edited here.
+
+## 9. Pair dogfood, free dry run (2026-11-17)
+
+`tests/test_pair_dogfood.py` runs the pair end to end with no model call, no gate, no arm and no
+network. The inner seat makes three recorded attempts that revert, Scout reports a fourth on its own
+seat (`inner-scout`), and all four carry distinct attempt ids and the same pinned evaluator digest.
+Biafra reads the ledger, `stall_report` names a three-revert stall, her outer cycle keeps a better
+metric, and a Mechanism Card candidate citing the stalled entry ids validates with no errors. The
+evaluator digest is unchanged afterwards, and an outer-seat attempt on a test path is refused as
+`verifier-protected`. A second cycle in the same directory is refused as `already-ran` with zero
+retries. This proves the contracts and seat boundaries. It does not prove that a model proposes a
+good search rule; that needs a live cycle, which needs the operator gate, a named budget and a
+same-day provider re-probe.
+
+The first version of this dogfood surfaced no new defect. The eight review defects it depends on
+(Scout's seat id, constant attempt ids, silent no-trace default, marker claimed before validation,
+metric guard, digest pinning, card consistency, owner and field checks) were fixed first, test-first.
