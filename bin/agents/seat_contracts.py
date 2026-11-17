@@ -7,7 +7,9 @@ the authority; the JSON Schema under docs/v2/references/biafra/ is shape-only.
 from __future__ import annotations
 
 import hashlib
+import json
 import math
+import os
 import re
 import unicodedata
 from pathlib import Path
@@ -144,6 +146,66 @@ def evaluator_digest(paths: Iterable[Path]) -> str:
     return h.hexdigest()
 
 
+PIN_VERSION = 1
+
+
+def _pin_body(digest: str, files: Sequence[Path]) -> dict[str, Any]:
+    """The pin record: the digest and the sorted names of the verifier files it covers."""
+    return {"version": PIN_VERSION, "evaluator_digest": digest, "covers": sorted(Path(f).name for f in files)}
+
+
+def _read_pin_record(pin_path: Path) -> dict[str, Any]:
+    """Parse and shape-check a pin file; ValueError on any defect, including a missing file."""
+    try:
+        record = json.loads(Path(pin_path).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:  # json.JSONDecodeError and UnicodeDecodeError are ValueErrors
+        raise ValueError(f"evaluator pin unreadable: {type(exc).__name__}") from exc
+    covers = record.get("covers") if isinstance(record, dict) else None
+    if not (
+        isinstance(record, dict)
+        and set(record) == {"version", "evaluator_digest", "covers"}
+        and record["version"] == PIN_VERSION
+        and not isinstance(record["version"], bool)
+        and isinstance(record["evaluator_digest"], str)
+        and _HEX64.fullmatch(record["evaluator_digest"])
+        and isinstance(covers, list)
+        and covers
+        and all(_text(name) for name in covers)
+    ):
+        raise ValueError("evaluator pin is malformed")
+    return record
+
+
+def read_pin(pin_path: Path) -> str:
+    """Return the pinned evaluator digest; ValueError if the file is missing or malformed."""
+    return _read_pin_record(pin_path)["evaluator_digest"]
+
+
+def pin_evaluator(pin_path: Path, verifier_paths: Iterable[Path]) -> str:
+    """Record the evaluator digest for this run, once, and return it.
+
+    The pin covers exactly the files given (bound by name and bytes, as `evaluator_digest`). The
+    file is created atomically and never rewritten. When it already exists the call succeeds only
+    if the recomputed digest and covered names are the same; otherwise ValueError("evaluator
+    changed"), so a verifier edited after the pin cannot be passed off as the pinned one.
+    """
+    files = [Path(p) for p in verifier_paths]
+    body = _pin_body(evaluator_digest(files), files)
+    pin_path = Path(pin_path)
+    pin_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = pin_path.with_name(f".{pin_path.name}.{os.getpid()}.tmp")
+    tmp.write_text(json.dumps(body, sort_keys=True) + "\n", encoding="utf-8")
+    try:
+        os.link(tmp, pin_path)  # atomic and exclusive: fails when a pin already exists
+    except FileExistsError:
+        record = _read_pin_record(pin_path)
+        if record["evaluator_digest"] != body["evaluator_digest"] or record["covers"] != body["covers"]:
+            raise ValueError("evaluator changed since it was pinned") from None
+    finally:
+        tmp.unlink(missing_ok=True)
+    return body["evaluator_digest"]
+
+
 def validate_trace_entry(entry: Mapping[str, Any]) -> list[str]:
     """Return error strings; empty means valid. A lower metric is better."""
     if not isinstance(entry, Mapping):
@@ -196,8 +258,14 @@ def stall_report(trace: Sequence[Mapping[str, Any]], window: int = 3) -> dict[st
     }
 
 
-def validate_mechanism_card(card: Mapping[str, Any]) -> list[str]:
-    """Return error strings; empty means valid. Never mutates `card`."""
+def validate_mechanism_card(card: Mapping[str, Any], pinned_digest: str | None = None) -> list[str]:
+    """Return error strings; empty means valid. Never mutates `card`.
+
+    `pinned_digest` is the run's pin (`read_pin`). Given for any status, it must equal the card's
+    evaluator_digest. A reviewed or graduated card needs a receipt that is a real dry run of this
+    card: ok, no retries, no launch, and a valid `trace` carrying the card's evaluator_digest.
+    Graduated also requires `pinned_digest`, so a digest nothing ever pinned cannot graduate.
+    """
     if not isinstance(card, Mapping):
         return ["card must be an object"]
     errors: list[str] = []
@@ -251,8 +319,27 @@ def validate_mechanism_card(card: Mapping[str, Any]) -> list[str]:
         receipt.get("ok") is True and receipt.get("retries") == 0 and receipt.get("launched") is False
     ):
         errors.append(f"dry_run_receipt must show ok, no retries and no launch before {status}")
+    elif status in ("reviewed", "graduated"):
+        errors.extend(_receipt_binding_errors(card, receipt))
+    if pinned_digest is not None and pinned_digest != card["evaluator_digest"]:
+        errors.append("pinned_digest does not equal the card's evaluator_digest")
+    if status == "graduated" and pinned_digest is None:
+        errors.append("a graduated card needs pinned_digest: the evaluator digest was never pinned")
     if status == "graduated" and card["reverted"] is True:
         errors.append("a reverted card cannot be graduated")
+    return errors
+
+
+def _receipt_binding_errors(card: Mapping[str, Any], receipt: Mapping[str, Any]) -> list[str]:
+    """Errors tying a dry-run receipt to this card through its trace and evaluator digest."""
+    errors: list[str] = []
+    trace = receipt.get("trace")
+    if not isinstance(trace, Mapping):
+        errors.append("dry_run_receipt must carry the dry cycle's trace")
+    elif validate_trace_entry(trace):
+        errors.append("dry_run_receipt.trace is not a valid trace entry")
+    elif trace["evaluator_digest"] != card["evaluator_digest"]:
+        errors.append("dry_run_receipt.trace.evaluator_digest does not equal the card's evaluator_digest")
     return errors
 
 

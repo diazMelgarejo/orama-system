@@ -14,7 +14,19 @@
   "dry_run_receipt": {
     "ok": true,
     "retries": 0,
-    "launched": false
+    "launched": false,
+    "trace": {
+      "version": 1,
+      "seat": "outer",
+      "attempt_id": "outer-plugin-loop-aaaaaaaaaaaa",
+      "hypothesis": "Repeat reverts on the same artifact mean the proposal rule is stale.",
+      "artifact": "search-rule",
+      "metric_name": "val_bpb",
+      "metric_before": 0.26,
+      "metric_after": 0.19,
+      "decision": "keep",
+      "evaluator_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
   },
   "delta": -0.01,
   "reverted": false,

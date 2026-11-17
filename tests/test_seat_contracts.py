@@ -187,9 +187,12 @@ def test_checked_in_fixtures_match_the_validator(sc) -> None:
     invalid = sorted(root.glob("invalid-*.json"))
     assert valid and invalid
     for path in valid:
-        assert sc.validate_mechanism_card(json.loads(path.read_text())) == [], path.name
+        card = json.loads(path.read_text())
+        pin = card["evaluator_digest"] if card["status"] == "graduated" else None  # graduated needs the run's pin
+        assert sc.validate_mechanism_card(card, pinned_digest=pin) == [], path.name
     for path in invalid:
-        assert sc.validate_mechanism_card(json.loads(path.read_text())), path.name
+        card = json.loads(path.read_text())
+        assert sc.validate_mechanism_card(card, pinned_digest=card.get("evaluator_digest")), path.name
 
 
 def test_the_schema_is_shape_only_and_names_the_python_authority() -> None:
@@ -638,3 +641,129 @@ def test_the_identifier_error_names_the_entry_but_stays_bounded(sc) -> None:
 @pytest.mark.parametrize("bad", [[123], [None], [True], [b"kungfu"], [["kungfu"]]])
 def test_non_string_entries_are_refused_without_raising(sc, bad) -> None:
     assert sc._owner_errors(bad)
+
+
+# --- G3: evaluator pin and receipt binding (doc 76 section 4) ---
+
+
+def _promoted(status: str = "reviewed", **over):
+    """A card for `status` whose receipt is a real dry-cycle result for that very card."""
+    card = _card(status=status)
+    trace = _entry(attempt_id="o-1", seat="outer", metric_before=0.26, metric_after=0.19)
+    card["dry_run_receipt"] = {
+        "ok": True, "retries": 0, "launched": False, "trace": trace,
+        "card_checked": True, "card_id": f"{card['mechanism_id']}@{card['revision']}",
+    }
+    card.update(over)
+    return card
+
+
+def test_g3_a_receipt_bound_to_its_card_and_pin_is_accepted(sc) -> None:
+    assert sc.validate_mechanism_card(_promoted("reviewed")) == []
+    assert sc.validate_mechanism_card(_promoted("graduated"), pinned_digest=DIGEST) == []
+
+
+@pytest.mark.parametrize("status", ["reviewed", "graduated"])
+def test_g3_case1_a_receipt_without_a_trace_is_refused(sc, status: str) -> None:
+    card = _promoted(status)
+    del card["dry_run_receipt"]["trace"]
+    errors = sc.validate_mechanism_card(card, pinned_digest=DIGEST)
+    assert any("trace" in e for e in errors)
+
+
+@pytest.mark.parametrize("status", ["reviewed", "graduated"])
+def test_g3_case1b_a_receipt_with_an_invalid_trace_is_refused(sc, status: str) -> None:
+    card = _promoted(status)
+    card["dry_run_receipt"]["trace"]["decision"] = "revert"  # disagrees with the metrics
+    assert any("trace" in e for e in sc.validate_mechanism_card(card, pinned_digest=DIGEST))
+
+
+@pytest.mark.parametrize("status", ["reviewed", "graduated"])
+def test_g3_case2_a_receipt_trace_digest_that_differs_is_refused(sc, status: str) -> None:
+    card = _promoted(status)
+    card["dry_run_receipt"]["trace"]["evaluator_digest"] = "c" * 64
+    errors = sc.validate_mechanism_card(card, pinned_digest=DIGEST)
+    assert any("evaluator_digest" in e and "trace" in e for e in errors)
+
+
+def test_g3_case3_a_graduated_card_that_was_never_pinned_is_refused(sc) -> None:
+    errors = sc.validate_mechanism_card(_promoted("graduated"))
+    assert any("pinned_digest" in e for e in errors)
+
+
+def test_g3_a_reviewed_card_does_not_need_a_pin_but_a_given_pin_must_match(sc) -> None:
+    assert sc.validate_mechanism_card(_promoted("reviewed")) == []
+    errors = sc.validate_mechanism_card(_promoted("reviewed"), pinned_digest="c" * 64)
+    assert any("pinned_digest" in e for e in errors)
+    assert any("pinned_digest" in e for e in sc.validate_mechanism_card(_card(), pinned_digest="c" * 64))
+    assert sc.validate_mechanism_card(_card(), pinned_digest=DIGEST) == []
+
+
+def test_g3_a_candidate_needs_no_trace(sc) -> None:
+    assert sc.validate_mechanism_card(_card()) == []
+
+
+@pytest.fixture()
+def verifier(tmp_path: Path) -> Path:
+    path = tmp_path / "verifier.py"
+    path.write_text("print('fixed evaluator')\n")
+    return path
+
+
+def test_g3_pin_evaluator_writes_the_digest_and_what_it_covers(sc, tmp_path: Path, verifier: Path) -> None:
+    pin = tmp_path / "run" / "evaluator.pin.json"
+    digest = sc.pin_evaluator(pin, [verifier])
+    assert digest == sc.evaluator_digest([verifier])
+    assert json.loads(pin.read_text()) == {"version": 1, "evaluator_digest": digest, "covers": ["verifier.py"]}
+    assert sc.read_pin(pin) == digest
+
+
+def test_g3_pin_evaluator_is_idempotent_and_refuses_a_changed_evaluator(sc, tmp_path: Path, verifier: Path) -> None:
+    pin = tmp_path / "evaluator.pin.json"
+    first = sc.pin_evaluator(pin, [verifier])
+    assert sc.pin_evaluator(pin, [verifier]) == first
+    verifier.write_text("print('edited')\n")
+    with pytest.raises(ValueError, match="evaluator changed"):
+        sc.pin_evaluator(pin, [verifier])
+    assert sc.read_pin(pin) == first  # the pin is never rewritten
+
+
+def test_g3_pin_evaluator_refuses_a_different_covered_file_set(sc, tmp_path: Path, verifier: Path) -> None:
+    pin = tmp_path / "evaluator.pin.json"
+    sc.pin_evaluator(pin, [verifier])
+    other = tmp_path / "other.py"
+    other.write_text("x = 1\n")
+    with pytest.raises(ValueError, match="evaluator changed"):
+        sc.pin_evaluator(pin, [verifier, other])
+
+
+def test_g3_pin_evaluator_refuses_a_malformed_existing_pin(sc, tmp_path: Path, verifier: Path) -> None:
+    pin = tmp_path / "evaluator.pin.json"
+    pin.write_text("not json")
+    with pytest.raises(ValueError):
+        sc.pin_evaluator(pin, [verifier])
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "not json",
+        "[]",
+        '{"version": 2, "evaluator_digest": "%s", "covers": ["a.py"]}' % DIGEST,
+        '{"version": 1, "evaluator_digest": "%s", "covers": []}' % DIGEST,
+        '{"version": 1, "evaluator_digest": "%s", "covers": [""]}' % DIGEST,
+        '{"version": 1, "evaluator_digest": "short", "covers": ["a.py"]}',
+        '{"version": 1, "evaluator_digest": "%s\\n", "covers": ["a.py"]}' % DIGEST,
+        '{"version": 1, "evaluator_digest": "%s", "covers": ["a.py"], "extra": 1}' % DIGEST,
+    ],
+)
+def test_g3_read_pin_refuses_any_defect(sc, tmp_path: Path, body: str) -> None:
+    pin = tmp_path / "evaluator.pin.json"
+    pin.write_text(body)
+    with pytest.raises(ValueError):
+        sc.read_pin(pin)
+
+
+def test_g3_read_pin_refuses_a_missing_file(sc, tmp_path: Path) -> None:
+    with pytest.raises(ValueError):
+        sc.read_pin(tmp_path / "absent.json")
