@@ -149,13 +149,23 @@ def sandbox_available() -> bool:
     return sys.platform == "darwin" and os.access(_KERNEL_SANDBOX_TOOL, os.X_OK)
 
 
+def _exited(proc: subprocess.Popen) -> bool:
+    """True once the leader has exited, WITHOUT reaping it, so its group id stays reserved until the group
+    has been killed. Falls back to poll() where waitid is unavailable."""
+    if hasattr(os, "waitid"):
+        return os.waitid(os.P_PID, proc.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT) is not None
+    return proc.poll() is not None
+
+
 def _kill_group(proc: subprocess.Popen) -> None:
     """Kill the child's own process group. Only called while the leader is still unreaped, so the
     group id cannot have been reused by an unrelated process."""
     if proc.returncode is None:
         try:
             os.killpg(proc.pid, signal.SIGKILL)
-        except ProcessLookupError:
+        except (ProcessLookupError, PermissionError):
+            # The group is ours, so nothing is left to kill: Linux says ESRCH, macOS says EPERM when only
+            # the exited, unreaped leader remains.
             pass
 
 
@@ -171,10 +181,9 @@ def run_isolated(
 
     The runner owns the child's whole lifecycle: stdout and stderr are drained concurrently and their
     combined size is capped (SandboxOutputLimit), the time is capped (SandboxTimeout), and on any abnormal
-    exit the child's own process group is killed and the reader threads are joined before the error
-    propagates. On the sandboxed path the profile also denies forking, so no descendant can outlive the
-    run. With `allow_unsandboxed=True` no profile runs: a descendant may keep a pipe open after the leader
-    exits and the output may then be partial; that path is for trusted code only. `cwd` is the scratch
+    exit, and on a normal exit too, the child's own process group is killed before the leader is reaped
+    and the reader threads are joined, so no descendant outlives the run. The sandboxed path also denies
+    forking. With `allow_unsandboxed=True` no profile runs, so that path is for trusted code only. `cwd` is the scratch
     root and must be a dedicated directory; the home folder, its ancestors and `/` are refused.
     """
     if isinstance(max_output_bytes, bool) or not isinstance(max_output_bytes, int) or max_output_bytes <= 0:
@@ -227,12 +236,14 @@ def run_isolated(
         reader.start()
     deadline = time.monotonic() + timeout
     try:
-        while proc.poll() is None:
+        while not _exited(proc):
             if state["over"]:
                 raise SandboxOutputLimit(f"child wrote more than {max_output_bytes} bytes and was killed")
             if time.monotonic() > deadline:
                 raise SandboxTimeout(f"child exceeded {timeout}s and was killed")
             time.sleep(0.005)
+        _kill_group(proc)  # a descendant may outlive the leader: end the group before the leader is reaped
+        proc.wait()
         for reader in readers:
             reader.join(timeout=5)
         if state["over"]:

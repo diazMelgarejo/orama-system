@@ -155,6 +155,25 @@ GOOD = '''def _owner_errors(owners: Any) -> list[str]:
     return ["x: " + ", ".join(repr(o[:72]) for o in bad)] if (walls or bad) else []'''
 
 
+def test_a_forked_descendant_does_not_outlive_a_successful_run(sb, tmp_path, monkeypatch) -> None:
+    import time
+
+    monkeypatch.setattr(sb, "sandbox_available", lambda: False)  # the unsandboxed path, where forks are allowed
+    marker = tmp_path / "descendant-survived"
+    code = (
+        "import os, time\n"
+        "if os.fork() == 0:\n"
+        "    os.close(1); os.close(2)\n"
+        "    time.sleep(1.2)\n"
+        f"    open({str(marker)!r}, 'w').close()\n"
+        "    os._exit(0)\n"
+    )
+    result = sb.run_isolated(_py(code), cwd=tmp_path, timeout=10, allow_unsandboxed=True)
+    assert result.returncode == 0
+    time.sleep(2.0)
+    assert not marker.exists(), "a descendant kept running after run_isolated returned"
+
+
 def test_the_allowlist_accepts_an_ordinary_small_function(sb) -> None:
     assert sb.vet_allowlist(GOOD, target="_owner_errors", allowed_names=NAMES) == []
 
