@@ -84,7 +84,7 @@ def _attest(tmp_path: Path, **over) -> None:
 @needs_pt
 def test_no_attestation_means_no_request(sg, tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("OPENCLAW_STATE_DIR", str(tmp_path))
-    g = sg.SpendGuard(state_dir=tmp_path / "spend")
+    g = sg.SpendGuard(pt_root=os.environ.get("ORAMA_TEST_PT_ROOT"), state_dir=tmp_path / "spend")
     r = g.preflight(10_000)
     assert r["ok"] is False and r["reason"] == "attestation-required" and r["stop"] is True
     assert any("missing" in x for x in r["reasons"])
@@ -95,14 +95,14 @@ def test_no_attestation_means_no_request(sg, tmp_path, monkeypatch) -> None:
 def test_an_attestation_that_does_not_clear_every_field_is_refused(sg, tmp_path, monkeypatch, over) -> None:
     monkeypatch.setenv("OPENCLAW_STATE_DIR", str(tmp_path))
     _attest(tmp_path, **over)
-    assert sg.SpendGuard(state_dir=tmp_path / "spend").preflight(1000)["reason"] == "attestation-required"
+    assert sg.SpendGuard(pt_root=os.environ.get("ORAMA_TEST_PT_ROOT"), state_dir=tmp_path / "spend").preflight(1000)["reason"] == "attestation-required"
 
 
 @needs_pt
 def test_a_valid_attestation_reserves_and_settling_records_a_size_only_audit_row(sg, tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("OPENCLAW_STATE_DIR", str(tmp_path))
     _attest(tmp_path)
-    g = sg.SpendGuard(state_dir=tmp_path / "spend")
+    g = sg.SpendGuard(pt_root=os.environ.get("ORAMA_TEST_PT_ROOT"), state_dir=tmp_path / "spend")
     pre = g.preflight(10_000)
     assert pre["ok"] is True and pre["projected_usd"] > 0
     usd = g.settle(pre["reservation"], input_chars=10_000, output_chars=40_000, outcome="ok", seat="inner", mode="inner")
@@ -118,7 +118,7 @@ def test_a_valid_attestation_reserves_and_settling_records_a_size_only_audit_row
 def test_the_budget_stops_the_next_request(sg, tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("OPENCLAW_STATE_DIR", str(tmp_path))
     _attest(tmp_path)
-    g = sg.SpendGuard(state_dir=tmp_path / "spend")
+    g = sg.SpendGuard(pt_root=os.environ.get("ORAMA_TEST_PT_ROOT"), state_dir=tmp_path / "spend")
     g.guard.record_spend(89.999)
     r = g.preflight(10_000)
     assert r["ok"] is False and r["reason"] == "budget-exhausted" and r["stop"] is True
@@ -128,7 +128,7 @@ def test_the_budget_stops_the_next_request(sg, tmp_path, monkeypatch) -> None:
 def test_a_released_reservation_frees_the_budget(sg, tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("OPENCLAW_STATE_DIR", str(tmp_path))
     _attest(tmp_path)
-    g = sg.SpendGuard(state_dir=tmp_path / "spend")
+    g = sg.SpendGuard(pt_root=os.environ.get("ORAMA_TEST_PT_ROOT"), state_dir=tmp_path / "spend")
     g.guard.record_spend(89.9)
     first = g.preflight(10_000)
     assert first["ok"] is True
@@ -140,7 +140,7 @@ def test_a_released_reservation_frees_the_budget(sg, tmp_path, monkeypatch) -> N
 @needs_pt
 def test_the_guard_classifies_provider_failures_with_the_shared_policy(sg, tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("OPENCLAW_STATE_DIR", str(tmp_path))
-    g = sg.SpendGuard(state_dir=tmp_path / "spend")
+    g = sg.SpendGuard(pt_root=os.environ.get("ORAMA_TEST_PT_ROOT"), state_dir=tmp_path / "spend")
     assert g.classify("You exceeded your current quota") == "provider-payment-required"
     assert g.classify("429 Concurrency limit reached") == "provider-rate-limited"
     assert g.classify("error: Invalid request") is None
@@ -254,13 +254,6 @@ def test_a_timeout_settles_with_zero_output(cycle, tmp_path, monkeypatch) -> Non
     assert r["reason"] == "launcher-timeout" and guard.settled[0][2:4] == (0, "timeout")
 
 
-def test_without_a_guard_nothing_changes(cycle, tmp_path, monkeypatch) -> None:
-    _arm(monkeypatch, cycle)
-    monkeypatch.setattr(cycle.subprocess, "run", _fake_run())
-    r = cycle.live_cycle(**_kwargs(tmp_path))
-    assert r["ok"] is True and "estimated_usd" not in r
-
-
 def test_the_old_ledger_parameters_are_gone(cycle) -> None:
     import inspect
 
@@ -335,3 +328,9 @@ def test_when_no_candidate_holds_the_guard_every_reason_is_reported(sg, tmp_path
     with pytest.raises(sg.SpendGuardUnavailable) as info:
         sg.resolve_pt_root(None)
     assert "PERPETUA_TOOLS_ROOT" in str(info.value)
+
+
+@needs_pt
+def test_releasing_a_reservation_that_is_already_closed_is_a_no_op(sg, tmp_path) -> None:
+    g = sg.SpendGuard(pt_root=os.environ.get("ORAMA_TEST_PT_ROOT"), state_dir=tmp_path / "spend")
+    g.release("never-reserved")  # must not raise: cleanup may follow a settle that already closed it

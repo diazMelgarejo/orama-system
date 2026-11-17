@@ -140,7 +140,12 @@ class SpendGuard:
         return usd
 
     def release(self, reservation: str) -> None:
-        asyncio.run(self.guard.rollback(reservation))
+        """Idempotent: a reservation that is already settled or released is not an error, so cleanup that
+        follows a settle never masks the original failure."""
+        try:
+            asyncio.run(self.guard.rollback(reservation))
+        except self.cg.UnknownReservationError:
+            pass
 
     def classify(self, text: Any) -> str | None:
         return self.pl.classify_failure(self.policy, text)

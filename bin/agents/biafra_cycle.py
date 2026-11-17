@@ -243,6 +243,71 @@ def _settle(spend_guard, reservation, input_chars, output_chars, outcome, seat, 
     return {"estimated_usd": usd}
 
 
+def _launch_decision(
+    gate_open: bool, has_digest: bool, metric_ok: bool, protected: bool, prompt_ok: bool,
+    card_errors: list, trace_problems: list, effort: str, efforts: tuple, has_guard: bool,
+) -> dict:
+    """Pure decision table: {} when a live attempt may start, else {"reason": ..., **extra} for the first
+    failing check, in this order. It reads facts the caller computed and has no side effect."""
+    if not gate_open:
+        return {"reason": "gate-closed"}
+    if not has_digest:
+        return {"reason": "no-evaluator-digest"}
+    if not metric_ok:
+        return {"reason": "non-finite-metric"}
+    if protected:
+        return {"reason": "verifier-protected"}
+    if not prompt_ok:
+        return {"reason": "empty-prompt"}
+    if card_errors:
+        return {"reason": "invalid-card", "errors": card_errors}
+    if trace_problems:
+        return {"reason": "invalid-trace", "errors": trace_problems}
+    if not has_guard:
+        return {"reason": "spend-guard-required"}
+    if effort is not None and effort not in efforts:
+        return {"reason": "invalid-effort"}
+    return {}
+
+
+def _prelaunch(
+    seat: str, mode: str, artifact: str, prompt: object, evaluator_digest: str | None, metric_before: object,
+    hypothesis: str, metric_name: str, attempt_id: str | None, log_dir: Path, mechanism_card: dict | None,
+    effort: str | None, spend_guard: object | None,
+) -> tuple[dict | None, dict | None]:
+    """Decide, with no side effect, whether a live attempt may start.
+
+    Returns (None, trace_base) when it may, else ({"reason": ..., **extra}, None). Nothing here reserves
+    budget, claims the marker or calls the launcher: every refusal that can be known up front is made
+    here, in one place, before anything is spent. The ordering lives in `_launch_decision`.
+    """
+    contracts = _contracts()
+    has_digest = evaluator_digest is not None
+    metric_ok = contracts.is_finite_number(metric_before)
+    prompt_ok = isinstance(prompt, str) and bool(prompt.strip()) and "\x00" not in prompt  # NUL cannot be an argv
+    card_errors = contracts.validate_mechanism_card(mechanism_card) if mechanism_card is not None else []
+    # The trace is built with a placeholder metric_after; only the measured value and the decision it
+    # implies remain to be checked after the request.
+    trace_base = None
+    trace_problems: list = []
+    if has_digest and metric_ok:
+        trace_base = {
+            "version": 1, "seat": seat,
+            "attempt_id": attempt_id if attempt_id is not None
+            else _attempt_id(seat, mode, log_dir, artifact, metric_name, metric_before, hypothesis),
+            "hypothesis": hypothesis, "artifact": artifact, "metric_name": metric_name,
+            "metric_before": metric_before, "evaluator_digest": evaluator_digest,
+        }
+        trace_problems = contracts.validate_trace_entry({**trace_base, "metric_after": metric_before, "decision": "revert"})
+    decision = _launch_decision(
+        launch_allowed(), has_digest, metric_ok, _forbidden(artifact), prompt_ok, card_errors, trace_problems,
+        effort, EFFORTS, spend_guard is not None,
+    )
+    if decision:
+        return decision, None
+    return None, trace_base
+
+
 def live_cycle(
     seat: str,
     task_type: str,
@@ -278,68 +343,56 @@ def live_cycle(
             "launched": False, "called_launcher": False, **extra,
         }
 
-    if not launch_allowed():
-        return refuse("gate-closed")
-    if evaluator_digest is None:
-        return refuse("no-evaluator-digest")
-    if not contracts.is_finite_number(metric_before):
-        return refuse("non-finite-metric")
-    if _forbidden(artifact):
-        return refuse("verifier-protected")
-    if not isinstance(prompt, str) or not prompt.strip():
-        return refuse("empty-prompt")
-    if mechanism_card is not None:
-        card_errors = contracts.validate_mechanism_card(mechanism_card)
-        if card_errors:
-            return refuse("invalid-card", errors=card_errors)
-    # Everything knowable before the request is validated before the request is spent. The trace is
-    # built now with a placeholder metric_after; only the measured value and the decision it implies
-    # remain to be checked afterwards.
-    trace_base = {
-        "version": 1, "seat": seat,
-        "attempt_id": attempt_id if attempt_id is not None
-        else _attempt_id(seat, mode, log_dir, artifact, metric_name, metric_before, hypothesis),
-        "hypothesis": hypothesis, "artifact": artifact, "metric_name": metric_name,
-        "metric_before": metric_before, "evaluator_digest": evaluator_digest,
-    }
-    problems = contracts.validate_trace_entry(
-        {**trace_base, "metric_after": metric_before, "decision": "revert"}
+    problem, trace_base = _prelaunch(
+        seat, mode, artifact, prompt, evaluator_digest, metric_before, hypothesis, metric_name, attempt_id,
+        log_dir, mechanism_card, effort, spend_guard,
     )
-    if problems:
-        return refuse("invalid-trace", errors=problems)
-    reservation = None
-    if spend_guard is not None:
-        # The shared guard (Perpetua-Tools) checks the operator attestation and reserves the projected
-        # cost against the monthly budget; a refusal here stops the loop before anything is launched.
-        pre = spend_guard.preflight(len(prompt))
-        if not pre.get("ok"):
-            extra = {k: v for k, v in pre.items() if k not in ("ok", "reason", "stop")}
-            return refuse(pre.get("reason", "spend-guard-refused"), stop=True, **extra)
-        reservation = pre["reservation"]
-    argv = launcher_argv(seat, prompt=prompt, effort=effort)
+    if problem is not None:
+        return refuse(problem["reason"], **{k: v for k, v in problem.items() if k != "reason"})
+    argv = launcher_argv(seat, prompt=prompt, effort=effort)  # effort was validated by the decision table
+    pre = spend_guard.preflight(len(prompt))
+    if not pre.get("ok"):
+        extra = {k: v for k, v in pre.items() if k not in ("ok", "reason", "stop")}
+        return refuse(pre.get("reason", "spend-guard-refused"), stop=True, **extra)
+    reservation = pre["reservation"]
     if not _claim_once(marker):
-        if spend_guard is not None:
-            spend_guard.release(reservation)
+        spend_guard.release(reservation)
         return refuse("already-ran")
 
+    # From here the reservation must end settled or released on every exit, including an interrupt.
+    closed = False
     try:
-        completed = subprocess.run(
-            argv, capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=timeout_s, check=False,
+        try:
+            completed = subprocess.run(
+                argv, capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=timeout_s, check=False,
+            )
+        except subprocess.TimeoutExpired:
+            spent = _settle(spend_guard, reservation, len(prompt), 0, "timeout", seat, mode)
+            closed = True
+            return refuse("launcher-timeout", spent=True, called_launcher=True, **spent)
+        except (OSError, ValueError) as exc:
+            # The launcher never started, so nothing was sent: free the reservation, keep the marker.
+            spend_guard.release(reservation)
+            closed = True
+            return refuse("launcher-error", error=f"{type(exc).__name__}: {exc}")
+        except BaseException:
+            # An interrupt may have landed after the request was sent: record the spend, never release it.
+            _settle(spend_guard, reservation, len(prompt), 0, "interrupted", seat, mode)
+            closed = True
+            raise
+        out_text = (completed.stdout or "") + (completed.stderr or "")
+        extra_spend = _settle(
+            spend_guard, reservation, len(prompt), len(out_text), "ok" if completed.returncode == 0 else "failed",
+            seat, mode,
         )
-    except subprocess.TimeoutExpired:
-        spent = _settle(spend_guard, reservation, len(prompt), 0, "timeout", seat, mode)
-        return refuse("launcher-timeout", spent=True, called_launcher=True, **spent)
-    out_text = (completed.stdout or "") + (completed.stderr or "")
-    extra_spend = _settle(
-        spend_guard, reservation, len(prompt), len(out_text), "ok" if completed.returncode == 0 else "failed",
-        seat, mode,
-    )
+        closed = True
+    finally:
+        if not closed:
+            spend_guard.release(reservation)
     if completed.returncode != 0:
         tail = (completed.stderr or "")[-300:]
         failure_text = f"{completed.stderr or ''}\n{completed.stdout or ''}"
-        stop_reason = (
-            spend_guard.classify(failure_text) if spend_guard is not None else _provider_stop(failure_text)
-        )
+        stop_reason = spend_guard.classify(failure_text)
         if stop_reason:
             # Never retry and never activate pay-as-you-go: report and stop the loop.
             return refuse(

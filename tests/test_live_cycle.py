@@ -28,7 +28,9 @@ def _load(path: Path, name: str):
 
 @pytest.fixture()
 def cycle():
-    return _load(ROOT / "bin/agents/biafra_cycle.py", "biafra_cycle")
+    module = _load(ROOT / "bin/agents/biafra_cycle.py", "biafra_cycle")
+    _Guard.stop = staticmethod(module._provider_stop)
+    return module
 
 
 def _fake_run(stdout: str = DIM + "thinking..." + RESET + "ANSWER TEXT", returncode: int = 0, calls=None):
@@ -45,12 +47,40 @@ def _arm(monkeypatch, cycle) -> None:
     monkeypatch.setenv(cycle.ARM_ENV, "1")
 
 
+class _Guard:
+    """A recording spend guard: every reservation must end settled or released, never left open."""
+
+    def __init__(self) -> None:
+        self.preflights = 0
+        self.settled: list = []
+        self.released: list = []
+
+    def preflight(self, n):
+        self.preflights += 1
+        return {"ok": True, "reservation": f"r{self.preflights}", "projected_usd": 0.0}
+
+    def settle(self, reservation, *a, **k):
+        self.settled.append(reservation)
+        return 0.0
+
+    def release(self, reservation):
+        self.released.append(reservation)
+
+    stop = staticmethod(lambda text: None)  # set by the `cycle` fixture to the real classifier
+
+    def classify(self, text):
+        return type(self).stop(text)
+
+    def open_reservations(self) -> list:
+        return [f"r{i}" for i in range(1, self.preflights + 1) if f"r{i}" not in self.settled + self.released]
+
+
 def _kwargs(tmp_path: Path, **over):
     base = dict(
         seat="inner", task_type="harden", prompt="Improve X. Return only code.", log_dir=tmp_path,
         evaluate=lambda answer: {"metric_after": 1.0, "detail": answer}, metric_before=3.0,
         artifact="seat_contracts._owner_folded", evaluator_digest=DIGEST,
-        hypothesis="handle leetspeak", metric_name="heldout_wrong",
+        hypothesis="handle leetspeak", metric_name="heldout_wrong", spend_guard=_Guard(),
     )
     base.update(over)
     return base
@@ -365,3 +395,89 @@ def test_without_a_ledger_path_nothing_is_written(cycle, tmp_path, monkeypatch) 
     monkeypatch.setattr(cycle.subprocess, "run", _fake_run())
     cycle.live_cycle(**_kwargs(tmp_path))
     assert not list(tmp_path.rglob("*.jsonl"))
+
+
+def test_a_live_launch_without_a_spend_guard_is_refused_before_the_marker(cycle, tmp_path, monkeypatch) -> None:
+    _arm(monkeypatch, cycle)
+    calls: list = []
+    monkeypatch.setattr(cycle.subprocess, "run", _fake_run(calls=calls))
+    r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=None))
+    assert r["ok"] is False and r["reason"] == "spend-guard-required" and r["launched"] is False
+    assert calls == [] and not list(tmp_path.glob("*.once"))
+
+
+@pytest.mark.parametrize("effort", ["xhigh", "max", "ultra", ""])
+def test_an_invalid_effort_is_refused_before_anything_is_reserved(cycle, tmp_path, monkeypatch, effort) -> None:
+    _arm(monkeypatch, cycle)
+    calls: list = []
+    monkeypatch.setattr(cycle.subprocess, "run", _fake_run(calls=calls))
+    guard = _Guard()
+    r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard, effort=effort))
+    assert r["reason"] == "invalid-effort" and r["launched"] is False
+    assert calls == [] and guard.preflights == 0 and not list(tmp_path.glob("*.once"))
+
+
+@pytest.mark.parametrize("effort", ["medium", "high", "low", None])
+def test_a_valid_effort_still_launches(cycle, tmp_path, monkeypatch, effort) -> None:
+    _arm(monkeypatch, cycle)
+    monkeypatch.setattr(cycle.subprocess, "run", _fake_run())
+    guard = _Guard()
+    r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard, effort=effort))
+    assert r["ok"] is True and guard.open_reservations() == []
+
+
+def test_the_decision_table_is_pure_and_ordered(cycle) -> None:
+    ok = dict(gate_open=True, has_digest=True, metric_ok=True, protected=False, prompt_ok=True,
+              card_errors=[], trace_problems=[], effort="high", efforts=cycle.EFFORTS, has_guard=True)
+    assert cycle._launch_decision(**ok) == {}
+    assert cycle._launch_decision(**{**ok, "gate_open": False, "has_guard": False, "effort": "xhigh"})["reason"] == "gate-closed"
+    assert cycle._launch_decision(**{**ok, "has_guard": False, "effort": "xhigh"})["reason"] == "spend-guard-required"
+
+
+def test_an_oserror_from_the_launcher_releases_the_reservation(cycle, tmp_path, monkeypatch) -> None:
+    _arm(monkeypatch, cycle)
+
+    def boom(argv, **kwargs):
+        raise OSError("exec failed")
+
+    monkeypatch.setattr(cycle.subprocess, "run", boom)
+    guard = _Guard()
+    r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard))
+    assert r["reason"] == "launcher-error" and r["called_launcher"] is False
+    assert guard.open_reservations() == [] and guard.released == ["r1"]
+
+
+def test_an_interrupt_during_the_run_settles_the_possibly_sent_request(cycle, tmp_path, monkeypatch) -> None:
+    """The request may already have been sent, so the spend is recorded (settled), not released."""
+    _arm(monkeypatch, cycle)
+
+    def interrupted(argv, **kwargs):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(cycle.subprocess, "run", interrupted)
+    guard = _Guard()
+    with pytest.raises(KeyboardInterrupt):
+        cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard))
+    assert guard.open_reservations() == [] and guard.settled == ["r1"] and guard.released == []
+
+
+def test_a_nul_byte_in_the_prompt_is_refused_before_the_marker(cycle, tmp_path, monkeypatch) -> None:
+    _arm(monkeypatch, cycle)
+    calls: list = []
+    monkeypatch.setattr(cycle.subprocess, "run", _fake_run(calls=calls))
+    guard = _Guard()
+    r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard, prompt="hi\x00there"))
+    assert r["ok"] is False and r["launched"] is False
+    assert calls == [] and guard.preflights == 0 and not list(tmp_path.glob("*.once"))
+
+
+def test_a_valueerror_from_the_launcher_frees_the_reservation(cycle, tmp_path, monkeypatch) -> None:
+    _arm(monkeypatch, cycle)
+
+    def refuses(argv, **kwargs):
+        raise ValueError("embedded null byte")
+
+    monkeypatch.setattr(cycle.subprocess, "run", refuses)
+    guard = _Guard()
+    r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard))
+    assert r["reason"] == "launcher-error" and guard.open_reservations() == [] and guard.released == ["r1"]
