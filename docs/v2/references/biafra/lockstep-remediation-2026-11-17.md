@@ -46,10 +46,10 @@ Finding 6 (memory) is PT-side and additive.
 ## Verification so far
 
 - PT integration (12 commits on `c90feebb`): full suite 3670 passed, 5 failed, 13 skipped at
-  `23cdc03`. The same 5 fail at the base (the sandbox lacks Git state discovery). A rerun at the
-  final PT head is in progress.
-- Orama integration (17 commits on `bd5931a2`): 421 passed, 18 skipped across the affected suites
-  against the integrated PT. Docstrings are 100 percent on all touched files; docstring-only
+  `23cdc03`. The same 5 fail at the base (the sandbox lacks Git state discovery). The rerun at the
+  final PT code head (`docs(spend-gate)` commit) gave 3674 passed, 13 skipped and the same 5.
+- Orama integration (all lanes plus the review fixes on `bd5931a2`): 428 passed, 18 skipped
+  (macOS-only sandbox tests) across the affected suites against the integrated PT. Docstrings are 100 percent on all touched files; docstring-only
   commits were proven by `ast.dump` equality with docstrings stripped.
 
 ## Independent review verdicts
@@ -57,7 +57,7 @@ Finding 6 (memory) is PT-side and additive.
 | Repository | Verdict | Handling |
 | --- | --- | --- |
 | PT | Approve; no Critical or Important findings. Four Minor items. | All four fixed or documented: settle fallback, `.migrated` marker, per-phase timeout documented, fail-closed default documented. |
-| orama | Request changes. | Five fixes decided (items 11 to 15 in doc 76 section 13.2): process-group kill on abnormal exit, a sent request is never released, receipt `delta` comparison, unique pin temp file, sandbox probe check before the child starts. Being implemented in a parallel lane; not yet verified. |
+| orama | Request changes. | Five fixes decided (items 11 to 15 in doc 76 section 13.2): process-group kill on abnormal exit, a sent request is never released, receipt `delta` comparison, unique pin temp file, sandbox probe check before the child starts. All five implemented with failing-first tests; a real grandchild no longer hangs the cycle (about 8 s before, about 1 s after). |
 
 ## Not done
 

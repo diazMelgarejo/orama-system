@@ -55,8 +55,8 @@ that cannot encode ownership must not be mistaken for safety.
 | G9 | The fixed-wall card check runs only when a caller passes `mechanism_card`. A caller that omits it is not checked. | Resolved 2026-11-17, decided by the operator's request in this change: no card, no promotion. Cycles stay usable without a card, because a proposal turn produces the card afterwards, and report `card_checked: false`. When a valid card is passed, `dry_cycle` and `live_cycle` results also carry `card_id` (`<mechanism_id>@<revision>`). A reviewed or graduated card needs a receipt with `card_checked: true` and a `card_id` equal to its own, so promotion follows a dry run that checked this card, fixed walls included, before measurement. |
 | G7 | Provider state for the live cycle (W&B model order and effort acceptance, BigModel balance) was last seen on 2026-11-12. | Must be re-probed before arming. |
 
-Note (2026-11-17, section 13): an independent review led to a decided addition to the G3 binding,
-in progress in a parallel lane: a receipt is also compared with the card's `delta` (the trace's
+Note (2026-11-17, section 13): an independent review led to an addition to the G3 binding, now
+implemented and tested: a receipt is also compared with the card's `delta` (the trace's
 `metric_after - metric_before`), so a receipt for `X@1` cannot promote a different card reusing
 that id. This section is otherwise unchanged.
 
@@ -245,14 +245,15 @@ orama.
 | 8 | Runbook: the attest command no longer shows `--confirm`. | The parser has no such argument. |
 | 9 | Memory changes ship in PR #516 although accepted `lesson_94a6ff5363ae` says PT memory commits belong on main only. Flagged to the operator. | The defect was introduced there. |
 | 10 | Publish order: push PT once, set orama `.github/pt-dispatch-test-ref` to the pushed PT head, push orama once; no merges; reply on the open PT thread with the fixing commit; update PT #516's description. | Orama pins PT; #516 now changes runtime and budget code, not only docs. |
-| 11 | Decided, in progress (parallel lane): the live-cycle launcher starts with `start_new_session=True`; on timeout, pipe error or interrupt the whole group is SIGKILLed before a bounded reap. | A grandchild holding the pipes cannot hang the cycle past `timeout_s`. |
-| 12 | Decided, in progress: after Popen succeeds the request counts as sent; the `finally` never releases a sent reservation; if settling fails after send, the reservation is left to its declared hold and the error is surfaced. | A sent request is never recorded as zero spend. |
-| 13 | Decided, in progress: receipt binding also compares the card's `delta` with the trace's `metric_after - metric_before` (float-rounding tolerance). | A receipt for `X@1` must not promote a different card that reuses the id `X@1`. |
-| 14 | Decided, in progress: `pin_evaluator` uses a unique temp file (`mkstemp` in the pin's directory). | Concurrent pinning in one process cannot collide. |
-| 15 | Decided, in progress: the sandbox checks that an exit probe exists before starting the child. | A platform with no probe fails closed before any model-written code runs. |
+| 11 | Implemented and tested: the live-cycle launcher starts with `start_new_session=True`; on timeout, pipe error or interrupt the whole group is SIGKILLed before a bounded reap. | A grandchild holding the pipes cannot hang the cycle past `timeout_s`. |
+| 12 | Implemented and tested: after Popen succeeds the request counts as sent; the `finally` never releases a sent reservation; if settling fails after send, the reservation is left to its declared hold and the error is surfaced. | A sent request is never recorded as zero spend. |
+| 13 | Implemented and tested: receipt binding also compares the card's `delta` with the trace's `metric_after - metric_before` (float-rounding tolerance). | A receipt for `X@1` must not promote a different card that reuses the id `X@1`. |
+| 14 | Implemented and tested: `pin_evaluator` uses a unique temp file (`mkstemp` in the pin's directory). | Concurrent pinning in one process cannot collide. |
+| 15 | Implemented and tested: the sandbox checks that an exit probe exists before starting the child. | A platform with no probe fails closed before any model-written code runs. |
 
-Decisions 11 to 15 came from the independent orama review (request changes) and are being
-implemented in a parallel lane; this document describes them as decided, not as merged.
+Decisions 11 to 15 came from the independent orama review (request changes). All five are
+implemented with failing-first tests on PR #519's branch (affected suites: 428 passed, 18 skipped
+macOS-only); the PR is not merged.
 
 ### 13.3 Operator-facing behaviour changes
 
@@ -269,11 +270,12 @@ implemented in a parallel lane; this document describes them as decided, not as 
 
 ### 13.4 Publication state
 
-Both PRs are open and not merged. The operator believed them merged, but their heads were still the
-reviewed `c90feebb` (PT #516) and `bd5931a2` (orama #519); no merge was made. Lockstep order: push PT
-once, set orama's `.github/pt-dispatch-test-ref` to the pushed PT head, push orama once; reply to
-the open PT thread with the fixing commit; update PT #516's description. Nothing is armed: live
-gates and serving stay off.
+Both PRs are open and not merged. The operator believed them merged, but their heads were still
+the reviewed `c90feebb` (PT #516) and `bd5931a2` (orama #519); no merge was made. Lockstep order:
+push PT once, set orama's `.github/pt-dispatch-test-ref` to the pushed PT head, push orama once;
+reply to the open PT thread with the fixing commit; update PT #516's description. Nothing is
+armed: live gates and serving stay off. By the operator's ruling, every change from this
+remediation, memory included, is consolidated on these two PRs; no new PR is opened.
 
 ### 13.5 Later TODOs
 
