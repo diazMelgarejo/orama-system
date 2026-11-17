@@ -155,6 +155,10 @@ EFFORTS = ("medium", "high", "low")  # never xhigh or max; mirrors launch_cline_
 _DIM_SPAN = re.compile(r"\x1b\[2m.*?\x1b\[0m", re.S)
 _ANSI = re.compile(r"\x1b\[[0-9;]*m")
 LIVE_TIMEOUT_S = 900
+# Seconds added to the launcher timeout when declaring the spend reservation's hold. The hold must cover
+# the whole allowed launch (timeout, kill, output decode, settle) or another reservation could sweep an
+# attempt that is still running; an over-long hold only keeps budget reserved a little longer.
+SETTLE_MARGIN_S = 120
 # Provider limit signals in a FAILED launch. Best effort: matched on the launcher's text, not guaranteed.
 _PAYMENT = re.compile(r"\b402\b|payment required|spending cap|exceeded your current|insufficient (?:credit|fund)", re.I)
 _RATE = re.compile(r"\b429\b|too many requests|rate.?limit|concurrency limit", re.I)
@@ -357,7 +361,7 @@ def live_cycle(
     if problem is not None:
         return refuse(problem["reason"], **{k: v for k, v in problem.items() if k != "reason"})
     argv = launcher_argv(seat, prompt=prompt, effort=effort)  # effort was validated by the decision table
-    pre = spend_guard.preflight(len(prompt), timeout_s)
+    pre = spend_guard.preflight(len(prompt), timeout_s + SETTLE_MARGIN_S)
     if not pre.get("ok"):
         extra = {k: v for k, v in pre.items() if k not in ("ok", "reason", "stop")}
         return refuse(pre.get("reason", "spend-guard-refused"), stop=True, **extra)

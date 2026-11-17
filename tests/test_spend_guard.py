@@ -409,3 +409,45 @@ def test_a_checkout_without_the_spend_gate_is_not_a_guard(sg_isolated, tmp_path,
         sg_isolated.resolve_pt_root(root)
     with pytest.raises(sg_isolated.SpendGuardUnavailable):
         sg_isolated.SpendGuard(pt_root=root, state_dir=tmp_path)
+
+
+# --- review finding 3: the reservation outlives the whole allowed launch -------------------------------
+
+
+def test_live_cycle_declares_a_hold_longer_than_the_launcher_timeout(cycle, tmp_path, monkeypatch) -> None:
+    _arm(monkeypatch, cycle)
+    monkeypatch.setattr(cycle.subprocess, "run", _fake_run())
+    guard = FakeGuard()
+    cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard, timeout_s=900))
+    assert guard.hold_seconds == 900 + cycle.SETTLE_MARGIN_S and cycle.SETTLE_MARGIN_S > 0
+
+
+@needs_pt
+def test_a_running_launch_cannot_be_swept_by_another_reservation(sg, cycle, tmp_path, monkeypatch) -> None:
+    """Finding 3 on the real gate: a second reservation just past the timeout must not free the first."""
+    import time as real_time
+
+    monkeypatch.setenv("OPENCLAW_STATE_DIR", str(tmp_path))
+    _attest(tmp_path)
+    _arm(monkeypatch, cycle)
+    spend = tmp_path / "spend"
+    first = sg.SpendGuard(pt_root=os.environ.get("ORAMA_TEST_PT_ROOT"), state_dir=spend)
+    other = sg.SpendGuard(pt_root=os.environ.get("ORAMA_TEST_PT_ROOT"), state_dir=spend)
+    first.gate.guard.record_spend(89.9)  # room for exactly one request
+    clock = {"skew": 0.0}
+    base = real_time.time
+    monkeypatch.setattr(real_time, "time", lambda: base() + clock["skew"])
+    seen: dict = {}
+
+    def slow_launch(argv, **kwargs):
+        clock["skew"] = 100 + 1  # the launcher is still inside its 100 s timeout, plus one second
+        seen["second"] = other.preflight(10_000, 60.0)
+        clock["skew"] = 100 + cycle.SETTLE_MARGIN_S - 1
+        return subprocess.CompletedProcess(argv, 0, stdout="ANSWER", stderr="")
+
+    monkeypatch.setattr(cycle.subprocess, "run", slow_launch)
+    result = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=first, timeout_s=100, prompt="x" * 10_000))
+    assert seen["second"]["ok"] is False and seen["second"]["reason"] == "budget-exhausted"
+    assert result["ok"] is True
+    rows = [json.loads(x) for x in (spend / "wandb-inference-spend-audit.jsonl").read_text().splitlines()]
+    assert len(rows) == 1 and "basis" not in rows[0]  # settled in time, not as a late commit
