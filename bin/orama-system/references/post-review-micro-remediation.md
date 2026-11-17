@@ -412,6 +412,18 @@ only ones touching files with a sibling copy elsewhere.
 
 ---
 
+## Two rules from the 2026-11-17 pair remediation turn
+
+- **Reproduce every finding before fixing it, and expect the reason to differ.** Rolling back a
+  committed reservation raised `UnknownReservationError`, which is what made one double-release finding
+  real; a NUL byte in an argv failed only after the one-attempt marker was claimed. A fix written from the
+  comment alone would have missed the actual defect.
+- **Saved harness drivers and run copies are evidence, not code to keep current.** Do not rewrite them to
+  satisfy a review. Document the known limit in a README beside them (for example "predates the mandatory
+  spend guard") and answer the comment with an evidence-backed decline that points at that note.
+
+---
+
 ## Enforcement — reference this doc, don't duplicate it
 
 Each consuming skill imports only the phases it needs, per the modular

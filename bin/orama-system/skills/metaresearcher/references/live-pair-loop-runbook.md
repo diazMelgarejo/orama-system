@@ -108,6 +108,20 @@ sandbox and record the trace. Vet the candidate and incorporate it test-first. R
 live on the real trace and vet her claims. Commit named files locally. Push only when the operator
 says so.
 
+## Choosing a target and ordering a turn
+
+Distilled by the Crystal pass over the 2026-11-17 event log (one request, about 0.009 dollars).
+
+- **Make the target a pure decision function.** The allowlist vet bans `try` and attribute calls by
+  design, so a lifecycle (try/finally, I/O, adapter calls) can never be a pair target. Extract a
+  function that takes facts and returns a decision, prove the extraction with the existing tests, give
+  that to the seat, and write the lifecycle by hand in the caller. `_launch_decision` is the example.
+- **Score against a measured baseline.** If a harness change leaves existing tests failing (a permissive
+  test guard did, 8 of them), count only failures beyond that baseline, and run a known-good reference
+  answer through the evaluator before the live request, so evaluator bugs are not charged to the model.
+- **Start the seat in the background, then edit only what it does not import.** Incorporate its output
+  test-first afterwards.
+
 ## Vetting what a model returns
 
 - **Reproduce each claim.** Turn 2's outer review had true points (a misleading message, degenerate
