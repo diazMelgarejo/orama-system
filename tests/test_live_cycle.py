@@ -55,7 +55,7 @@ class _Guard:
         self.settled: list = []
         self.released: list = []
 
-    def preflight(self, n):
+    def preflight(self, n, hold_seconds):
         self.preflights += 1
         return {"ok": True, "reservation": f"r{self.preflights}", "projected_usd": 0.0}
 
@@ -355,7 +355,7 @@ def test_malformed_trace_fields_are_refused_before_anything_is_spent(cycle, tmp_
     class Guard:
         preflights = 0
 
-        def preflight(self, n):
+        def preflight(self, n, hold_seconds):
             Guard.preflights += 1
             return {"ok": True, "reservation": "r", "projected_usd": 0.0}
 

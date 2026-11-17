@@ -18,6 +18,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 DIGEST = "c" * 64
+HOLD = 60.0
 
 
 pytestmark = pytest.mark.usefixtures("offline_guard")
@@ -94,7 +95,7 @@ def _attest(tmp_path: Path, **over) -> None:
 def test_no_attestation_means_no_request(sg, tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("OPENCLAW_STATE_DIR", str(tmp_path))
     g = sg.SpendGuard(pt_root=os.environ.get("ORAMA_TEST_PT_ROOT"), state_dir=tmp_path / "spend")
-    r = g.preflight(10_000)
+    r = g.preflight(10_000, HOLD)
     assert r["ok"] is False and r["reason"] == "attestation-required" and r["stop"] is True
     assert any("missing" in x for x in r["reasons"])
 
@@ -104,7 +105,7 @@ def test_no_attestation_means_no_request(sg, tmp_path, monkeypatch) -> None:
 def test_an_attestation_that_does_not_clear_every_field_is_refused(sg, tmp_path, monkeypatch, over) -> None:
     monkeypatch.setenv("OPENCLAW_STATE_DIR", str(tmp_path))
     _attest(tmp_path, **over)
-    assert sg.SpendGuard(pt_root=os.environ.get("ORAMA_TEST_PT_ROOT"), state_dir=tmp_path / "spend").preflight(1000)["reason"] == "attestation-required"
+    assert sg.SpendGuard(pt_root=os.environ.get("ORAMA_TEST_PT_ROOT"), state_dir=tmp_path / "spend").preflight(1000, HOLD)["reason"] == "attestation-required"
 
 
 @needs_pt
@@ -112,7 +113,7 @@ def test_a_valid_attestation_reserves_and_settling_records_a_size_only_audit_row
     monkeypatch.setenv("OPENCLAW_STATE_DIR", str(tmp_path))
     _attest(tmp_path)
     g = sg.SpendGuard(pt_root=os.environ.get("ORAMA_TEST_PT_ROOT"), state_dir=tmp_path / "spend")
-    pre = g.preflight(10_000)
+    pre = g.preflight(10_000, HOLD)
     assert pre["ok"] is True and pre["projected_usd"] > 0
     usd = g.settle(pre["reservation"], input_chars=10_000, output_chars=40_000, outcome="ok", seat="inner", mode="inner")
     assert usd > 0
@@ -128,8 +129,8 @@ def test_the_budget_stops_the_next_request(sg, tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("OPENCLAW_STATE_DIR", str(tmp_path))
     _attest(tmp_path)
     g = sg.SpendGuard(pt_root=os.environ.get("ORAMA_TEST_PT_ROOT"), state_dir=tmp_path / "spend")
-    g.guard.record_spend(89.999)
-    r = g.preflight(10_000)
+    g.gate.guard.record_spend(89.999)
+    r = g.preflight(10_000, HOLD)
     assert r["ok"] is False and r["reason"] == "budget-exhausted" and r["stop"] is True
 
 
@@ -138,12 +139,12 @@ def test_a_released_reservation_frees_the_budget(sg, tmp_path, monkeypatch) -> N
     monkeypatch.setenv("OPENCLAW_STATE_DIR", str(tmp_path))
     _attest(tmp_path)
     g = sg.SpendGuard(pt_root=os.environ.get("ORAMA_TEST_PT_ROOT"), state_dir=tmp_path / "spend")
-    g.guard.record_spend(89.9)
-    first = g.preflight(10_000)
+    g.gate.guard.record_spend(89.9)
+    first = g.preflight(10_000, HOLD)
     assert first["ok"] is True
-    assert g.preflight(10_000)["ok"] is False          # the first reservation still holds the budget
+    assert g.preflight(10_000, HOLD)["ok"] is False          # the first reservation still holds the budget
     g.release(first["reservation"])
-    assert g.preflight(10_000)["ok"] is True
+    assert g.preflight(10_000, HOLD)["ok"] is True
 
 
 @needs_pt
@@ -163,15 +164,21 @@ class FakeGuard:
         self.pre = pre or {"ok": True, "reservation": "r1", "projected_usd": 0.05}
         self.settled = []
         self.released = []
+        self.unknown = []
         self._classify = classify
 
-    def preflight(self, prompt_chars):
+    def preflight(self, prompt_chars, hold_seconds):
         self.prompt_chars = prompt_chars
+        self.hold_seconds = hold_seconds
         return self.pre
 
     def settle(self, reservation, input_chars, output_chars, outcome, seat, mode):
         self.settled.append((reservation, input_chars, output_chars, outcome, seat, mode))
         return 0.0123
+
+    def settle_unknown(self, reservation, input_chars, outcome, seat, mode):
+        self.unknown.append((reservation, input_chars, outcome, seat, mode))
+        return 0.05
 
     def release(self, reservation):
         self.released.append(reservation)
@@ -276,7 +283,7 @@ def test_the_old_ledger_parameters_are_gone(cycle) -> None:
 
 def _fake_pt(root: Path) -> Path:
     (root / "orchestrator").mkdir(parents=True)
-    for name in ("provider_limits.py", "cost_guard.py"):
+    for name in ("provider_limits.py", "cost_guard.py", "spend_gate.py"):
         (root / "orchestrator" / name).write_text("# stub\n")
     return root
 
@@ -354,3 +361,51 @@ def test_when_no_candidate_holds_the_guard_every_reason_is_reported(sg_isolated,
 def test_releasing_a_reservation_that_is_already_closed_is_a_no_op(sg, tmp_path) -> None:
     g = sg.SpendGuard(pt_root=os.environ.get("ORAMA_TEST_PT_ROOT"), state_dir=tmp_path / "spend")
     g.release("never-reserved")  # must not raise: cleanup may follow a settle that already closed it
+
+
+@needs_pt
+def test_the_adapter_loads_the_producer_gate_and_adds_no_ledger_of_its_own(sg, tmp_path) -> None:
+    g = sg.SpendGuard(pt_root=os.environ.get("ORAMA_TEST_PT_ROOT"), state_dir=tmp_path / "spend")
+    assert g.gate.__class__.__name__ == "SpendGate" and g.gate.guard is g.guard
+    assert g.audit_path == g.gate.audit_path and g.policy is g.gate.policy
+    assert not hasattr(g, "_ledger") and not hasattr(g, "reservations")
+
+
+@needs_pt
+def test_two_adapter_instances_share_one_ceiling(sg, tmp_path, monkeypatch) -> None:
+    """Review finding 2 through the adapter: independent instances must not both spend the last dollars."""
+    monkeypatch.setenv("OPENCLAW_STATE_DIR", str(tmp_path))
+    _attest(tmp_path)
+    one = sg.SpendGuard(pt_root=os.environ.get("ORAMA_TEST_PT_ROOT"), state_dir=tmp_path / "spend")
+    two = sg.SpendGuard(pt_root=os.environ.get("ORAMA_TEST_PT_ROOT"), state_dir=tmp_path / "spend")
+    one.gate.guard.record_spend(89.9)
+    a = one.preflight(10_000, HOLD)
+    b = two.preflight(10_000, HOLD)
+    assert a["ok"] is True
+    assert b["ok"] is False and b["reason"] == "budget-exhausted"
+    one.release(a["reservation"])
+    assert two.preflight(10_000, HOLD)["ok"] is True
+
+
+@needs_pt
+def test_settle_unknown_charges_the_whole_reservation_and_marks_the_output_unknown(sg, tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("OPENCLAW_STATE_DIR", str(tmp_path))
+    _attest(tmp_path)
+    g = sg.SpendGuard(pt_root=os.environ.get("ORAMA_TEST_PT_ROOT"), state_dir=tmp_path / "spend")
+    pre = g.preflight(10_000, HOLD)
+    usd = g.settle_unknown(pre["reservation"], 10_000, "timeout", "inner", "inner")
+    assert usd == pytest.approx(pre["projected_usd"])
+    rows = [json.loads(x) for x in (tmp_path / "spend" / "wandb-inference-spend-audit.jsonl").read_text().splitlines()]
+    assert rows[0]["outcome"] == "timeout" and "output_chars" not in rows[0]
+    assert g.snapshot()["daily_spend"] == pytest.approx(usd)
+
+
+def test_a_checkout_without_the_spend_gate_is_not_a_guard(sg_isolated, tmp_path, monkeypatch) -> None:
+    root = _fake_pt(tmp_path / "old")
+    (root / "orchestrator" / "spend_gate.py").unlink()
+    monkeypatch.delenv("PERPETUA_TOOLS_ROOT", raising=False)
+    monkeypatch.setattr(sg_isolated, "LOCAL_LINK", tmp_path / "absent")
+    with pytest.raises(sg_isolated.SpendGuardUnavailable):
+        sg_isolated.resolve_pt_root(root)
+    with pytest.raises(sg_isolated.SpendGuardUnavailable):
+        sg_isolated.SpendGuard(pt_root=root, state_dir=tmp_path)

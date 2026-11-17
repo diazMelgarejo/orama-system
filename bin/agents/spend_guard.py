@@ -2,18 +2,16 @@
 
 Perpetua-Tools is the runtime and state authority (budget state, provider policies, attestations);
 orama-system is stateless and consumes it. The adapter loads Perpetua-Tools'
-`orchestrator/provider_limits.py` and `orchestrator/cost_guard.py` from PERPETUA_TOOLS_ROOT and adds
-no spend logic of its own. It fails closed: with no checkout, no policy or no valid operator
+`orchestrator/spend_gate.py` from PERPETUA_TOOLS_ROOT and forwards to its SpendGate: orama keeps no
+ledger and no spend logic of its own, so the ceiling is the one shared, atomic budget Perpetua-Tools owns. It fails closed: with no checkout, no policy or no valid operator
 attestation, a live request is refused. The estimate is not billing; the provider's Billing page is.
 """
 
 from __future__ import annotations
 
-import asyncio
 import importlib.util
 import os
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -32,7 +30,8 @@ class SpendGuardUnavailable(RuntimeError):
 
 
 def _has_guard(root: Path) -> bool:
-    return (root / "orchestrator" / "provider_limits.py").is_file() and (root / "orchestrator" / "cost_guard.py").is_file()
+    """True when ``root`` holds the shared spend gate (an older checkout without it is not a guard)."""
+    return (root / "orchestrator" / "spend_gate.py").is_file()
 
 
 def resolve_pt_root(explicit: str | Path | None = None) -> Path:
@@ -64,6 +63,7 @@ def resolve_pt_root(explicit: str | Path | None = None) -> Path:
 
 
 def _load(root: Path, rel: str, name: str):
+    """Import ``rel`` under ``root`` by file path as module ``name``; SpendGuardUnavailable if it cannot load."""
     path = root / rel
     if not path.is_file():
         raise SpendGuardUnavailable(f"{rel} not found under {root}")
@@ -77,7 +77,7 @@ def _load(root: Path, rel: str, name: str):
 
 
 class SpendGuard:
-    """Preflight, settle and release one provider's spend through Perpetua-Tools' CostGuard."""
+    """Preflight, settle and release one provider's spend by forwarding to Perpetua-Tools' SpendGate."""
 
     def __init__(
         self,
@@ -86,69 +86,38 @@ class SpendGuard:
         state_dir: str | Path | None = None,
         now: Any = None,
     ) -> None:
+        """Load the producer's gate. Any failure to obtain a valid policy or a safe store is a refusal."""
         root = resolve_pt_root(pt_root)
-        self.pl = _load(root, "orchestrator/provider_limits.py", "pt_provider_limits")
-        self.cg = _load(root, "orchestrator/cost_guard.py", "pt_cost_guard")
+        module = _load(root, "orchestrator/spend_gate.py", "pt_spend_gate")
         try:
-            self.policy = self.pl.load_policy(provider)
-        except self.pl.ProviderPolicyError as exc:
+            self.gate = module.SpendGate(provider, state_dir=state_dir, now=now)
+        except (module._pl.ProviderPolicyError, PermissionError) as exc:
             raise SpendGuardUnavailable(str(exc)) from exc
         self.provider = provider
-        self._now = now or (lambda: datetime.now(timezone.utc))
-        spend = Path(state_dir) if state_dir else self.pl.spend_dir()
-        self.guard = self.cg.CostGuard(
-            state_dir=str(spend), budget_file=f"{provider}-budget.json", period=self.policy["budget"]["period"]
-        )
-        ceiling = float(self.policy["budget"]["operator_estimate_ceiling_usd"])
-        if self.guard.snapshot()["daily_budget"] != ceiling:
-            self.guard.set_budget(ceiling)  # the policy file is the source of truth for the ceiling
-        self.audit_path = spend / f"{provider}-spend-audit.jsonl"
+        self.policy = self.gate.policy
+        self.guard = self.gate.guard
+        self.audit_path = self.gate.audit_path
 
-    def _attestation(self) -> Any:
-        import json
-
-        path = self.pl.attestation_path(self.provider)
-        try:
-            return json.loads(path.read_text(encoding="utf-8"))
-        except FileNotFoundError:
-            return None
-        except (OSError, ValueError):
-            return {}
-
-    def preflight(self, prompt_chars: int) -> dict:
-        """Check the operator attestation, then reserve the projected cost against the budget."""
-        status = self.pl.attestation_status(self.policy, self._attestation(), self._now())
-        if not status["ok"]:
-            return {"ok": False, "reason": "attestation-required", "stop": True, "reasons": status["reasons"]}
-        projected = self.pl.projected_usd(self.policy, prompt_chars)
-        try:
-            reservation = asyncio.run(self.guard.reserve(projected))
-        except self.cg.BudgetExceededError as exc:
-            return {"ok": False, "reason": "budget-exhausted", "stop": True, "error": str(exc),
-                    "projected_usd": projected}
-        return {"ok": True, "reservation": reservation, "projected_usd": projected}
+    def preflight(self, prompt_chars: int, hold_seconds: float) -> dict:
+        """Refuse (attestation, budget) or reserve the projected cost for ``hold_seconds``."""
+        return self.gate.preflight(prompt_chars, hold_seconds)
 
     def settle(self, reservation: str, input_chars: int, output_chars: int, outcome: str, seat: str, mode: str) -> float:
-        """Commit the estimated actual cost and append a size-only audit row. Returns the estimate."""
-        usd = self.pl.estimate_usd(self.policy, input_chars, output_chars)
-        asyncio.run(self.guard.commit(reservation, usd))
-        self.pl.append_audit(self.audit_path, {
-            "ts": self._now().isoformat(), "seat": seat, "mode": mode, "input_chars": input_chars,
-            "output_chars": output_chars, "estimated_usd": usd, "estimated": True, "outcome": outcome,
-            "provider": self.provider, "policy_id": self.policy["policy_id"],
-        })
-        return usd
+        """Commit the estimated actual cost of an answered request. Returns the estimate."""
+        return self.gate.settle(reservation, input_chars, output_chars, outcome, seat, mode)
+
+    def settle_unknown(self, reservation: str, input_chars: int, outcome: str, seat: str, mode: str) -> float:
+        """Commit the full reservation for a possibly sent request whose output is unavailable."""
+        return self.gate.settle_unknown(reservation, input_chars, outcome, seat, mode)
 
     def release(self, reservation: str) -> None:
-        """Idempotent: a reservation that is already settled or released is not an error, so cleanup that
-        follows a settle never masks the original failure."""
-        try:
-            asyncio.run(self.guard.rollback(reservation))
-        except self.cg.UnknownReservationError:
-            pass
+        """Release a reservation that was never sent. Idempotent."""
+        self.gate.release(reservation)
 
     def classify(self, text: Any) -> str | None:
-        return self.pl.classify_failure(self.policy, text)
+        """The shared policy's classification of a provider failure message, or None."""
+        return self.gate.classify(text)
 
     def snapshot(self) -> dict:
-        return self.guard.snapshot()
+        """The shared budget snapshot."""
+        return self.gate.snapshot()

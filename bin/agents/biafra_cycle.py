@@ -357,7 +357,7 @@ def live_cycle(
     if problem is not None:
         return refuse(problem["reason"], **{k: v for k, v in problem.items() if k != "reason"})
     argv = launcher_argv(seat, prompt=prompt, effort=effort)  # effort was validated by the decision table
-    pre = spend_guard.preflight(len(prompt))
+    pre = spend_guard.preflight(len(prompt), timeout_s)
     if not pre.get("ok"):
         extra = {k: v for k, v in pre.items() if k not in ("ok", "reason", "stop")}
         return refuse(pre.get("reason", "spend-guard-refused"), stop=True, **extra)
