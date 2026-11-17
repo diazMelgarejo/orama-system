@@ -49,12 +49,17 @@ needs_pt = pytest.mark.skipif(
 
 
 @pytest.fixture()
-def sg(tmp_path_factory):
-    mod = _load("bin/agents/spend_guard.py", "spend_guard")
-    # Every default location the resolver tries must be neutralized here: CI really has a checkout at
-    # CI_CHECKOUT, which would otherwise satisfy tests that expect "no guard anywhere".
-    mod.CI_CHECKOUT = tmp_path_factory.getbasetemp() / "no-ci-checkout"
-    return mod
+def sg():
+    return _load("bin/agents/spend_guard.py", "spend_guard")
+
+
+@pytest.fixture()
+def sg_isolated(sg, tmp_path_factory):
+    # For tests that assert "no guard anywhere" or pick the candidate themselves. CI really has a checkout
+    # at CI_CHECKOUT, which would otherwise satisfy them. Tests that need the real guard use `sg`, which
+    # keeps that fallback, because in CI it is the only way they find the guard.
+    sg.CI_CHECKOUT = tmp_path_factory.getbasetemp() / "no-ci-checkout"
+    return sg
 
 
 @pytest.fixture()
@@ -65,13 +70,13 @@ def cycle():
 # --- the adapter --------------------------------------------------------------------------------
 
 
-def test_a_missing_perpetua_tools_checkout_fails_closed(sg, tmp_path, monkeypatch) -> None:
+def test_a_missing_perpetua_tools_checkout_fails_closed(sg_isolated, tmp_path, monkeypatch) -> None:
     monkeypatch.delenv("PERPETUA_TOOLS_ROOT", raising=False)
-    monkeypatch.setattr(sg, "LOCAL_LINK", tmp_path / "absent")
-    with pytest.raises(sg.SpendGuardUnavailable):
-        sg.SpendGuard(state_dir=tmp_path)
-    with pytest.raises(sg.SpendGuardUnavailable):
-        sg.SpendGuard(pt_root=tmp_path / "nowhere", state_dir=tmp_path)
+    monkeypatch.setattr(sg_isolated, "LOCAL_LINK", tmp_path / "absent")
+    with pytest.raises(sg_isolated.SpendGuardUnavailable):
+        sg_isolated.SpendGuard(state_dir=tmp_path)
+    with pytest.raises(sg_isolated.SpendGuardUnavailable):
+        sg_isolated.SpendGuard(pt_root=tmp_path / "nowhere", state_dir=tmp_path)
 
 
 def _attest(tmp_path: Path, **over) -> None:
@@ -276,46 +281,46 @@ def _fake_pt(root: Path) -> Path:
     return root
 
 
-def test_the_root_resolves_argument_then_environment_then_the_symlink(sg, tmp_path, monkeypatch) -> None:
+def test_the_root_resolves_argument_then_environment_then_the_symlink(sg_isolated, tmp_path, monkeypatch) -> None:
     arg, env, link = _fake_pt(tmp_path / "arg"), _fake_pt(tmp_path / "env"), _fake_pt(tmp_path / "link")
-    monkeypatch.setattr(sg, "LOCAL_LINK", tmp_path / "linkname")
+    monkeypatch.setattr(sg_isolated, "LOCAL_LINK", tmp_path / "linkname")
     (tmp_path / "linkname").symlink_to(link)
     monkeypatch.setenv("PERPETUA_TOOLS_ROOT", str(env))
-    assert sg.resolve_pt_root(arg) == arg.resolve()
-    assert sg.resolve_pt_root(None) == env.resolve()
+    assert sg_isolated.resolve_pt_root(arg) == arg.resolve()
+    assert sg_isolated.resolve_pt_root(None) == env.resolve()
     monkeypatch.delenv("PERPETUA_TOOLS_ROOT")
-    assert sg.resolve_pt_root(None) == link.resolve()
+    assert sg_isolated.resolve_pt_root(None) == link.resolve()
 
 
-def test_no_argument_no_variable_and_no_symlink_fails_closed(sg, tmp_path, monkeypatch) -> None:
+def test_no_argument_no_variable_and_no_symlink_fails_closed(sg_isolated, tmp_path, monkeypatch) -> None:
     monkeypatch.delenv("PERPETUA_TOOLS_ROOT", raising=False)
-    monkeypatch.setattr(sg, "LOCAL_LINK", tmp_path / "absent")
-    with pytest.raises(sg.SpendGuardUnavailable):
-        sg.resolve_pt_root(None)
+    monkeypatch.setattr(sg_isolated, "LOCAL_LINK", tmp_path / "absent")
+    with pytest.raises(sg_isolated.SpendGuardUnavailable):
+        sg_isolated.resolve_pt_root(None)
 
 
-def test_the_ci_checkout_is_the_last_resort(sg, tmp_path, monkeypatch) -> None:
+def test_the_ci_checkout_is_the_last_resort(sg_isolated, tmp_path, monkeypatch) -> None:
     ci = _fake_pt(tmp_path / "ci")
     monkeypatch.delenv("PERPETUA_TOOLS_ROOT", raising=False)
-    monkeypatch.setattr(sg, "LOCAL_LINK", tmp_path / "absent")
-    monkeypatch.setattr(sg, "CI_CHECKOUT", ci)
-    assert sg.resolve_pt_root(None) == ci.resolve()
+    monkeypatch.setattr(sg_isolated, "LOCAL_LINK", tmp_path / "absent")
+    monkeypatch.setattr(sg_isolated, "CI_CHECKOUT", ci)
+    assert sg_isolated.resolve_pt_root(None) == ci.resolve()
     env = _fake_pt(tmp_path / "env")
     monkeypatch.setenv("PERPETUA_TOOLS_ROOT", str(env))
-    assert sg.resolve_pt_root(None) == env.resolve()
+    assert sg_isolated.resolve_pt_root(None) == env.resolve()
 
 
-def test_a_dangling_or_wrong_symlink_is_refused(sg, tmp_path, monkeypatch) -> None:
+def test_a_dangling_or_wrong_symlink_is_refused(sg_isolated, tmp_path, monkeypatch) -> None:
     monkeypatch.delenv("PERPETUA_TOOLS_ROOT", raising=False)
-    monkeypatch.setattr(sg, "LOCAL_LINK", tmp_path / "link")
+    monkeypatch.setattr(sg_isolated, "LOCAL_LINK", tmp_path / "link")
     (tmp_path / "link").symlink_to(tmp_path / "nowhere")
-    with pytest.raises(sg.SpendGuardUnavailable):
-        sg.resolve_pt_root(None)
+    with pytest.raises(sg_isolated.SpendGuardUnavailable):
+        sg_isolated.resolve_pt_root(None)
     (tmp_path / "link").unlink()
     (tmp_path / "empty").mkdir()
     (tmp_path / "link").symlink_to(tmp_path / "empty")
-    with pytest.raises(sg.SpendGuardUnavailable):
-        sg.resolve_pt_root(None)
+    with pytest.raises(sg_isolated.SpendGuardUnavailable):
+        sg_isolated.resolve_pt_root(None)
 
 
 def test_an_environment_checkout_without_the_guard_falls_through_to_the_symlink(sg, tmp_path, monkeypatch) -> None:
@@ -335,13 +340,13 @@ def test_an_explicit_root_must_be_valid_and_never_falls_through(sg, tmp_path, mo
         sg.resolve_pt_root(tmp_path / "typo")
 
 
-def test_when_no_candidate_holds_the_guard_every_reason_is_reported(sg, tmp_path, monkeypatch) -> None:
+def test_when_no_candidate_holds_the_guard_every_reason_is_reported(sg_isolated, tmp_path, monkeypatch) -> None:
     stale = tmp_path / "stale"
     stale.mkdir()
-    monkeypatch.setattr(sg, "LOCAL_LINK", tmp_path / "absent")
+    monkeypatch.setattr(sg_isolated, "LOCAL_LINK", tmp_path / "absent")
     monkeypatch.setenv("PERPETUA_TOOLS_ROOT", str(stale))
-    with pytest.raises(sg.SpendGuardUnavailable) as info:
-        sg.resolve_pt_root(None)
+    with pytest.raises(sg_isolated.SpendGuardUnavailable) as info:
+        sg_isolated.resolve_pt_root(None)
     assert "PERPETUA_TOOLS_ROOT" in str(info.value)
 
 
