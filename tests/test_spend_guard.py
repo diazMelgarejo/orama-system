@@ -41,8 +41,9 @@ def _pt_available() -> bool:
         return False
 
 
+# In CI a missing guard must fail loudly, never skip to a green check that proves nothing.
 needs_pt = pytest.mark.skipif(
-    not _pt_available(),
+    not _pt_available() and not os.environ.get("CI"),
     reason="needs a Perpetua-Tools checkout: ORAMA_TEST_PT_ROOT, PERPETUA_TOOLS_ROOT or the .local symlink",
 )
 

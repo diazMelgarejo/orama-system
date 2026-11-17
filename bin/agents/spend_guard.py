@@ -23,6 +23,8 @@ DEFAULT_PROVIDER = "wandb-inference"
 # needed, which matters: orama's own portal also reads PERPETUA_TOOLS_ROOT and a linked worktree
 # there trips Perpetua-Tools' state-authority check.
 LOCAL_LINK = Path(__file__).resolve().parents[2] / ".local" / "perpetua-tools"
+# CI checkout of Perpetua-Tools (pinned by .github/pt-dispatch-test-ref).
+CI_CHECKOUT = Path(__file__).resolve().parents[2] / ".ci" / "pt-dispatch"
 
 
 class SpendGuardUnavailable(RuntimeError):
@@ -49,6 +51,7 @@ def resolve_pt_root(explicit: str | Path | None = None) -> Path:
     for label, raw in (
         ("PERPETUA_TOOLS_ROOT", os.environ.get("PERPETUA_TOOLS_ROOT")),
         ("local symlink", LOCAL_LINK if (LOCAL_LINK.exists() or LOCAL_LINK.is_symlink()) else None),
+        ("CI checkout", CI_CHECKOUT if CI_CHECKOUT.exists() else None),
     ):
         if not raw:
             tried.append(f"{label}: not set")
