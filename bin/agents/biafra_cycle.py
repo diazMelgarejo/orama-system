@@ -124,6 +124,8 @@ def dry_cycle(
         "gate": os.environ.get(GATE_ENV, ""),
         "armed": os.environ.get(ARM_ENV, ""),
     }
+    if mechanism_card is not None:
+        result["card_id"] = contracts.card_id(mechanism_card)  # the validated card this run checked
     if trace is None:
         result["warning"] = "no-evaluator-digest"
     return result
@@ -419,6 +421,8 @@ def live_cycle(
         "seat": seat, "mode": mode, "retries": 0, "launched": True, "called_launcher": True,
         "answer": answer, "card_checked": mechanism_card is not None, **extra_spend,
     }
+    if mechanism_card is not None:
+        base["card_id"] = contracts.card_id(mechanism_card)  # validated by _prelaunch before launch
     try:
         measured = evaluate(answer)
         metric_after = measured["metric_after"]

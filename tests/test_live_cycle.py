@@ -250,6 +250,22 @@ def test_live_cycle_with_a_valid_card_reports_it_was_checked(cycle, tmp_path, mo
     assert r2["ok"] is True and r2["card_checked"] is False
 
 
+def test_g9_dry_cycle_names_the_card_it_checked(cycle, tmp_path: Path) -> None:
+    r = cycle.dry_cycle("outer", "harden", 0.3, 0.1, tmp_path, evaluator_digest=DIGEST, mechanism_card=_card())
+    assert r["card_id"] == "m-test@1"
+    r2 = cycle.dry_cycle("outer", "harden", 0.3, 0.1, tmp_path / "b", evaluator_digest=DIGEST)
+    assert "card_id" not in r2
+
+
+def test_g9_live_cycle_names_the_card_it_checked(cycle, tmp_path, monkeypatch) -> None:
+    _arm(monkeypatch, cycle)
+    monkeypatch.setattr(cycle.subprocess, "run", _fake_run())
+    r = cycle.live_cycle(**_kwargs(tmp_path, mechanism_card=_card(revision=4)))
+    assert r["ok"] is True and r["card_id"] == "m-test@4"
+    r2 = cycle.live_cycle(**_kwargs(tmp_path / "b"))
+    assert "card_id" not in r2
+
+
 @pytest.mark.parametrize("name", ["autoresearch-inner", "metaresearch-outer"])
 def test_the_programs_pass_the_card_through(name: str, tmp_path: Path) -> None:
     module = _load(ROOT / "bin/agents" / name / "program.py", name.replace("-", "_") + "_card")

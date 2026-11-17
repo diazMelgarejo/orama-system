@@ -153,6 +153,40 @@ def test_a_second_pair_cycle_in_the_same_directories_does_not_retry(tmp_path: Pa
     assert again["ok"] is False and again["reason"] == "already-ran" and again["retries"] == 0
 
 
+def test_g9_a_card_is_promoted_only_after_a_dry_cycle_that_checked_that_card(receipt, tmp_path: Path) -> None:
+    sc = _load(ROOT / "bin/agents/seat_contracts.py", "seat_contracts")
+    cycle = _load(ROOT / "bin/agents/biafra_cycle.py", "biafra_cycle")
+    candidate = receipt["card"]
+    assert candidate["status"] == "candidate" and sc.validate_mechanism_card(candidate) == []
+    # The outer dry cycle checks the candidate before measurement, in a fresh directory.
+    checked = cycle.dry_cycle(
+        "outer", "harden", 0.26, 0.19, tmp_path / "promote", "search-rule", receipt["digest"],
+        hypothesis="repeat reverts mean the proposal rule is stale", metric_name="val_bpb",
+        mechanism_card=candidate,
+    )
+    assert checked["ok"] is True and checked["card_checked"] is True
+    assert checked["card_id"] == f"{candidate['mechanism_id']}@1"
+    reviewed = {**candidate, "status": "reviewed", "dry_run_receipt": checked}
+    assert sc.validate_mechanism_card(reviewed) == []
+    # Graduation also needs the run's pin, written by the operator before the cycle.
+    pin = tmp_path / "evaluator.pin.json"
+    pinned = sc.pin_evaluator(pin, [tmp_path / "verifier" / "check_metric.py"])
+    graduated = {**reviewed, "status": "graduated"}
+    assert any("pinned_digest" in e for e in sc.validate_mechanism_card(graduated))
+    assert sc.validate_mechanism_card(graduated, pinned_digest=sc.read_pin(pin)) == []
+    assert sc.validate_mechanism_card(graduated, pinned_digest="0" * 64)
+    assert pinned == receipt["digest"]
+    # A dry cycle that never saw the card, or saw another one, cannot promote it.
+    unchecked = cycle.dry_cycle(
+        "outer", "harden", 0.26, 0.19, tmp_path / "nocard", "search-rule", receipt["digest"],
+        hypothesis="repeat reverts mean the proposal rule is stale", metric_name="val_bpb",
+    )
+    assert unchecked["card_checked"] is False
+    assert sc.validate_mechanism_card({**reviewed, "dry_run_receipt": unchecked})
+    other = {**reviewed, "dry_run_receipt": {**checked, "card_id": "m-other@1"}}
+    assert any("card_id" in e for e in sc.validate_mechanism_card(other))
+
+
 def test_the_saved_live_cycle_artifacts_are_valid() -> None:
     sc = _load(ROOT / "bin/agents/seat_contracts.py", "seat_contracts")
     base = ROOT / "docs/v2/references/biafra/live-cycle-2026-11-17"

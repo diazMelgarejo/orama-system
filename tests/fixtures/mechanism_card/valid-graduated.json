@@ -26,7 +26,9 @@
       "metric_after": 0.19,
       "decision": "keep",
       "evaluator_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-    }
+    },
+    "card_checked": true,
+    "card_id": "m-bbbbbbbbbbbb@2"
   },
   "delta": -0.01,
   "reverted": false,

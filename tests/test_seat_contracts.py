@@ -767,3 +767,32 @@ def test_g3_read_pin_refuses_any_defect(sc, tmp_path: Path, body: str) -> None:
 def test_g3_read_pin_refuses_a_missing_file(sc, tmp_path: Path) -> None:
     with pytest.raises(ValueError):
         sc.read_pin(tmp_path / "absent.json")
+
+
+# --- G9: no card, no promotion ---
+
+
+@pytest.mark.parametrize("status", ["reviewed", "graduated"])
+@pytest.mark.parametrize("flag", [False, None, "yes", 1])
+def test_g9_a_receipt_that_did_not_check_the_card_is_refused(sc, status: str, flag) -> None:
+    card = _promoted(status)
+    card["dry_run_receipt"]["card_checked"] = flag
+    assert any("card_checked" in e for e in sc.validate_mechanism_card(card, pinned_digest=DIGEST))
+    del card["dry_run_receipt"]["card_checked"]
+    assert any("card_checked" in e for e in sc.validate_mechanism_card(card, pinned_digest=DIGEST))
+
+
+@pytest.mark.parametrize("status", ["reviewed", "graduated"])
+@pytest.mark.parametrize("card_id", [None, "", "m-other@1", "m-bbbbbbbbbbbb@2", 7])
+def test_g9_a_receipt_for_another_card_is_refused(sc, status: str, card_id) -> None:
+    card = _promoted(status)
+    card["dry_run_receipt"]["card_id"] = card_id
+    assert any("card_id" in e for e in sc.validate_mechanism_card(card, pinned_digest=DIGEST))
+
+
+def test_g9_card_id_is_mechanism_id_at_revision(sc) -> None:
+    assert sc.card_id(_card(mechanism_id="m-x", revision=3)) == "m-x@3"
+
+
+def test_g9_a_candidate_needs_no_checked_receipt(sc) -> None:
+    assert sc.validate_mechanism_card(_card(dry_run_receipt={})) == []

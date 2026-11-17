@@ -263,8 +263,9 @@ def validate_mechanism_card(card: Mapping[str, Any], pinned_digest: str | None =
 
     `pinned_digest` is the run's pin (`read_pin`). Given for any status, it must equal the card's
     evaluator_digest. A reviewed or graduated card needs a receipt that is a real dry run of this
-    card: ok, no retries, no launch, and a valid `trace` carrying the card's evaluator_digest.
-    Graduated also requires `pinned_digest`, so a digest nothing ever pinned cannot graduate.
+    card: ok, no retries, no launch, and a valid `trace` carrying the card's evaluator_digest,
+    and `card_checked` true with `card_id` naming this card (so a dry run that saw no card, or
+    another one, cannot promote it). Graduated also requires `pinned_digest`, so a digest nothing ever pinned cannot graduate.
     """
     if not isinstance(card, Mapping):
         return ["card must be an object"]
@@ -330,8 +331,13 @@ def validate_mechanism_card(card: Mapping[str, Any], pinned_digest: str | None =
     return errors
 
 
+def card_id(card: Mapping[str, Any]) -> str:
+    """The identity a dry cycle reports for the card it checked: "<mechanism_id>@<revision>"."""
+    return f"{card['mechanism_id']}@{card['revision']}"
+
+
 def _receipt_binding_errors(card: Mapping[str, Any], receipt: Mapping[str, Any]) -> list[str]:
-    """Errors tying a dry-run receipt to this card through its trace and evaluator digest."""
+    """Errors tying a dry-run receipt to this card: its trace digest, and that it checked this card."""
     errors: list[str] = []
     trace = receipt.get("trace")
     if not isinstance(trace, Mapping):
@@ -340,6 +346,10 @@ def _receipt_binding_errors(card: Mapping[str, Any], receipt: Mapping[str, Any])
         errors.append("dry_run_receipt.trace is not a valid trace entry")
     elif trace["evaluator_digest"] != card["evaluator_digest"]:
         errors.append("dry_run_receipt.trace.evaluator_digest does not equal the card's evaluator_digest")
+    if receipt.get("card_checked") is not True:
+        errors.append("dry_run_receipt must show card_checked true")
+    elif receipt.get("card_id") != card_id(card):
+        errors.append("dry_run_receipt.card_id does not name this card")
     return errors
 
 
