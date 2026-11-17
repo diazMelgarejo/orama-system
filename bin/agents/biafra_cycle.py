@@ -10,6 +10,7 @@ import hashlib
 import importlib.util
 import os
 import re
+import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -260,17 +261,41 @@ def _settle_unknown(spend_guard, reservation, input_chars, outcome, seat, mode) 
     return {"estimated_usd": usd}
 
 
-def _reap(proc) -> None:
-    """Kill a launcher that is still running and wait for it, so no child outlives the attempt.
+REAP_WAIT_S = 5.0
 
-    Never raises an ordinary error: cleanup must not mask the failure that led here or skip the settle.
+
+def _reap(proc) -> None:
+    """Kill a launcher and everything it started, then wait for it a bounded time.
+
+    The launcher runs in its own session, so the whole process group is killed while the leader is still
+    unreaped (its pid cannot yet be reused). A grandchild holding the pipes cannot keep the wait open: the
+    reap is bounded and the pipes are closed regardless. Never raises an ordinary error: cleanup must not
+    mask the failure that led here or skip the settle.
     """
     try:
+        pid = getattr(proc, "pid", None)
+        if isinstance(pid, int) and proc.poll() is None:
+            try:
+                os.killpg(pid, signal.SIGKILL)
+            except OSError:
+                pass
         if proc.poll() is None:
             proc.kill()
-        proc.communicate()
     except Exception:
         pass
+    try:
+        proc.communicate(timeout=REAP_WAIT_S)
+    except Exception:
+        for stream in (getattr(proc, "stdout", None), getattr(proc, "stderr", None)):
+            try:
+                if stream is not None:
+                    stream.close()
+            except Exception:
+                pass
+        try:
+            proc.wait(timeout=REAP_WAIT_S)
+        except Exception:
+            pass
 
 
 def _decode(raw: bytes | str | None) -> str:
@@ -399,6 +424,7 @@ def live_cycle(
     # From here the reservation must end settled or released on every exit, including an interrupt and a
     # marker that cannot be written (an unwritable log_dir).
     closed = False
+    sent = False
     try:
         try:
             claimed = _claim_once(marker)
@@ -412,11 +438,15 @@ def live_cycle(
             return refuse("already-ran")
         try:
             # Only a failure of Popen itself means nothing was sent (bad argv, missing or unrunnable file).
-            proc = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL)
+            proc = subprocess.Popen(
+                argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL,
+                start_new_session=True,
+            )
         except (OSError, ValueError) as exc:
             spend_guard.release(reservation)
             closed = True
             return refuse("launcher-error", error=f"{type(exc).__name__}: {exc}")
+        sent = True  # from here a release would record a sent request as zero spend
         # From here the request may have been sent. Output is bytes, decoded below, so a decode problem
         # can never be mistaken for a launcher that never started.
         try:
@@ -457,7 +487,8 @@ def live_cycle(
         )
         closed = True
     finally:
-        if not closed:
+        if not closed and not sent:
+            # A settle that raised after the send leaves the reservation to its declared hold.
             spend_guard.release(reservation)
     if completed.returncode != 0:
         tail = stderr_text[-300:]

@@ -641,3 +641,62 @@ def test_a_failure_to_start_the_process_releases_and_reports_no_launch(cycle, tm
     r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard))
     assert r["reason"] == "launcher-error" and r["called_launcher"] is False
     assert guard.released == ["r1"] and guard.settled == [] and guard.unknown == []
+
+
+# --- review items 11 and 12: process-group reap and the sent flag ---------------------------------------
+
+
+def test_a_grandchild_holding_the_pipes_cannot_hang_the_cycle_past_the_timeout(cycle, tmp_path, monkeypatch) -> None:
+    """Check that a real grandchild holding the pipes is killed with its group and the cycle still settles."""
+    import time
+
+    _arm(monkeypatch, cycle)
+    # A harmless real shell child: it backgrounds a sleeping grandchild that inherits the pipes.
+    monkeypatch.setattr(
+        cycle, "launcher_argv", lambda seat, prompt=None, effort=None: ["sh", "-c", "sleep 8 & sleep 8"]
+    )
+    guard = FakeGuard()
+    started = time.monotonic()
+    r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard, timeout_s=1))
+    elapsed = time.monotonic() - started
+    assert r["reason"] == "launcher-timeout" and r["called_launcher"] is True
+    assert guard.unknown[0][2] == "timeout" and guard.released == []
+    assert elapsed < 5, f"the group was not killed: the cycle waited {elapsed:.1f}s"
+
+
+class _SettleBoom(FakeGuard):
+    """A guard whose settle calls fail, to model a store error after the request was sent."""
+
+    def settle(self, *args):
+        """Fail like a store error."""
+        raise RuntimeError("settle failed")
+
+    def settle_unknown(self, *args):
+        """Fail like a store error."""
+        raise RuntimeError("settle failed")
+
+
+@pytest.mark.parametrize("returncode", [0, 1])
+def test_a_settle_failure_after_a_successful_launch_never_releases(cycle, tmp_path, monkeypatch, returncode) -> None:
+    """Check that a sent request whose settle raises keeps its reservation and surfaces the error."""
+    _arm(monkeypatch, cycle)
+    monkeypatch.setattr(cycle.subprocess, "Popen", _fake_run(returncode=returncode))
+    guard = _SettleBoom()
+    with pytest.raises(RuntimeError, match="settle failed"):
+        cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard))
+    assert guard.released == []
+
+
+def test_a_settle_failure_after_a_timeout_never_releases(cycle, tmp_path, monkeypatch) -> None:
+    """Check that a failing settle_unknown after a timeout leaves the reservation to its hold."""
+    _arm(monkeypatch, cycle)
+
+    def slow(argv, **kwargs):
+        """Time out the wait."""
+        raise subprocess.TimeoutExpired(argv, 1)
+
+    monkeypatch.setattr(cycle.subprocess, "Popen", as_popen(slow))
+    guard = _SettleBoom()
+    with pytest.raises(RuntimeError, match="settle failed"):
+        cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard))
+    assert guard.released == []
