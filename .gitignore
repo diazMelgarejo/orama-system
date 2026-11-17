@@ -116,6 +116,8 @@ pnpm-debug.log*
 docs/distill-fable-5/traces/
 docs/distill-fable-5/runs/
 *.jsonl
+# Versioned evidence: the live pair loop ledgers hold only digests, metric names and hypotheses (no prompts).
+!docs/v2/references/biafra/live-cycle-2026-11-17/*.jsonl
 trace.zip
 *.har
 *.webm
