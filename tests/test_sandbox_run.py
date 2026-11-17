@@ -13,6 +13,8 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 
 
+pytestmark = pytest.mark.usefixtures("offline_guard")
+
 def _load():
     spec = importlib.util.spec_from_file_location("sandbox_run", ROOT / "bin/agents/sandbox_run.py")
     assert spec is not None and spec.loader is not None
@@ -95,7 +97,7 @@ def test_writes_are_allowed_inside_the_scratch_root_and_denied_outside(sb, tmp_p
 
 @needs_sandbox
 def test_reads_of_listed_secret_locations_are_denied(sb, tmp_path) -> None:
-    canary = tmp_path.parent / f"canary-{tmp_path.name}"
+    canary = tmp_path / "canary"
     canary.mkdir()
     (canary / "token.txt").write_text("top-secret")
     code = f"""
@@ -105,10 +107,9 @@ def test_reads_of_listed_secret_locations_are_denied(sb, tmp_path) -> None:
         except OSError:
             print("BLOCKED")
     """
-    try:
-        r = sb.run_isolated(_py(code), cwd=tmp_path, timeout=30, deny_read=[canary])
-    finally:
-        shutil.rmtree(canary, ignore_errors=True)
+    control = sb.run_isolated(_py(code), cwd=tmp_path, timeout=30)
+    assert "top-secret" in control.stdout  # positive control: readable when not denied
+    r = sb.run_isolated(_py(code), cwd=tmp_path, timeout=30, deny_read=[canary])
     assert "BLOCKED" in r.stdout and "top-secret" not in r.stdout
 
 
@@ -119,13 +120,13 @@ def test_a_runaway_child_is_killed_at_the_timeout(sb, tmp_path) -> None:
 
 
 def test_it_fails_closed_when_no_sandbox_is_available(sb, tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr(sb.shutil, "which", lambda name: None)
+    monkeypatch.setattr(sb, "sandbox_available", lambda: False)
     with pytest.raises(sb.SandboxUnavailable):
         sb.run_isolated(_py("print(1)"), cwd=tmp_path, timeout=5)
 
 
 def test_unsandboxed_runs_need_an_explicit_flag_and_still_scrub_the_env(sb, tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr(sb.shutil, "which", lambda name: None)
+    monkeypatch.setattr(sb, "sandbox_available", lambda: False)
     monkeypatch.setenv("DEEPSEEK_V4_FLASH_WANDB", "s3cret")
     r = sb.run_isolated(_py("import os; print(sorted(os.environ))"), cwd=tmp_path, timeout=30, allow_unsandboxed=True)
     assert r.returncode == 0 and "DEEPSEEK" not in r.stdout and r.sandboxed is False
@@ -314,3 +315,155 @@ def test_read_roots_are_exact_directories_not_a_parent_of_the_binary(sb) -> None
     roots, execs = sb._interpreter_paths()
     exe = Path(sys.executable).resolve()
     assert exe.parent.parent not in roots or exe.parent.parent == Path(sys.base_prefix).resolve()
+
+
+# --- redesign: the vet tracks lexical scope and refuses dunder names outright ----------------------------
+
+SCOPE_NAMES = {"Any", "re"}
+
+
+@pytest.mark.parametrize(
+    "src",
+    [
+        # a nested function's parameter must not make the name readable in the outer function
+        "def f(owners):\n    def g(__builtins__):\n        return 1\n    return __builtins__",
+        "def f(owners):\n    def g(len):\n        return 1\n    return owners",              # shadows a builtin in a nested scope
+        "def f(owners):\n    def g(helper):\n        return helper\n    return helper",         # bound only in g
+        "def f(owners):\n    def g():\n        x = 1\n    return x",                            # assigned only in g
+        "def f(owners):\n    return [x for x in owners] + [x]",                                # comprehension target does not leak
+        "def f(owners):\n    return __builtins__",
+        "def f(__owners):\n    return 1",                                                       # dunder parameter name
+        "def f(owners):\n    __x = 1\n    return owners",                                      # dunder assignment
+        "def f(owners):\n    def __g():\n        return 1\n    return owners",                  # dunder nested def
+        "def f(owners):\n    return owners.get(__import__='x')",                               # dunder keyword
+        "def f(owners):\n    def g(a=1):\n        return a\n    return owners",                 # default in a nested function
+        "def f(owners):\n    def g(*a):\n        return a\n    return owners",                  # variadic in a nested function
+    ],
+)
+def test_the_vet_is_scope_aware_and_refuses_dunder_names(sb, src: str) -> None:
+    assert sb.vet_allowlist(src, target="f", allowed_names=SCOPE_NAMES), src
+
+
+@pytest.mark.parametrize(
+    "src",
+    [
+        "def f(owners):\n    def g(item):\n        return item.strip()\n    return [g(o) for o in owners]",
+        "def f(owners):\n    out = []\n    for o in owners:\n        out.append(len(o))\n    return out",
+        "def f(owners):\n    def inner(x):\n        return re.fullmatch('a', x)\n    return inner('a')",   # allowed_names reach nested scopes
+        "def f(owners):\n    return {k: v for k, v in owners.items()}",
+        "def f(owners) -> list[str]:\n    return sorted({o for o in owners})",
+    ],
+)
+def test_ordinary_nested_helpers_and_comprehensions_are_allowed(sb, src: str) -> None:
+    assert sb.vet_allowlist(src, target="f", allowed_names=SCOPE_NAMES) == [], src
+
+
+# --- redesign: the runner owns the whole process lifecycle ------------------------------------------------
+
+
+@needs_sandbox
+def test_runaway_output_is_bounded_and_the_child_is_killed(sb, tmp_path) -> None:
+    import time
+
+    code = """
+        import sys
+        chunk = "x" * 65536
+        while True:
+            sys.stdout.write(chunk)
+    """
+    started = time.monotonic()
+    with pytest.raises(sb.SandboxOutputLimit):
+        sb.run_isolated(_py(code), cwd=tmp_path, timeout=30, max_output_bytes=200_000)
+    assert time.monotonic() - started < 15
+
+
+@needs_sandbox
+def test_the_cap_counts_stdout_and_stderr_together(sb, tmp_path) -> None:
+    code = """
+        import sys
+        sys.stdout.write("o" * 70000)
+        sys.stdout.flush()
+        sys.stderr.write("e" * 70000)
+        sys.stderr.flush()
+    """
+    with pytest.raises(sb.SandboxOutputLimit):
+        sb.run_isolated(_py(code), cwd=tmp_path, timeout=30, max_output_bytes=100_000)
+    ok = sb.run_isolated(_py(code), cwd=tmp_path, timeout=30, max_output_bytes=200_000)
+    assert len(ok.stdout) == 70000 and len(ok.stderr) == 70000
+
+
+@pytest.mark.parametrize("bad", [0, -1, True, None, "10", 1.5])
+def test_a_bad_output_cap_is_refused(sb, tmp_path, bad) -> None:
+    with pytest.raises(ValueError):
+        sb.run_isolated(_py("print(1)"), cwd=tmp_path, timeout=5, max_output_bytes=bad)
+
+
+@needs_sandbox
+def test_the_child_cannot_fork_so_it_leaves_no_descendants(sb, tmp_path) -> None:
+    code = """
+        import os, subprocess
+        for attempt in ("fork", "spawn"):
+            try:
+                if attempt == "fork":
+                    pid = os.fork()
+                    print("FORKED", pid)
+                else:
+                    subprocess.Popen(["/bin/sleep", "60"])
+                    print("SPAWNED")
+            except OSError as exc:
+                print("DENIED", attempt, type(exc).__name__)
+    """
+    r = sb.run_isolated(_py(code), cwd=tmp_path, timeout=30)
+    assert "DENIED fork" in r.stdout and "DENIED spawn" in r.stdout
+    assert "FORKED" not in r.stdout and "SPAWNED" not in r.stdout
+
+
+def _alive(pid: int) -> bool:
+    import os
+
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    return True
+
+
+@needs_sandbox
+@pytest.mark.parametrize("how", ["timeout", "output"])
+def test_the_process_is_gone_after_an_abnormal_exit(sb, tmp_path, how: str) -> None:
+    import time
+
+    code = f"""
+        import os, sys, time
+        open("child.pid", "w").write(str(os.getpid()))
+        if {how!r} == "output":
+            while True:
+                sys.stdout.write("x" * 65536)
+        time.sleep(120)
+    """
+    expected = sb.SandboxTimeout if how == "timeout" else sb.SandboxOutputLimit
+    with pytest.raises(expected):
+        sb.run_isolated(_py(code), cwd=tmp_path, timeout=2, max_output_bytes=150_000)
+    pid = int((tmp_path / "child.pid").read_text())
+    for _ in range(50):
+        if not _alive(pid):
+            break
+        time.sleep(0.1)
+    assert not _alive(pid), "the sandboxed process outlived the run"
+
+
+@needs_sandbox
+def test_reader_threads_do_not_leak(sb, tmp_path) -> None:
+    import threading
+
+    before = threading.active_count()
+    for _ in range(3):
+        sb.run_isolated(_py("print('hi')"), cwd=tmp_path, timeout=30)
+        with pytest.raises(sb.SandboxTimeout):
+            sb.run_isolated(_py("import time; time.sleep(60)"), cwd=tmp_path, timeout=1)
+    assert threading.active_count() <= before + 1
+
+
+def test_the_profile_does_not_allow_forking(sb, tmp_path) -> None:
+    profile = sb.sandbox_profile(tmp_path, read_roots=[], exec_paths=[])
+    assert "(allow process-fork)" not in profile

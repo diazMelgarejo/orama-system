@@ -21,6 +21,8 @@ CYCLE = ROOT / "bin" / "agents" / "biafra_cycle.py"
 DIGEST = "a" * 64
 
 
+pytestmark = pytest.mark.usefixtures("offline_guard")
+
 def _load(path: Path, name: str):
     spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)

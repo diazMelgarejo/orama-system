@@ -1,7 +1,7 @@
 """Run model-written code with no secrets, no network and no writes outside a scratch root.
 
 A name filter is not a sandbox. This module gives two independent controls:
-  * `run_isolated` starts the child with a scrubbed environment inside a macOS `sandbox-exec`
+  * `run_isolated` starts the child with a scrubbed environment inside a macOS kernel-sandbox
     profile that denies network access, denies file writes outside the scratch root and denies
     reads of listed secret locations. It fails closed when no sandbox is available.
   * `vet_allowlist` accepts only a small, explicit subset of Python for a single function, so a
@@ -17,11 +17,15 @@ import shutil
 import signal
 import subprocess
 import sys
+import threading
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
 _PATH = "/usr/bin:/bin"
+_KERNEL_SANDBOX_TOOL = "/usr/bin/sandbox-exec"  # the one place the platform tool is named
+DEFAULT_MAX_OUTPUT_BYTES = 1_000_000
 _SECRET_DIRS = (".ssh", ".aws", ".gnupg", ".config", ".openclaw", ".claude", ".gbrain", ".netrc", ".npmrc")
 _MIN_ROOT_DEPTH = 3  # a read root must be at least three components deep, e.g. /opt/homebrew/opt
 
@@ -32,6 +36,10 @@ class SandboxUnavailable(RuntimeError):
 
 class SandboxTimeout(RuntimeError):
     """The child exceeded its time limit and was killed."""
+
+
+class SandboxOutputLimit(RuntimeError):
+    """The child wrote more than the combined output cap and was killed."""
 
 
 @dataclass(frozen=True)
@@ -84,7 +92,6 @@ def sandbox_profile(
         "(deny default)",
         "(deny network*)",
         "(allow sysctl-read)",
-        "(allow process-fork)",
         "(allow signal (target self))",
         "(allow file-read-metadata)",
         '(allow file-read-data (literal "/"))',  # path resolution needs the root entry; nothing below it
@@ -137,16 +144,40 @@ def _interpreter_paths() -> tuple[list[Path], list[Path]]:
     return sorted(roots), sorted(execs)
 
 
+def sandbox_available() -> bool:
+    """True when the platform's kernel sandbox tool can be used on this machine."""
+    return sys.platform == "darwin" and os.access(_KERNEL_SANDBOX_TOOL, os.X_OK)
+
+
+def _kill_group(proc: subprocess.Popen) -> None:
+    """Kill the child's own process group. Only called while the leader is still unreaped, so the
+    group id cannot have been reused by an unrelated process."""
+    if proc.returncode is None:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+
+
 def run_isolated(
     argv: list[str],
     cwd: str | Path,
     timeout: float = 60,
     deny_read: Iterable[Path] | None = None,
     allow_unsandboxed: bool = False,
+    max_output_bytes: int = DEFAULT_MAX_OUTPUT_BYTES,
 ) -> IsolatedResult:
-    """Run `argv` in `cwd` isolated. The scratch root is `cwd`; writes outside it are denied."""
+    """Run `argv` in `cwd` isolated. The scratch root is `cwd`; writes outside it are denied.
+
+    The runner owns the child's whole lifecycle: stdout and stderr are drained concurrently and their
+    combined size is capped (SandboxOutputLimit), the time is capped (SandboxTimeout), forking is denied
+    by the profile so no descendant can outlive the run, and on any abnormal exit the child's own
+    process group is killed and the reader threads are joined before the error propagates.
+    """
+    if isinstance(max_output_bytes, bool) or not isinstance(max_output_bytes, int) or max_output_bytes <= 0:
+        raise ValueError("max_output_bytes must be a positive integer")
     root = Path(cwd).resolve()
-    use_sandbox = sys.platform == "darwin" and shutil.which("sandbox-exec") is not None
+    use_sandbox = sandbox_available()
     if not use_sandbox and not allow_unsandboxed:
         raise SandboxUnavailable("no kernel sandbox available; refusing to run model-written code")
     tmp = root / ".tmp"
@@ -157,21 +188,69 @@ def run_isolated(
         roots, execs = _interpreter_paths()
         check_read_roots(roots)
         cmd = [
-            "/usr/bin/sandbox-exec", "-p",
+            _KERNEL_SANDBOX_TOOL, "-p",
             sandbox_profile(root, roots, execs, deny_read=merge_deny_read(deny_read)),
             *argv,
         ]
     proc = subprocess.Popen(
         cmd, cwd=root, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-        text=True, start_new_session=True,
+        start_new_session=True,
     )
+    chunks: dict[str, bytearray] = {"out": bytearray(), "err": bytearray()}
+    lock = threading.Lock()
+    state = {"total": 0, "over": False}
+
+    def drain(stream, key: str) -> None:
+        try:
+            while True:
+                data = os.read(stream.fileno(), 65536)
+                if not data:
+                    return
+                with lock:
+                    state["total"] += len(data)
+                    if state["total"] > max_output_bytes:
+                        state["over"] = True
+                        return
+                    chunks[key].extend(data)
+        except OSError:
+            return
+
+    readers = [
+        threading.Thread(target=drain, args=(proc.stdout, "out"), daemon=True),
+        threading.Thread(target=drain, args=(proc.stderr, "err"), daemon=True),
+    ]
+    for reader in readers:
+        reader.start()
+    deadline = time.monotonic() + timeout
     try:
-        out, err = proc.communicate(timeout=timeout)
-    except subprocess.TimeoutExpired:
-        os.killpg(proc.pid, signal.SIGKILL)
-        proc.communicate()
-        raise SandboxTimeout(f"child exceeded {timeout}s and was killed") from None
-    return IsolatedResult(proc.returncode, out, err, use_sandbox)
+        while proc.poll() is None:
+            if state["over"]:
+                raise SandboxOutputLimit(f"child wrote more than {max_output_bytes} bytes and was killed")
+            if time.monotonic() > deadline:
+                raise SandboxTimeout(f"child exceeded {timeout}s and was killed")
+            time.sleep(0.005)
+        for reader in readers:
+            reader.join(timeout=5)
+        if state["over"]:
+            raise SandboxOutputLimit(f"child wrote more than {max_output_bytes} bytes")
+    except BaseException:
+        _kill_group(proc)
+        proc.wait()
+        for reader in readers:
+            reader.join(timeout=5)
+        raise
+    finally:
+        for stream in (proc.stdout, proc.stderr):
+            try:
+                stream.close()
+            except OSError:
+                pass
+    return IsolatedResult(
+        proc.returncode,
+        chunks["out"].decode("utf-8", errors="replace"),
+        chunks["err"].decode("utf-8", errors="replace"),
+        use_sandbox,
+    )
 
 
 # --- allowlist vet -----------------------------------------------------------------------------
@@ -197,52 +276,117 @@ _ALLOWED_NODES = (
 )
 
 
-def _bound_names(func: ast.FunctionDef) -> set[str]:
-    names: set[str] = set()
-    for node in ast.walk(func):
-        if isinstance(node, ast.arg):
-            names.add(node.arg)
-        elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
-            names.add(node.id)
-        elif isinstance(node, ast.FunctionDef) and node is not func:
-            names.add(node.name)
-    return names
+class _Vet(ast.NodeVisitor):
+    """Scope-aware allowlist walk. A name is readable only if it is bound in an enclosing scope of the
+    function being vetted, or is an allowed name or safe builtin. Nothing may bind or read a dunder
+    name, bind a builtin's name, take parameter defaults, or be variadic, in any scope."""
+
+    def __init__(self, allowed: frozenset[str]) -> None:
+        self.allowed = allowed
+        self.scopes: list[set[str]] = []
+        self.problems: set[str] = set()
+
+    # -- bindings and reads ------------------------------------------------------------------
+    def _bind(self, name: str) -> None:
+        if name.startswith("__"):
+            self.problems.add(f"dunder names are not allowed: {name}")
+        elif name in _BUILTIN_NAMES:
+            self.problems.add(f"binding a builtin name is not allowed: {name}")
+        self.scopes[-1].add(name)
+
+    def _read(self, name: str) -> None:
+        if name.startswith("__"):
+            self.problems.add(f"dunder names are not allowed: {name}")
+        elif not (any(name in scope for scope in self.scopes) or name in self.allowed or name in _SAFE_BUILTINS):
+            self.problems.add(f"name not allowed: {name}")
+
+    # -- dispatch ----------------------------------------------------------------------------
+    def visit(self, node: ast.AST):
+        if not isinstance(node, _ALLOWED_NODES):
+            self.problems.add(f"node not allowed: {type(node).__name__}")
+            return None
+        return super().visit(node)
+
+    def visit_Name(self, node: ast.Name) -> None:
+        if isinstance(node.ctx, ast.Store):
+            self._bind(node.id)
+        else:
+            self._read(node.id)
+
+    def visit_Attribute(self, node: ast.Attribute) -> None:
+        if node.attr.startswith("_") or node.attr not in _SAFE_ATTRS:
+            self.problems.add(f"attribute not allowed: {node.attr}")
+        self.visit(node.value)
+
+    def visit_keyword(self, node: ast.keyword) -> None:
+        if node.arg and node.arg.startswith("__"):
+            self.problems.add(f"dunder names are not allowed: {node.arg}")
+        self.visit(node.value)
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        if self.scopes:  # a nested def binds its name in the enclosing scope
+            self._bind(node.name)
+        elif node.name.startswith("__"):
+            self.problems.add(f"dunder names are not allowed: {node.name}")
+        if node.decorator_list:
+            self.problems.add("decorators are not allowed")
+        a = node.args
+        if a.defaults or any(d is not None for d in a.kw_defaults):
+            self.problems.add("parameter defaults are not allowed")
+        if a.vararg or a.kwarg:
+            self.problems.add("variadic parameters are not allowed")
+        params = [*a.posonlyargs, *a.args, *a.kwonlyargs]
+        for arg in params:  # annotations are read in the enclosing scope
+            if arg.annotation is not None:
+                self.visit(arg.annotation)
+        if node.returns is not None:
+            self.visit(node.returns)
+        self.scopes.append(set())
+        for arg in params:
+            self._bind(arg.arg)
+        for stmt in node.body:
+            self.visit(stmt)
+        self.scopes.pop()
+
+    def _comprehension(self, node: ast.AST, elements: list[ast.AST]) -> None:
+        self.scopes.append(set())
+        for gen in node.generators:  # type: ignore[attr-defined]
+            self.visit(gen.iter)
+            self.visit(gen.target)
+            for cond in gen.ifs:
+                self.visit(cond)
+        for element in elements:
+            self.visit(element)
+        self.scopes.pop()
+
+    def visit_ListComp(self, node: ast.ListComp) -> None:
+        self._comprehension(node, [node.elt])
+
+    def visit_SetComp(self, node: ast.SetComp) -> None:
+        self._comprehension(node, [node.elt])
+
+    def visit_GeneratorExp(self, node: ast.GeneratorExp) -> None:
+        self._comprehension(node, [node.elt])
+
+    def visit_DictComp(self, node: ast.DictComp) -> None:
+        self._comprehension(node, [node.key, node.value])
 
 
 def vet_allowlist(source: str, target: str, allowed_names: Iterable[str]) -> list[str]:
     """Reasons to reject `source`; empty means it uses only the allowlisted subset.
 
     The source must be exactly one top-level function named `target`. Only listed node types,
-    builtins, attribute names and the caller's `allowed_names` may appear. No import, lambda,
-    while loop, global, try, with, class, dunder or underscore-prefixed attribute is allowed.
-    Parameters may not have defaults and may not be variadic, and no parameter, assigned or
-    comprehension name may shadow any builtin: a name bound in the function is never a way to
-    make a builtin readable, because binding a builtin's name is itself refused.
+    builtins, attribute names and the caller's `allowed_names` may appear. No import, lambda, while
+    loop, global, try, with, class, dunder name or underscore-prefixed attribute is allowed, in any
+    scope. Reads follow lexical scope: a name bound only inside a nested function is not readable
+    outside it, and a comprehension's target does not leak.
     """
     try:
         tree = ast.parse(source)
     except SyntaxError as exc:
         return [f"syntax error: {exc.msg}"]
-    problems: list[str] = []
     if len(tree.body) != 1 or not isinstance(tree.body[0], ast.FunctionDef) or tree.body[0].name != target:
         return [f"source must be exactly one top-level def {target}"]
-    func = tree.body[0]
-    if func.decorator_list:
-        problems.append("decorators are not allowed")
-    a = func.args
-    if a.defaults or any(d is not None for d in a.kw_defaults):
-        problems.append("parameter defaults are not allowed")
-    if a.vararg or a.kwarg:
-        problems.append("variadic parameters are not allowed")
-    bound = _bound_names(func)
-    for name in sorted(bound & _BUILTIN_NAMES):
-        problems.append(f"binding a builtin name is not allowed: {name}")
-    permitted = bound | set(allowed_names) | _SAFE_BUILTINS
-    for node in ast.walk(func):
-        if not isinstance(node, _ALLOWED_NODES):
-            problems.append(f"node not allowed: {type(node).__name__}")
-        elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load) and node.id not in permitted:
-            problems.append(f"name not allowed: {node.id}")
-        elif isinstance(node, ast.Attribute) and (node.attr.startswith("_") or node.attr not in _SAFE_ATTRS):
-            problems.append(f"attribute not allowed: {node.attr}")
-    return sorted(set(problems))
+    walker = _Vet(frozenset(allowed_names))
+    walker.visit(tree.body[0])
+    return sorted(walker.problems)

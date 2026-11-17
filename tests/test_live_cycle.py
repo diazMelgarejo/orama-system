@@ -15,6 +15,8 @@ DIM = "\x1b[2m"
 RESET = "\x1b[0m"
 
 
+pytestmark = pytest.mark.usefixtures("offline_guard")
+
 def _load(path: Path, name: str):
     spec = importlib.util.spec_from_file_location(name, path)
     assert spec is not None and spec.loader is not None
@@ -281,3 +283,85 @@ def test_a_successful_answer_that_merely_mentions_a_limit_is_not_misread(cycle, 
     )
     r = cycle.live_cycle(**_kwargs(tmp_path))
     assert r["ok"] is True and "stop" not in r
+
+
+# --- redesign: validate everything knowable before a request is spent; record everything spent ------
+
+
+@pytest.mark.parametrize(
+    "over",
+    [
+        {"evaluator_digest": "not-a-digest"},
+        {"evaluator_digest": "A" * 64},
+        {"evaluator_digest": "a" * 64 + "\n"},
+        {"hypothesis": ""},
+        {"artifact": "  "},
+        {"metric_name": ""},
+        {"attempt_id": "  "},
+    ],
+)
+def test_malformed_trace_fields_are_refused_before_anything_is_spent(cycle, tmp_path, monkeypatch, over) -> None:
+    _arm(monkeypatch, cycle)
+    calls: list = []
+    monkeypatch.setattr(cycle.subprocess, "run", _fake_run(calls=calls))
+
+    class Guard:
+        preflights = 0
+
+        def preflight(self, n):
+            Guard.preflights += 1
+            return {"ok": True, "reservation": "r", "projected_usd": 0.0}
+
+        def release(self, r):
+            pass
+
+        def settle(self, *a, **k):
+            return 0.0
+
+        def classify(self, t):
+            return None
+
+    r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=Guard(), **over))
+    assert r["ok"] is False and r["reason"] == "invalid-trace" and r["launched"] is False
+    assert calls == [] and Guard.preflights == 0, "nothing may be reserved or launched"
+    assert not list(tmp_path.glob("*.once"))
+
+
+def test_a_timeout_reports_that_the_launcher_was_called(cycle, tmp_path, monkeypatch) -> None:
+    _arm(monkeypatch, cycle)
+
+    def boom(argv, **kwargs):
+        raise subprocess.TimeoutExpired(argv, 1)
+
+    monkeypatch.setattr(cycle.subprocess, "run", boom)
+    r = cycle.live_cycle(**_kwargs(tmp_path))
+    assert r["reason"] == "launcher-timeout" and r["called_launcher"] is True and r["spent"] is True
+
+
+def test_a_spent_measurement_is_appended_to_the_ledger(cycle, tmp_path, monkeypatch) -> None:
+    import json
+
+    _arm(monkeypatch, cycle)
+    monkeypatch.setattr(cycle.subprocess, "run", _fake_run())
+    ledger = tmp_path / "evidence" / "ledger.jsonl"
+    r = cycle.live_cycle(**_kwargs(tmp_path, ledger_path=ledger))
+    assert r["ok"] is True
+    rows = [json.loads(x) for x in ledger.read_text().splitlines()]
+    assert rows == [r["trace"]]
+
+
+def test_refusals_and_unmeasured_attempts_leave_the_ledger_alone(cycle, tmp_path, monkeypatch) -> None:
+    _arm(monkeypatch, cycle)
+    ledger = tmp_path / "ledger.jsonl"
+    monkeypatch.setattr(cycle.subprocess, "run", _fake_run(returncode=2))
+    assert cycle.live_cycle(**_kwargs(tmp_path, ledger_path=ledger))["reason"] == "launcher-failed"
+    monkeypatch.setattr(cycle.subprocess, "run", _fake_run())
+    assert cycle.live_cycle(**_kwargs(tmp_path / "b", ledger_path=ledger, evaluator_digest="bad"))["ok"] is False
+    assert not ledger.exists()
+
+
+def test_without_a_ledger_path_nothing_is_written(cycle, tmp_path, monkeypatch) -> None:
+    _arm(monkeypatch, cycle)
+    monkeypatch.setattr(cycle.subprocess, "run", _fake_run())
+    cycle.live_cycle(**_kwargs(tmp_path))
+    assert not list(tmp_path.rglob("*.jsonl"))

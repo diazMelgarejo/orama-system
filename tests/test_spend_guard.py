@@ -18,12 +18,9 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 DIGEST = "c" * 64
-PT = os.environ.get("PERPETUA_TOOLS_ROOT")
-needs_pt = pytest.mark.skipif(
-    not (PT and (Path(PT) / "orchestrator/provider_limits.py").is_file()),
-    reason="needs PERPETUA_TOOLS_ROOT pointing at a Perpetua-Tools checkout",
-)
 
+
+pytestmark = pytest.mark.usefixtures("offline_guard")
 
 def _load(rel: str, name: str):
     spec = importlib.util.spec_from_file_location(name, ROOT / rel)
@@ -32,6 +29,22 @@ def _load(rel: str, name: str):
     sys.modules[name] = module
     spec.loader.exec_module(module)
     return module
+
+
+def _pt_available() -> bool:
+    """True when the adapter can resolve a Perpetua-Tools checkout (argument, variable or symlink)."""
+    try:
+        probe = _load("bin/agents/spend_guard.py", "spend_guard_probe")
+        probe.resolve_pt_root(os.environ.get("ORAMA_TEST_PT_ROOT"))
+        return True
+    except Exception:
+        return False
+
+
+needs_pt = pytest.mark.skipif(
+    not _pt_available(),
+    reason="needs a Perpetua-Tools checkout: ORAMA_TEST_PT_ROOT, PERPETUA_TOOLS_ROOT or the .local symlink",
+)
 
 
 @pytest.fixture()
@@ -49,6 +62,7 @@ def cycle():
 
 def test_a_missing_perpetua_tools_checkout_fails_closed(sg, tmp_path, monkeypatch) -> None:
     monkeypatch.delenv("PERPETUA_TOOLS_ROOT", raising=False)
+    monkeypatch.setattr(sg, "LOCAL_LINK", tmp_path / "absent")
     with pytest.raises(sg.SpendGuardUnavailable):
         sg.SpendGuard(state_dir=tmp_path)
     with pytest.raises(sg.SpendGuardUnavailable):
@@ -251,3 +265,72 @@ def test_the_old_ledger_parameters_are_gone(cycle) -> None:
 
     params = inspect.signature(cycle.live_cycle).parameters
     assert "spend_guard" in params and "spend_ledger" not in params and "budget_usd" not in params
+
+
+
+# --- resolving the Perpetua-Tools checkout: argument, environment, then one documented symlink ----------
+
+
+def _fake_pt(root: Path) -> Path:
+    (root / "orchestrator").mkdir(parents=True)
+    for name in ("provider_limits.py", "cost_guard.py"):
+        (root / "orchestrator" / name).write_text("# stub\n")
+    return root
+
+
+def test_the_root_resolves_argument_then_environment_then_the_symlink(sg, tmp_path, monkeypatch) -> None:
+    arg, env, link = _fake_pt(tmp_path / "arg"), _fake_pt(tmp_path / "env"), _fake_pt(tmp_path / "link")
+    monkeypatch.setattr(sg, "LOCAL_LINK", tmp_path / "linkname")
+    (tmp_path / "linkname").symlink_to(link)
+    monkeypatch.setenv("PERPETUA_TOOLS_ROOT", str(env))
+    assert sg.resolve_pt_root(arg) == arg.resolve()
+    assert sg.resolve_pt_root(None) == env.resolve()
+    monkeypatch.delenv("PERPETUA_TOOLS_ROOT")
+    assert sg.resolve_pt_root(None) == link.resolve()
+
+
+def test_no_argument_no_variable_and_no_symlink_fails_closed(sg, tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("PERPETUA_TOOLS_ROOT", raising=False)
+    monkeypatch.setattr(sg, "LOCAL_LINK", tmp_path / "absent")
+    with pytest.raises(sg.SpendGuardUnavailable):
+        sg.resolve_pt_root(None)
+
+
+def test_a_dangling_or_wrong_symlink_is_refused(sg, tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("PERPETUA_TOOLS_ROOT", raising=False)
+    monkeypatch.setattr(sg, "LOCAL_LINK", tmp_path / "link")
+    (tmp_path / "link").symlink_to(tmp_path / "nowhere")
+    with pytest.raises(sg.SpendGuardUnavailable):
+        sg.resolve_pt_root(None)
+    (tmp_path / "link").unlink()
+    (tmp_path / "empty").mkdir()
+    (tmp_path / "link").symlink_to(tmp_path / "empty")
+    with pytest.raises(sg.SpendGuardUnavailable):
+        sg.resolve_pt_root(None)
+
+
+def test_an_environment_checkout_without_the_guard_falls_through_to_the_symlink(sg, tmp_path, monkeypatch) -> None:
+    stale = tmp_path / "stale"
+    (stale / "orchestrator").mkdir(parents=True)          # an older checkout: no shared guard in it yet
+    link = _fake_pt(tmp_path / "link")
+    monkeypatch.setattr(sg, "LOCAL_LINK", tmp_path / "linkname")
+    (tmp_path / "linkname").symlink_to(link)
+    monkeypatch.setenv("PERPETUA_TOOLS_ROOT", str(stale))
+    assert sg.resolve_pt_root(None) == link.resolve()
+
+
+def test_an_explicit_root_must_be_valid_and_never_falls_through(sg, tmp_path, monkeypatch) -> None:
+    good = _fake_pt(tmp_path / "good")
+    monkeypatch.setenv("PERPETUA_TOOLS_ROOT", str(good))
+    with pytest.raises(sg.SpendGuardUnavailable):
+        sg.resolve_pt_root(tmp_path / "typo")
+
+
+def test_when_no_candidate_holds_the_guard_every_reason_is_reported(sg, tmp_path, monkeypatch) -> None:
+    stale = tmp_path / "stale"
+    stale.mkdir()
+    monkeypatch.setattr(sg, "LOCAL_LINK", tmp_path / "absent")
+    monkeypatch.setenv("PERPETUA_TOOLS_ROOT", str(stale))
+    with pytest.raises(sg.SpendGuardUnavailable) as info:
+        sg.resolve_pt_root(None)
+    assert "PERPETUA_TOOLS_ROOT" in str(info.value)

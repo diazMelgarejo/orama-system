@@ -18,10 +18,46 @@ from pathlib import Path
 from typing import Any
 
 DEFAULT_PROVIDER = "wandb-inference"
+# One documented, git-ignored symlink to the Perpetua-Tools checkout that holds the shared guard.
+# Resolution order: explicit argument, PERPETUA_TOOLS_ROOT, then this link. No global variable is
+# needed, which matters: orama's own portal also reads PERPETUA_TOOLS_ROOT and a linked worktree
+# there trips Perpetua-Tools' state-authority check.
+LOCAL_LINK = Path(__file__).resolve().parents[2] / ".local" / "perpetua-tools"
 
 
 class SpendGuardUnavailable(RuntimeError):
     """The shared guard cannot be loaded. A caller that asked for a budget must not proceed."""
+
+
+def _has_guard(root: Path) -> bool:
+    return (root / "orchestrator" / "provider_limits.py").is_file() and (root / "orchestrator" / "cost_guard.py").is_file()
+
+
+def resolve_pt_root(explicit: str | Path | None = None) -> Path:
+    """The Perpetua-Tools checkout holding the shared guard, or SpendGuardUnavailable.
+
+    An explicit argument must be valid and is never second-guessed. Otherwise the first of
+    PERPETUA_TOOLS_ROOT and the local symlink that actually contains the guard wins: the environment
+    often names a checkout that predates the guard, and the symlink then supplies it.
+    """
+    if explicit:
+        root = Path(explicit).expanduser().resolve()
+        if not _has_guard(root):
+            raise SpendGuardUnavailable(f"{root} does not contain the shared spend guard")
+        return root
+    tried: list[str] = []
+    for label, raw in (
+        ("PERPETUA_TOOLS_ROOT", os.environ.get("PERPETUA_TOOLS_ROOT")),
+        ("local symlink", LOCAL_LINK if (LOCAL_LINK.exists() or LOCAL_LINK.is_symlink()) else None),
+    ):
+        if not raw:
+            tried.append(f"{label}: not set")
+            continue
+        root = Path(raw).expanduser().resolve()
+        if _has_guard(root):
+            return root
+        tried.append(f"{label}: no shared spend guard in {root.name}")
+    raise SpendGuardUnavailable("no Perpetua-Tools checkout with the shared guard (" + "; ".join(tried) + ")")
 
 
 def _load(root: Path, rel: str, name: str):
@@ -47,10 +83,7 @@ class SpendGuard:
         state_dir: str | Path | None = None,
         now: Any = None,
     ) -> None:
-        raw = pt_root or os.environ.get("PERPETUA_TOOLS_ROOT")
-        if not raw:
-            raise SpendGuardUnavailable("PERPETUA_TOOLS_ROOT is not set")
-        root = Path(raw).expanduser().resolve()
+        root = resolve_pt_root(pt_root)
         self.pl = _load(root, "orchestrator/provider_limits.py", "pt_provider_limits")
         self.cg = _load(root, "orchestrator/cost_guard.py", "pt_cost_guard")
         try:

@@ -225,6 +225,16 @@ def run_program(
     return result
 
 
+def _append_trace(ledger_path: Path, trace: dict) -> None:
+    """Append one validated trace as a JSON line. Only traces go here; failures are in the spend audit."""
+    import json
+
+    ledger_path = Path(ledger_path)
+    ledger_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(ledger_path, "a", encoding="utf-8") as handle:
+        handle.write(json.dumps(trace, sort_keys=True) + "\n")
+
+
 def _settle(spend_guard, reservation, input_chars, output_chars, outcome, seat, mode) -> dict:
     """Settle a reservation with the estimated actual cost; {} when no guard is in use."""
     if spend_guard is None:
@@ -249,6 +259,7 @@ def live_cycle(
     timeout_s: int = LIVE_TIMEOUT_S,
     mechanism_card: dict | None = None,
     spend_guard: object | None = None,
+    ledger_path: Path | None = None,
 ) -> dict:
     """One live attempt: launch the seat's model once, evaluate its answer, record the trace.
 
@@ -281,6 +292,21 @@ def live_cycle(
         card_errors = contracts.validate_mechanism_card(mechanism_card)
         if card_errors:
             return refuse("invalid-card", errors=card_errors)
+    # Everything knowable before the request is validated before the request is spent. The trace is
+    # built now with a placeholder metric_after; only the measured value and the decision it implies
+    # remain to be checked afterwards.
+    trace_base = {
+        "version": 1, "seat": seat,
+        "attempt_id": attempt_id if attempt_id is not None
+        else _attempt_id(seat, mode, log_dir, artifact, metric_name, metric_before, hypothesis),
+        "hypothesis": hypothesis, "artifact": artifact, "metric_name": metric_name,
+        "metric_before": metric_before, "evaluator_digest": evaluator_digest,
+    }
+    problems = contracts.validate_trace_entry(
+        {**trace_base, "metric_after": metric_before, "decision": "revert"}
+    )
+    if problems:
+        return refuse("invalid-trace", errors=problems)
     reservation = None
     if spend_guard is not None:
         # The shared guard (Perpetua-Tools) checks the operator attestation and reserves the projected
@@ -302,7 +328,7 @@ def live_cycle(
         )
     except subprocess.TimeoutExpired:
         spent = _settle(spend_guard, reservation, len(prompt), 0, "timeout", seat, mode)
-        return refuse("launcher-timeout", spent=True, **spent)
+        return refuse("launcher-timeout", spent=True, called_launcher=True, **spent)
     out_text = (completed.stdout or "") + (completed.stderr or "")
     extra_spend = _settle(
         spend_guard, reservation, len(prompt), len(out_text), "ok" if completed.returncode == 0 else "failed",
@@ -338,17 +364,12 @@ def live_cycle(
         return {"ok": False, "reason": "evaluation-failed", "error": f"{type(exc).__name__}: {exc}",
                 "recorded": False, "trace": None, **base}
     decision = "keep" if metric_after < metric_before else "revert"
-    trace = {
-        "version": 1, "seat": seat,
-        "attempt_id": attempt_id
-        or _attempt_id(seat, mode, log_dir, artifact, metric_name, metric_before, metric_after, hypothesis),
-        "hypothesis": hypothesis, "artifact": artifact, "metric_name": metric_name,
-        "metric_before": metric_before, "metric_after": metric_after, "decision": decision,
-        "evaluator_digest": evaluator_digest,
-    }
+    trace = {**trace_base, "metric_after": metric_after, "decision": decision}
     problems = contracts.validate_trace_entry(trace)
     if problems:
         return {"ok": False, "reason": "invalid-trace", "errors": problems, "recorded": False, "trace": None, **base}
+    if ledger_path is not None:
+        _append_trace(ledger_path, trace)
     return {"ok": True, "decision": decision, "recorded": True, "trace": trace,
             "detail": measured.get("detail"), **base}
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -16,6 +17,8 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
+
+pytestmark = pytest.mark.usefixtures("offline_guard")
 
 def _load(path: Path, name: str):
     spec = importlib.util.spec_from_file_location(name, path)
@@ -204,3 +207,15 @@ def test_the_plan_states_both_402_causes_and_the_attestation_requirement() -> No
     assert "a `402` means the cap was reached" not in text
     for needle in ("two causes", "attest", "pay-as-you-go is inactive", "Perpetua-Tools", "provider_limits"):
         assert needle in text, needle
+
+
+def test_the_evidence_ledgers_exist_and_are_not_gitignored() -> None:
+    """The ledgers are versioned evidence. `*.jsonl` is ignored repo-wide, so they need an explicit allowlist."""
+    base = ROOT / "docs/v2/references/biafra/live-cycle-2026-11-17"
+    names = ["ledger.jsonl", "ledger-turn-2.jsonl", "ledger-turn-3-reverted.jsonl", "ledger-turn-3b.jsonl"]
+    for name in names:
+        assert (base / name).is_file(), f"missing evidence file {name}"
+        ignored = subprocess.run(
+            ["git", "check-ignore", "-q", str(base / name)], cwd=ROOT, capture_output=True, check=False
+        )
+        assert ignored.returncode == 1, f"{name} is gitignored, so a clean checkout will not have it"
