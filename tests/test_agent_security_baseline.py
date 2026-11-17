@@ -22,7 +22,10 @@ def test_the_agents_baseline_exists_and_is_well_formed() -> None:
 
 def test_the_baseline_is_justified_in_writing() -> None:
     note = (ROOT / "config/agent-security/aguara-agents.baseline.md").read_text()
-    for needle in ("SUPPLY_018", "sandbox_run.py", "lexical", "false positive", "kernel sandbox"):
+    for needle in (
+        "SUPPLY_018", "sandbox_run.py", "lexical", "false positive", "kernel sandbox",
+        "SUPPLY_017", "seat_contracts.py", "mkstemp", "exclusive",
+    ):
         assert needle in note, needle
 
 

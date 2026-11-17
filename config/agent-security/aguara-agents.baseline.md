@@ -3,7 +3,7 @@
 `aguara-agents.baseline.json` lists the findings the `bin/agents` scan is allowed to carry. The CI
 script gates only on findings that are **not** in it, and fails closed if the file is missing.
 
-## The one critical entry: SUPPLY_018 in `sandbox_run.py`
+## The critical entry: SUPPLY_018 in `sandbox_run.py`
 
 Rule SUPPLY_018 ("sandbox escape via process spawn") is a lexical match: the words exec, spawn, popen,
 system or subprocess within sixty characters of sandbox, restricted, isolated or contained. The line
@@ -16,6 +16,16 @@ root, reads only from the interpreter and the scratch root, and forking denied.
 The tool is named in exactly one place (a constant), a test enforces that, and the name is not
 obfuscated to dodge the scanner. If the finding disappears, `tests/test_agent_security_baseline.py`
 fails and the entry should be removed.
+
+## The high entry: SUPPLY_017 in `seat_contracts.py`
+
+Rule SUPPLY_017 ("hardlink workspace escape") matches the `os.link` call in `pin_evaluator`. The
+link cannot reach outside the workspace: its source is a temp file that `pin_evaluator` has just
+created with `tempfile.mkstemp` in the pin's own directory, and its target is the pin path in that
+same directory. `os.link` is used because it is the atomic, exclusive create. It fails when a pin
+already exists, so a pin is written once and readers never see a partial file. The temp file is
+removed in `finally`. Replacing it with `O_CREAT | O_EXCL` on the final path would expose a partial
+pin to a concurrent reader. Accepted by the operator on 2026-11-17 (orama PR #519).
 
 ## The low entries
 
