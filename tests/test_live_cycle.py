@@ -297,7 +297,7 @@ def test_g9_dry_cycle_names_the_card_it_checked(cycle, tmp_path: Path) -> None:
 
 def test_g9_live_cycle_names_the_card_it_checked(cycle, tmp_path, monkeypatch) -> None:
     _arm(monkeypatch, cycle)
-    monkeypatch.setattr(cycle.subprocess, "run", _fake_run())
+    monkeypatch.setattr(cycle.subprocess, "Popen", _fake_run())
     r = cycle.live_cycle(**_kwargs(tmp_path, mechanism_card=_card(revision=4)))
     assert r["ok"] is True and r["card_id"] == "m-test@4"
     r2 = cycle.live_cycle(**_kwargs(tmp_path / "b"))

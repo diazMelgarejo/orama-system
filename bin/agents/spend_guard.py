@@ -91,7 +91,7 @@ class SpendGuard:
         module = _load(root, "orchestrator/spend_gate.py", "pt_spend_gate")
         try:
             self.gate = module.SpendGate(provider, state_dir=state_dir, now=now)
-        except (module._pl.ProviderPolicyError, PermissionError) as exc:
+        except (module.ProviderPolicyError, PermissionError) as exc:
             raise SpendGuardUnavailable(str(exc)) from exc
         self.provider = provider
         self.policy = self.gate.policy
