@@ -15,6 +15,7 @@ import builtins
 import os
 import shutil
 import signal
+import select
 import subprocess
 import sys
 import threading
@@ -149,39 +150,80 @@ def sandbox_available() -> bool:
     return sys.platform == "darwin" and os.access(_KERNEL_SANDBOX_TOOL, os.X_OK)
 
 
-def _process_state(pid: int) -> str | None:
-    """The one-letter scheduler state of `pid` ("Z" for an exited, unreaped zombie) read without
-    reaping it, or None when this platform offers no way to read it. Uses /proc where present and
-    `ps` elsewhere (macOS)."""
-    try:
-        with open(f"/proc/{pid}/stat", encoding="utf-8") as fh:
-            return fh.read().rsplit(")", 1)[1].split()[0]
-    except FileNotFoundError:
-        if Path("/proc/self/stat").exists():
-            return ""  # /proc works and the process is gone
-    except (OSError, IndexError):
-        pass
-    try:
-        out = subprocess.run(
-            ["/bin/ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True, timeout=5, check=False,
-        ).stdout.strip()
-    except (OSError, subprocess.SubprocessError):
-        return None
-    return out[:1]
+class _KqueueExit:
+    """Watches one process for exit through a kqueue held for the whole run. Never reaps the process."""
+
+    def __init__(self, pid: int) -> None:
+        """Register interest in `pid` exiting. ESRCH means it already exited; the leader is still
+        unreaped then, so the group id is still reserved and that counts as exited."""
+        self._kq = select.kqueue()
+        self._done = False
+        try:
+            event = select.kevent(
+                pid, filter=select.KQ_FILTER_PROC, flags=select.KQ_EV_ADD | select.KQ_EV_ONESHOT,
+                fflags=select.KQ_NOTE_EXIT,
+            )
+            self._kq.control([event], 0, 0)
+        except ProcessLookupError:
+            self._done = True
+        except BaseException:
+            self._kq.close()
+            raise
+
+    def exited(self) -> bool:
+        """True once the exit event has been delivered or registration found the process already gone."""
+        if not self._done:
+            self._done = bool(self._kq.control(None, 1, 0))
+        return self._done
+
+    def close(self) -> None:
+        """Release the kqueue."""
+        self._kq.close()
 
 
-def _exited(proc: subprocess.Popen) -> bool:
-    """True once the leader has exited, WITHOUT ever reaping it, so its pid (and so the group id) stays
-    reserved until the group has been killed. Uses `os.waitid(WNOWAIT)` where available; otherwise reads
-    the leader's state (zombie or gone) from /proc or `ps`. It never calls poll(), which would reap the
-    leader before the group was signalled. Raises SandboxUnavailable when no non-reaping probe exists,
-    because the only alternative would be to signal a group whose leader may already be reaped."""
+class _ProcExit:
+    """Watches one process for exit by reading /proc/<pid>/stat. Never reaps the process."""
+
+    def __init__(self, pid: int) -> None:
+        """Remember the pid to watch."""
+        self._pid = pid
+
+    def exited(self) -> bool:
+        """True when the process is a zombie or its /proc entry is gone."""
+        try:
+            with open(f"/proc/{self._pid}/stat", encoding="utf-8") as fh:
+                return fh.read().rsplit(")", 1)[1].split()[0] == "Z"
+        except FileNotFoundError:
+            return True
+
+    def close(self) -> None:
+        """Nothing to release."""
+
+
+def _open_exit_probe(proc: subprocess.Popen):
+    """The non-reaping exit probe for this platform, or None where `os.waitid` does the job.
+
+    Order: waitid (Linux; macOS only from CPython 3.13), then kqueue (macOS/BSD), then /proc, otherwise
+    SandboxUnavailable. There is no `ps` fallback: polling it every few milliseconds would launch a
+    process per poll, and every platform that lacks waitid and /proc has kqueue.
+    """
     if hasattr(os, "waitid"):
+        return None
+    if hasattr(select, "kqueue"):
+        return _KqueueExit(proc.pid)
+    if Path("/proc/self/stat").exists():
+        return _ProcExit(proc.pid)
+    raise SandboxUnavailable("cannot observe the child's exit without reaping it on this platform")
+
+
+def _exited(proc: subprocess.Popen, probe=None) -> bool:
+    """True once the leader has exited, WITHOUT ever reaping it, so its pid (and so the group id) stays
+    reserved until the group has been killed. Uses `os.waitid(WNOWAIT)` where available, otherwise the
+    `probe` from `_open_exit_probe`. It never calls poll(), which would reap the leader before the group
+    was signalled."""
+    if probe is None:
         return os.waitid(os.P_PID, proc.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT) is not None
-    state = _process_state(proc.pid)
-    if state is None:
-        raise SandboxUnavailable("cannot observe the child's exit without reaping it on this platform")
-    return state in ("", "Z")
+    return probe.exited()
 
 
 def _kill_group(proc: subprocess.Popen) -> None:
@@ -240,7 +282,9 @@ def run_isolated(
     )
     # Cleanup is armed the moment the child exists: nothing below may raise outside this try.
     readers: list[threading.Thread] = []
+    probe = None
     try:
+        probe = _open_exit_probe(proc)
         chunks: dict[str, bytearray] = {"out": bytearray(), "err": bytearray()}
         lock = threading.Lock()
         state = {"total": 0, "over": False}
@@ -266,7 +310,7 @@ def run_isolated(
             reader.start()  # only a started thread is recorded, so cleanup never joins an unstarted one
             readers.append(reader)
         deadline = time.monotonic() + timeout
-        while not _exited(proc):
+        while not _exited(proc, probe):
             if state["over"]:
                 raise SandboxOutputLimit(f"child wrote more than {max_output_bytes} bytes and was killed")
             if time.monotonic() > deadline:
@@ -285,6 +329,8 @@ def run_isolated(
             reader.join(timeout=5)
         raise
     finally:
+        if probe is not None:
+            probe.close()
         for stream in (proc.stdout, proc.stderr):
             try:
                 stream.close()

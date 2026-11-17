@@ -587,17 +587,102 @@ def test_the_child_is_cleaned_up_when_a_reader_thread_cannot_start(sb, tmp_path,
                 pass
 
 
-def test_exit_detection_without_waitid_never_reaps_the_leader(sb, monkeypatch) -> None:
+class _FakeKqueue:
+    """Stands in for select.kqueue: registration may raise ESRCH, and exit is reported on demand."""
+
+    instances: list = []
+    register_error: BaseException | None = None
+    exit_seen = False
+
+    def __init__(self) -> None:
+        """Count the instance."""
+        type(self).instances.append(self)
+        self.closed = False
+
+    def control(self, changelist, max_events, timeout):
+        """Register (raising the configured error) or poll for the exit event."""
+        if changelist:
+            if type(self).register_error is not None:
+                raise type(self).register_error
+            return []
+        return [object()] if type(self).exit_seen else []
+
+    def close(self) -> None:
+        """Record the close."""
+        self.closed = True
+
+
+@pytest.fixture()
+def fake_kqueue(sb, monkeypatch):
+    """Make the module see a kqueue-only platform (no waitid) backed by _FakeKqueue."""
+    import os
+    import types
+
+    cls = type("K", (_FakeKqueue,), {"instances": [], "register_error": None, "exit_seen": False})
+    fake = types.SimpleNamespace(
+        kqueue=cls, kevent=lambda *a, **kw: ("event", a, kw), KQ_FILTER_PROC=-5, KQ_EV_ADD=1,
+        KQ_EV_ONESHOT=16, KQ_NOTE_EXIT=0x80000000,
+    )
+    monkeypatch.setattr(sb, "select", fake)
+    monkeypatch.delattr(os, "waitid", raising=False)
+    return cls
+
+
+def test_the_kqueue_probe_sees_exit_without_reaping_the_leader(sb, fake_kqueue) -> None:
+    import subprocess
+
+    proc = subprocess.Popen([sys.executable, "-I", "-c", "pass"])
+    try:
+        probe = sb._open_exit_probe(proc)
+        assert isinstance(probe, sb._KqueueExit)
+        assert [sb._exited(proc, probe) for _ in range(3)] == [False] * 3
+        fake_kqueue.exit_seen = True
+        assert sb._exited(proc, probe) is True
+        assert len(fake_kqueue.instances) == 1, "one kqueue must serve the whole run"
+        assert proc.returncode is None, "the probe reaped the leader"
+        probe.close()
+        assert fake_kqueue.instances[0].closed
+    finally:
+        proc.wait()
+
+
+def test_the_kqueue_probe_treats_esrch_as_exited(sb, fake_kqueue) -> None:
+    import subprocess
+
+    fake_kqueue.register_error = ProcessLookupError(3, "No such process")
+    proc = subprocess.Popen([sys.executable, "-I", "-c", "pass"])
+    try:
+        probe = sb._open_exit_probe(proc)
+        assert sb._exited(proc, probe) is True
+        assert proc.returncode is None, "the probe reaped the leader"
+    finally:
+        proc.wait()
+
+
+def test_a_run_with_the_kqueue_probe_closes_it_and_leaves_no_group(sb, tmp_path, monkeypatch, fake_kqueue) -> None:
+    monkeypatch.setattr(sb, "sandbox_available", lambda: False)
+    fake_kqueue.register_error = ProcessLookupError(3, "No such process")  # reported as exited at once
+    result = sb.run_isolated(_py("import time; time.sleep(0.2)"), cwd=tmp_path, timeout=20, allow_unsandboxed=True)
+    assert result.returncode in (0, -9)
+    assert fake_kqueue.instances[0].closed
+
+
+def test_the_proc_probe_never_reaps_and_the_run_fails_closed_without_any_probe(sb, monkeypatch) -> None:
     import os
     import subprocess
 
     monkeypatch.delattr(os, "waitid", raising=False)
+    monkeypatch.delattr(sb.select, "kqueue", raising=False)
     proc = subprocess.Popen([sys.executable, "-I", "-c", "pass"])
     try:
-        assert _wait_until(lambda: sb._exited(proc))
-        assert proc.returncode is None, "the probe reaped the leader"
-        monkeypatch.setattr(sb, "_process_state", lambda pid: None)
+        if Path("/proc/self/stat").exists():
+            probe = sb._open_exit_probe(proc)
+            assert isinstance(probe, sb._ProcExit)
+            assert _wait_until(lambda: sb._exited(proc, probe))
+            assert proc.returncode is None, "the probe reaped the leader"
+        real_exists = Path.exists
+        monkeypatch.setattr(Path, "exists", lambda self: False if str(self) == "/proc/self/stat" else real_exists(self))
         with pytest.raises(sb.SandboxUnavailable):
-            sb._exited(proc)
+            sb._open_exit_probe(proc)
     finally:
         proc.wait()
