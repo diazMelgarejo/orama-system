@@ -10,6 +10,10 @@ supported tool.
 | `evaluator_outer_turn2.py` | Fixed evaluator for the outer seat: validates her Mechanism Card and checks it is grounded in the real ledger |
 | `driver_inner_turn3b.py` | Builds the inner prompt (task, target function, helper source, required behaviour), re-probes the model list, runs `run_live`, saves the trace |
 | `driver_outer_turn2.py` | Builds the outer prompt from the real trace, the candidate and the real open items, runs `run_live` |
+| `evaluator_prelaunch.py` | Turn 5 inner evaluator: reviewer cases for the pure pre-launch decision table `_launch_decision`, existing live-cycle tests scored against a measured baseline, a reference answer checked first |
+| `driver_inner_prelaunch.py` | Turn 5 inner driver; passes the real shared `SpendGuard()` and `ledger_path` (7 failed cases to 0, kept) |
+| `evaluator_review.py` | Turn 5 outer evaluator: scores only the review's form and grounding in the diff; content is vetted by reproduction |
+| `driver_outer_review.py` | Turn 5 outer driver: Biafra reviews the redesigned launch lifecycle; three findings, all reproduced and fixed |
 
 ## To reuse
 
@@ -20,6 +24,16 @@ supported tool.
    variables on the same command line.
 5. Set `PERPETUA_TOOLS_ROOT`, build `SpendGuard()` from `bin/agents/spend_guard.py` and pass it to `run_live`
    as `spend_guard`; the operator must have attested (see the runbook) or every request is refused.
+
+## Known limitations of these saved copies
+
+- `driver_inner_turn3b.py` and `driver_outer_turn2.py` ran before the spend guard was mandatory and call
+  `run_live` without `spend_guard`. `live_cycle` now refuses that call (`spend-guard-required`); add
+  `spend_guard=SpendGuard()` to rebuild a turn (step 5 above).
+- `evaluator_outer_turn2.py` reads the live ledger, which now holds later records than the prompt named,
+  and assumes the card parses to an object. `evaluator_turn3.py` scores an unavailable pytest as 999.
+  They are kept exactly as run, as evidence of what was measured. A new turn should use a fixed evidence
+  snapshot, reject non-object cards, and stop (not score) when the test launch itself fails.
 
 The scoring must go through `bin/agents/sandbox_run.py`. Never run a candidate with the provider key
 in its environment. See the runbook at
