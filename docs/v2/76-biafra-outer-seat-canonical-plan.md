@@ -55,6 +55,11 @@ that cannot encode ownership must not be mistaken for safety.
 | G9 | The fixed-wall card check runs only when a caller passes `mechanism_card`. A caller that omits it is not checked. | Resolved 2026-11-17, decided by the operator's request in this change: no card, no promotion. Cycles stay usable without a card, because a proposal turn produces the card afterwards, and report `card_checked: false`. When a valid card is passed, `dry_cycle` and `live_cycle` results also carry `card_id` (`<mechanism_id>@<revision>`). A reviewed or graduated card needs a receipt with `card_checked: true` and a `card_id` equal to its own, so promotion follows a dry run that checked this card, fixed walls included, before measurement. |
 | G7 | Provider state for the live cycle (W&B model order and effort acceptance, BigModel balance) was last seen on 2026-11-12. | Must be re-probed before arming. |
 
+Note (2026-11-17, section 13): an independent review led to a decided addition to the G3 binding,
+in progress in a parallel lane: a receipt is also compared with the card's `delta` (the trace's
+`metric_after - metric_before`), so a receipt for `X@1` cannot promote a different card reusing
+that id. This section is otherwise unchanged.
+
 ## 5. Live cycle (one, bounded, not armed by this change)
 
 Preconditions, all required: the operator names provider, budget, request limit and deadline (given
@@ -63,6 +68,11 @@ the same day; the evaluator digest is pinned with `pin_evaluator` before the cyc
 `BIAFRA_ALLOW_LAUNCH=1` are set by the operator for that one run and unset afterwards. Stop and report,
 without retry, if the provider needs paid credit, rejects the requested effort, or the marker file
 already exists. The result is data until a non-maker reviews it.
+
+Note (2026-11-17, after the lockstep remediation, section 13): the live cycle does not read the pin
+itself yet, so the operator or gate must call `pin_evaluator` first; and the spend gate refuses the
+launch without a fresh attestation or with an exhausted budget, holding the reservation for the
+launcher timeout plus a settle margin.
 
 ## 6. Retrofit map (later, each its own decision)
 
@@ -190,3 +200,100 @@ Full text and the stop rules are in the runbook,
 `bin/orama-system/skills/metaresearcher/references/live-pair-loop-runbook.md`, under Billing
 basis. The Billing page is the only place the plan state can be confirmed, and an agent cannot
 open it.
+
+## 13. Lockstep remediation (2026-11-17) dispositions
+
+> Numbering note: the request called this section 10, but sections 10 to 12 already exist and are
+> historical, so it is section 13. Nothing earlier is renumbered.
+
+Perpetua-Tools (PT, producer and state authority) PR #516 and orama-system (stateless consumer)
+PR #519, both on branch `2026-11-17-001-biafra-seat-canonical`, were reviewed in the "2026-11-17
+Restack Review": request changes, seven findings (P1: 1 and 2; P2: 3 to 7), with G3 and G9 called
+out as open design gaps. The record of inputs, commit subjects, verification and both independent
+review verdicts is
+[`references/biafra/lockstep-remediation-2026-11-17.md`](references/biafra/lockstep-remediation-2026-11-17.md).
+
+### 13.1 Dispositions
+
+| Item | Disposition | Owning repo and module |
+| --- | --- | --- |
+| Finding 1 (P1) | Fixed. The PT W&B path refuses before dispatch on a missing or stale attestation or an exhausted budget, settles on success, and settles the full reservation after a possibly sent failure. | PT: `orchestrator/spend_gate.py`, `.agent/harness/llm.py` |
+| Finding 2 (P1) | Fixed. `CostGuard` is shared and atomic across instances and processes that use one budget file: one private SQLite store, every operation in BEGIN IMMEDIATE. | PT: `orchestrator/spend_gate.py` (`CostGuard`), `orchestrator/private_sqlite.py` |
+| Finding 3 (P2) | Fixed. Declared holds `reserve(cost, hold_seconds)`; a late commit for a swept reservation still records the spend (`late_commit`). Orama's live cycle holds for `timeout_s` plus `SETTLE_MARGIN_S`. | PT: `orchestrator/spend_gate.py`; orama: `bin/agents/biafra_cycle.py` |
+| Finding 4 (P2) | Recorded as one of the seven; the source states no individual description. | Not stated in the source |
+| Finding 5 (P2) | Recorded as one of the seven; the source states no individual description. | Not stated in the source |
+| Finding 6 (P2) | Fixed by additive memory records: `lesson_d4ac6209ce38` supersedes `lesson_762380426dc7`; `lesson_7240bbe31030` supersedes the original over-claim `lesson_15733a3316ad`. | PT: memory records |
+| Finding 7 (P2) | Fixed. The runbook's attest command no longer shows `--confirm`; the operator types the phrase at the interactive prompt. | orama: `live-pair-loop-runbook.md` |
+| G3 | Resolved (section 4): evaluator pin and receipt binding; the receipt's `delta` is also compared (decision 13 below). | orama: `bin/agents/seat_contracts.py` |
+| G9 | Resolved (section 4): no card, no promotion. | orama: `bin/agents/seat_contracts.py`, `bin/agents/biafra_cycle.py` |
+
+Two further changes are recorded without a finding number: the live cycle's abnormal-exit and
+reservation handling (decisions 5, 11 and 12) and the sandbox cleanup (decisions 6 and 15), both in
+orama.
+
+### 13.2 Decisions
+
+| # | Decision | Rationale |
+| --- | --- | --- |
+| 1 | G3: `pin_evaluator` writes a one-time pin at run start (exclusive create; re-pin only for the same digest and covers, else "evaluator changed"); `read_pin` validates shape; a reviewed or graduated card needs a receipt `trace` carrying its digest; graduated also needs `pinned_digest`. | Closes the three accepted G3 cases. |
+| 2 | G9: cycles stay usable without a card; a validated card adds `card_id = "<mechanism_id>@<revision>"`; a reviewed or graduated card needs a receipt with `card_checked: true` and its own `card_id`. Reversible. | A mandatory input card would break the real flow, because the outer dry run produces the receipt the card is built from. |
+| 3 | One spend gate owned by PT: `SpendGate` (preflight, settle, settle_unknown, release, classify, snapshot); shared atomic `CostGuard`; private-file checks extracted to `orchestrator/private_sqlite.py`; legacy budget JSON imported once and renamed `<name>.migrated`, and a missing store beside a `.migrated` file fails closed; orama's `spend_guard.py` is a thin forwarder with no ledger. | PT is the runtime and state authority; orama adds no ledger. |
+| 4 | W&B outcome mapping: an HTTP status below 500 is a definitive refusal and releases; 5xx, transport errors, timeouts, interrupts and malformed responses settle the full reservation; if settle fails after a paid answer, the answer is kept and the charge falls back to `settle_unknown`. | The first design charged every HTTP error; unavailable output is not evidence of zero billed output. |
+| 5 | Live cycle: hold = `timeout_s` + `SETTLE_MARGIN_S` (120 s); launcher started with Popen and awaited with `communicate`; only a failed Popen releases; output decoded afterwards with `errors="replace"`. | A running launch must never be swept; a bad byte must not make a spent request look unsent. |
+| 6 | Sandbox cleanup: never reap the leader before signalling the group; cleanup armed right after Popen; exit probe order `waitid`, kqueue, `/proc`, else fail closed (`SandboxUnavailable`). A per-poll `ps` probe was rejected. | Cost; CPython exposes `os.waitid` on macOS only from 3.13, so older macOS Pythons use kqueue. |
+| 7 | Memory correction by additive records. Accurate wording: a same-user process can write a valid attestation file; the guard checks contents and age and cannot prove who wrote it; only the interactive `attest` command asks a human. | The original wording over-claimed. |
+| 8 | Runbook: the attest command no longer shows `--confirm`. | The parser has no such argument. |
+| 9 | Memory changes ship in PR #516 although accepted `lesson_94a6ff5363ae` says PT memory commits belong on main only. Flagged to the operator. | The defect was introduced there. |
+| 10 | Publish order: push PT once, set orama `.github/pt-dispatch-test-ref` to the pushed PT head, push orama once; no merges; reply on the open PT thread with the fixing commit; update PT #516's description. | Orama pins PT; #516 now changes runtime and budget code, not only docs. |
+| 11 | Decided, in progress (parallel lane): the live-cycle launcher starts with `start_new_session=True`; on timeout, pipe error or interrupt the whole group is SIGKILLed before a bounded reap. | A grandchild holding the pipes cannot hang the cycle past `timeout_s`. |
+| 12 | Decided, in progress: after Popen succeeds the request counts as sent; the `finally` never releases a sent reservation; if settling fails after send, the reservation is left to its declared hold and the error is surfaced. | A sent request is never recorded as zero spend. |
+| 13 | Decided, in progress: receipt binding also compares the card's `delta` with the trace's `metric_after - metric_before` (float-rounding tolerance). | A receipt for `X@1` must not promote a different card that reuses the id `X@1`. |
+| 14 | Decided, in progress: `pin_evaluator` uses a unique temp file (`mkstemp` in the pin's directory). | Concurrent pinning in one process cannot collide. |
+| 15 | Decided, in progress: the sandbox checks that an exit probe exists before starting the child. | A platform with no probe fails closed before any model-written code runs. |
+
+Decisions 11 to 15 came from the independent orama review (request changes) and are being
+implemented in a parallel lane; this document describes them as decided, not as merged.
+
+### 13.3 Operator-facing behaviour changes
+
+- `CostGuard`'s default store fails closed when its directory or an ancestor fails the private-store
+  checks. Previously it degraded to an in-memory budget.
+- Spend recorded after migration lives only in the SQLite store; reverting does not move it back.
+- The 600 s openai client timeout is per HTTP phase, not a total deadline. A request can outlive the
+  900 s hold; the late commit still records the spend.
+- Live-cycle precondition (section 5): the evaluator pin is recorded with `pin_evaluator` before the
+  cycle, and graduating a card needs it. The live cycle does not itself read the pin yet (see
+  Later TODOs). The spend gate refuses the launch on a missing or stale attestation or an exhausted
+  budget, and the reservation is held for the launcher timeout plus the settle margin.
+- The runbook's attest command is run without `--confirm`; the operator types the phrase.
+
+### 13.4 Publication state
+
+Both PRs are open and not merged. The operator believed them merged, but their heads were still the
+reviewed `c90feebb` (PT #516) and `bd5931a2` (orama #519); no merge was made. Lockstep order: push PT
+once, set orama's `.github/pt-dispatch-test-ref` to the pushed PT head, push orama once; reply to
+the open PT thread with the fixing commit; update PT #516's description. Nothing is armed: live
+gates and serving stay off.
+
+### 13.5 Later TODOs
+
+From the remediation source (not done; owner decisions or follow-up work):
+
+- Native macOS verification of the kqueue probe and the 18 macOS-only sandbox tests; Windows was not
+  exercised.
+- The live cycle reads no pin itself. Enforcing `read_pin` inside `live_cycle` before launch is a
+  follow-up (graduation already requires the pin).
+- `lesson_371473e17ad0` remains accepted as a redundant shorter correction (its `supersedes` holds
+  one id).
+- Generic filler docstrings ("Test helper or fixture: ...") in older test helpers could be
+  rewritten.
+- A hard wall-clock deadline for the W&B request instead of the per-phase timeout.
+- `AGENT_PROVIDER=openai` with `OPENAI_BASE_URL` pointed at W&B bypasses the gate (operator
+  environment); route or refuse it.
+- Decide whether PR-carried memory is acceptable versus `lesson_94a6ff5363ae`.
+- Live gates and serving stay off; arming one bounded live cycle remains a separate operator act.
+
+Still open in this document, unchanged by this remediation: G1 (Anamnesis ledger), G2 (Kungfu),
+G4 (stall window), G6 (persona draft), G7 (re-probe provider state before arming), G8 (`_finite`
+integer precision), G10 (metric registry) and G11 (Wanda's soul card versus the Cline W&B route,
+see 8.4). Tri-level stays off.

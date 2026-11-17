@@ -185,6 +185,10 @@ blocks commands naming `node_modules` or `.venv` paths is not to be worked aroun
 
 The stall window; Wanda's soul card versus the W&B Cline route; a registry of declared metrics (G10).
 
+Later follow-ups from the 2026-11-17 lockstep remediation (for example
+reading the pin inside `live_cycle`) are listed in
+`docs/v2/76-biafra-outer-seat-canonical-plan.md` section 13.5.
+
 ## Saved harness
 
 Sanitized copies of the evaluators and drivers used in the live turns are in

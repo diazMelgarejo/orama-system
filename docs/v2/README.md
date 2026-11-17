@@ -312,6 +312,10 @@ orama-system/docs/v2/
   recorded in [the T0 evidence record](references/r4-safety-compatibility-platform-2026-10-10/T0-RESTORATION-AND-REGISTRY-BASELINE-2026-10-10.md);
   documentation only, with P0 pin promotion still gated.
 
+- [Biafra lockstep remediation record (2026-11-17)](references/biafra/lockstep-remediation-2026-11-17.md)
+  — inputs, commit-subject map, verification and review verdicts for PT #516 and orama #519
+  (see doc 76 section 13).
+
 - [Activation-readiness baseline receipt (2026-10-26)](references/activation-readiness-baseline-2026-10-26.md)
   — dated metadata-only record of `main` heads, pins, digests and E1 heads; not an activation.
   The [Release 0 to 2 contract freeze](references/r0-r2-contract-freeze-2026-10-26.md) is its
