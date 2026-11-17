@@ -24,6 +24,7 @@ DIGEST = "a" * 64
 pytestmark = pytest.mark.usefixtures("offline_guard")
 
 def _load(path: Path, name: str):
+    """Import the module at `path` under `name` and return it."""
     spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
@@ -34,10 +35,12 @@ def _load(path: Path, name: str):
 
 @pytest.fixture()
 def sc():
+    """Provide the freshly loaded seat_contracts module."""
     return _load(CONTRACTS, "seat_contracts")
 
 
 def _entry(**over):
+    """Return a valid trace entry, with any keyword overrides applied."""
     base = {
         "version": 1,
         "seat": "inner",
@@ -55,6 +58,7 @@ def _entry(**over):
 
 
 def _card(**over):
+    """Return a valid candidate mechanism card, with any keyword overrides applied."""
     base = {
         "version": 1,
         "mechanism_id": "m-" + "b" * 12,
@@ -77,6 +81,7 @@ def _card(**over):
 
 
 def test_valid_trace_entry_has_no_errors(sc) -> None:
+    """A valid trace entry yields no validation errors."""
     assert sc.validate_trace_entry(_entry()) == []
 
 
@@ -93,21 +98,25 @@ def test_valid_trace_entry_has_no_errors(sc) -> None:
     ],
 )
 def test_invalid_trace_entries_are_refused(sc, bad) -> None:
+    """Each malformed trace entry produces at least one error."""
     assert sc.validate_trace_entry(_entry(**bad))
 
 
 def test_trace_entry_must_agree_with_its_metrics(sc) -> None:
+    """A keep decision on a worse metric is reported as an error."""
     errors = sc.validate_trace_entry(_entry(metric_before=0.1, metric_after=0.2, decision="keep"))
     assert any("decision" in e for e in errors)
 
 
 def test_missing_field_is_named(sc) -> None:
+    """A trace entry missing a field gets an error that names it."""
     entry = _entry()
     del entry["hypothesis"]
     assert any("hypothesis" in e for e in sc.validate_trace_entry(entry))
 
 
 def test_evaluator_digest_changes_when_a_verifier_file_changes(sc, tmp_path: Path) -> None:
+    """Editing a verifier file changes its 64-character digest."""
     (tmp_path / "check.py").write_text("assert True\n")
     first = sc.evaluator_digest([tmp_path / "check.py"])
     (tmp_path / "check.py").write_text("assert False\n")
@@ -116,6 +125,7 @@ def test_evaluator_digest_changes_when_a_verifier_file_changes(sc, tmp_path: Pat
 
 
 def test_stall_report_names_a_repeat_revert_window(sc) -> None:
+    """Three consecutive reverts are reported as a stall with their ids."""
     trace = [_entry(attempt_id=f"a-{i}", metric_before=0.2, metric_after=0.3, decision="revert") for i in range(3)]
     report = sc.stall_report(trace, window=3)
     assert report["stalled"] is True
@@ -123,31 +133,37 @@ def test_stall_report_names_a_repeat_revert_window(sc) -> None:
 
 
 def test_stall_report_is_clear_after_a_keep(sc) -> None:
+    """A keep in the window means no stall is reported."""
     trace = [_entry(attempt_id="a-0", metric_after=0.3, decision="revert"), _entry(attempt_id="a-1")]
     assert sc.stall_report(trace, window=2)["stalled"] is False
 
 
 def test_stall_report_with_too_few_entries_is_not_a_stall(sc) -> None:
+    """Fewer entries than the window never count as a stall."""
     assert sc.stall_report([_entry(decision="revert", metric_after=0.9)], window=3)["stalled"] is False
 
 
 def test_stall_report_ignores_invalid_entries_and_says_so(sc) -> None:
+    """Invalid entries are skipped and counted in the report."""
     report = sc.stall_report([_entry(decision="maybe")] * 3, window=3)
     assert report["stalled"] is False
     assert report["invalid"] == 3
 
 
 def test_valid_mechanism_card_passes(sc) -> None:
+    """A valid candidate card yields no validation errors."""
     assert sc.validate_mechanism_card(_card()) == []
 
 
 @pytest.mark.parametrize("owner", ["phylax", "telos", "agate", "Phylax"])
 def test_a_mechanism_touching_a_fixed_wall_is_refused_before_measurement(sc, owner: str) -> None:
+    """An owner slice naming a fixed wall is refused with E_OWNER."""
     errors = sc.validate_mechanism_card(_card(owner_slices=["kungfu", owner]))
     assert any("E_OWNER" in e for e in errors)
 
 
 def test_a_card_must_authorize_nothing(sc) -> None:
+    """A card whose scope_record authorizes anything is refused."""
     assert any("scope_record" in e for e in sc.validate_mechanism_card(_card(scope_record={"authorizes": "merge"})))
 
 
@@ -165,16 +181,19 @@ def test_a_card_must_authorize_nothing(sc) -> None:
     ],
 )
 def test_malformed_cards_are_refused(sc, bad) -> None:
+    """Each malformed card produces at least one error."""
     assert sc.validate_mechanism_card(_card(**bad))
 
 
 def test_a_graduated_card_needs_a_dry_run_that_did_not_launch_or_retry(sc) -> None:
+    """A graduated card with a retried dry run is refused."""
     receipt = {"ok": True, "retries": 1, "launched": False}
     errors = sc.validate_mechanism_card(_card(status="graduated", dry_run_receipt=receipt))
     assert any("dry_run_receipt" in e for e in errors)
 
 
 def test_card_validation_does_not_mutate_its_input(sc) -> None:
+    """Validating a card leaves the card unchanged."""
     card = _card()
     before = copy.deepcopy(card)
     sc.validate_mechanism_card(card)
@@ -182,6 +201,7 @@ def test_card_validation_does_not_mutate_its_input(sc) -> None:
 
 
 def test_checked_in_fixtures_match_the_validator(sc) -> None:
+    """Valid fixture cards pass and invalid ones fail the validator."""
     root = ROOT / "tests" / "fixtures" / "mechanism_card"
     valid = sorted(root.glob("valid-*.json"))
     invalid = sorted(root.glob("invalid-*.json"))
@@ -196,6 +216,7 @@ def test_checked_in_fixtures_match_the_validator(sc) -> None:
 
 
 def test_the_schema_is_shape_only_and_names_the_python_authority() -> None:
+    """The JSON Schema is object-shaped and cites the Python validator."""
     schema = json.loads((ROOT / "docs/v2/references/biafra/mechanism-card.schema.json").read_text())
     assert schema["type"] == "object"
     assert "validate_mechanism_card" in schema["description"]
@@ -203,6 +224,7 @@ def test_the_schema_is_shape_only_and_names_the_python_authority() -> None:
 
 
 def test_dry_cycle_emits_a_valid_trace_entry(tmp_path: Path, sc) -> None:
+    """A dry cycle with a digest returns a valid keep trace entry."""
     cycle = _load(CYCLE, "biafra_cycle")
     result = cycle.dry_cycle("inner", "harden", 0.20, 0.10, tmp_path, evaluator_digest=DIGEST)
     assert sc.validate_trace_entry(result["trace"]) == []
@@ -210,6 +232,7 @@ def test_dry_cycle_emits_a_valid_trace_entry(tmp_path: Path, sc) -> None:
 
 
 def test_dry_cycle_refuses_a_non_finite_metric(tmp_path: Path) -> None:
+    """A NaN metric is refused without launching."""
     cycle = _load(CYCLE, "biafra_cycle")
     result = cycle.dry_cycle("outer", "harden", 0.20, float("nan"), tmp_path)
     assert result["ok"] is False
@@ -218,6 +241,7 @@ def test_dry_cycle_refuses_a_non_finite_metric(tmp_path: Path) -> None:
 
 
 def test_biafra_is_canonical_additively() -> None:
+    """The registry lists Biafra and Scout with the expected seats and ids."""
     registry = yaml.safe_load((ROOT / "bin/agents/REGISTRY.yml").read_text())
     rows = {r["staging_folder"]: r for r in registry["roles"]}
     outer = rows["metaresearch-outer"]
@@ -232,6 +256,7 @@ def test_biafra_is_canonical_additively() -> None:
 
 
 def test_biafra_persona_exists_and_keeps_the_hard_limits() -> None:
+    """The Biafra persona and soul card keep the hard limits."""
     persona = yaml.safe_load((ROOT / "bin/agents/personas/biafra.yaml").read_text())
     assert persona["name"] == "Biafra"
     assert persona["openclaw_id"] == "metaresearch-outer"
@@ -247,6 +272,7 @@ def test_biafra_persona_exists_and_keeps_the_hard_limits() -> None:
 
 
 def test_default_effort_ladder_is_medium_then_high_then_low(sc) -> None:
+    """The effort ladder is medium, high, low and picks in that order."""
     assert sc.EFFORT_LADDER == ("medium", "high", "low")
     assert sc.select_effort(("low", "high", "medium")) == "medium"
     assert sc.select_effort(("low", "high")) == "high"
@@ -255,10 +281,12 @@ def test_default_effort_ladder_is_medium_then_high_then_low(sc) -> None:
 
 @pytest.mark.parametrize("supported", [(), ("xhigh", "max"), ("max",)])
 def test_effort_never_selects_xhigh_or_max(sc, supported) -> None:
+    """Effort selection returns None when only xhigh or max are supported."""
     assert sc.select_effort(supported) is None
 
 
 def test_free_turn_runs_the_default_ladder_with_no_approval(sc) -> None:
+    """An unapproved turn uses the default tier, auto-run and ungated."""
     plan = sc.plan_turn("outer", platform="anthropic", paid_approved=False, supported=("high", "low"))
     assert plan == {
         "tier": "default", "model": None, "effort": "high", "human_gated": False, "auto_run": True,
@@ -267,6 +295,7 @@ def test_free_turn_runs_the_default_ladder_with_no_approval(sc) -> None:
 
 @pytest.mark.parametrize("approved", [None, 0, 1, "yes", "true"])
 def test_only_a_literal_true_approves_a_paid_preference(sc, approved) -> None:
+    """Only a literal True for paid_approved leaves the default tier."""
     plan = sc.plan_turn("outer", platform="anthropic", paid_approved=approved)
     assert plan["tier"] == "default" and plan["auto_run"] is True
 
@@ -281,6 +310,7 @@ def test_only_a_literal_true_approves_a_paid_preference(sc, approved) -> None:
     ],
 )
 def test_preferred_paid_models_need_explicit_approval(sc, seat, platform, model, effort) -> None:
+    """Approved paid turns get the preferred model, human-gated and not auto-run."""
     plan = sc.plan_turn(seat, platform=platform, paid_approved=True)
     assert plan == {
         "tier": "preferred", "model": model, "effort": effort, "human_gated": True, "auto_run": False,
@@ -289,14 +319,17 @@ def test_preferred_paid_models_need_explicit_approval(sc, seat, platform, model,
 
 
 def test_unknown_platform_falls_back_even_when_approved(sc) -> None:
+    """An unknown platform stays on the default tier even if approved."""
     assert sc.plan_turn("outer", platform="other", paid_approved=True)["tier"] == "default"
 
 
 def test_no_preferred_effort_is_xhigh_or_max(sc) -> None:
+    """Every preferred paid effort belongs to the effort ladder."""
     assert all(effort in sc.EFFORT_LADDER for _model, effort in sc.PREFERRED_PAID.values())
 
 
 def test_policy_text_is_in_the_plan_and_the_persona() -> None:
+    """The plan and persona both state the human-gated policy."""
     plan = (ROOT / "docs/v2/76-biafra-outer-seat-canonical-plan.md").read_text()
     assert "human-gated" in plan and "Fable 5.2" in plan and "free W&B" in plan
     persona = yaml.safe_load((ROOT / "bin/agents/personas/biafra.yaml").read_text())
@@ -311,22 +344,26 @@ def test_policy_text_is_in_the_plan_and_the_persona() -> None:
     ["oramasys/phylax", "phylax.admission", "phylax-policy", "Ｐhylax", "ph​ylax", "TELOS_endpoint", "agate/fit"],
 )
 def test_fixed_wall_owner_cannot_be_hidden_in_a_longer_name(sc, owner: str) -> None:
+    """Fixed-wall names embedded in longer or disguised owners are refused."""
     errors = sc.validate_mechanism_card(_card(owner_slices=["kungfu", owner]))
     assert any("E_OWNER" in e for e in errors), owner
 
 
 @pytest.mark.parametrize("owner", ["kungfu", "anamnesis", "alexandria", "perpetua-core"])
 def test_ordinary_owners_are_not_refused(sc, owner: str) -> None:
+    """Ordinary repository owners pass the owner check."""
     assert sc.validate_mechanism_card(_card(owner_slices=[owner])) == []
 
 
 @pytest.mark.parametrize("bad", [None, 5, 1.5, True])
 def test_non_mapping_input_is_an_error_not_a_crash(sc, bad) -> None:
+    """Non-object input gives an error message instead of raising."""
     assert sc.validate_trace_entry(bad) == ["entry must be an object"]
     assert sc.validate_mechanism_card(bad) == ["card must be an object"]
 
 
 def test_a_bare_string_is_one_effort_not_a_set_of_letters(sc) -> None:
+    """A bare string is treated as one effort value, not iterated."""
     assert sc.select_effort("medium") == "medium"
     assert sc.select_effort("xhigh") is None
 
@@ -339,22 +376,26 @@ def test_a_bare_string_is_one_effort_not_a_set_of_letters(sc) -> None:
     ["Phýlax", "phylaxpolicy", "xtelosx", "my_agate_adapter", "Рhylax", "phуlax", "pḣylax"],
 )
 def test_owner_check_survives_accents_glued_names_and_lookalikes(sc, owner: str) -> None:
+    """Accented, glued and lookalike fixed-wall names are still refused."""
     errors = sc.validate_mechanism_card(_card(owner_slices=["kungfu", owner]))
     assert any("E_OWNER" in e for e in errors), owner
 
 
 def test_over_refusal_is_deliberate_and_documented(sc) -> None:
     # "propagate" contains "agate"; fail-closed is the intent, so it is refused.
+    """An owner containing a wall name as a substring is refused on purpose."""
     assert any("E_OWNER" in e for e in sc.validate_mechanism_card(_card(owner_slices=["propagate"])))
 
 
 def test_owner_names_are_checked_one_at_a_time(sc) -> None:
     # "pery" + "lax" must not combine across entries into a false match.
+    """Owner entries are checked separately, never joined into a match."""
     assert sc.validate_mechanism_card(_card(owner_slices=["phy", "lax"])) == []
 
 
 @pytest.mark.parametrize("owner", ["---", "___", "​​ "])
 def test_an_owner_with_no_identity_is_refused(sc, owner: str) -> None:
+    """Owners made only of punctuation or invisible characters are refused."""
     assert sc.validate_mechanism_card(_card(owner_slices=[owner]))
 
 
@@ -366,6 +407,7 @@ V0731 = "deepseek-ai/DeepSeek-V4-Flash-0731"
 
 
 def test_wandb_model_order_matches_the_launcher(sc) -> None:
+    """The W&B model order matches the launcher default and effort wording."""
     source = (ROOT / "bin/orama-system/skills/cline-wandb/scripts/launch_cline_wandb.py").read_text()
     assert f'DEFAULT_MODEL = "{sc.WANDB_MODEL_ORDER[0]}"' in source
     assert sc.WANDB_MODEL_ORDER == (V1017, V41, V0731)
@@ -373,6 +415,7 @@ def test_wandb_model_order_matches_the_launcher(sc) -> None:
 
 
 def test_v41_models_reject_medium_and_v4_flash_0731_accepts_it(sc) -> None:
+    """Only the V4-Flash-0731 model accepts the medium effort."""
     assert "medium" not in sc.WANDB_EFFORTS[V1017]
     assert "medium" not in sc.WANDB_EFFORTS[V41]
     assert sc.select_effort(sc.WANDB_EFFORTS[V0731]) == "medium"
@@ -380,6 +423,7 @@ def test_v41_models_reject_medium_and_v4_flash_0731_accepts_it(sc) -> None:
 
 
 def test_the_free_default_turn_is_v41_1017_at_high(sc) -> None:
+    """The free default turn is the 1017 model at high effort."""
     plan = sc.plan_turn("outer", platform="anthropic", paid_approved=False)
     assert plan == {
         "tier": "default", "provider": "wandb", "model": V1017, "effort": "high",
@@ -388,23 +432,27 @@ def test_the_free_default_turn_is_v41_1017_at_high(sc) -> None:
 
 
 def test_the_fallback_walks_the_model_order_then_the_effort_ladder(sc) -> None:
+    """Unavailable models fall back along the order with their efforts."""
     assert sc.default_wandb_turn(unavailable=(V1017,))["model"] == V41
     third = sc.default_wandb_turn(unavailable=(V1017, V41))
     assert (third["model"], third["effort"]) == (V0731, "medium")
 
 
 def test_no_available_wandb_model_is_reported_not_guessed(sc) -> None:
+    """With every model unavailable the plan reports no model."""
     plan = sc.default_wandb_turn(unavailable=sc.WANDB_MODEL_ORDER)
     assert plan["model"] is None and plan["effort"] is None
     assert plan["reason"] == "no-wandb-model-available"
 
 
 def test_default_turns_never_select_xhigh_or_max(sc) -> None:
+    """Default W&B turns always use an effort from the ladder."""
     for blocked in ((), (V1017,), (V1017, V41)):
         assert sc.default_wandb_turn(unavailable=blocked)["effort"] in sc.EFFORT_LADDER
 
 
 def test_the_plan_cites_correct_references_and_defaults() -> None:
+    """The canonical plan cites the expected references and defaults."""
     plan = (ROOT / "docs/v2/76-biafra-outer-seat-canonical-plan.md").read_text()
     for needle in (
         "../../bin/orama-system/skills/cline-wandb/scripts/launch_cline_wandb.py",
@@ -421,6 +469,7 @@ def test_the_plan_cites_correct_references_and_defaults() -> None:
 
 
 def test_1_scout_is_a_legal_seat_and_distinct_from_the_inner_seat(sc) -> None:
+    """inner-scout is a legal seat and every registry seat is known."""
     assert sc.validate_trace_entry(_entry(seat="inner-scout")) == []
     assert "inner-scout" in sc.SEATS and "inner" in sc.SEATS and "outer" in sc.SEATS
     registry = yaml.safe_load((ROOT / "bin/agents/REGISTRY.yml").read_text())
@@ -429,6 +478,7 @@ def test_1_scout_is_a_legal_seat_and_distinct_from_the_inner_seat(sc) -> None:
 
 
 def test_2_attempt_ids_differ_between_attempts(tmp_path: Path) -> None:
+    """Separate dry cycles produce distinct, non-constant attempt ids."""
     cycle = _load(CYCLE, "biafra_cycle")
     a = cycle.dry_cycle("inner", "harden", 0.2, 0.1, tmp_path / "a", evaluator_digest=DIGEST)
     b = cycle.dry_cycle("inner", "harden", 0.2, 0.1, tmp_path / "b", evaluator_digest=DIGEST)
@@ -439,6 +489,7 @@ def test_2_attempt_ids_differ_between_attempts(tmp_path: Path) -> None:
 
 
 def test_2_metric_name_and_attempt_id_can_be_supplied(tmp_path: Path) -> None:
+    """A dry cycle records a supplied metric name and attempt id."""
     cycle = _load(CYCLE, "biafra_cycle")
     r = cycle.dry_cycle(
         "inner", "harden", 0.2, 0.1, tmp_path, evaluator_digest=DIGEST,
@@ -448,6 +499,7 @@ def test_2_metric_name_and_attempt_id_can_be_supplied(tmp_path: Path) -> None:
 
 
 def test_3_a_cycle_without_a_digest_says_it_recorded_nothing(tmp_path: Path) -> None:
+    """Without a digest a cycle returns no trace and warns it recorded nothing."""
     cycle = _load(CYCLE, "biafra_cycle")
     r = cycle.dry_cycle("inner", "harden", 0.2, 0.1, tmp_path)
     assert r["ok"] is True and r["trace"] is None
@@ -457,12 +509,14 @@ def test_3_a_cycle_without_a_digest_says_it_recorded_nothing(tmp_path: Path) -> 
 
 
 def test_3_the_soul_cards_state_the_conditional_contract() -> None:
+    """The inner soul and Scout README state the recorded:false rule."""
     for rel in ("bin/agents/autoresearch-inner/SOUL.md", "bin/agents/autoresearcher/README.md"):
         text = (ROOT / rel).read_text()
         assert "recorded: false" in text or "recorded:false" in text, rel
 
 
 def test_4_a_bad_digest_does_not_consume_the_single_attempt(tmp_path: Path) -> None:
+    """An invalid digest is refused without using up the single attempt."""
     cycle = _load(CYCLE, "biafra_cycle")
     bad = cycle.dry_cycle("inner", "harden", 0.2, 0.1, tmp_path, evaluator_digest="A" * 64)
     assert bad["ok"] is False and bad["reason"] == "invalid-trace"
@@ -472,6 +526,7 @@ def test_4_a_bad_digest_does_not_consume_the_single_attempt(tmp_path: Path) -> N
 
 @pytest.mark.parametrize("bad", [None, "0.1", True, False, [1]])
 def test_5_non_numeric_metrics_are_refused_not_raised(tmp_path: Path, bad) -> None:
+    """Non-numeric metrics are refused as non-finite without raising."""
     cycle = _load(CYCLE, "biafra_cycle")
     for args in ((bad, 0.5), (0.5, bad)):
         r = cycle.dry_cycle("inner", "harden", *args, tmp_path / str(id(args)))
@@ -480,11 +535,13 @@ def test_5_non_numeric_metrics_are_refused_not_raised(tmp_path: Path, bad) -> No
 
 
 def test_6_a_digest_with_a_trailing_newline_is_refused(sc) -> None:
+    """A digest with a trailing newline fails trace and card validation."""
     assert sc.validate_trace_entry(_entry(evaluator_digest=DIGEST + "\n"))
     assert sc.validate_mechanism_card(_card(evaluator_digest=DIGEST + "\n"))
 
 
 def test_6_an_empty_verifier_set_has_no_digest(sc, tmp_path: Path) -> None:
+    """An empty verifier set or a directory raises ValueError."""
     with pytest.raises(ValueError):
         sc.evaluator_digest([])
     with pytest.raises(ValueError):
@@ -492,6 +549,7 @@ def test_6_an_empty_verifier_set_has_no_digest(sc, tmp_path: Path) -> None:
 
 
 def test_7_reverted_and_delta_must_agree(sc) -> None:
+    """A card's reverted flag must match the sign of its delta."""
     assert any("reverted" in e for e in sc.validate_mechanism_card(_card(reverted=True, delta=-0.5)))
     assert any("reverted" in e for e in sc.validate_mechanism_card(_card(reverted=False, delta=0.5)))
     assert sc.validate_mechanism_card(_card(reverted=True, delta=0.5)) == []
@@ -499,21 +557,25 @@ def test_7_reverted_and_delta_must_agree(sc) -> None:
 
 
 def test_7_graduated_cannot_be_a_reverted_card(sc) -> None:
+    """A graduated card that is marked reverted is refused."""
     errors = sc.validate_mechanism_card(_card(status="graduated", reverted=True, delta=1.5))
     assert any("graduated" in e for e in errors)
 
 
 @pytest.mark.parametrize("status", ["reviewed", "graduated"])
 def test_7_reviewed_and_graduated_need_a_real_dry_run(sc, status: str) -> None:
+    """Reviewed and graduated cards with an empty receipt are refused."""
     assert any("dry_run_receipt" in e for e in sc.validate_mechanism_card(_card(status=status, dry_run_receipt={})))
 
 
 def test_8_unknown_card_fields_are_refused(sc) -> None:
+    """A card with an unlisted field is refused as unknown."""
     errors = sc.validate_mechanism_card(_card(targets=["oramasys/phylax/admission.py"]))
     assert any("unknown" in e for e in errors)
 
 
 def test_8_the_schema_matches_the_allowlist_and_the_soul_is_honest(sc) -> None:
+    """The schema fields match CARD_FIELDS and the soul text is accurate."""
     schema = json.loads((ROOT / "docs/v2/references/biafra/mechanism-card.schema.json").read_text())
     assert schema["additionalProperties"] is False
     assert set(schema["properties"]) == set(sc.CARD_FIELDS)
@@ -526,6 +588,7 @@ def test_8_the_schema_matches_the_allowlist_and_the_soul_is_honest(sc) -> None:
 
 @pytest.mark.parametrize("huge", [10**400, -10**400, 2**1024])
 def test_huge_integers_are_refused_not_raised(sc, huge: int) -> None:
+    """Integers too large for a float are refused as metrics without raising."""
     assert sc.is_finite_number(huge) is False
     assert any("delta" in e for e in sc.validate_mechanism_card(_card(delta=huge)))
     assert any("metric_before" in e for e in sc.validate_trace_entry(_entry(metric_before=huge)))
@@ -533,21 +596,25 @@ def test_huge_integers_are_refused_not_raised(sc, huge: int) -> None:
 
 
 def test_stall_report_counts_a_huge_metric_as_invalid_not_a_crash(sc) -> None:
+    """A huge metric counts as invalid in the stall report."""
     report = sc.stall_report([_entry(metric_after=10**400)] * 3, window=3)
     assert report["invalid"] == 3 and report["stalled"] is False
 
 
 def test_the_cycle_refuses_a_huge_metric(tmp_path: Path) -> None:
+    """A dry cycle refuses a huge metric as non-finite without launching."""
     cycle = _load(CYCLE, "biafra_cycle")
     r = cycle.dry_cycle("inner", "harden", 10**400, 0.5, tmp_path)
     assert r["ok"] is False and r["reason"] == "non-finite-metric" and r["launched"] is False
 
 
 def test_large_but_representable_numbers_are_still_measurements(sc) -> None:
+    """Large numbers that fit a float still count as finite metrics."""
     assert all(sc.is_finite_number(v) for v in (10**15, 10**308, 1.7976931348623157e308, -3, 0.25))
 
 
 def test_the_representable_boundary_is_pinned(sc) -> None:
+    """The finite check accepts up to the float maximum and rejects beyond it."""
     import sys
 
     top = int(sys.float_info.max)
@@ -559,6 +626,7 @@ def test_the_representable_boundary_is_pinned(sc) -> None:
 
 
 def test_the_finite_helper_states_its_real_domain() -> None:
+    """The finite-number helper's source says it tests after float conversion."""
     text = (ROOT / "bin/agents/seat_contracts.py").read_text()
     assert "after conversion to float" in text
 
@@ -579,6 +647,7 @@ REAL_SENTENCE = (
     ],
 )
 def test_owner_slices_must_be_repository_identifiers(sc, owners) -> None:
+    """Sentences and malformed strings in owner_slices are refused."""
     errors = sc.validate_mechanism_card(_card(owner_slices=owners))
     assert any("owner_slices" in e for e in errors), owners
 
@@ -589,16 +658,19 @@ def test_owner_slices_must_be_repository_identifiers(sc, owners) -> None:
      ["diazMelgarejo/orama-system"], ["perpetua-core"], ["a.b_c-d"], ["a" * 64]],
 )
 def test_ordinary_repository_names_are_accepted(sc, owners) -> None:
+    """Ordinary repository identifiers pass the owner check."""
     assert sc.validate_mechanism_card(_card(owner_slices=owners)) == []
 
 
 def test_a_fixed_wall_name_reports_e_owner_even_when_it_is_not_identifier_shaped(sc) -> None:
+    """Disguised fixed-wall names still report E_OWNER."""
     for name in ("Ｐhylax", "ph​ylax", "Рhylax", "Phýlax", "agate/fit", "xtelosx"):
         errors = sc.validate_mechanism_card(_card(owner_slices=[name]))
         assert any("E_OWNER" in e for e in errors), name
 
 
 def test_owner_errors_never_raises(sc) -> None:
+    """The owner check returns a list for every kind of bad input."""
     for bad in (None, 5, "kungfu", [], [None], [5], [["x"]], {"a": 1}):
         assert isinstance(sc._owner_errors(bad), list)
 
@@ -611,27 +683,32 @@ def test_owner_errors_never_raises(sc) -> None:
     "name", ["a.", "a/", "a//b", "a/../b", "a/./b", "a/.", "a/.hidden", "a/b/", "a/b."],
 )
 def test_degenerate_identifiers_are_refused(sc, name: str) -> None:
+    """Identifiers with empty, dot or trailing-separator parts are refused."""
     errors = sc.validate_mechanism_card(_card(owner_slices=[name]))
     assert any("repository identifiers" in e for e in errors), name
 
 
 @pytest.mark.parametrize("name", ["a", "1", "org/repo.name", "a.b.c", "x-y_z", "a/b/c"])
 def test_short_and_dotted_but_valid_identifiers_are_accepted(sc, name: str) -> None:
+    """Short and dotted identifiers that are well formed are accepted."""
     assert sc.validate_mechanism_card(_card(owner_slices=[name])) == []
 
 
 @pytest.mark.parametrize("owners", [["", "orama-system"], ["   "], [" "]])
 def test_a_blank_entry_is_not_blamed_on_the_list(sc, owners) -> None:
+    """A blank entry gets an entries message, not a non-empty-list message."""
     msg = " ".join(sc._owner_errors(owners))
     assert msg and "non-empty list" not in msg and "entries" in msg
 
 
 @pytest.mark.parametrize("owners", [[], "kungfu", None])
 def test_an_empty_or_missing_list_is_still_blamed_on_the_list(sc, owners) -> None:
+    """An empty, string or missing list is blamed as a non-empty-list failure."""
     assert "non-empty list" in " ".join(sc._owner_errors(owners))
 
 
 def test_the_identifier_error_names_the_entry_but_stays_bounded(sc) -> None:
+    """The identifier error names the entry yet stays under 400 characters."""
     assert "a//b" in " ".join(sc._owner_errors(["a//b"]))
     huge = "x/" * 3000
     msg = " ".join(sc._owner_errors([huge, huge]))
@@ -640,6 +717,7 @@ def test_the_identifier_error_names_the_entry_but_stays_bounded(sc) -> None:
 
 @pytest.mark.parametrize("bad", [[123], [None], [True], [b"kungfu"], [["kungfu"]]])
 def test_non_string_entries_are_refused_without_raising(sc, bad) -> None:
+    """Non-string owner entries produce errors without raising."""
     assert sc._owner_errors(bad)
 
 
@@ -659,12 +737,14 @@ def _promoted(status: str = "reviewed", **over):
 
 
 def test_g3_a_receipt_bound_to_its_card_and_pin_is_accepted(sc) -> None:
+    """A receipt bound to its card, with a matching pin, validates cleanly."""
     assert sc.validate_mechanism_card(_promoted("reviewed")) == []
     assert sc.validate_mechanism_card(_promoted("graduated"), pinned_digest=DIGEST) == []
 
 
 @pytest.mark.parametrize("status", ["reviewed", "graduated"])
 def test_g3_case1_a_receipt_without_a_trace_is_refused(sc, status: str) -> None:
+    """A promoted card whose receipt lacks a trace is refused."""
     card = _promoted(status)
     del card["dry_run_receipt"]["trace"]
     errors = sc.validate_mechanism_card(card, pinned_digest=DIGEST)
@@ -673,6 +753,7 @@ def test_g3_case1_a_receipt_without_a_trace_is_refused(sc, status: str) -> None:
 
 @pytest.mark.parametrize("status", ["reviewed", "graduated"])
 def test_g3_case1b_a_receipt_with_an_invalid_trace_is_refused(sc, status: str) -> None:
+    """A promoted card whose receipt trace is invalid is refused."""
     card = _promoted(status)
     card["dry_run_receipt"]["trace"]["decision"] = "revert"  # disagrees with the metrics
     assert any("trace" in e for e in sc.validate_mechanism_card(card, pinned_digest=DIGEST))
@@ -680,6 +761,7 @@ def test_g3_case1b_a_receipt_with_an_invalid_trace_is_refused(sc, status: str) -
 
 @pytest.mark.parametrize("status", ["reviewed", "graduated"])
 def test_g3_case2_a_receipt_trace_digest_that_differs_is_refused(sc, status: str) -> None:
+    """A receipt trace digest that differs from the card's is refused."""
     card = _promoted(status)
     card["dry_run_receipt"]["trace"]["evaluator_digest"] = "c" * 64
     errors = sc.validate_mechanism_card(card, pinned_digest=DIGEST)
@@ -687,11 +769,13 @@ def test_g3_case2_a_receipt_trace_digest_that_differs_is_refused(sc, status: str
 
 
 def test_g3_case3_a_graduated_card_that_was_never_pinned_is_refused(sc) -> None:
+    """A graduated card validated without a pinned digest is refused."""
     errors = sc.validate_mechanism_card(_promoted("graduated"))
     assert any("pinned_digest" in e for e in errors)
 
 
 def test_g3_a_reviewed_card_does_not_need_a_pin_but_a_given_pin_must_match(sc) -> None:
+    """A reviewed card needs no pin, but a supplied pin must match."""
     assert sc.validate_mechanism_card(_promoted("reviewed")) == []
     errors = sc.validate_mechanism_card(_promoted("reviewed"), pinned_digest="c" * 64)
     assert any("pinned_digest" in e for e in errors)
@@ -700,17 +784,20 @@ def test_g3_a_reviewed_card_does_not_need_a_pin_but_a_given_pin_must_match(sc) -
 
 
 def test_g3_a_candidate_needs_no_trace(sc) -> None:
+    """A candidate card validates without any receipt trace."""
     assert sc.validate_mechanism_card(_card()) == []
 
 
 @pytest.fixture()
 def verifier(tmp_path: Path) -> Path:
+    """Write a small verifier file under tmp_path and return its path."""
     path = tmp_path / "verifier.py"
     path.write_text("print('fixed evaluator')\n")
     return path
 
 
 def test_g3_pin_evaluator_writes_the_digest_and_what_it_covers(sc, tmp_path: Path, verifier: Path) -> None:
+    """pin_evaluator writes the digest and covered file names, and read_pin returns it."""
     pin = tmp_path / "run" / "evaluator.pin.json"
     digest = sc.pin_evaluator(pin, [verifier])
     assert digest == sc.evaluator_digest([verifier])
@@ -719,6 +806,7 @@ def test_g3_pin_evaluator_writes_the_digest_and_what_it_covers(sc, tmp_path: Pat
 
 
 def test_g3_pin_evaluator_is_idempotent_and_refuses_a_changed_evaluator(sc, tmp_path: Path, verifier: Path) -> None:
+    """Re-pinning an unchanged evaluator is a no-op; an edited one raises."""
     pin = tmp_path / "evaluator.pin.json"
     first = sc.pin_evaluator(pin, [verifier])
     assert sc.pin_evaluator(pin, [verifier]) == first
@@ -729,6 +817,7 @@ def test_g3_pin_evaluator_is_idempotent_and_refuses_a_changed_evaluator(sc, tmp_
 
 
 def test_g3_pin_evaluator_refuses_a_different_covered_file_set(sc, tmp_path: Path, verifier: Path) -> None:
+    """Pinning a different set of covered files raises ValueError."""
     pin = tmp_path / "evaluator.pin.json"
     sc.pin_evaluator(pin, [verifier])
     other = tmp_path / "other.py"
@@ -738,6 +827,7 @@ def test_g3_pin_evaluator_refuses_a_different_covered_file_set(sc, tmp_path: Pat
 
 
 def test_g3_pin_evaluator_refuses_a_malformed_existing_pin(sc, tmp_path: Path, verifier: Path) -> None:
+    """An existing pin file that is not valid JSON makes pin_evaluator raise."""
     pin = tmp_path / "evaluator.pin.json"
     pin.write_text("not json")
     with pytest.raises(ValueError):
@@ -758,6 +848,7 @@ def test_g3_pin_evaluator_refuses_a_malformed_existing_pin(sc, tmp_path: Path, v
     ],
 )
 def test_g3_read_pin_refuses_any_defect(sc, tmp_path: Path, body: str) -> None:
+    """read_pin raises ValueError for each malformed pin body."""
     pin = tmp_path / "evaluator.pin.json"
     pin.write_text(body)
     with pytest.raises(ValueError):
@@ -765,6 +856,7 @@ def test_g3_read_pin_refuses_any_defect(sc, tmp_path: Path, body: str) -> None:
 
 
 def test_g3_read_pin_refuses_a_missing_file(sc, tmp_path: Path) -> None:
+    """read_pin raises ValueError when the pin file is absent."""
     with pytest.raises(ValueError):
         sc.read_pin(tmp_path / "absent.json")
 
@@ -775,6 +867,7 @@ def test_g3_read_pin_refuses_a_missing_file(sc, tmp_path: Path) -> None:
 @pytest.mark.parametrize("status", ["reviewed", "graduated"])
 @pytest.mark.parametrize("flag", [False, None, "yes", 1])
 def test_g9_a_receipt_that_did_not_check_the_card_is_refused(sc, status: str, flag) -> None:
+    """A receipt without card_checked set to True is refused."""
     card = _promoted(status)
     card["dry_run_receipt"]["card_checked"] = flag
     assert any("card_checked" in e for e in sc.validate_mechanism_card(card, pinned_digest=DIGEST))
@@ -785,20 +878,24 @@ def test_g9_a_receipt_that_did_not_check_the_card_is_refused(sc, status: str, fl
 @pytest.mark.parametrize("status", ["reviewed", "graduated"])
 @pytest.mark.parametrize("card_id", [None, "", "m-other@1", "m-bbbbbbbbbbbb@2", 7])
 def test_g9_a_receipt_for_another_card_is_refused(sc, status: str, card_id) -> None:
+    """A receipt whose card_id is not this card's id is refused."""
     card = _promoted(status)
     card["dry_run_receipt"]["card_id"] = card_id
     assert any("card_id" in e for e in sc.validate_mechanism_card(card, pinned_digest=DIGEST))
 
 
 def test_g9_card_id_is_mechanism_id_at_revision(sc) -> None:
+    """card_id returns the mechanism id joined to the revision with an at sign."""
     assert sc.card_id(_card(mechanism_id="m-x", revision=3)) == "m-x@3"
 
 
 def test_g9_a_candidate_needs_no_checked_receipt(sc) -> None:
+    """A candidate card validates with an empty receipt."""
     assert sc.validate_mechanism_card(_card(dry_run_receipt={})) == []
 
 
 def test_g3_g9_the_schema_types_the_receipt_fields_and_stays_shape_only() -> None:
+    """The schema types the receipt fields and accepts shape-only fixtures."""
     jsonschema = pytest.importorskip("jsonschema")
     schema = json.loads((ROOT / "docs/v2/references/biafra/mechanism-card.schema.json").read_text())
     receipt = schema["properties"]["dry_run_receipt"]["properties"]
@@ -819,6 +916,7 @@ def test_g3_g9_the_schema_types_the_receipt_fields_and_stays_shape_only() -> Non
 
 
 def test_g3_g9_each_new_invalid_fixture_is_refused_for_its_own_reason(sc) -> None:
+    """Each new invalid fixture fails with an error naming its own cause."""
     root = ROOT / "tests" / "fixtures" / "mechanism_card"
     expect = {
         "invalid-graduated-receipt-without-trace.json": "trace",

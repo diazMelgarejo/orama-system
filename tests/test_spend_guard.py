@@ -173,6 +173,7 @@ def test_the_guard_classifies_provider_failures_with_the_shared_policy(sg, tmp_p
 
 
 class FakeGuard:
+    """Recording fake spend guard with a canned preflight result and optional classifier."""
     def __init__(self, pre=None, classify=None):
         """Test helper or fixture: init  ."""
         self.pre = pre or {"ok": True, "reservation": "r1", "projected_usd": 0.05}

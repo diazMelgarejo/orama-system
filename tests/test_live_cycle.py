@@ -289,6 +289,7 @@ def test_live_cycle_with_a_valid_card_reports_it_was_checked(cycle, tmp_path, mo
 
 
 def test_g9_dry_cycle_names_the_card_it_checked(cycle, tmp_path: Path) -> None:
+    """A dry cycle returns card_id only when a card was passed."""
     r = cycle.dry_cycle("outer", "harden", 0.3, 0.1, tmp_path, evaluator_digest=DIGEST, mechanism_card=_card())
     assert r["card_id"] == "m-test@1"
     r2 = cycle.dry_cycle("outer", "harden", 0.3, 0.1, tmp_path / "b", evaluator_digest=DIGEST)
@@ -296,6 +297,7 @@ def test_g9_dry_cycle_names_the_card_it_checked(cycle, tmp_path: Path) -> None:
 
 
 def test_g9_live_cycle_names_the_card_it_checked(cycle, tmp_path, monkeypatch) -> None:
+    """A live cycle returns card_id only when a card was passed."""
     _arm(monkeypatch, cycle)
     monkeypatch.setattr(cycle.subprocess, "Popen", _fake_run())
     r = cycle.live_cycle(**_kwargs(tmp_path, mechanism_card=_card(revision=4)))
@@ -399,6 +401,7 @@ def test_malformed_trace_fields_are_refused_before_anything_is_spent(cycle, tmp_
     monkeypatch.setattr(cycle.subprocess, "Popen", _fake_run(calls=calls))
 
     class Guard:
+        """Fake spend guard that counts preflights and always approves."""
         preflights = 0
 
         def preflight(self, n, hold_seconds):

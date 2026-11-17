@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 pytestmark = pytest.mark.usefixtures("offline_guard")
 
 def _load(path: Path, name: str):
+    """Import the module at `path` under `name`, register it in sys.modules and return it."""
     spec = importlib.util.spec_from_file_location(name, path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -105,10 +106,12 @@ def run_pair(workdir: Path) -> dict[str, Any]:
 
 @pytest.fixture()
 def receipt(tmp_path: Path) -> dict[str, Any]:
+    """Run one full pair cycle in tmp_path and return its receipt."""
     return run_pair(tmp_path)
 
 
 def test_inner_seat_records_distinct_valid_attempts(receipt) -> None:
+    """Inner and Scout ledger entries are valid with distinct attempt ids."""
     sc = _load(ROOT / "bin/agents/seat_contracts.py", "seat_contracts")
     assert all(r["ok"] and r["recorded"] for r in receipt["inner_results"])
     assert all(sc.validate_trace_entry(e) == [] for e in receipt["ledger"])
@@ -118,12 +121,14 @@ def test_inner_seat_records_distinct_valid_attempts(receipt) -> None:
 
 
 def test_biafra_detects_the_stall_from_the_ledger(receipt) -> None:
+    """The stall report flags the three reverts with no invalid entries."""
     assert receipt["stall"]["stalled"] is True
     assert receipt["stall"]["invalid"] == 0
     assert len(receipt["stall"]["entry_ids"]) == 3
 
 
 def test_biafra_proposes_a_valid_card_citing_the_stall(receipt) -> None:
+    """The proposed candidate card is valid and cites the stalled entries."""
     assert receipt["card_errors"] == []
     assert receipt["card"]["evidence_ids"] == receipt["stall"]["entry_ids"]
     assert receipt["card"]["reverted"] is False and receipt["card"]["delta"] < 0
@@ -131,11 +136,13 @@ def test_biafra_proposes_a_valid_card_citing_the_stall(receipt) -> None:
 
 
 def test_the_evaluator_is_untouched_and_the_seats_cannot_edit_it(receipt) -> None:
+    """The digest is unchanged and a verifier path is refused as protected."""
     assert receipt["digest"] == receipt["digest_after"]
     assert receipt["protected"]["ok"] is False and receipt["protected"]["reason"] == "verifier-protected"
 
 
 def test_the_pair_run_is_free_and_gated(receipt) -> None:
+    """No pair result launched, retried, called a plugin, or dispatched a GPU."""
     for result in (*receipt["inner_results"], receipt["outer_result"]):
         assert result["launched"] is False and result["called_launcher"] is False
         assert result["calls_plugin"] is False and result["dispatches_gpu"] is False
@@ -146,6 +153,7 @@ def test_the_pair_run_is_free_and_gated(receipt) -> None:
 
 
 def test_a_second_pair_cycle_in_the_same_directories_does_not_retry(tmp_path: Path) -> None:
+    """Repeating the outer cycle in the same directory is refused as already-ran."""
     first = run_pair(tmp_path / "one")
     assert first["outer_result"]["ok"] is True
     cycle = _load(ROOT / "bin/agents/biafra_cycle.py", "biafra_cycle")
@@ -154,6 +162,7 @@ def test_a_second_pair_cycle_in_the_same_directories_does_not_retry(tmp_path: Pa
 
 
 def test_g9_a_card_is_promoted_only_after_a_dry_cycle_that_checked_that_card(receipt, tmp_path: Path) -> None:
+    """Promotion needs a dry cycle that checked this card, and a pin for graduation."""
     sc = _load(ROOT / "bin/agents/seat_contracts.py", "seat_contracts")
     cycle = _load(ROOT / "bin/agents/biafra_cycle.py", "biafra_cycle")
     candidate = receipt["card"]
@@ -188,6 +197,7 @@ def test_g9_a_card_is_promoted_only_after_a_dry_cycle_that_checked_that_card(rec
 
 
 def test_the_saved_live_cycle_artifacts_are_valid() -> None:
+    """The saved live-cycle ledger rows are valid and the card has one known defect."""
     sc = _load(ROOT / "bin/agents/seat_contracts.py", "seat_contracts")
     base = ROOT / "docs/v2/references/biafra/live-cycle-2026-11-17"
     rows = [json.loads(line) for line in (base / "ledger.jsonl").read_text().splitlines() if line.strip()]
@@ -202,6 +212,7 @@ def test_the_saved_live_cycle_artifacts_are_valid() -> None:
 
 
 def test_every_saved_ledger_row_is_valid_and_the_reverted_turn_is_recorded() -> None:
+    """Every saved ledger row is valid, ids are unique and turn 3 is recorded as reverted."""
     sc = _load(ROOT / "bin/agents/seat_contracts.py", "seat_contracts")
     base = ROOT / "docs/v2/references/biafra/live-cycle-2026-11-17"
     seen = {}
@@ -216,6 +227,7 @@ def test_every_saved_ledger_row_is_valid_and_the_reverted_turn_is_recorded() -> 
 
 
 def test_the_runbook_states_the_billing_basis_and_the_stop_rule() -> None:
+    """The runbook states the billing basis, error codes and stop rule."""
     text = (ROOT / "bin/orama-system/skills/metaresearcher/references/live-pair-loop-runbook.md").read_text()
     assert "https://docs.coreweave.com/products/inference/serverless/usage-limits" in text
     assert "https://docs.coreweave.com/support/inference/articles/api-error-code-402-you-exceeded-your-cur" in text
@@ -226,6 +238,7 @@ def test_the_runbook_states_the_billing_basis_and_the_stop_rule() -> None:
 
 
 def test_the_runbook_attest_command_has_no_confirm_flag_and_g3_g9_are_closed() -> None:
+    """The runbook has no confirm flag and the plan marks G3 and G9 resolved."""
     text = (ROOT / "bin/orama-system/skills/metaresearcher/references/live-pair-loop-runbook.md").read_text()
     assert "--confirm" not in text.replace("has no `--confirm` argument", "")  # PT's parser refuses the flag
     assert "interactive prompt" in text
@@ -238,6 +251,7 @@ def test_the_runbook_attest_command_has_no_confirm_flag_and_g3_g9_are_closed() -
 
 
 def test_the_runbook_points_at_the_shared_guard_and_not_a_private_ledger() -> None:
+    """The runbook cites the shared spend guard and omits the private ledger terms."""
     raw = (ROOT / "bin/orama-system/skills/metaresearcher/references/live-pair-loop-runbook.md").read_text()
     text = " ".join(raw.split())  # the runbook is wrapped: a phrase may span a line break
     for needle in (
@@ -250,6 +264,7 @@ def test_the_runbook_points_at_the_shared_guard_and_not_a_private_ledger() -> No
 
 
 def test_the_plan_states_both_402_causes_and_the_attestation_requirement() -> None:
+    """The plan names both 402 causes and the attestation requirement."""
     text = (ROOT / "docs/v2/76-biafra-outer-seat-canonical-plan.md").read_text()
     assert "a `402` means the cap was reached" not in text
     for needle in ("two causes", "attest", "pay-as-you-go is inactive", "Perpetua-Tools", "provider_limits"):
