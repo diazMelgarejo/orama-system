@@ -202,6 +202,17 @@ class _ProcExit:
         """Nothing to release."""
 
 
+def _require_exit_probe() -> None:
+    """Raise SandboxUnavailable unless this platform can watch a child's exit without reaping it.
+
+    Called before the child starts, so a platform with no waitid, kqueue or /proc fails closed before any
+    model-written code runs.
+    """
+    if hasattr(os, "waitid") or hasattr(select, "kqueue") or Path("/proc/self/stat").exists():
+        return
+    raise SandboxUnavailable("cannot observe the child's exit without reaping it on this platform")
+
+
 def _open_exit_probe(proc: subprocess.Popen):
     """The non-reaping exit probe for this platform, or None where `os.waitid` does the job.
 
@@ -278,6 +289,7 @@ def run_isolated(
             sandbox_profile(root, roots, execs, deny_read=merge_deny_read(deny_read)),
             *argv,
         ]
+    _require_exit_probe()  # before any model-written code runs
     proc = subprocess.Popen(
         cmd, cwd=root, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         start_new_session=True,

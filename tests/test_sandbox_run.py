@@ -734,3 +734,25 @@ def test_the_proc_probe_never_reaps_and_the_run_fails_closed_without_any_probe(s
             sb._open_exit_probe(proc)
     finally:
         proc.wait()
+
+
+def test_a_platform_with_no_exit_probe_fails_closed_before_the_child_starts(sb, tmp_path, monkeypatch) -> None:
+    """Check that with no waitid, kqueue or /proc the run raises SandboxUnavailable and never calls Popen."""
+    import os
+
+    monkeypatch.delattr(os, "waitid", raising=False)
+    monkeypatch.delattr(sb.select, "kqueue", raising=False)
+    real_exists = Path.exists
+    monkeypatch.setattr(Path, "exists", lambda self: False if str(self) == "/proc/self/stat" else real_exists(self))
+    monkeypatch.setattr(sb, "sandbox_available", lambda: False)
+    started: list = []
+
+    def never(*args, **kwargs):
+        """Record a launch; the run must not get here."""
+        started.append(args)
+        raise AssertionError("Popen was called although no exit probe exists")
+
+    monkeypatch.setattr(sb.subprocess, "Popen", never)
+    with pytest.raises(sb.SandboxUnavailable):
+        sb.run_isolated(_py("print(1)"), cwd=tmp_path, timeout=5, allow_unsandboxed=True)
+    assert started == []
