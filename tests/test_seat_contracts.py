@@ -10,6 +10,7 @@ import importlib.util
 import json
 import math
 import sys
+import threading
 from pathlib import Path
 
 import pytest
@@ -728,6 +729,7 @@ def _promoted(status: str = "reviewed", **over):
     """A card for `status` whose receipt is a real dry-cycle result for that very card."""
     card = _card(status=status)
     trace = _entry(attempt_id="o-1", seat="outer", metric_before=0.26, metric_after=0.19)
+    card["delta"] = round(0.19 - 0.26, 10)  # the card reports the same change its receipt measured
     card["dry_run_receipt"] = {
         "ok": True, "retries": 0, "launched": False, "trace": trace,
         "card_checked": True, "card_id": f"{card['mechanism_id']}@{card['revision']}",
@@ -928,3 +930,43 @@ def test_g3_g9_each_new_invalid_fixture_is_refused_for_its_own_reason(sc) -> Non
         card = json.loads((root / name).read_text())
         errors = sc.validate_mechanism_card(card, pinned_digest=card["evaluator_digest"])
         assert errors and all(needle in e for e in errors), (name, errors)
+
+
+def test_g3_a_receipt_for_the_same_id_cannot_promote_a_card_with_another_delta(sc) -> None:
+    """A receipt for X@1 attached to another card that reuses X@1 with a different delta is refused."""
+    card = _promoted("reviewed")
+    assert sc.validate_mechanism_card(card) == []
+    other = {**card, "delta": -0.02}  # same id and revision, so card_id still matches
+    assert any("delta" in e for e in sc.validate_mechanism_card(other))
+    assert sc.validate_mechanism_card({**card, "delta": card["delta"] + 1e-12}) == []  # float rounding
+
+
+def test_g3_concurrent_pins_of_one_path_never_hit_a_missing_temp_file(sc, tmp_path: Path, verifier: Path) -> None:
+    """Threads pinning one path, with different verifier sets, end with one winner and no stray error."""
+    extra = tmp_path / "extra.py"
+    extra.write_text("x = 1\n")
+    for round_number in range(40):
+        pin = tmp_path / f"round{round_number}" / "evaluator.pin.json"
+        barrier = threading.Barrier(4)
+        outcomes: list = []
+
+        def pin_it(paths) -> None:
+            """Pin once, recording the digest or the exception."""
+            barrier.wait()
+            try:
+                outcomes.append(sc.pin_evaluator(pin, paths))
+            except BaseException as exc:  # recorded and asserted on below
+                outcomes.append(exc)
+
+        sets = [[verifier], [verifier, extra], [verifier], [verifier, extra]]
+        threads = [threading.Thread(target=pin_it, args=(paths,)) for paths in sets]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        errors = [o for o in outcomes if isinstance(o, BaseException)]
+        assert all(isinstance(e, ValueError) and "evaluator changed" in str(e) for e in errors), errors
+        winner = sc.read_pin(pin)
+        assert all(o == winner for o in outcomes if not isinstance(o, BaseException))
+        assert len(outcomes) == 4
+        assert [f.name for f in pin.parent.iterdir()] == [pin.name]  # no temp file is left behind

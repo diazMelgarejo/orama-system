@@ -11,6 +11,7 @@ import json
 import math
 import os
 import re
+import tempfile
 import unicodedata
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
@@ -194,9 +195,13 @@ def pin_evaluator(pin_path: Path, verifier_paths: Iterable[Path]) -> str:
     body = _pin_body(evaluator_digest(files), files)
     pin_path = Path(pin_path)
     pin_path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = pin_path.with_name(f".{pin_path.name}.{os.getpid()}.tmp")
-    tmp.write_text(json.dumps(body, sort_keys=True) + "\n", encoding="utf-8")
+    # A unique temp file in the pin's directory (same filesystem for the link), so threads and
+    # processes pinning the same path never share or delete one another's temp.
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{pin_path.name}.", suffix=".tmp", dir=pin_path.parent)
+    tmp = Path(tmp_name)
     try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(json.dumps(body, sort_keys=True) + "\n")
         os.link(tmp, pin_path)  # atomic and exclusive: fails when a pin already exists
     except FileExistsError:
         record = _read_pin_record(pin_path)
@@ -338,7 +343,7 @@ def card_id(card: Mapping[str, Any]) -> str:
 
 
 def _receipt_binding_errors(card: Mapping[str, Any], receipt: Mapping[str, Any]) -> list[str]:
-    """Errors tying a dry-run receipt to this card: its trace digest, and that it checked this card."""
+    """Errors tying a dry-run receipt to this card: trace digest and delta, and that it checked this card."""
     errors: list[str] = []
     trace = receipt.get("trace")
     if not isinstance(trace, Mapping):
@@ -347,6 +352,10 @@ def _receipt_binding_errors(card: Mapping[str, Any], receipt: Mapping[str, Any])
         errors.append("dry_run_receipt.trace is not a valid trace entry")
     elif trace["evaluator_digest"] != card["evaluator_digest"]:
         errors.append("dry_run_receipt.trace.evaluator_digest does not equal the card's evaluator_digest")
+    elif not _finite(card["delta"]) or not math.isclose(
+        card["delta"], trace["metric_after"] - trace["metric_before"], rel_tol=0.0, abs_tol=1e-9
+    ):
+        errors.append("card delta does not equal the receipt trace's metric_after - metric_before")
     if receipt.get("card_checked") is not True:
         errors.append("dry_run_receipt must show card_checked true")
     elif receipt.get("card_id") != card_id(card):
