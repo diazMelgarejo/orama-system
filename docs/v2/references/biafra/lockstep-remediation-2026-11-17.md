@@ -62,4 +62,6 @@ Finding 6 (memory) is PT-side and additive.
 
 ## Not done
 
-See "Later TODOs" in doc 76 section 13.5. Nothing is merged and no live gate is armed.
+See "Later TODOs" in doc 76 section 13.5 and the execution plan for the open gaps in
+[handoff-open-gaps-2026-11-17.md](handoff-open-gaps-2026-11-17.md). Nothing is merged and no live
+gate is armed.
