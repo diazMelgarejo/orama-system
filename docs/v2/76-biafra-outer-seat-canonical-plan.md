@@ -83,7 +83,7 @@ and the repository hygiene and markdown checks named in the PR.
 
 | Item | Default | Source |
 | --- | --- | --- |
-| Model order | `deepseek-ai/DeepSeek-V4.1-Flash-1017`, then `deepseek-ai/DeepSeek-V4.1-Flash`, then `deepseek-ai/DeepSeek-V4-Flash-0731` | [launcher](https://github.com/diazMelgarejo/orama-system/blob/main/bin/orama-system/skills/cline-wandb/scripts/launch_cline_wandb.py), [stale-reference ledger](https://github.com/diazMelgarejo/orama-system/blob/main/docs/stale-reference-ledger-2026-11-12.md) |
+| Model order | `deepseek-ai/DeepSeek-V4.1-Flash-1017`, then `deepseek-ai/DeepSeek-V4.1-Flash`, then `deepseek-ai/DeepSeek-V4-Flash-0731` | [launcher](../../bin/orama-system/skills/cline-wandb/scripts/launch_cline_wandb.py), [stale-reference ledger](../stale-reference-ledger-2026-11-12.md) |
 | Effort | Ladder medium, else high, else low, never xhigh or max. The V4.1 models reject `medium` (HTTP 400 "Invalid request") and accept `high` and `low`, so the free default turn is V4.1-Flash-1017 at **high**. V4-Flash-0731 accepts `medium`. | `lesson_d4ff6f4278ad` |
 | Absent ids | The bare `DeepSeek-V4-Flash` id is 404; W&B serves no `deepseek-flash` alias | launcher docstring, `lesson_d4ff6f4278ad` |
 | Cline provider entry | `tokenSource` `manual`; `updatedAt` in milliseconds with a trailing `Z`. A "invalid model ID" error from Cline 3.0.74 is stale metadata, not a bad model | `lesson_8e02c7fd391d`, ledger |
