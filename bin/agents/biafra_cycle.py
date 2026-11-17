@@ -68,8 +68,9 @@ def dry_cycle(
     Without it the cycle still runs but reports `recorded: false` and a warning. Everything that
     can refuse the attempt is checked before the one-cycle marker is claimed, so a refusal never
     consumes the single attempt. A `mechanism_card`, when given, is validated first and a card that
-    names a fixed-wall owner is refused (`invalid-card`) before anything is measured; without one
-    the result says `card_checked: false`, so a reviewer can tell checked from unchecked.
+    names a fixed-wall owner is refused (`invalid-card`) before anything is recorded. This cycle is handed
+    its measurement, so the proposing agent must run `validate_mechanism_card` before it measures; without
+    a card the result says `card_checked: false`, so a reviewer can tell checked from unchecked.
     """
     contracts = _contracts()
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -245,7 +246,7 @@ def _settle(spend_guard, reservation, input_chars, output_chars, outcome, seat, 
 
 def _launch_decision(
     gate_open: bool, has_digest: bool, metric_ok: bool, protected: bool, prompt_ok: bool,
-    card_errors: list, trace_problems: list, effort: str, efforts: tuple, has_guard: bool,
+    card_errors: list, trace_problems: list, effort: str, efforts: tuple, has_guard: bool, has_ledger: bool,
 ) -> dict:
     """Pure decision table: {} when a live attempt may start, else {"reason": ..., **extra} for the first
     failing check, in this order. It reads facts the caller computed and has no side effect."""
@@ -267,13 +268,15 @@ def _launch_decision(
         return {"reason": "spend-guard-required"}
     if effort is not None and effort not in efforts:
         return {"reason": "invalid-effort"}
+    if not has_ledger:
+        return {"reason": "ledger-required"}
     return {}
 
 
 def _prelaunch(
     seat: str, mode: str, artifact: str, prompt: object, evaluator_digest: str | None, metric_before: object,
     hypothesis: str, metric_name: str, attempt_id: str | None, log_dir: Path, mechanism_card: dict | None,
-    effort: str | None, spend_guard: object | None,
+    effort: str | None, spend_guard: object | None, ledger_path: Path | None = None,
 ) -> tuple[dict | None, dict | None]:
     """Decide, with no side effect, whether a live attempt may start.
 
@@ -301,7 +304,7 @@ def _prelaunch(
         trace_problems = contracts.validate_trace_entry({**trace_base, "metric_after": metric_before, "decision": "revert"})
     decision = _launch_decision(
         launch_allowed(), has_digest, metric_ok, _forbidden(artifact), prompt_ok, card_errors, trace_problems,
-        effort, EFFORTS, spend_guard is not None,
+        effort, EFFORTS, spend_guard is not None, ledger_path is not None,
     )
     if decision:
         return decision, None
@@ -345,7 +348,7 @@ def live_cycle(
 
     problem, trace_base = _prelaunch(
         seat, mode, artifact, prompt, evaluator_digest, metric_before, hypothesis, metric_name, attempt_id,
-        log_dir, mechanism_card, effort, spend_guard,
+        log_dir, mechanism_card, effort, spend_guard, ledger_path,
     )
     if problem is not None:
         return refuse(problem["reason"], **{k: v for k, v in problem.items() if k != "reason"})
@@ -355,13 +358,21 @@ def live_cycle(
         extra = {k: v for k, v in pre.items() if k not in ("ok", "reason", "stop")}
         return refuse(pre.get("reason", "spend-guard-refused"), stop=True, **extra)
     reservation = pre["reservation"]
-    if not _claim_once(marker):
-        spend_guard.release(reservation)
-        return refuse("already-ran")
 
-    # From here the reservation must end settled or released on every exit, including an interrupt.
+    # From here the reservation must end settled or released on every exit, including an interrupt and a
+    # marker that cannot be written (an unwritable log_dir).
     closed = False
     try:
+        try:
+            claimed = _claim_once(marker)
+        except OSError as exc:
+            spend_guard.release(reservation)
+            closed = True
+            return refuse("marker-error", error=f"{type(exc).__name__}: {exc}")
+        if not claimed:
+            spend_guard.release(reservation)
+            closed = True
+            return refuse("already-ran")
         try:
             completed = subprocess.run(
                 argv, capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=timeout_s, check=False,
@@ -421,8 +432,11 @@ def live_cycle(
     problems = contracts.validate_trace_entry(trace)
     if problems:
         return {"ok": False, "reason": "invalid-trace", "errors": problems, "recorded": False, "trace": None, **base}
-    if ledger_path is not None:
+    try:
         _append_trace(ledger_path, trace)
+    except OSError as exc:  # the request is spent: hand the trace back so the caller can still persist it
+        return {"ok": False, "reason": "ledger-write-failed", "error": f"{type(exc).__name__}: {exc}",
+                "recorded": False, "trace": trace, **base}
     return {"ok": True, "decision": decision, "recorded": True, "trace": trace,
             "detail": measured.get("detail"), **base}
 

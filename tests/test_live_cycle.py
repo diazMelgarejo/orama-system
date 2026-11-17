@@ -81,6 +81,7 @@ def _kwargs(tmp_path: Path, **over):
         evaluate=lambda answer: {"metric_after": 1.0, "detail": answer}, metric_before=3.0,
         artifact="seat_contracts._owner_folded", evaluator_digest=DIGEST,
         hypothesis="handle leetspeak", metric_name="heldout_wrong", spend_guard=_Guard(),
+        ledger_path=tmp_path / "default-ledger.jsonl",
     )
     base.update(over)
     return base
@@ -390,11 +391,39 @@ def test_refusals_and_unmeasured_attempts_leave_the_ledger_alone(cycle, tmp_path
     assert not ledger.exists()
 
 
-def test_without_a_ledger_path_nothing_is_written(cycle, tmp_path, monkeypatch) -> None:
+def test_a_live_launch_without_a_ledger_is_refused_before_anything_is_reserved(cycle, tmp_path, monkeypatch) -> None:
+    _arm(monkeypatch, cycle)
+    calls: list = []
+    monkeypatch.setattr(cycle.subprocess, "run", _fake_run(calls=calls))
+    guard = _Guard()
+    r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard, ledger_path=None))
+    assert r["reason"] == "ledger-required" and r["launched"] is False
+    assert calls == [] and guard.preflights == 0 and not list(tmp_path.glob("*.once"))
+
+
+def test_an_unwritable_marker_releases_the_reservation(cycle, tmp_path, monkeypatch) -> None:
+    _arm(monkeypatch, cycle)
+    calls: list = []
+    monkeypatch.setattr(cycle.subprocess, "run", _fake_run(calls=calls))
+
+    def denied(marker):
+        raise PermissionError("log_dir is not writable")
+
+    monkeypatch.setattr(cycle, "_claim_once", denied)
+    guard = _Guard()
+    r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard))
+    assert r["reason"] == "marker-error" and r["launched"] is False
+    assert calls == [] and guard.open_reservations() == [] and guard.released == ["r1"]
+
+
+def test_a_failed_ledger_write_hands_the_spent_trace_back(cycle, tmp_path, monkeypatch) -> None:
     _arm(monkeypatch, cycle)
     monkeypatch.setattr(cycle.subprocess, "run", _fake_run())
-    cycle.live_cycle(**_kwargs(tmp_path))
-    assert not list(tmp_path.rglob("*.jsonl"))
+    (tmp_path / "blocker").write_text("a file where a directory is needed")
+    guard = _Guard()
+    r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard, ledger_path=tmp_path / "blocker" / "ledger.jsonl"))
+    assert r["ok"] is False and r["reason"] == "ledger-write-failed" and r["recorded"] is False
+    assert r["trace"]["decision"] in ("keep", "revert") and guard.settled == ["r1"]
 
 
 def test_a_live_launch_without_a_spend_guard_is_refused_before_the_marker(cycle, tmp_path, monkeypatch) -> None:
@@ -428,10 +457,13 @@ def test_a_valid_effort_still_launches(cycle, tmp_path, monkeypatch, effort) -> 
 
 def test_the_decision_table_is_pure_and_ordered(cycle) -> None:
     ok = dict(gate_open=True, has_digest=True, metric_ok=True, protected=False, prompt_ok=True,
-              card_errors=[], trace_problems=[], effort="high", efforts=cycle.EFFORTS, has_guard=True)
+              card_errors=[], trace_problems=[], effort="high", efforts=cycle.EFFORTS, has_guard=True,
+              has_ledger=True)
     assert cycle._launch_decision(**ok) == {}
     assert cycle._launch_decision(**{**ok, "gate_open": False, "has_guard": False, "effort": "xhigh"})["reason"] == "gate-closed"
     assert cycle._launch_decision(**{**ok, "has_guard": False, "effort": "xhigh"})["reason"] == "spend-guard-required"
+    assert cycle._launch_decision(**{**ok, "has_ledger": False, "effort": "xhigh"})["reason"] == "invalid-effort"
+    assert cycle._launch_decision(**{**ok, "has_ledger": False})["reason"] == "ledger-required"
 
 
 def test_an_oserror_from_the_launcher_releases_the_reservation(cycle, tmp_path, monkeypatch) -> None:
