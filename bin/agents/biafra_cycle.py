@@ -252,6 +252,21 @@ def _settle(spend_guard, reservation, input_chars, output_chars, outcome, seat, 
     return {"estimated_usd": usd}
 
 
+def _settle_unknown(spend_guard, reservation, input_chars, outcome, seat, mode) -> dict:
+    """Charge the whole reservation for a possibly sent request with no usable output; {} without a guard."""
+    if spend_guard is None:
+        return {}
+    usd = spend_guard.settle_unknown(reservation, input_chars, outcome, seat, mode)
+    return {"estimated_usd": usd}
+
+
+def _decode(raw: bytes | str | None) -> str:
+    """Launcher output as text. Invalid UTF-8 is replaced, never raised: the request was already sent."""
+    if raw is None:
+        return ""
+    return raw if isinstance(raw, str) else raw.decode("utf-8", errors="replace")
+
+
 def _launch_decision(
     gate_open: bool, has_digest: bool, metric_ok: bool, protected: bool, prompt_ok: bool,
     card_errors: list, trace_problems: list, effort: str, efforts: tuple, has_guard: bool, has_ledger: bool,
@@ -382,24 +397,30 @@ def live_cycle(
             closed = True
             return refuse("already-ran")
         try:
+            # Bytes, decoded below: a decode problem must never surface from inside this try, where it
+            # would be mistaken for a launcher that never started.
             completed = subprocess.run(
-                argv, capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=timeout_s, check=False,
+                argv, capture_output=True, stdin=subprocess.DEVNULL, timeout=timeout_s, check=False,
             )
         except subprocess.TimeoutExpired:
-            spent = _settle(spend_guard, reservation, len(prompt), 0, "timeout", seat, mode)
+            # Unavailable output is not evidence of zero billed output: charge the whole reservation.
+            spent = _settle_unknown(spend_guard, reservation, len(prompt), "timeout", seat, mode)
             closed = True
             return refuse("launcher-timeout", spent=True, called_launcher=True, **spent)
         except (OSError, ValueError) as exc:
-            # The launcher never started, so nothing was sent: free the reservation, keep the marker.
+            # subprocess.run raises these only for a launcher that could not be started (bad argv, missing
+            # or unrunnable file): nothing was sent, so free the reservation and keep the marker.
             spend_guard.release(reservation)
             closed = True
             return refuse("launcher-error", error=f"{type(exc).__name__}: {exc}")
         except BaseException:
             # An interrupt may have landed after the request was sent: record the spend, never release it.
-            _settle(spend_guard, reservation, len(prompt), 0, "interrupted", seat, mode)
+            _settle_unknown(spend_guard, reservation, len(prompt), "interrupted", seat, mode)
             closed = True
             raise
-        out_text = (completed.stdout or "") + (completed.stderr or "")
+        stdout_text = _decode(completed.stdout)
+        stderr_text = _decode(completed.stderr)
+        out_text = stdout_text + stderr_text
         extra_spend = _settle(
             spend_guard, reservation, len(prompt), len(out_text), "ok" if completed.returncode == 0 else "failed",
             seat, mode,
@@ -409,8 +430,8 @@ def live_cycle(
         if not closed:
             spend_guard.release(reservation)
     if completed.returncode != 0:
-        tail = (completed.stderr or "")[-300:]
-        failure_text = f"{completed.stderr or ''}\n{completed.stdout or ''}"
+        tail = stderr_text[-300:]
+        failure_text = f"{stderr_text}\n{stdout_text}"
         stop_reason = spend_guard.classify(failure_text)
         if stop_reason:
             # Never retry and never activate pay-as-you-go: report and stop the loop.
@@ -422,7 +443,7 @@ def live_cycle(
             "launcher-failed", spent=True, returncode=completed.returncode, called_launcher=True, stderr=tail,
             **extra_spend,
         )
-    answer = extract_answer(completed.stdout or "")
+    answer = extract_answer(stdout_text)
     base = {
         "seat": seat, "mode": mode, "retries": 0, "launched": True, "called_launcher": True,
         "answer": answer, "card_checked": mechanism_card is not None, **extra_spend,

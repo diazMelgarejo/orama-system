@@ -37,7 +37,7 @@ def _fake_run(stdout: str = DIM + "thinking..." + RESET + "ANSWER TEXT", returnc
     def run(argv, **kwargs):
         if calls is not None:
             calls.append((argv, kwargs))
-        return subprocess.CompletedProcess(argv, returncode, stdout=stdout, stderr="")
+        return subprocess.CompletedProcess(argv, returncode, stdout=stdout.encode(), stderr=b"")
 
     return run
 
@@ -60,6 +60,10 @@ class _Guard:
         return {"ok": True, "reservation": f"r{self.preflights}", "projected_usd": 0.0}
 
     def settle(self, reservation, *a, **k):
+        self.settled.append(reservation)
+        return 0.0
+
+    def settle_unknown(self, reservation, *a, **k):
         self.settled.append(reservation)
         return 0.0
 

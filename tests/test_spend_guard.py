@@ -191,7 +191,7 @@ def _fake_run(stdout="ANSWER", stderr="", returncode=0, calls=None):
     def run(argv, **kwargs):
         if calls is not None:
             calls.append(argv)
-        return subprocess.CompletedProcess(argv, returncode, stdout=stdout, stderr=stderr)
+        return subprocess.CompletedProcess(argv, returncode, stdout=stdout.encode(), stderr=stderr.encode())
 
     return run
 
@@ -258,7 +258,7 @@ def test_an_already_spent_attempt_releases_its_reservation(cycle, tmp_path, monk
     assert again["reason"] == "already-ran" and guard.released == ["r1"] and guard.settled == []
 
 
-def test_a_timeout_settles_with_zero_output(cycle, tmp_path, monkeypatch) -> None:
+def test_a_timeout_settles_as_unknown_output_never_as_zero(cycle, tmp_path, monkeypatch) -> None:
     _arm(monkeypatch, cycle)
 
     def boom(argv, **kwargs):
@@ -267,7 +267,9 @@ def test_a_timeout_settles_with_zero_output(cycle, tmp_path, monkeypatch) -> Non
     monkeypatch.setattr(cycle.subprocess, "run", boom)
     guard = FakeGuard()
     r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard))
-    assert r["reason"] == "launcher-timeout" and guard.settled[0][2:4] == (0, "timeout")
+    assert r["reason"] == "launcher-timeout" and r["spent"] is True and r["called_launcher"] is True
+    assert guard.settled == [] and guard.released == []
+    assert guard.unknown == [("r1", len("Improve X."), "timeout", "inner", "inner")]
 
 
 def test_the_old_ledger_parameters_are_gone(cycle) -> None:
@@ -451,3 +453,64 @@ def test_a_running_launch_cannot_be_swept_by_another_reservation(sg, cycle, tmp_
     assert result["ok"] is True
     rows = [json.loads(x) for x in (spend / "wandb-inference-spend-audit.jsonl").read_text().splitlines()]
     assert len(rows) == 1 and "basis" not in rows[0]  # settled in time, not as a late commit
+
+
+# --- review finding 4: a post-start output problem is not a pre-start failure ---------------------------
+
+
+def _child(code: str) -> list[str]:
+    return [sys.executable, "-c", code]
+
+
+def test_invalid_utf8_output_is_settled_decoded_with_replacement_and_counts_as_a_launch(cycle, tmp_path, monkeypatch) -> None:
+    _arm(monkeypatch, cycle)
+    monkeypatch.setattr(
+        cycle, "launcher_argv",
+        lambda seat, prompt=None, effort=None: _child("import sys; sys.stdout.buffer.write(b'AB\\xffCD')"),
+    )
+    guard = FakeGuard()
+    r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard))
+    assert r["called_launcher"] is True and r.get("reason") != "launcher-error"
+    assert guard.released == [] and len(guard.settled) == 1 and guard.settled[0][3] == "ok"
+    assert r["ok"] is True and r["answer"] == "AB\ufffdCD"
+
+
+def test_a_launcher_that_cannot_start_still_releases_the_reservation(cycle, tmp_path, monkeypatch) -> None:
+    _arm(monkeypatch, cycle)
+    monkeypatch.setattr(
+        cycle, "launcher_argv", lambda seat, prompt=None, effort=None: [str(tmp_path / "no-such-launcher")]
+    )
+    guard = FakeGuard()
+    r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard))
+    assert r["reason"] == "launcher-error" and r["called_launcher"] is False
+    assert guard.released == ["r1"] and guard.settled == [] and guard.unknown == []
+
+
+def test_an_interrupt_settles_unknown_and_reraises(cycle, tmp_path, monkeypatch) -> None:
+    _arm(monkeypatch, cycle)
+
+    def interrupted(argv, **kwargs):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(cycle.subprocess, "run", interrupted)
+    guard = FakeGuard()
+    with pytest.raises(KeyboardInterrupt):
+        cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard))
+    assert guard.settled == [] and guard.released == []
+    assert guard.unknown == [("r1", len("Improve X."), "interrupted", "inner", "inner")]
+
+
+@needs_pt
+def test_a_timeout_commits_the_full_reservation_on_the_real_gate(sg, cycle, tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("OPENCLAW_STATE_DIR", str(tmp_path))
+    _attest(tmp_path)
+    _arm(monkeypatch, cycle)
+    guard = sg.SpendGuard(pt_root=os.environ.get("ORAMA_TEST_PT_ROOT"), state_dir=tmp_path / "spend")
+    monkeypatch.setattr(
+        cycle, "launcher_argv", lambda seat, prompt=None, effort=None: _child("import time; time.sleep(30)")
+    )
+    r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard, timeout_s=1, prompt="x" * 10_000))
+    assert r["reason"] == "launcher-timeout" and r["called_launcher"] is True
+    rows = [json.loads(x) for x in (tmp_path / "spend" / "wandb-inference-spend-audit.jsonl").read_text().splitlines()]
+    assert rows[0]["outcome"] == "timeout" and rows[0]["basis"] == "output-unknown" and "output_chars" not in rows[0]
+    assert guard.snapshot()["daily_spend"] == pytest.approx(guard.gate.pl.projected_usd(guard.policy, 10_000))

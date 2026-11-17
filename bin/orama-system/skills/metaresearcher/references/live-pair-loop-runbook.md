@@ -40,17 +40,24 @@ provider client is built with `max_retries=0` (the OpenAI SDK retries a 429 twic
 
 ### Monthly budget and the shared guard
 
-The operator set an estimated ceiling of 90 dollars a month of "free" use, kept under the 100-dollar cap. The
-guard is Perpetua-Tools' `orchestrator/cost_guard.py` `CostGuard` in its monthly mode (atomic reserve, commit
-and rollback), configured by the provider policy and used from orama through `bin/agents/spend_guard.py`:
-set `PERPETUA_TOOLS_ROOT`, build `SpendGuard()`, pass it as `live_cycle(..., spend_guard=guard)`. `live_cycle`
-refuses before any launch with the guard's reason (`attestation-required`, `budget-exhausted`; `stop: true`),
-reserves a conservative projection, and settles the estimated actual cost afterwards, including for failed and
-timed-out requests. With no checkout, no policy or no attestation, it fails closed. Only sizes are stored in
-the audit rows, never prompts or answers. Sizes are characters over four; the rates are an upper bound (0.50
-input and 1.50 output dollars per million tokens, the highest non-Pro DeepSeek rates on the pricing page), and
-the projection assumes 40 thousand output tokens because the reasoning stream is billed. The estimate is not
-billing: the Billing page is the truth.
+The operator set an estimated ceiling of 90 dollars a month of "free" use, kept under the 100-dollar
+cap. The guard is Perpetua-Tools' `orchestrator/spend_gate.py` `SpendGate`, built on its shared,
+atomic `CostGuard` in monthly mode and configured by the provider policy. Orama reaches it through
+the thin adapter `bin/agents/spend_guard.py` and keeps no ledger: set `PERPETUA_TOOLS_ROOT`, build
+`SpendGuard()`, pass it as `live_cycle(..., spend_guard=guard)`. `live_cycle` refuses before any
+launch with the guard's reason (`attestation-required`, `budget-exhausted`; `stop: true`), reserves
+a conservative projection held for the launcher timeout plus a settle margin (`SETTLE_MARGIN_S`), so
+a running launch is never swept, and afterwards settles the estimated actual cost of every answered
+request, including one that answered with an error. A timeout or an interrupt has no usable output,
+which is not evidence of zero billed output, so it is settled as unknown (`settle_unknown`: the
+whole reservation is charged and the audit row says `output-unknown`). The reservation is released
+only when the launcher never started. Launcher output is read as bytes and decoded with replacement
+afterwards, so a bad byte cannot make a spent request look unsent. With no checkout, no policy or no
+attestation, it fails closed. Only sizes are stored in the audit rows, never prompts or answers.
+Sizes are characters over four; the rates are an upper bound (0.50 input and 1.50 output dollars per
+million tokens, the highest non-Pro DeepSeek rates on the pricing page), and the projection assumes
+40 thousand output tokens because the reasoning stream is billed. The estimate is not billing: the
+Billing page is the truth.
 
 Position on 2026-11-17: the live requests made so far are estimated at about 0.15 dollars (0.17 percent of the
 budget), reconstructed as an upper bound and seeded into the guard's state.
