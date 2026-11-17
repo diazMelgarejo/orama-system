@@ -24,6 +24,7 @@ HOLD = 60.0
 pytestmark = pytest.mark.usefixtures("offline_guard")
 
 def _load(rel: str, name: str):
+    """Test helper or fixture: load."""
     spec = importlib.util.spec_from_file_location(name, ROOT / rel)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -51,6 +52,7 @@ needs_pt = pytest.mark.skipif(
 
 @pytest.fixture()
 def sg():
+    """Test helper or fixture: sg."""
     return _load("bin/agents/spend_guard.py", "spend_guard")
 
 
@@ -59,12 +61,14 @@ def sg_isolated(sg, tmp_path_factory):
     # For tests that assert "no guard anywhere" or pick the candidate themselves. CI really has a checkout
     # at CI_CHECKOUT, which would otherwise satisfy them. Tests that need the real guard use `sg`, which
     # keeps that fallback, because in CI it is the only way they find the guard.
+    """Test helper or fixture: sg isolated."""
     sg.CI_CHECKOUT = tmp_path_factory.getbasetemp() / "no-ci-checkout"
     return sg
 
 
 @pytest.fixture()
 def cycle():
+    """Test helper or fixture: cycle."""
     return _load("bin/agents/biafra_cycle.py", "biafra_cycle")
 
 
@@ -72,6 +76,7 @@ def cycle():
 
 
 def test_a_missing_perpetua_tools_checkout_fails_closed(sg_isolated, tmp_path, monkeypatch) -> None:
+    """Check that a missing perpetua tools checkout fails closed."""
     monkeypatch.delenv("PERPETUA_TOOLS_ROOT", raising=False)
     monkeypatch.setattr(sg_isolated, "LOCAL_LINK", tmp_path / "absent")
     with pytest.raises(sg_isolated.SpendGuardUnavailable):
@@ -81,6 +86,7 @@ def test_a_missing_perpetua_tools_checkout_fails_closed(sg_isolated, tmp_path, m
 
 
 def _attest(tmp_path: Path, **over) -> None:
+    """Test helper or fixture: attest."""
     path = tmp_path / "provider-attestations" / "wandb-inference.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     record = {
@@ -93,6 +99,7 @@ def _attest(tmp_path: Path, **over) -> None:
 
 @needs_pt
 def test_no_attestation_means_no_request(sg, tmp_path, monkeypatch) -> None:
+    """Check that no attestation means no request."""
     monkeypatch.setenv("OPENCLAW_STATE_DIR", str(tmp_path))
     g = sg.SpendGuard(pt_root=os.environ.get("ORAMA_TEST_PT_ROOT"), state_dir=tmp_path / "spend")
     r = g.preflight(10_000, HOLD)
@@ -103,6 +110,7 @@ def test_no_attestation_means_no_request(sg, tmp_path, monkeypatch) -> None:
 @needs_pt
 @pytest.mark.parametrize("over", [{"payg_inactive": False}, {"allowance_remaining": False}, {"plan_is_free": "yes"}])
 def test_an_attestation_that_does_not_clear_every_field_is_refused(sg, tmp_path, monkeypatch, over) -> None:
+    """Check that an attestation that does not clear every field is refused."""
     monkeypatch.setenv("OPENCLAW_STATE_DIR", str(tmp_path))
     _attest(tmp_path, **over)
     assert sg.SpendGuard(pt_root=os.environ.get("ORAMA_TEST_PT_ROOT"), state_dir=tmp_path / "spend").preflight(1000, HOLD)["reason"] == "attestation-required"
@@ -110,6 +118,7 @@ def test_an_attestation_that_does_not_clear_every_field_is_refused(sg, tmp_path,
 
 @needs_pt
 def test_a_valid_attestation_reserves_and_settling_records_a_size_only_audit_row(sg, tmp_path, monkeypatch) -> None:
+    """Check that a valid attestation reserves and settling records a size only audit row."""
     monkeypatch.setenv("OPENCLAW_STATE_DIR", str(tmp_path))
     _attest(tmp_path)
     g = sg.SpendGuard(pt_root=os.environ.get("ORAMA_TEST_PT_ROOT"), state_dir=tmp_path / "spend")
@@ -126,6 +135,7 @@ def test_a_valid_attestation_reserves_and_settling_records_a_size_only_audit_row
 
 @needs_pt
 def test_the_budget_stops_the_next_request(sg, tmp_path, monkeypatch) -> None:
+    """Check that the budget stops the next request."""
     monkeypatch.setenv("OPENCLAW_STATE_DIR", str(tmp_path))
     _attest(tmp_path)
     g = sg.SpendGuard(pt_root=os.environ.get("ORAMA_TEST_PT_ROOT"), state_dir=tmp_path / "spend")
@@ -136,6 +146,7 @@ def test_the_budget_stops_the_next_request(sg, tmp_path, monkeypatch) -> None:
 
 @needs_pt
 def test_a_released_reservation_frees_the_budget(sg, tmp_path, monkeypatch) -> None:
+    """Check that a released reservation frees the budget."""
     monkeypatch.setenv("OPENCLAW_STATE_DIR", str(tmp_path))
     _attest(tmp_path)
     g = sg.SpendGuard(pt_root=os.environ.get("ORAMA_TEST_PT_ROOT"), state_dir=tmp_path / "spend")
@@ -149,6 +160,7 @@ def test_a_released_reservation_frees_the_budget(sg, tmp_path, monkeypatch) -> N
 
 @needs_pt
 def test_the_guard_classifies_provider_failures_with_the_shared_policy(sg, tmp_path, monkeypatch) -> None:
+    """Check that the guard classifies provider failures with the shared policy."""
     monkeypatch.setenv("OPENCLAW_STATE_DIR", str(tmp_path))
     g = sg.SpendGuard(pt_root=os.environ.get("ORAMA_TEST_PT_ROOT"), state_dir=tmp_path / "spend")
     assert g.classify("You exceeded your current quota") == "provider-payment-required"
@@ -161,6 +173,7 @@ def test_the_guard_classifies_provider_failures_with_the_shared_policy(sg, tmp_p
 
 class FakeGuard:
     def __init__(self, pre=None, classify=None):
+        """Test helper or fixture: init  ."""
         self.pre = pre or {"ok": True, "reservation": "r1", "projected_usd": 0.05}
         self.settled = []
         self.released = []
@@ -168,27 +181,34 @@ class FakeGuard:
         self._classify = classify
 
     def preflight(self, prompt_chars, hold_seconds):
+        """Test helper or fixture: preflight."""
         self.prompt_chars = prompt_chars
         self.hold_seconds = hold_seconds
         return self.pre
 
     def settle(self, reservation, input_chars, output_chars, outcome, seat, mode):
+        """Test helper or fixture: settle."""
         self.settled.append((reservation, input_chars, output_chars, outcome, seat, mode))
         return 0.0123
 
     def settle_unknown(self, reservation, input_chars, outcome, seat, mode):
+        """Test helper or fixture: settle unknown."""
         self.unknown.append((reservation, input_chars, outcome, seat, mode))
         return 0.05
 
     def release(self, reservation):
+        """Test helper or fixture: release."""
         self.released.append(reservation)
 
     def classify(self, text):
+        """Test helper or fixture: classify."""
         return self._classify(text) if self._classify else None
 
 
 def _fake_run(stdout="ANSWER", stderr="", returncode=0, calls=None):
+    """Test helper or fixture: fake run."""
     def run(argv, **kwargs):
+        """Test helper or fixture: run."""
         if calls is not None:
             calls.append(argv)
         return subprocess.CompletedProcess(argv, returncode, stdout=stdout.encode(), stderr=stderr.encode())
@@ -197,11 +217,13 @@ def _fake_run(stdout="ANSWER", stderr="", returncode=0, calls=None):
 
 
 def _arm(monkeypatch, cycle) -> None:
+    """Test helper or fixture: arm."""
     monkeypatch.setenv(cycle.GATE_ENV, "approved")
     monkeypatch.setenv(cycle.ARM_ENV, "1")
 
 
 def _kwargs(tmp_path: Path, **over):
+    """Test helper or fixture: kwargs."""
     base = dict(
         seat="inner", task_type="harden", prompt="Improve X.", log_dir=tmp_path / "log",
         evaluate=lambda a: {"metric_after": 1.0}, metric_before=3.0, artifact="a.b",
@@ -212,6 +234,7 @@ def _kwargs(tmp_path: Path, **over):
 
 
 def test_a_refusing_guard_stops_the_cycle_before_any_launch_or_marker(cycle, tmp_path, monkeypatch) -> None:
+    """Check that a refusing guard stops the cycle before any launch or marker."""
     _arm(monkeypatch, cycle)
     calls: list = []
     monkeypatch.setattr(cycle.subprocess, "run", _fake_run(calls=calls))
@@ -222,6 +245,7 @@ def test_a_refusing_guard_stops_the_cycle_before_any_launch_or_marker(cycle, tmp
 
 
 def test_a_request_is_settled_with_sizes_and_the_estimate_is_returned(cycle, tmp_path, monkeypatch) -> None:
+    """Check that a request is settled with sizes and the estimate is returned."""
     _arm(monkeypatch, cycle)
     monkeypatch.setattr(cycle.subprocess, "run", _fake_run(stdout="x" * 5000, stderr="y" * 100))
     guard = FakeGuard()
@@ -232,6 +256,7 @@ def test_a_request_is_settled_with_sizes_and_the_estimate_is_returned(cycle, tmp
 
 
 def test_a_failed_launch_is_still_settled_as_spent(cycle, tmp_path, monkeypatch) -> None:
+    """Check that a failed launch is still settled as spent."""
     _arm(monkeypatch, cycle)
     monkeypatch.setattr(cycle.subprocess, "run", _fake_run(stdout="partial", returncode=2))
     guard = FakeGuard()
@@ -241,6 +266,7 @@ def test_a_failed_launch_is_still_settled_as_spent(cycle, tmp_path, monkeypatch)
 
 
 def test_the_shared_classifier_decides_a_provider_stop(cycle, tmp_path, monkeypatch) -> None:
+    """Check that the shared classifier decides a provider stop."""
     _arm(monkeypatch, cycle)
     monkeypatch.setattr(cycle.subprocess, "run", _fake_run(stderr="weird provider text", returncode=1))
     guard = FakeGuard(classify=lambda text: "provider-payment-required")
@@ -249,6 +275,7 @@ def test_the_shared_classifier_decides_a_provider_stop(cycle, tmp_path, monkeypa
 
 
 def test_an_already_spent_attempt_releases_its_reservation(cycle, tmp_path, monkeypatch) -> None:
+    """Check that an already spent attempt releases its reservation."""
     _arm(monkeypatch, cycle)
     monkeypatch.setattr(cycle.subprocess, "run", _fake_run())
     first = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=FakeGuard()))
@@ -259,9 +286,11 @@ def test_an_already_spent_attempt_releases_its_reservation(cycle, tmp_path, monk
 
 
 def test_a_timeout_settles_as_unknown_output_never_as_zero(cycle, tmp_path, monkeypatch) -> None:
+    """Check that a timeout settles as unknown output never as zero."""
     _arm(monkeypatch, cycle)
 
     def boom(argv, **kwargs):
+        """Test helper or fixture: boom."""
         raise subprocess.TimeoutExpired(argv, 1)
 
     monkeypatch.setattr(cycle.subprocess, "run", boom)
@@ -273,6 +302,7 @@ def test_a_timeout_settles_as_unknown_output_never_as_zero(cycle, tmp_path, monk
 
 
 def test_the_old_ledger_parameters_are_gone(cycle) -> None:
+    """Check that the old ledger parameters are gone."""
     import inspect
 
     params = inspect.signature(cycle.live_cycle).parameters
@@ -284,6 +314,7 @@ def test_the_old_ledger_parameters_are_gone(cycle) -> None:
 
 
 def _fake_pt(root: Path) -> Path:
+    """Test helper or fixture: fake pt."""
     (root / "orchestrator").mkdir(parents=True)
     for name in ("provider_limits.py", "cost_guard.py", "spend_gate.py"):
         (root / "orchestrator" / name).write_text("# stub\n")
@@ -291,6 +322,7 @@ def _fake_pt(root: Path) -> Path:
 
 
 def test_the_root_resolves_argument_then_environment_then_the_symlink(sg_isolated, tmp_path, monkeypatch) -> None:
+    """Check that the root resolves argument then environment then the symlink."""
     arg, env, link = _fake_pt(tmp_path / "arg"), _fake_pt(tmp_path / "env"), _fake_pt(tmp_path / "link")
     monkeypatch.setattr(sg_isolated, "LOCAL_LINK", tmp_path / "linkname")
     (tmp_path / "linkname").symlink_to(link)
@@ -302,6 +334,7 @@ def test_the_root_resolves_argument_then_environment_then_the_symlink(sg_isolate
 
 
 def test_no_argument_no_variable_and_no_symlink_fails_closed(sg_isolated, tmp_path, monkeypatch) -> None:
+    """Check that no argument no variable and no symlink fails closed."""
     monkeypatch.delenv("PERPETUA_TOOLS_ROOT", raising=False)
     monkeypatch.setattr(sg_isolated, "LOCAL_LINK", tmp_path / "absent")
     with pytest.raises(sg_isolated.SpendGuardUnavailable):
@@ -309,6 +342,7 @@ def test_no_argument_no_variable_and_no_symlink_fails_closed(sg_isolated, tmp_pa
 
 
 def test_the_ci_checkout_is_the_last_resort(sg_isolated, tmp_path, monkeypatch) -> None:
+    """Check that the ci checkout is the last resort."""
     ci = _fake_pt(tmp_path / "ci")
     monkeypatch.delenv("PERPETUA_TOOLS_ROOT", raising=False)
     monkeypatch.setattr(sg_isolated, "LOCAL_LINK", tmp_path / "absent")
@@ -320,6 +354,7 @@ def test_the_ci_checkout_is_the_last_resort(sg_isolated, tmp_path, monkeypatch) 
 
 
 def test_a_dangling_or_wrong_symlink_is_refused(sg_isolated, tmp_path, monkeypatch) -> None:
+    """Check that a dangling or wrong symlink is refused."""
     monkeypatch.delenv("PERPETUA_TOOLS_ROOT", raising=False)
     monkeypatch.setattr(sg_isolated, "LOCAL_LINK", tmp_path / "link")
     (tmp_path / "link").symlink_to(tmp_path / "nowhere")
@@ -333,6 +368,7 @@ def test_a_dangling_or_wrong_symlink_is_refused(sg_isolated, tmp_path, monkeypat
 
 
 def test_an_environment_checkout_without_the_guard_falls_through_to_the_symlink(sg, tmp_path, monkeypatch) -> None:
+    """Check that an environment checkout without the guard falls through to the symlink."""
     stale = tmp_path / "stale"
     (stale / "orchestrator").mkdir(parents=True)          # an older checkout: no shared guard in it yet
     link = _fake_pt(tmp_path / "link")
@@ -343,6 +379,7 @@ def test_an_environment_checkout_without_the_guard_falls_through_to_the_symlink(
 
 
 def test_an_explicit_root_must_be_valid_and_never_falls_through(sg, tmp_path, monkeypatch) -> None:
+    """Check that an explicit root must be valid and never falls through."""
     good = _fake_pt(tmp_path / "good")
     monkeypatch.setenv("PERPETUA_TOOLS_ROOT", str(good))
     with pytest.raises(sg.SpendGuardUnavailable):
@@ -350,6 +387,7 @@ def test_an_explicit_root_must_be_valid_and_never_falls_through(sg, tmp_path, mo
 
 
 def test_when_no_candidate_holds_the_guard_every_reason_is_reported(sg_isolated, tmp_path, monkeypatch) -> None:
+    """Check that when no candidate holds the guard every reason is reported."""
     stale = tmp_path / "stale"
     stale.mkdir()
     monkeypatch.setattr(sg_isolated, "LOCAL_LINK", tmp_path / "absent")
@@ -361,12 +399,14 @@ def test_when_no_candidate_holds_the_guard_every_reason_is_reported(sg_isolated,
 
 @needs_pt
 def test_releasing_a_reservation_that_is_already_closed_is_a_no_op(sg, tmp_path) -> None:
+    """Check that releasing a reservation that is already closed is a no op."""
     g = sg.SpendGuard(pt_root=os.environ.get("ORAMA_TEST_PT_ROOT"), state_dir=tmp_path / "spend")
     g.release("never-reserved")  # must not raise: cleanup may follow a settle that already closed it
 
 
 @needs_pt
 def test_the_adapter_loads_the_producer_gate_and_adds_no_ledger_of_its_own(sg, tmp_path) -> None:
+    """Check that the adapter loads the producer gate and adds no ledger of its own."""
     g = sg.SpendGuard(pt_root=os.environ.get("ORAMA_TEST_PT_ROOT"), state_dir=tmp_path / "spend")
     assert g.gate.__class__.__name__ == "SpendGate" and g.gate.guard is g.guard
     assert g.audit_path == g.gate.audit_path and g.policy is g.gate.policy
@@ -391,6 +431,7 @@ def test_two_adapter_instances_share_one_ceiling(sg, tmp_path, monkeypatch) -> N
 
 @needs_pt
 def test_settle_unknown_charges_the_whole_reservation_and_marks_the_output_unknown(sg, tmp_path, monkeypatch) -> None:
+    """Check that settle unknown charges the whole reservation and marks the output unknown."""
     monkeypatch.setenv("OPENCLAW_STATE_DIR", str(tmp_path))
     _attest(tmp_path)
     g = sg.SpendGuard(pt_root=os.environ.get("ORAMA_TEST_PT_ROOT"), state_dir=tmp_path / "spend")
@@ -403,6 +444,7 @@ def test_settle_unknown_charges_the_whole_reservation_and_marks_the_output_unkno
 
 
 def test_a_checkout_without_the_spend_gate_is_not_a_guard(sg_isolated, tmp_path, monkeypatch) -> None:
+    """Check that a checkout without the spend gate is not a guard."""
     root = _fake_pt(tmp_path / "old")
     (root / "orchestrator" / "spend_gate.py").unlink()
     monkeypatch.delenv("PERPETUA_TOOLS_ROOT", raising=False)
@@ -417,6 +459,7 @@ def test_a_checkout_without_the_spend_gate_is_not_a_guard(sg_isolated, tmp_path,
 
 
 def test_live_cycle_declares_a_hold_longer_than_the_launcher_timeout(cycle, tmp_path, monkeypatch) -> None:
+    """Check that live cycle declares a hold longer than the launcher timeout."""
     _arm(monkeypatch, cycle)
     monkeypatch.setattr(cycle.subprocess, "run", _fake_run())
     guard = FakeGuard()
@@ -442,6 +485,7 @@ def test_a_running_launch_cannot_be_swept_by_another_reservation(sg, cycle, tmp_
     seen: dict = {}
 
     def slow_launch(argv, **kwargs):
+        """Test helper or fixture: slow launch."""
         clock["skew"] = 100 + 1  # the launcher is still inside its 100 s timeout, plus one second
         seen["second"] = other.preflight(10_000, 60.0)
         clock["skew"] = 100 + cycle.SETTLE_MARGIN_S - 1
@@ -459,10 +503,12 @@ def test_a_running_launch_cannot_be_swept_by_another_reservation(sg, cycle, tmp_
 
 
 def _child(code: str) -> list[str]:
+    """Test helper or fixture: child."""
     return [sys.executable, "-c", code]
 
 
 def test_invalid_utf8_output_is_settled_decoded_with_replacement_and_counts_as_a_launch(cycle, tmp_path, monkeypatch) -> None:
+    """Check that invalid utf8 output is settled decoded with replacement and counts as a launch."""
     _arm(monkeypatch, cycle)
     monkeypatch.setattr(
         cycle, "launcher_argv",
@@ -476,6 +522,7 @@ def test_invalid_utf8_output_is_settled_decoded_with_replacement_and_counts_as_a
 
 
 def test_a_launcher_that_cannot_start_still_releases_the_reservation(cycle, tmp_path, monkeypatch) -> None:
+    """Check that a launcher that cannot start still releases the reservation."""
     _arm(monkeypatch, cycle)
     monkeypatch.setattr(
         cycle, "launcher_argv", lambda seat, prompt=None, effort=None: [str(tmp_path / "no-such-launcher")]
@@ -487,9 +534,11 @@ def test_a_launcher_that_cannot_start_still_releases_the_reservation(cycle, tmp_
 
 
 def test_an_interrupt_settles_unknown_and_reraises(cycle, tmp_path, monkeypatch) -> None:
+    """Check that an interrupt settles unknown and reraises."""
     _arm(monkeypatch, cycle)
 
     def interrupted(argv, **kwargs):
+        """Test helper or fixture: interrupted."""
         raise KeyboardInterrupt
 
     monkeypatch.setattr(cycle.subprocess, "run", interrupted)
@@ -502,6 +551,7 @@ def test_an_interrupt_settles_unknown_and_reraises(cycle, tmp_path, monkeypatch)
 
 @needs_pt
 def test_a_timeout_commits_the_full_reservation_on_the_real_gate(sg, cycle, tmp_path, monkeypatch) -> None:
+    """Check that a timeout commits the full reservation on the real gate."""
     monkeypatch.setenv("OPENCLAW_STATE_DIR", str(tmp_path))
     _attest(tmp_path)
     _arm(monkeypatch, cycle)

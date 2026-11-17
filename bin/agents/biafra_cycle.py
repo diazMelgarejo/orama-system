@@ -364,6 +364,7 @@ def live_cycle(
     marker = log_dir / f"{seat}-{mode}-live.once"
 
     def refuse(reason: str, **extra: object) -> dict:
+        """Build the refusal result for ``reason``: nothing was launched and no retry is allowed."""
         return {
             "ok": False, "seat": seat, "mode": mode, "reason": reason, "retries": 0,
             "launched": False, "called_launcher": False, **extra,

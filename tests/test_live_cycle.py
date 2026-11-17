@@ -18,6 +18,7 @@ RESET = "\x1b[0m"
 pytestmark = pytest.mark.usefixtures("offline_guard")
 
 def _load(path: Path, name: str):
+    """Test helper or fixture: load."""
     spec = importlib.util.spec_from_file_location(name, path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -28,13 +29,16 @@ def _load(path: Path, name: str):
 
 @pytest.fixture()
 def cycle():
+    """Test helper or fixture: cycle."""
     module = _load(ROOT / "bin/agents/biafra_cycle.py", "biafra_cycle")
     _Guard.stop = staticmethod(module._provider_stop)
     return module
 
 
 def _fake_run(stdout: str = DIM + "thinking..." + RESET + "ANSWER TEXT", returncode: int = 0, calls=None):
+    """Test helper or fixture: fake run."""
     def run(argv, **kwargs):
+        """Test helper or fixture: run."""
         if calls is not None:
             calls.append((argv, kwargs))
         return subprocess.CompletedProcess(argv, returncode, stdout=stdout.encode(), stderr=b"")
@@ -43,6 +47,7 @@ def _fake_run(stdout: str = DIM + "thinking..." + RESET + "ANSWER TEXT", returnc
 
 
 def _arm(monkeypatch, cycle) -> None:
+    """Test helper or fixture: arm."""
     monkeypatch.setenv(cycle.GATE_ENV, "approved")
     monkeypatch.setenv(cycle.ARM_ENV, "1")
 
@@ -51,35 +56,43 @@ class _Guard:
     """A recording spend guard: every reservation must end settled or released, never left open."""
 
     def __init__(self) -> None:
+        """Test helper or fixture: init  ."""
         self.preflights = 0
         self.settled: list = []
         self.released: list = []
 
     def preflight(self, n, hold_seconds):
+        """Test helper or fixture: preflight."""
         self.preflights += 1
         return {"ok": True, "reservation": f"r{self.preflights}", "projected_usd": 0.0}
 
     def settle(self, reservation, *a, **k):
+        """Test helper or fixture: settle."""
         self.settled.append(reservation)
         return 0.0
 
     def settle_unknown(self, reservation, *a, **k):
+        """Test helper or fixture: settle unknown."""
         self.settled.append(reservation)
         return 0.0
 
     def release(self, reservation):
+        """Test helper or fixture: release."""
         self.released.append(reservation)
 
     stop = staticmethod(lambda text: None)  # set by the `cycle` fixture to the real classifier
 
     def classify(self, text):
+        """Test helper or fixture: classify."""
         return type(self).stop(text)
 
     def open_reservations(self) -> list:
+        """Test helper or fixture: open reservations."""
         return [f"r{i}" for i in range(1, self.preflights + 1) if f"r{i}" not in self.settled + self.released]
 
 
 def _kwargs(tmp_path: Path, **over):
+    """Test helper or fixture: kwargs."""
     base = dict(
         seat="inner", task_type="harden", prompt="Improve X. Return only code.", log_dir=tmp_path,
         evaluate=lambda answer: {"metric_after": 1.0, "detail": answer}, metric_before=3.0,
@@ -92,11 +105,13 @@ def _kwargs(tmp_path: Path, **over):
 
 
 def test_extract_answer_drops_the_thinking_stream_and_ansi(cycle) -> None:
+    """Check that extract answer drops the thinking stream and ansi."""
     raw = DIM + "plan the reply" + RESET + "\x1b[1mFinal\x1b[0m answer" + DIM + "more" + RESET
     assert cycle.extract_answer(raw) == "Final answer"
 
 
 def test_launcher_argv_carries_the_task_prompt_and_an_explicit_effort(cycle) -> None:
+    """Check that launcher argv carries the task prompt and an explicit effort."""
     argv = cycle.launcher_argv("inner", prompt="Do the thing", effort="high")
     assert argv[argv.index("--") + 1] == "Do the thing"
     assert argv[argv.index("--effort") + 1] == "high"
@@ -105,11 +120,13 @@ def test_launcher_argv_carries_the_task_prompt_and_an_explicit_effort(cycle) -> 
 
 @pytest.mark.parametrize("effort", ["xhigh", "max", "ultra", ""])
 def test_launcher_argv_refuses_a_forbidden_effort(cycle, effort: str) -> None:
+    """Check that launcher argv refuses a forbidden effort."""
     with pytest.raises(ValueError):
         cycle.launcher_argv("inner", prompt="p", effort=effort)
 
 
 def test_a_closed_gate_refuses_before_any_marker_or_launch(cycle, tmp_path, monkeypatch) -> None:
+    """Check that a closed gate refuses before any marker or launch."""
     monkeypatch.delenv(cycle.GATE_ENV, raising=False)
     monkeypatch.delenv(cycle.ARM_ENV, raising=False)
     calls: list = []
@@ -129,6 +146,7 @@ def test_a_closed_gate_refuses_before_any_marker_or_launch(cycle, tmp_path, monk
     ],
 )
 def test_refusals_happen_before_the_marker_and_the_launch(cycle, tmp_path, monkeypatch, over, reason) -> None:
+    """Check that refusals happen before the marker and the launch."""
     _arm(monkeypatch, cycle)
     calls: list = []
     monkeypatch.setattr(cycle.subprocess, "run", _fake_run(calls=calls))
@@ -138,6 +156,7 @@ def test_refusals_happen_before_the_marker_and_the_launch(cycle, tmp_path, monke
 
 
 def test_a_live_cycle_keeps_a_better_metric_and_records_a_trace(cycle, tmp_path, monkeypatch) -> None:
+    """Check that a live cycle keeps a better metric and records a trace."""
     _arm(monkeypatch, cycle)
     calls: list = []
     monkeypatch.setattr(cycle.subprocess, "run", _fake_run(calls=calls))
@@ -149,6 +168,7 @@ def test_a_live_cycle_keeps_a_better_metric_and_records_a_trace(cycle, tmp_path,
 
 
 def test_a_worse_metric_is_reverted(cycle, tmp_path, monkeypatch) -> None:
+    """Check that a worse metric is reverted."""
     _arm(monkeypatch, cycle)
     monkeypatch.setattr(cycle.subprocess, "run", _fake_run())
     r = cycle.live_cycle(**_kwargs(tmp_path, evaluate=lambda a: {"metric_after": 9.0}))
@@ -156,6 +176,7 @@ def test_a_worse_metric_is_reverted(cycle, tmp_path, monkeypatch) -> None:
 
 
 def test_the_single_attempt_is_spent_by_a_launch_and_is_never_retried(cycle, tmp_path, monkeypatch) -> None:
+    """Check that the single attempt is spent by a launch and is never retried."""
     _arm(monkeypatch, cycle)
     calls: list = []
     monkeypatch.setattr(cycle.subprocess, "run", _fake_run(returncode=2, calls=calls))
@@ -166,9 +187,11 @@ def test_the_single_attempt_is_spent_by_a_launch_and_is_never_retried(cycle, tmp
 
 
 def test_a_timeout_is_reported_not_raised(cycle, tmp_path, monkeypatch) -> None:
+    """Check that a timeout is reported not raised."""
     _arm(monkeypatch, cycle)
 
     def boom(argv, **kwargs):
+        """Test helper or fixture: boom."""
         raise subprocess.TimeoutExpired(argv, 1)
 
     monkeypatch.setattr(cycle.subprocess, "run", boom)
@@ -178,6 +201,7 @@ def test_a_timeout_is_reported_not_raised(cycle, tmp_path, monkeypatch) -> None:
 
 @pytest.mark.parametrize("bad", [None, "x", float("nan"), True])
 def test_an_unusable_evaluation_is_reported_after_the_request_was_spent(cycle, tmp_path, monkeypatch, bad) -> None:
+    """Check that an unusable evaluation is reported after the request was spent."""
     _arm(monkeypatch, cycle)
     monkeypatch.setattr(cycle.subprocess, "run", _fake_run())
     r = cycle.live_cycle(**_kwargs(tmp_path, evaluate=lambda a: {"metric_after": bad}))
@@ -186,10 +210,12 @@ def test_an_unusable_evaluation_is_reported_after_the_request_was_spent(cycle, t
 
 
 def test_an_evaluator_that_raises_is_reported(cycle, tmp_path, monkeypatch) -> None:
+    """Check that an evaluator that raises is reported."""
     _arm(monkeypatch, cycle)
     monkeypatch.setattr(cycle.subprocess, "run", _fake_run())
 
     def bad(answer):
+        """Test helper or fixture: bad."""
         raise RuntimeError("boom")
 
     r = cycle.live_cycle(**_kwargs(tmp_path, evaluate=bad))
@@ -198,6 +224,7 @@ def test_an_evaluator_that_raises_is_reported(cycle, tmp_path, monkeypatch) -> N
 
 @pytest.mark.parametrize("name", ["autoresearch-inner", "metaresearch-outer"])
 def test_both_programs_expose_run_live(name: str) -> None:
+    """Check that both programs expose run live."""
     module = _load(ROOT / "bin/agents" / name / "program.py", name.replace("-", "_") + "_p")
     assert callable(module.run_live)
 
@@ -213,12 +240,14 @@ PHYLAX_CARD = {
 
 
 def _card(**over):
+    """Test helper or fixture: card."""
     card = dict(PHYLAX_CARD)
     card.update(over)
     return card
 
 
 def test_dry_cycle_refuses_a_fixed_wall_card_before_measurement(cycle, tmp_path: Path) -> None:
+    """Check that dry cycle refuses a fixed wall card before measurement."""
     r = cycle.dry_cycle("outer", "harden", 0.3, 0.1, tmp_path, evaluator_digest=DIGEST,
                         mechanism_card=_card(owner_slices=["phylax"]))
     assert r["ok"] is False and r["reason"] == "invalid-card" and r["launched"] is False
@@ -227,16 +256,19 @@ def test_dry_cycle_refuses_a_fixed_wall_card_before_measurement(cycle, tmp_path:
 
 
 def test_dry_cycle_runs_with_a_valid_card_and_says_it_was_checked(cycle, tmp_path: Path) -> None:
+    """Check that dry cycle runs with a valid card and says it was checked."""
     r = cycle.dry_cycle("outer", "harden", 0.3, 0.1, tmp_path, evaluator_digest=DIGEST, mechanism_card=_card())
     assert r["ok"] is True and r["card_checked"] is True
 
 
 def test_the_no_card_path_is_unchanged_and_says_nothing_was_checked(cycle, tmp_path: Path) -> None:
+    """Check that the no card path is unchanged and says nothing was checked."""
     r = cycle.dry_cycle("outer", "harden", 0.3, 0.1, tmp_path, evaluator_digest=DIGEST)
     assert r["ok"] is True and r["card_checked"] is False
 
 
 def test_live_cycle_refuses_a_fixed_wall_card_before_any_launch(cycle, tmp_path, monkeypatch) -> None:
+    """Check that live cycle refuses a fixed wall card before any launch."""
     _arm(monkeypatch, cycle)
     calls: list = []
     monkeypatch.setattr(cycle.subprocess, "run", _fake_run(calls=calls))
@@ -246,6 +278,7 @@ def test_live_cycle_refuses_a_fixed_wall_card_before_any_launch(cycle, tmp_path,
 
 
 def test_live_cycle_with_a_valid_card_reports_it_was_checked(cycle, tmp_path, monkeypatch) -> None:
+    """Check that live cycle with a valid card reports it was checked."""
     _arm(monkeypatch, cycle)
     monkeypatch.setattr(cycle.subprocess, "run", _fake_run())
     r = cycle.live_cycle(**_kwargs(tmp_path, mechanism_card=_card()))
@@ -272,6 +305,7 @@ def test_g9_live_cycle_names_the_card_it_checked(cycle, tmp_path, monkeypatch) -
 
 @pytest.mark.parametrize("name", ["autoresearch-inner", "metaresearch-outer"])
 def test_the_programs_pass_the_card_through(name: str, tmp_path: Path) -> None:
+    """Check that the programs pass the card through."""
     module = _load(ROOT / "bin/agents" / name / "program.py", name.replace("-", "_") + "_card")
     r = module.run("harden", 0.3, 0.1, tmp_path, evaluator_digest=DIGEST, mechanism_card=_card(owner_slices=["agate"]))
     assert r["ok"] is False and r["reason"] == "invalid-card"
@@ -281,7 +315,9 @@ def test_the_programs_pass_the_card_through(name: str, tmp_path: Path) -> None:
 
 
 def _fake_run_err(stderr: str, stdout: str = "", returncode: int = 1, calls=None):
+    """Test helper or fixture: fake run err."""
     def run(argv, **kwargs):
+        """Test helper or fixture: run."""
         if calls is not None:
             calls.append(argv)
         return subprocess.CompletedProcess(argv, returncode, stdout=stdout, stderr=stderr)
@@ -300,6 +336,7 @@ def _fake_run_err(stderr: str, stdout: str = "", returncode: int = 1, calls=None
     ],
 )
 def test_a_402_style_failure_is_a_payment_stop(cycle, tmp_path, monkeypatch, text: str) -> None:
+    """Check that a 402 style failure is a payment stop."""
     _arm(monkeypatch, cycle)
     calls: list = []
     monkeypatch.setattr(cycle.subprocess, "run", _fake_run_err(text, calls=calls))
@@ -314,6 +351,7 @@ def test_a_402_style_failure_is_a_payment_stop(cycle, tmp_path, monkeypatch, tex
     "text", ["429 Concurrency limit reached for requests", "HTTP 429 Too Many Requests", "rate limit exceeded"],
 )
 def test_a_429_style_failure_is_a_rate_limit_stop(cycle, tmp_path, monkeypatch, text: str) -> None:
+    """Check that a 429 style failure is a rate limit stop."""
     _arm(monkeypatch, cycle)
     monkeypatch.setattr(cycle.subprocess, "run", _fake_run_err("", stdout=text))
     r = cycle.live_cycle(**_kwargs(tmp_path))
@@ -321,6 +359,7 @@ def test_a_429_style_failure_is_a_rate_limit_stop(cycle, tmp_path, monkeypatch, 
 
 
 def test_an_ordinary_launcher_failure_is_not_a_stop(cycle, tmp_path, monkeypatch) -> None:
+    """Check that an ordinary launcher failure is not a stop."""
     _arm(monkeypatch, cycle)
     monkeypatch.setattr(cycle.subprocess, "run", _fake_run_err("error: Invalid request"))
     r = cycle.live_cycle(**_kwargs(tmp_path))
@@ -328,6 +367,7 @@ def test_an_ordinary_launcher_failure_is_not_a_stop(cycle, tmp_path, monkeypatch
 
 
 def test_a_successful_answer_that_merely_mentions_a_limit_is_not_misread(cycle, tmp_path, monkeypatch) -> None:
+    """Check that a successful answer that merely mentions a limit is not misread."""
     _arm(monkeypatch, cycle)
     monkeypatch.setattr(
         cycle.subprocess, "run", _fake_run(stdout="ANSWER: note the 429 and 402 status codes in the docs", returncode=0),
@@ -352,6 +392,7 @@ def test_a_successful_answer_that_merely_mentions_a_limit_is_not_misread(cycle, 
     ],
 )
 def test_malformed_trace_fields_are_refused_before_anything_is_spent(cycle, tmp_path, monkeypatch, over) -> None:
+    """Check that malformed trace fields are refused before anything is spent."""
     _arm(monkeypatch, cycle)
     calls: list = []
     monkeypatch.setattr(cycle.subprocess, "run", _fake_run(calls=calls))
@@ -360,16 +401,20 @@ def test_malformed_trace_fields_are_refused_before_anything_is_spent(cycle, tmp_
         preflights = 0
 
         def preflight(self, n, hold_seconds):
+            """Test helper or fixture: preflight."""
             Guard.preflights += 1
             return {"ok": True, "reservation": "r", "projected_usd": 0.0}
 
         def release(self, r):
+            """Test helper or fixture: release."""
             pass
 
         def settle(self, *a, **k):
+            """Test helper or fixture: settle."""
             return 0.0
 
         def classify(self, t):
+            """Test helper or fixture: classify."""
             return None
 
     r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=Guard(), **over))
@@ -379,9 +424,11 @@ def test_malformed_trace_fields_are_refused_before_anything_is_spent(cycle, tmp_
 
 
 def test_a_timeout_reports_that_the_launcher_was_called(cycle, tmp_path, monkeypatch) -> None:
+    """Check that a timeout reports that the launcher was called."""
     _arm(monkeypatch, cycle)
 
     def boom(argv, **kwargs):
+        """Test helper or fixture: boom."""
         raise subprocess.TimeoutExpired(argv, 1)
 
     monkeypatch.setattr(cycle.subprocess, "run", boom)
@@ -390,6 +437,7 @@ def test_a_timeout_reports_that_the_launcher_was_called(cycle, tmp_path, monkeyp
 
 
 def test_a_spent_measurement_is_appended_to_the_ledger(cycle, tmp_path, monkeypatch) -> None:
+    """Check that a spent measurement is appended to the ledger."""
     import json
 
     _arm(monkeypatch, cycle)
@@ -402,6 +450,7 @@ def test_a_spent_measurement_is_appended_to_the_ledger(cycle, tmp_path, monkeypa
 
 
 def test_refusals_and_unmeasured_attempts_leave_the_ledger_alone(cycle, tmp_path, monkeypatch) -> None:
+    """Check that refusals and unmeasured attempts leave the ledger alone."""
     _arm(monkeypatch, cycle)
     ledger = tmp_path / "ledger.jsonl"
     monkeypatch.setattr(cycle.subprocess, "run", _fake_run(returncode=2))
@@ -412,6 +461,7 @@ def test_refusals_and_unmeasured_attempts_leave_the_ledger_alone(cycle, tmp_path
 
 
 def test_a_live_launch_without_a_ledger_is_refused_before_anything_is_reserved(cycle, tmp_path, monkeypatch) -> None:
+    """Check that a live launch without a ledger is refused before anything is reserved."""
     _arm(monkeypatch, cycle)
     calls: list = []
     monkeypatch.setattr(cycle.subprocess, "run", _fake_run(calls=calls))
@@ -422,11 +472,13 @@ def test_a_live_launch_without_a_ledger_is_refused_before_anything_is_reserved(c
 
 
 def test_an_unwritable_marker_releases_the_reservation(cycle, tmp_path, monkeypatch) -> None:
+    """Check that an unwritable marker releases the reservation."""
     _arm(monkeypatch, cycle)
     calls: list = []
     monkeypatch.setattr(cycle.subprocess, "run", _fake_run(calls=calls))
 
     def denied(marker):
+        """Test helper or fixture: denied."""
         raise PermissionError("log_dir is not writable")
 
     monkeypatch.setattr(cycle, "_claim_once", denied)
@@ -437,6 +489,7 @@ def test_an_unwritable_marker_releases_the_reservation(cycle, tmp_path, monkeypa
 
 
 def test_a_failed_ledger_write_hands_the_spent_trace_back(cycle, tmp_path, monkeypatch) -> None:
+    """Check that a failed ledger write hands the spent trace back."""
     _arm(monkeypatch, cycle)
     monkeypatch.setattr(cycle.subprocess, "run", _fake_run())
     (tmp_path / "blocker").write_text("a file where a directory is needed")
@@ -447,6 +500,7 @@ def test_a_failed_ledger_write_hands_the_spent_trace_back(cycle, tmp_path, monke
 
 
 def test_a_live_launch_without_a_spend_guard_is_refused_before_the_marker(cycle, tmp_path, monkeypatch) -> None:
+    """Check that a live launch without a spend guard is refused before the marker."""
     _arm(monkeypatch, cycle)
     calls: list = []
     monkeypatch.setattr(cycle.subprocess, "run", _fake_run(calls=calls))
@@ -457,6 +511,7 @@ def test_a_live_launch_without_a_spend_guard_is_refused_before_the_marker(cycle,
 
 @pytest.mark.parametrize("effort", ["xhigh", "max", "ultra", ""])
 def test_an_invalid_effort_is_refused_before_anything_is_reserved(cycle, tmp_path, monkeypatch, effort) -> None:
+    """Check that an invalid effort is refused before anything is reserved."""
     _arm(monkeypatch, cycle)
     calls: list = []
     monkeypatch.setattr(cycle.subprocess, "run", _fake_run(calls=calls))
@@ -468,6 +523,7 @@ def test_an_invalid_effort_is_refused_before_anything_is_reserved(cycle, tmp_pat
 
 @pytest.mark.parametrize("effort", ["medium", "high", "low", None])
 def test_a_valid_effort_still_launches(cycle, tmp_path, monkeypatch, effort) -> None:
+    """Check that a valid effort still launches."""
     _arm(monkeypatch, cycle)
     monkeypatch.setattr(cycle.subprocess, "run", _fake_run())
     guard = _Guard()
@@ -476,6 +532,7 @@ def test_a_valid_effort_still_launches(cycle, tmp_path, monkeypatch, effort) -> 
 
 
 def test_the_decision_table_is_pure_and_ordered(cycle) -> None:
+    """Check that the decision table is pure and ordered."""
     ok = dict(gate_open=True, has_digest=True, metric_ok=True, protected=False, prompt_ok=True,
               card_errors=[], trace_problems=[], effort="high", efforts=cycle.EFFORTS, has_guard=True,
               has_ledger=True)
@@ -487,9 +544,11 @@ def test_the_decision_table_is_pure_and_ordered(cycle) -> None:
 
 
 def test_an_oserror_from_the_launcher_releases_the_reservation(cycle, tmp_path, monkeypatch) -> None:
+    """Check that an oserror from the launcher releases the reservation."""
     _arm(monkeypatch, cycle)
 
     def boom(argv, **kwargs):
+        """Test helper or fixture: boom."""
         raise OSError("exec failed")
 
     monkeypatch.setattr(cycle.subprocess, "run", boom)
@@ -504,6 +563,7 @@ def test_an_interrupt_during_the_run_settles_the_possibly_sent_request(cycle, tm
     _arm(monkeypatch, cycle)
 
     def interrupted(argv, **kwargs):
+        """Test helper or fixture: interrupted."""
         raise KeyboardInterrupt
 
     monkeypatch.setattr(cycle.subprocess, "run", interrupted)
@@ -514,6 +574,7 @@ def test_an_interrupt_during_the_run_settles_the_possibly_sent_request(cycle, tm
 
 
 def test_a_nul_byte_in_the_prompt_is_refused_before_the_marker(cycle, tmp_path, monkeypatch) -> None:
+    """Check that a nul byte in the prompt is refused before the marker."""
     _arm(monkeypatch, cycle)
     calls: list = []
     monkeypatch.setattr(cycle.subprocess, "run", _fake_run(calls=calls))
@@ -524,9 +585,11 @@ def test_a_nul_byte_in_the_prompt_is_refused_before_the_marker(cycle, tmp_path, 
 
 
 def test_a_valueerror_from_the_launcher_frees_the_reservation(cycle, tmp_path, monkeypatch) -> None:
+    """Check that a valueerror from the launcher frees the reservation."""
     _arm(monkeypatch, cycle)
 
     def refuses(argv, **kwargs):
+        """Test helper or fixture: refuses."""
         raise ValueError("embedded null byte")
 
     monkeypatch.setattr(cycle.subprocess, "run", refuses)
