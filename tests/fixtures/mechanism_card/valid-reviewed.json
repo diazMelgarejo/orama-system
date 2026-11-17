@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "mechanism_id": "m-bbbbbbbbbbbb",
+  "revision": 1,
+  "parent": null,
+  "hypothesis": "Repeat reverts on the same artifact mean the proposal rule is stale.",
+  "evidence_ids": [
+    "a-001",
+    "a-002"
+  ],
+  "inner_metric": "val_bpb",
+  "held_out_metric": "val_bpb_heldout",
+  "evaluator_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "dry_run_receipt": {
+    "ok": true,
+    "retries": 0,
+    "launched": false,
+    "trace": {
+      "version": 1,
+      "seat": "outer",
+      "attempt_id": "outer-plugin-loop-aaaaaaaaaaaa",
+      "hypothesis": "Repeat reverts on the same artifact mean the proposal rule is stale.",
+      "artifact": "search-rule",
+      "metric_name": "val_bpb",
+      "metric_before": 0.26,
+      "metric_after": 0.19,
+      "decision": "keep",
+      "evaluator_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "card_checked": true,
+    "card_id": "m-bbbbbbbbbbbb@1"
+  },
+  "delta": -0.01,
+  "reverted": false,
+  "scope_record": {
+    "authorizes": "nothing"
+  },
+  "owner_slices": [
+    "kungfu"
+  ],
+  "status": "reviewed"
+}

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Mechanism Card",
   "type": "object",
-  "description": "Shape only. The authority is validate_mechanism_card in bin/agents/seat_contracts.py. The validator also enforces what a schema cannot: fixed-wall owner names (normalized, ASCII only), reverted agreeing with the sign of delta, and a real dry-run receipt before reviewed or graduated. Unknown fields are refused here and there.",
+  "description": "Shape only. The authority is validate_mechanism_card in bin/agents/seat_contracts.py. The validator also enforces what a schema cannot: fixed-wall owner names (normalized, ASCII only), reverted agreeing with the sign of delta, and, before reviewed or graduated, a real dry-run receipt bound to this card (valid trace with the card's evaluator_digest, card_checked true, card_id equal to mechanism_id@revision); graduated also needs the run's pin (pinned_digest, from pin_evaluator). Unknown fields are refused here and there.",
   "required": [
     "version",
     "mechanism_id",
@@ -61,7 +61,28 @@
       "pattern": "^[0-9a-f]{64}$"
     },
     "dry_run_receipt": {
-      "type": "object"
+      "type": "object",
+      "description": "A dry cycle result. Other keys are allowed. Whether a reviewed or graduated card's receipt is bound to this card, its trace and the pin is decided by the validator, not here.",
+      "properties": {
+        "ok": {
+          "type": "boolean"
+        },
+        "retries": {
+          "type": "integer"
+        },
+        "launched": {
+          "type": "boolean"
+        },
+        "trace": {
+          "type": "object"
+        },
+        "card_checked": {
+          "type": "boolean"
+        },
+        "card_id": {
+          "type": "string"
+        }
+      }
     },
     "delta": {
       "type": "number"

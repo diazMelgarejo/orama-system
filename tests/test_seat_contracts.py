@@ -796,3 +796,37 @@ def test_g9_card_id_is_mechanism_id_at_revision(sc) -> None:
 
 def test_g9_a_candidate_needs_no_checked_receipt(sc) -> None:
     assert sc.validate_mechanism_card(_card(dry_run_receipt={})) == []
+
+
+def test_g3_g9_the_schema_types_the_receipt_fields_and_stays_shape_only() -> None:
+    jsonschema = pytest.importorskip("jsonschema")
+    schema = json.loads((ROOT / "docs/v2/references/biafra/mechanism-card.schema.json").read_text())
+    receipt = schema["properties"]["dry_run_receipt"]["properties"]
+    assert {"ok", "retries", "launched", "trace", "card_checked", "card_id"} <= set(receipt)
+    root = ROOT / "tests" / "fixtures" / "mechanism_card"
+    validator = jsonschema.Draft202012Validator(schema)
+    shape_only = [
+        "valid-reviewed.json", "valid-graduated.json",
+        # Semantic refusals the Python validator owns: the schema alone accepts their shape.
+        "invalid-graduated-receipt-without-trace.json", "invalid-receipt-trace-digest-differs.json",
+        "invalid-reviewed-receipt-did-not-check-the-card.json", "invalid-reviewed-receipt-names-another-card.json",
+    ]
+    for name in shape_only:
+        assert not list(validator.iter_errors(json.loads((root / name).read_text()))), name
+    bad = json.loads((root / "valid-reviewed.json").read_text())
+    bad["dry_run_receipt"]["card_checked"] = "yes"
+    assert list(validator.iter_errors(bad))
+
+
+def test_g3_g9_each_new_invalid_fixture_is_refused_for_its_own_reason(sc) -> None:
+    root = ROOT / "tests" / "fixtures" / "mechanism_card"
+    expect = {
+        "invalid-graduated-receipt-without-trace.json": "trace",
+        "invalid-receipt-trace-digest-differs.json": "trace.evaluator_digest",
+        "invalid-reviewed-receipt-did-not-check-the-card.json": "card_checked",
+        "invalid-reviewed-receipt-names-another-card.json": "card_id",
+    }
+    for name, needle in expect.items():
+        card = json.loads((root / name).read_text())
+        errors = sc.validate_mechanism_card(card, pinned_digest=card["evaluator_digest"])
+        assert errors and all(needle in e for e in errors), (name, errors)
