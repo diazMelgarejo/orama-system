@@ -300,3 +300,31 @@ Still open in this document, unchanged by this remediation: G1 (Anamnesis ledger
 G4 (stall window), G6 (persona draft), G7 (re-probe provider state before arming), G8 (`_finite`
 integer precision), G10 (metric registry) and G11 (Wanda's soul card versus the Cline W&B route,
 see 8.4). Tri-level stays off.
+
+## 14. Open-gap source continuation (2026-11-17)
+
+The current implementation request continues the source work without claiming
+new operator ratification. The
+[implementation receipt](references/biafra/open-gaps-implementation-2026-11-17.md)
+records the migration, caller compatibility and residual gates. Sections 4 and
+13 retain their historical cutoff; the following dispositions supersede only
+their statements about these source gaps.
+
+| Gap | Current disposition |
+| --- | --- |
+| G1 | Still dependency-blocked on provisioned Anamnesis; no replacement Orama ledger. |
+| G2 | Still dependency-blocked on published Kungfu atoms and evaluable O1–O3. |
+| G4 | Existing three-revert behavior retained as `STALL_WINDOW`; not new policy ratification. |
+| G6 | Persona remains a draft; no agent has accepted it for the operator. |
+| G7 | Live preflight now requires same-day local probe evidence and matching evaluator pin before reservation or marker; an actual provider re-probe remains an operator prerequisite. |
+| G8 | Source guard rejects integers beyond ±2**53 without requiring the unverified all-consumers-double assumption. |
+| G10 | One declared metric registry governs cards, trace entries and cycles; existing `metric` default remains declared for compatibility. |
+| G11 | Still an operator choice; conflicting Wanda and PT records remain preserved. |
+
+The live-cycle pin TODO is implemented. The generic OpenAI W&B bypass now
+refuses before SDK construction. PT bounds the W&B SDK request in a killable
+worker with parent-owned spending; process creation and bounded cleanup limits
+are documented rather than represented as hard real-time guarantees.
+Armed legacy `run_program` refuses: live callers must use the governed interface.
+Nothing here arms a cycle, enables serving, approves a paid model, qualifies a
+host or authorizes a merge. Publication remains held for the existing PR pair.

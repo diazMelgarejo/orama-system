@@ -87,7 +87,7 @@ budget), reconstructed as an upper bound and seeded into the guard's state.
 | The evaluator is fixed | Repository tests plus reviewer-derived cases; baseline measured; a reference answer scores 0 |
 | The evaluator is safe | Candidates run through `bin/agents/sandbox_run.py` only |
 | Gate and arm | `BIAFRA_ORCHESTRATOR_GATE=approved` and `BIAFRA_ALLOW_LAUNCH=1` set for that one command only |
-| Provider re-probe | Same-day read-only model list; abort before any completion if the model is missing |
+| Provider re-probe | Same-day local evidence plus evaluator pin are required by live preflight before any spend; see the source continuation below |
 | Budget | Operator ceiling: an estimated 90 dollars a month of list-price usage, under the Free plan's 100-dollar cap; pass `spend_guard` (the adapter to the shared guard in Perpetua-Tools) to `live_cycle`; see Billing basis |
 | Effort | Explicit; medium, else high, else low; the V4.1 models reject `medium`, so `high` |
 
@@ -193,3 +193,19 @@ reading the pin inside `live_cycle`) are listed in
 
 Sanitized copies of the evaluators and drivers used in the live turns are in
 `docs/v2/references/biafra/live-cycle-2026-11-17/harness/`, with a README on how to rebuild a turn.
+
+## Source continuation: preflight and request deadline
+
+The [open-gap implementation](../../../../../docs/v2/references/biafra/open-gaps-implementation-2026-11-17.md)
+supersedes the source TODOs above about absent metric and pin checks. Supply
+`pin_path` and a real same-day `probe_record` to `live_cycle`; the linked receipt
+defines its closed schema. Its example is not provider evidence. Model and
+effort are chosen from the canonical policy; invalid explicit overrides refuse
+before budget reservation or the once marker. Billing attestation stays separate.
+
+Armed legacy `run_program` refuses; use the governed live interface instead.
+PT's SDK worker stops request execution at the monotonic deadline, then performs
+bounded cleanup. Process creation and OS scheduling are not hard real-time.
+No source check arms a cycle, creates an attestation or approves a paid model.
+G6 and G11 still require operator decisions; real provider probes and native
+platform evidence remain prerequisites, not claims made by local tests.
