@@ -260,6 +260,19 @@ def _settle_unknown(spend_guard, reservation, input_chars, outcome, seat, mode) 
     return {"estimated_usd": usd}
 
 
+def _reap(proc) -> None:
+    """Kill a launcher that is still running and wait for it, so no child outlives the attempt.
+
+    Never raises an ordinary error: cleanup must not mask the failure that led here or skip the settle.
+    """
+    try:
+        if proc.poll() is None:
+            proc.kill()
+        proc.communicate()
+    except Exception:
+        pass
+
+
 def _decode(raw: bytes | str | None) -> str:
     """Launcher output as text. Invalid UTF-8 is replaced, never raised: the request was already sent."""
     if raw is None:
@@ -398,27 +411,43 @@ def live_cycle(
             closed = True
             return refuse("already-ran")
         try:
-            # Bytes, decoded below: a decode problem must never surface from inside this try, where it
-            # would be mistaken for a launcher that never started.
-            completed = subprocess.run(
-                argv, capture_output=True, stdin=subprocess.DEVNULL, timeout=timeout_s, check=False,
-            )
-        except subprocess.TimeoutExpired:
-            # Unavailable output is not evidence of zero billed output: charge the whole reservation.
-            spent = _settle_unknown(spend_guard, reservation, len(prompt), "timeout", seat, mode)
-            closed = True
-            return refuse("launcher-timeout", spent=True, called_launcher=True, **spent)
+            # Only a failure of Popen itself means nothing was sent (bad argv, missing or unrunnable file).
+            proc = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL)
         except (OSError, ValueError) as exc:
-            # subprocess.run raises these only for a launcher that could not be started (bad argv, missing
-            # or unrunnable file): nothing was sent, so free the reservation and keep the marker.
             spend_guard.release(reservation)
             closed = True
             return refuse("launcher-error", error=f"{type(exc).__name__}: {exc}")
+        # From here the request may have been sent. Output is bytes, decoded below, so a decode problem
+        # can never be mistaken for a launcher that never started.
+        try:
+            raw_out, raw_err = proc.communicate(timeout=timeout_s)
+        except subprocess.TimeoutExpired:
+            # Unavailable output is not evidence of zero billed output: charge the whole reservation.
+            try:
+                _reap(proc)
+            finally:
+                spent = _settle_unknown(spend_guard, reservation, len(prompt), "timeout", seat, mode)
+                closed = True
+            return refuse("launcher-timeout", spent=True, called_launcher=True, **spent)
+        except Exception as exc:
+            # The wait itself failed (for example a pipe read): the request was sent, so charge it.
+            try:
+                _reap(proc)
+            finally:
+                spent = _settle_unknown(spend_guard, reservation, len(prompt), "launcher-io-error", seat, mode)
+                closed = True
+            return refuse(
+                "launcher-error", spent=True, called_launcher=True, error=f"{type(exc).__name__}: {exc}", **spent,
+            )
         except BaseException:
             # An interrupt may have landed after the request was sent: record the spend, never release it.
-            _settle_unknown(spend_guard, reservation, len(prompt), "interrupted", seat, mode)
-            closed = True
+            try:
+                _reap(proc)
+            finally:
+                _settle_unknown(spend_guard, reservation, len(prompt), "interrupted", seat, mode)
+                closed = True
             raise
+        completed = subprocess.CompletedProcess(argv, proc.returncode, raw_out, raw_err)
         stdout_text = _decode(completed.stdout)
         stderr_text = _decode(completed.stderr)
         out_text = stdout_text + stderr_text

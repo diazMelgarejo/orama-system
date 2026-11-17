@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
+from _fake_popen import as_popen
 
 ROOT = Path(__file__).resolve().parents[1]
 DIGEST = "c" * 64
@@ -213,7 +214,7 @@ def _fake_run(stdout="ANSWER", stderr="", returncode=0, calls=None):
             calls.append(argv)
         return subprocess.CompletedProcess(argv, returncode, stdout=stdout.encode(), stderr=stderr.encode())
 
-    return run
+    return as_popen(run)
 
 
 def _arm(monkeypatch, cycle) -> None:
@@ -237,7 +238,7 @@ def test_a_refusing_guard_stops_the_cycle_before_any_launch_or_marker(cycle, tmp
     """Check that a refusing guard stops the cycle before any launch or marker."""
     _arm(monkeypatch, cycle)
     calls: list = []
-    monkeypatch.setattr(cycle.subprocess, "run", _fake_run(calls=calls))
+    monkeypatch.setattr(cycle.subprocess, "Popen", _fake_run(calls=calls))
     guard = FakeGuard(pre={"ok": False, "reason": "attestation-required", "stop": True, "reasons": ["missing"]})
     r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard))
     assert r["ok"] is False and r["reason"] == "attestation-required" and r["stop"] is True
@@ -247,7 +248,7 @@ def test_a_refusing_guard_stops_the_cycle_before_any_launch_or_marker(cycle, tmp
 def test_a_request_is_settled_with_sizes_and_the_estimate_is_returned(cycle, tmp_path, monkeypatch) -> None:
     """Check that a request is settled with sizes and the estimate is returned."""
     _arm(monkeypatch, cycle)
-    monkeypatch.setattr(cycle.subprocess, "run", _fake_run(stdout="x" * 5000, stderr="y" * 100))
+    monkeypatch.setattr(cycle.subprocess, "Popen", _fake_run(stdout="x" * 5000, stderr="y" * 100))
     guard = FakeGuard()
     r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard))
     assert r["ok"] is True and r["estimated_usd"] == 0.0123
@@ -258,7 +259,7 @@ def test_a_request_is_settled_with_sizes_and_the_estimate_is_returned(cycle, tmp
 def test_a_failed_launch_is_still_settled_as_spent(cycle, tmp_path, monkeypatch) -> None:
     """Check that a failed launch is still settled as spent."""
     _arm(monkeypatch, cycle)
-    monkeypatch.setattr(cycle.subprocess, "run", _fake_run(stdout="partial", returncode=2))
+    monkeypatch.setattr(cycle.subprocess, "Popen", _fake_run(stdout="partial", returncode=2))
     guard = FakeGuard()
     r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard))
     assert r["reason"] == "launcher-failed" and r["estimated_usd"] == 0.0123
@@ -268,7 +269,7 @@ def test_a_failed_launch_is_still_settled_as_spent(cycle, tmp_path, monkeypatch)
 def test_the_shared_classifier_decides_a_provider_stop(cycle, tmp_path, monkeypatch) -> None:
     """Check that the shared classifier decides a provider stop."""
     _arm(monkeypatch, cycle)
-    monkeypatch.setattr(cycle.subprocess, "run", _fake_run(stderr="weird provider text", returncode=1))
+    monkeypatch.setattr(cycle.subprocess, "Popen", _fake_run(stderr="weird provider text", returncode=1))
     guard = FakeGuard(classify=lambda text: "provider-payment-required")
     r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard))
     assert r["reason"] == "provider-payment-required" and r["stop"] is True and r["retries"] == 0
@@ -277,7 +278,7 @@ def test_the_shared_classifier_decides_a_provider_stop(cycle, tmp_path, monkeypa
 def test_an_already_spent_attempt_releases_its_reservation(cycle, tmp_path, monkeypatch) -> None:
     """Check that an already spent attempt releases its reservation."""
     _arm(monkeypatch, cycle)
-    monkeypatch.setattr(cycle.subprocess, "run", _fake_run())
+    monkeypatch.setattr(cycle.subprocess, "Popen", _fake_run())
     first = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=FakeGuard()))
     assert first["ok"] is True
     guard = FakeGuard()
@@ -293,7 +294,7 @@ def test_a_timeout_settles_as_unknown_output_never_as_zero(cycle, tmp_path, monk
         """Test helper or fixture: boom."""
         raise subprocess.TimeoutExpired(argv, 1)
 
-    monkeypatch.setattr(cycle.subprocess, "run", boom)
+    monkeypatch.setattr(cycle.subprocess, "Popen", as_popen(boom))
     guard = FakeGuard()
     r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard))
     assert r["reason"] == "launcher-timeout" and r["spent"] is True and r["called_launcher"] is True
@@ -461,7 +462,7 @@ def test_a_checkout_without_the_spend_gate_is_not_a_guard(sg_isolated, tmp_path,
 def test_live_cycle_declares_a_hold_longer_than_the_launcher_timeout(cycle, tmp_path, monkeypatch) -> None:
     """Check that live cycle declares a hold longer than the launcher timeout."""
     _arm(monkeypatch, cycle)
-    monkeypatch.setattr(cycle.subprocess, "run", _fake_run())
+    monkeypatch.setattr(cycle.subprocess, "Popen", _fake_run())
     guard = FakeGuard()
     cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard, timeout_s=900))
     assert guard.hold_seconds == 900 + cycle.SETTLE_MARGIN_S and cycle.SETTLE_MARGIN_S > 0
@@ -491,7 +492,7 @@ def test_a_running_launch_cannot_be_swept_by_another_reservation(sg, cycle, tmp_
         clock["skew"] = 100 + cycle.SETTLE_MARGIN_S - 1
         return subprocess.CompletedProcess(argv, 0, stdout="ANSWER", stderr="")
 
-    monkeypatch.setattr(cycle.subprocess, "run", slow_launch)
+    monkeypatch.setattr(cycle.subprocess, "Popen", as_popen(slow_launch))
     result = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=first, timeout_s=100, prompt="x" * 10_000))
     assert seen["second"]["ok"] is False and seen["second"]["reason"] == "budget-exhausted"
     assert result["ok"] is True
@@ -541,7 +542,7 @@ def test_an_interrupt_settles_unknown_and_reraises(cycle, tmp_path, monkeypatch)
         """Test helper or fixture: interrupted."""
         raise KeyboardInterrupt
 
-    monkeypatch.setattr(cycle.subprocess, "run", interrupted)
+    monkeypatch.setattr(cycle.subprocess, "Popen", as_popen(interrupted))
     guard = FakeGuard()
     with pytest.raises(KeyboardInterrupt):
         cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard))
@@ -564,3 +565,78 @@ def test_a_timeout_commits_the_full_reservation_on_the_real_gate(sg, cycle, tmp_
     rows = [json.loads(x) for x in (tmp_path / "spend" / "wandb-inference-spend-audit.jsonl").read_text().splitlines()]
     assert rows[0]["outcome"] == "timeout" and rows[0]["basis"] == "output-unknown" and "output_chars" not in rows[0]
     assert guard.snapshot()["daily_spend"] == pytest.approx(guard.gate.pl.projected_usd(guard.policy, 10_000))
+
+
+# --- the wait is explicit: only a failed start means nothing was sent -----------------------------------
+
+
+def test_an_oserror_while_waiting_settles_as_unknown_and_counts_as_a_launch(cycle, tmp_path, monkeypatch) -> None:
+    """Check that an oserror raised while waiting settles unknown, kills the child and reports a launch."""
+    _arm(monkeypatch, cycle)
+    monkeypatch.setattr(cycle, "launcher_argv", lambda seat, prompt=None, effort=None: _child("pass"))
+    procs: list = []
+
+    def broken_pipe(argv, **kwargs):
+        """Fail the way a pipe read fails after the process started."""
+        raise OSError("pipe read failed")
+
+    monkeypatch.setattr(cycle.subprocess, "Popen", as_popen(broken_pipe, procs))
+    guard = FakeGuard()
+    r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard))
+    assert r["ok"] is False and r["reason"] == "launcher-error"
+    assert r["called_launcher"] is True and r["spent"] is True and "OSError" in r["error"]
+    assert guard.released == [] and guard.settled == []
+    assert guard.unknown == [("r1", len("Improve X."), "launcher-io-error", "inner", "inner")]
+    assert procs[0].killed is True and procs[0].communicate_calls == 2  # killed, then reaped
+
+
+def test_a_timeout_kills_and_reaps_the_child_before_settling(cycle, tmp_path, monkeypatch) -> None:
+    """Check that a timeout kills and reaps the process and then settles unknown."""
+    _arm(monkeypatch, cycle)
+    monkeypatch.setattr(cycle, "launcher_argv", lambda seat, prompt=None, effort=None: _child("pass"))
+    procs: list = []
+
+    def slow(argv, **kwargs):
+        """Time out the wait."""
+        raise subprocess.TimeoutExpired(argv, 1)
+
+    monkeypatch.setattr(cycle.subprocess, "Popen", as_popen(slow, procs))
+    guard = FakeGuard()
+    r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard))
+    assert r["reason"] == "launcher-timeout" and r["called_launcher"] is True
+    assert procs[0].killed is True and procs[0].communicate_calls == 2
+    assert len(guard.unknown) == 1 and guard.settled == [] and guard.released == []
+
+
+def test_an_interrupt_kills_and_reaps_the_child_and_still_reraises(cycle, tmp_path, monkeypatch) -> None:
+    """Check that an interrupt kills and reaps the process, settles unknown and is re-raised."""
+    _arm(monkeypatch, cycle)
+    monkeypatch.setattr(cycle, "launcher_argv", lambda seat, prompt=None, effort=None: _child("pass"))
+    procs: list = []
+
+    def interrupted(argv, **kwargs):
+        """Interrupt the wait."""
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(cycle.subprocess, "Popen", as_popen(interrupted, procs))
+    guard = FakeGuard()
+    with pytest.raises(KeyboardInterrupt):
+        cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard))
+    assert procs[0].killed is True and procs[0].communicate_calls == 2
+    assert guard.unknown[0][2] == "interrupted" and guard.settled == [] and guard.released == []
+
+
+def test_a_failure_to_start_the_process_releases_and_reports_no_launch(cycle, tmp_path, monkeypatch) -> None:
+    """Check that an exception raised by Popen itself releases the reservation."""
+    _arm(monkeypatch, cycle)
+    monkeypatch.setattr(cycle, "launcher_argv", lambda seat, prompt=None, effort=None: _child("pass"))
+
+    def no_start(argv, **kwargs):
+        """Fail to start."""
+        raise OSError("exec failed")
+
+    monkeypatch.setattr(cycle.subprocess, "Popen", no_start)
+    guard = FakeGuard()
+    r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard))
+    assert r["reason"] == "launcher-error" and r["called_launcher"] is False
+    assert guard.released == ["r1"] and guard.settled == [] and guard.unknown == []

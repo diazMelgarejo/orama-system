@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from _fake_popen import as_popen
 
 ROOT = Path(__file__).resolve().parents[1]
 DIGEST = "b" * 64
@@ -43,7 +44,7 @@ def _fake_run(stdout: str = DIM + "thinking..." + RESET + "ANSWER TEXT", returnc
             calls.append((argv, kwargs))
         return subprocess.CompletedProcess(argv, returncode, stdout=stdout.encode(), stderr=b"")
 
-    return run
+    return as_popen(run)
 
 
 def _arm(monkeypatch, cycle) -> None:
@@ -130,7 +131,7 @@ def test_a_closed_gate_refuses_before_any_marker_or_launch(cycle, tmp_path, monk
     monkeypatch.delenv(cycle.GATE_ENV, raising=False)
     monkeypatch.delenv(cycle.ARM_ENV, raising=False)
     calls: list = []
-    monkeypatch.setattr(cycle.subprocess, "run", _fake_run(calls=calls))
+    monkeypatch.setattr(cycle.subprocess, "Popen", _fake_run(calls=calls))
     r = cycle.live_cycle(**_kwargs(tmp_path))
     assert r["ok"] is False and r["reason"] == "gate-closed" and r["launched"] is False
     assert calls == [] and not list(tmp_path.glob("*.once"))
@@ -149,7 +150,7 @@ def test_refusals_happen_before_the_marker_and_the_launch(cycle, tmp_path, monke
     """Check that refusals happen before the marker and the launch."""
     _arm(monkeypatch, cycle)
     calls: list = []
-    monkeypatch.setattr(cycle.subprocess, "run", _fake_run(calls=calls))
+    monkeypatch.setattr(cycle.subprocess, "Popen", _fake_run(calls=calls))
     r = cycle.live_cycle(**_kwargs(tmp_path, **over))
     assert r["ok"] is False and r["reason"] == reason and calls == []
     assert not list(tmp_path.glob("*.once"))
@@ -159,7 +160,7 @@ def test_a_live_cycle_keeps_a_better_metric_and_records_a_trace(cycle, tmp_path,
     """Check that a live cycle keeps a better metric and records a trace."""
     _arm(monkeypatch, cycle)
     calls: list = []
-    monkeypatch.setattr(cycle.subprocess, "run", _fake_run(calls=calls))
+    monkeypatch.setattr(cycle.subprocess, "Popen", _fake_run(calls=calls))
     r = cycle.live_cycle(**_kwargs(tmp_path, effort="high"))
     assert r["ok"] is True and r["decision"] == "keep" and r["launched"] is True and r["retries"] == 0
     assert r["recorded"] is True and r["answer"] == "ANSWER TEXT" and r["called_launcher"] is True
@@ -170,7 +171,7 @@ def test_a_live_cycle_keeps_a_better_metric_and_records_a_trace(cycle, tmp_path,
 def test_a_worse_metric_is_reverted(cycle, tmp_path, monkeypatch) -> None:
     """Check that a worse metric is reverted."""
     _arm(monkeypatch, cycle)
-    monkeypatch.setattr(cycle.subprocess, "run", _fake_run())
+    monkeypatch.setattr(cycle.subprocess, "Popen", _fake_run())
     r = cycle.live_cycle(**_kwargs(tmp_path, evaluate=lambda a: {"metric_after": 9.0}))
     assert r["ok"] is True and r["decision"] == "revert"
 
@@ -179,7 +180,7 @@ def test_the_single_attempt_is_spent_by_a_launch_and_is_never_retried(cycle, tmp
     """Check that the single attempt is spent by a launch and is never retried."""
     _arm(monkeypatch, cycle)
     calls: list = []
-    monkeypatch.setattr(cycle.subprocess, "run", _fake_run(returncode=2, calls=calls))
+    monkeypatch.setattr(cycle.subprocess, "Popen", _fake_run(returncode=2, calls=calls))
     first = cycle.live_cycle(**_kwargs(tmp_path))
     assert first["ok"] is False and first["reason"] == "launcher-failed" and first["returncode"] == 2
     second = cycle.live_cycle(**_kwargs(tmp_path))
@@ -194,7 +195,7 @@ def test_a_timeout_is_reported_not_raised(cycle, tmp_path, monkeypatch) -> None:
         """Test helper or fixture: boom."""
         raise subprocess.TimeoutExpired(argv, 1)
 
-    monkeypatch.setattr(cycle.subprocess, "run", boom)
+    monkeypatch.setattr(cycle.subprocess, "Popen", as_popen(boom))
     r = cycle.live_cycle(**_kwargs(tmp_path))
     assert r["ok"] is False and r["reason"] == "launcher-timeout"
 
@@ -203,7 +204,7 @@ def test_a_timeout_is_reported_not_raised(cycle, tmp_path, monkeypatch) -> None:
 def test_an_unusable_evaluation_is_reported_after_the_request_was_spent(cycle, tmp_path, monkeypatch, bad) -> None:
     """Check that an unusable evaluation is reported after the request was spent."""
     _arm(monkeypatch, cycle)
-    monkeypatch.setattr(cycle.subprocess, "run", _fake_run())
+    monkeypatch.setattr(cycle.subprocess, "Popen", _fake_run())
     r = cycle.live_cycle(**_kwargs(tmp_path, evaluate=lambda a: {"metric_after": bad}))
     assert r["ok"] is False and r["reason"] == "evaluation-failed" and r["launched"] is True
     assert r["answer"] == "ANSWER TEXT"
@@ -212,7 +213,7 @@ def test_an_unusable_evaluation_is_reported_after_the_request_was_spent(cycle, t
 def test_an_evaluator_that_raises_is_reported(cycle, tmp_path, monkeypatch) -> None:
     """Check that an evaluator that raises is reported."""
     _arm(monkeypatch, cycle)
-    monkeypatch.setattr(cycle.subprocess, "run", _fake_run())
+    monkeypatch.setattr(cycle.subprocess, "Popen", _fake_run())
 
     def bad(answer):
         """Test helper or fixture: bad."""
@@ -271,7 +272,7 @@ def test_live_cycle_refuses_a_fixed_wall_card_before_any_launch(cycle, tmp_path,
     """Check that live cycle refuses a fixed wall card before any launch."""
     _arm(monkeypatch, cycle)
     calls: list = []
-    monkeypatch.setattr(cycle.subprocess, "run", _fake_run(calls=calls))
+    monkeypatch.setattr(cycle.subprocess, "Popen", _fake_run(calls=calls))
     r = cycle.live_cycle(**_kwargs(tmp_path, mechanism_card=_card(owner_slices=["telos"])))
     assert r["ok"] is False and r["reason"] == "invalid-card" and calls == []
     assert not list(tmp_path.glob("*.once"))
@@ -280,7 +281,7 @@ def test_live_cycle_refuses_a_fixed_wall_card_before_any_launch(cycle, tmp_path,
 def test_live_cycle_with_a_valid_card_reports_it_was_checked(cycle, tmp_path, monkeypatch) -> None:
     """Check that live cycle with a valid card reports it was checked."""
     _arm(monkeypatch, cycle)
-    monkeypatch.setattr(cycle.subprocess, "run", _fake_run())
+    monkeypatch.setattr(cycle.subprocess, "Popen", _fake_run())
     r = cycle.live_cycle(**_kwargs(tmp_path, mechanism_card=_card()))
     assert r["ok"] is True and r["card_checked"] is True
     r2 = cycle.live_cycle(**_kwargs(tmp_path / "b"))
@@ -322,7 +323,7 @@ def _fake_run_err(stderr: str, stdout: str = "", returncode: int = 1, calls=None
             calls.append(argv)
         return subprocess.CompletedProcess(argv, returncode, stdout=stdout, stderr=stderr)
 
-    return run
+    return as_popen(run)
 
 
 @pytest.mark.parametrize(
@@ -339,7 +340,7 @@ def test_a_402_style_failure_is_a_payment_stop(cycle, tmp_path, monkeypatch, tex
     """Check that a 402 style failure is a payment stop."""
     _arm(monkeypatch, cycle)
     calls: list = []
-    monkeypatch.setattr(cycle.subprocess, "run", _fake_run_err(text, calls=calls))
+    monkeypatch.setattr(cycle.subprocess, "Popen", _fake_run_err(text, calls=calls))
     r = cycle.live_cycle(**_kwargs(tmp_path))
     assert r["ok"] is False and r["reason"] == "provider-payment-required" and r["stop"] is True
     assert r["retries"] == 0 and len(calls) == 1
@@ -353,7 +354,7 @@ def test_a_402_style_failure_is_a_payment_stop(cycle, tmp_path, monkeypatch, tex
 def test_a_429_style_failure_is_a_rate_limit_stop(cycle, tmp_path, monkeypatch, text: str) -> None:
     """Check that a 429 style failure is a rate limit stop."""
     _arm(monkeypatch, cycle)
-    monkeypatch.setattr(cycle.subprocess, "run", _fake_run_err("", stdout=text))
+    monkeypatch.setattr(cycle.subprocess, "Popen", _fake_run_err("", stdout=text))
     r = cycle.live_cycle(**_kwargs(tmp_path))
     assert r["ok"] is False and r["reason"] == "provider-rate-limited" and r["stop"] is True
 
@@ -361,7 +362,7 @@ def test_a_429_style_failure_is_a_rate_limit_stop(cycle, tmp_path, monkeypatch, 
 def test_an_ordinary_launcher_failure_is_not_a_stop(cycle, tmp_path, monkeypatch) -> None:
     """Check that an ordinary launcher failure is not a stop."""
     _arm(monkeypatch, cycle)
-    monkeypatch.setattr(cycle.subprocess, "run", _fake_run_err("error: Invalid request"))
+    monkeypatch.setattr(cycle.subprocess, "Popen", _fake_run_err("error: Invalid request"))
     r = cycle.live_cycle(**_kwargs(tmp_path))
     assert r["reason"] == "launcher-failed" and not r.get("stop")
 
@@ -370,7 +371,7 @@ def test_a_successful_answer_that_merely_mentions_a_limit_is_not_misread(cycle, 
     """Check that a successful answer that merely mentions a limit is not misread."""
     _arm(monkeypatch, cycle)
     monkeypatch.setattr(
-        cycle.subprocess, "run", _fake_run(stdout="ANSWER: note the 429 and 402 status codes in the docs", returncode=0),
+        cycle.subprocess, "Popen", _fake_run(stdout="ANSWER: note the 429 and 402 status codes in the docs", returncode=0),
     )
     r = cycle.live_cycle(**_kwargs(tmp_path))
     assert r["ok"] is True and "stop" not in r
@@ -395,7 +396,7 @@ def test_malformed_trace_fields_are_refused_before_anything_is_spent(cycle, tmp_
     """Check that malformed trace fields are refused before anything is spent."""
     _arm(monkeypatch, cycle)
     calls: list = []
-    monkeypatch.setattr(cycle.subprocess, "run", _fake_run(calls=calls))
+    monkeypatch.setattr(cycle.subprocess, "Popen", _fake_run(calls=calls))
 
     class Guard:
         preflights = 0
@@ -431,7 +432,7 @@ def test_a_timeout_reports_that_the_launcher_was_called(cycle, tmp_path, monkeyp
         """Test helper or fixture: boom."""
         raise subprocess.TimeoutExpired(argv, 1)
 
-    monkeypatch.setattr(cycle.subprocess, "run", boom)
+    monkeypatch.setattr(cycle.subprocess, "Popen", as_popen(boom))
     r = cycle.live_cycle(**_kwargs(tmp_path))
     assert r["reason"] == "launcher-timeout" and r["called_launcher"] is True and r["spent"] is True
 
@@ -441,7 +442,7 @@ def test_a_spent_measurement_is_appended_to_the_ledger(cycle, tmp_path, monkeypa
     import json
 
     _arm(monkeypatch, cycle)
-    monkeypatch.setattr(cycle.subprocess, "run", _fake_run())
+    monkeypatch.setattr(cycle.subprocess, "Popen", _fake_run())
     ledger = tmp_path / "evidence" / "ledger.jsonl"
     r = cycle.live_cycle(**_kwargs(tmp_path, ledger_path=ledger))
     assert r["ok"] is True
@@ -453,9 +454,9 @@ def test_refusals_and_unmeasured_attempts_leave_the_ledger_alone(cycle, tmp_path
     """Check that refusals and unmeasured attempts leave the ledger alone."""
     _arm(monkeypatch, cycle)
     ledger = tmp_path / "ledger.jsonl"
-    monkeypatch.setattr(cycle.subprocess, "run", _fake_run(returncode=2))
+    monkeypatch.setattr(cycle.subprocess, "Popen", _fake_run(returncode=2))
     assert cycle.live_cycle(**_kwargs(tmp_path, ledger_path=ledger))["reason"] == "launcher-failed"
-    monkeypatch.setattr(cycle.subprocess, "run", _fake_run())
+    monkeypatch.setattr(cycle.subprocess, "Popen", _fake_run())
     assert cycle.live_cycle(**_kwargs(tmp_path / "b", ledger_path=ledger, evaluator_digest="bad"))["ok"] is False
     assert not ledger.exists()
 
@@ -464,7 +465,7 @@ def test_a_live_launch_without_a_ledger_is_refused_before_anything_is_reserved(c
     """Check that a live launch without a ledger is refused before anything is reserved."""
     _arm(monkeypatch, cycle)
     calls: list = []
-    monkeypatch.setattr(cycle.subprocess, "run", _fake_run(calls=calls))
+    monkeypatch.setattr(cycle.subprocess, "Popen", _fake_run(calls=calls))
     guard = _Guard()
     r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard, ledger_path=None))
     assert r["reason"] == "ledger-required" and r["launched"] is False
@@ -475,7 +476,7 @@ def test_an_unwritable_marker_releases_the_reservation(cycle, tmp_path, monkeypa
     """Check that an unwritable marker releases the reservation."""
     _arm(monkeypatch, cycle)
     calls: list = []
-    monkeypatch.setattr(cycle.subprocess, "run", _fake_run(calls=calls))
+    monkeypatch.setattr(cycle.subprocess, "Popen", _fake_run(calls=calls))
 
     def denied(marker):
         """Test helper or fixture: denied."""
@@ -491,7 +492,7 @@ def test_an_unwritable_marker_releases_the_reservation(cycle, tmp_path, monkeypa
 def test_a_failed_ledger_write_hands_the_spent_trace_back(cycle, tmp_path, monkeypatch) -> None:
     """Check that a failed ledger write hands the spent trace back."""
     _arm(monkeypatch, cycle)
-    monkeypatch.setattr(cycle.subprocess, "run", _fake_run())
+    monkeypatch.setattr(cycle.subprocess, "Popen", _fake_run())
     (tmp_path / "blocker").write_text("a file where a directory is needed")
     guard = _Guard()
     r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard, ledger_path=tmp_path / "blocker" / "ledger.jsonl"))
@@ -503,7 +504,7 @@ def test_a_live_launch_without_a_spend_guard_is_refused_before_the_marker(cycle,
     """Check that a live launch without a spend guard is refused before the marker."""
     _arm(monkeypatch, cycle)
     calls: list = []
-    monkeypatch.setattr(cycle.subprocess, "run", _fake_run(calls=calls))
+    monkeypatch.setattr(cycle.subprocess, "Popen", _fake_run(calls=calls))
     r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=None))
     assert r["ok"] is False and r["reason"] == "spend-guard-required" and r["launched"] is False
     assert calls == [] and not list(tmp_path.glob("*.once"))
@@ -514,7 +515,7 @@ def test_an_invalid_effort_is_refused_before_anything_is_reserved(cycle, tmp_pat
     """Check that an invalid effort is refused before anything is reserved."""
     _arm(monkeypatch, cycle)
     calls: list = []
-    monkeypatch.setattr(cycle.subprocess, "run", _fake_run(calls=calls))
+    monkeypatch.setattr(cycle.subprocess, "Popen", _fake_run(calls=calls))
     guard = _Guard()
     r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard, effort=effort))
     assert r["reason"] == "invalid-effort" and r["launched"] is False
@@ -525,7 +526,7 @@ def test_an_invalid_effort_is_refused_before_anything_is_reserved(cycle, tmp_pat
 def test_a_valid_effort_still_launches(cycle, tmp_path, monkeypatch, effort) -> None:
     """Check that a valid effort still launches."""
     _arm(monkeypatch, cycle)
-    monkeypatch.setattr(cycle.subprocess, "run", _fake_run())
+    monkeypatch.setattr(cycle.subprocess, "Popen", _fake_run())
     guard = _Guard()
     r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard, effort=effort))
     assert r["ok"] is True and guard.open_reservations() == []
@@ -551,7 +552,7 @@ def test_an_oserror_from_the_launcher_releases_the_reservation(cycle, tmp_path, 
         """Test helper or fixture: boom."""
         raise OSError("exec failed")
 
-    monkeypatch.setattr(cycle.subprocess, "run", boom)
+    monkeypatch.setattr(cycle.subprocess, "Popen", boom)
     guard = _Guard()
     r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard))
     assert r["reason"] == "launcher-error" and r["called_launcher"] is False
@@ -566,7 +567,7 @@ def test_an_interrupt_during_the_run_settles_the_possibly_sent_request(cycle, tm
         """Test helper or fixture: interrupted."""
         raise KeyboardInterrupt
 
-    monkeypatch.setattr(cycle.subprocess, "run", interrupted)
+    monkeypatch.setattr(cycle.subprocess, "Popen", as_popen(interrupted))
     guard = _Guard()
     with pytest.raises(KeyboardInterrupt):
         cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard))
@@ -577,7 +578,7 @@ def test_a_nul_byte_in_the_prompt_is_refused_before_the_marker(cycle, tmp_path, 
     """Check that a nul byte in the prompt is refused before the marker."""
     _arm(monkeypatch, cycle)
     calls: list = []
-    monkeypatch.setattr(cycle.subprocess, "run", _fake_run(calls=calls))
+    monkeypatch.setattr(cycle.subprocess, "Popen", _fake_run(calls=calls))
     guard = _Guard()
     r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard, prompt="hi\x00there"))
     assert r["ok"] is False and r["launched"] is False
@@ -592,7 +593,7 @@ def test_a_valueerror_from_the_launcher_frees_the_reservation(cycle, tmp_path, m
         """Test helper or fixture: refuses."""
         raise ValueError("embedded null byte")
 
-    monkeypatch.setattr(cycle.subprocess, "run", refuses)
+    monkeypatch.setattr(cycle.subprocess, "Popen", refuses)
     guard = _Guard()
     r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard))
     assert r["reason"] == "launcher-error" and guard.open_reservations() == [] and guard.released == ["r1"]
