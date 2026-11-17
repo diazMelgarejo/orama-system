@@ -238,10 +238,11 @@ def test_the_runbook_attest_command_has_no_confirm_flag_and_g3_g9_are_closed() -
 
 
 def test_the_runbook_points_at_the_shared_guard_and_not_a_private_ledger() -> None:
-    text = (ROOT / "bin/orama-system/skills/metaresearcher/references/live-pair-loop-runbook.md").read_text()
+    raw = (ROOT / "bin/orama-system/skills/metaresearcher/references/live-pair-loop-runbook.md").read_text()
+    text = " ".join(raw.split())  # the runbook is wrapped: a phrase may span a line break
     for needle in (
         "90 dollars", "spend_guard", "PERPETUA_TOOLS_ROOT", "provider_limits verify", "attestation-required",
-        "budget-exhausted", "the Billing page is the truth", "orchestrator/cost_guard.py",
+        "budget-exhausted", "the Billing page is the truth", "orchestrator/spend_gate.py", "settle_unknown",
     ):
         assert needle in text, needle
     for gone in ("spend_ledger", "budget_usd"):
