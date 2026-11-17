@@ -495,3 +495,109 @@ def test_reader_threads_do_not_leak(sb, tmp_path) -> None:
 def test_the_profile_does_not_allow_forking(sb, tmp_path) -> None:
     profile = sb.sandbox_profile(tmp_path, read_roots=[], exec_paths=[])
     assert "(allow process-fork)" not in profile
+
+
+# --- cleanup ownership: no-waitid fallback and early cleanup ----------------------------------------
+
+
+def _gone(pid: int) -> bool:
+    """True when `pid` no longer runs: absent, or only an unreaped zombie remains."""
+    try:
+        with open(f"/proc/{pid}/stat", encoding="utf-8") as fh:
+            return fh.read().rsplit(")", 1)[1].split()[0] == "Z"
+    except (FileNotFoundError, ProcessLookupError):
+        return True
+
+
+def _wait_until(predicate, limit: float = 10.0) -> bool:
+    """Poll `predicate` until it holds or `limit` seconds pass."""
+    import time
+
+    end = time.monotonic() + limit
+    while time.monotonic() < end:
+        if predicate():
+            return True
+        time.sleep(0.01)
+    return predicate()
+
+
+@pytest.mark.skipif(not Path("/proc/self/stat").exists(), reason="uses /proc to inspect the descendant")
+def test_a_descendant_does_not_outlive_a_run_when_waitid_is_unavailable(sb, tmp_path, monkeypatch) -> None:
+    import os
+
+    monkeypatch.setattr(sb, "sandbox_available", lambda: False)
+    monkeypatch.delattr(os, "waitid", raising=False)
+    pidfile = tmp_path / "descendant.pid"
+    code = (
+        "import os, time\n"
+        "if os.fork() == 0:\n"
+        "    os.close(1); os.close(2)\n"
+        f"    open({str(pidfile)!r} + '.tmp', 'w').write(str(os.getpid()))\n"
+        f"    os.rename({str(pidfile)!r} + '.tmp', {str(pidfile)!r})\n"
+        "    time.sleep(120)\n"
+        "    os._exit(0)\n"
+        f"while not os.path.exists({str(pidfile)!r}):\n"
+        "    time.sleep(0.01)\n"
+    )
+    result = sb.run_isolated(_py(code), cwd=tmp_path, timeout=20, allow_unsandboxed=True)
+    pid = int(pidfile.read_text())
+    try:
+        assert result.returncode == 0
+        assert _wait_until(lambda: _gone(pid)), "a descendant outlived run_isolated without waitid"
+    finally:
+        try:
+            os.kill(pid, 9)
+        except ProcessLookupError:
+            pass
+
+
+def test_the_child_is_cleaned_up_when_a_reader_thread_cannot_start(sb, tmp_path, monkeypatch) -> None:
+    import os
+    import subprocess
+    import threading
+
+    monkeypatch.setattr(sb, "sandbox_available", lambda: False)
+    spawned: list[subprocess.Popen] = []
+
+    real_popen = subprocess.Popen  # the offline guard may already wrap it; record whatever is in place
+
+    def recording_popen(*a, **kw):
+        proc = real_popen(*a, **kw)
+        spawned.append(proc)
+        return proc
+
+    class FailingThread(threading.Thread):
+        def start(self):
+            raise RuntimeError("can't start new thread")
+
+    monkeypatch.setattr(sb.subprocess, "Popen", recording_popen)
+    monkeypatch.setattr(sb.threading, "Thread", FailingThread)
+    try:
+        with pytest.raises(RuntimeError, match="can't start new thread"):
+            sb.run_isolated(_py("import time; time.sleep(120)"), cwd=tmp_path, timeout=20, allow_unsandboxed=True)
+        (proc,) = spawned
+        assert proc.returncode is not None, "the child was not reaped"
+        with pytest.raises(ProcessLookupError):
+            os.killpg(proc.pid, 0)
+    finally:
+        for proc in spawned:
+            try:
+                os.killpg(proc.pid, 9)
+            except ProcessLookupError:
+                pass
+
+
+def test_exit_detection_without_waitid_never_reaps_the_leader(sb, monkeypatch) -> None:
+    import os
+    import subprocess
+
+    monkeypatch.delattr(os, "waitid", raising=False)
+    proc = subprocess.Popen([sys.executable, "-I", "-c", "pass"])
+    try:
+        assert _wait_until(lambda: sb._exited(proc))
+        assert proc.returncode is None, "the probe reaped the leader"
+        monkeypatch.setattr(sb, "_process_state", lambda pid: None)
+        with pytest.raises(sb.SandboxUnavailable):
+            sb._exited(proc)
+    finally:
+        proc.wait()

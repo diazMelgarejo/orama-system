@@ -149,12 +149,39 @@ def sandbox_available() -> bool:
     return sys.platform == "darwin" and os.access(_KERNEL_SANDBOX_TOOL, os.X_OK)
 
 
+def _process_state(pid: int) -> str | None:
+    """The one-letter scheduler state of `pid` ("Z" for an exited, unreaped zombie) read without
+    reaping it, or None when this platform offers no way to read it. Uses /proc where present and
+    `ps` elsewhere (macOS)."""
+    try:
+        with open(f"/proc/{pid}/stat", encoding="utf-8") as fh:
+            return fh.read().rsplit(")", 1)[1].split()[0]
+    except FileNotFoundError:
+        if Path("/proc/self/stat").exists():
+            return ""  # /proc works and the process is gone
+    except (OSError, IndexError):
+        pass
+    try:
+        out = subprocess.run(
+            ["/bin/ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True, timeout=5, check=False,
+        ).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return out[:1]
+
+
 def _exited(proc: subprocess.Popen) -> bool:
-    """True once the leader has exited, WITHOUT reaping it, so its group id stays reserved until the group
-    has been killed. Falls back to poll() where waitid is unavailable."""
+    """True once the leader has exited, WITHOUT ever reaping it, so its pid (and so the group id) stays
+    reserved until the group has been killed. Uses `os.waitid(WNOWAIT)` where available; otherwise reads
+    the leader's state (zombie or gone) from /proc or `ps`. It never calls poll(), which would reap the
+    leader before the group was signalled. Raises SandboxUnavailable when no non-reaping probe exists,
+    because the only alternative would be to signal a group whose leader may already be reaped."""
     if hasattr(os, "waitid"):
         return os.waitid(os.P_PID, proc.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT) is not None
-    return proc.poll() is not None
+    state = _process_state(proc.pid)
+    if state is None:
+        raise SandboxUnavailable("cannot observe the child's exit without reaping it on this platform")
+    return state in ("", "Z")
 
 
 def _kill_group(proc: subprocess.Popen) -> None:
@@ -182,7 +209,9 @@ def run_isolated(
     The runner owns the child's whole lifecycle: stdout and stderr are drained concurrently and their
     combined size is capped (SandboxOutputLimit), the time is capped (SandboxTimeout), and on any abnormal
     exit, and on a normal exit too, the child's own process group is killed before the leader is reaped
-    and the reader threads are joined, so no descendant outlives the run. The sandboxed path also denies
+    and the reader threads are joined, so no descendant outlives the run. Cleanup is armed immediately
+    after the child is created, so a failure starting a reader thread still kills and reaps it. The leader
+    is never reaped before its group has been signalled, on every platform. The sandboxed path also denies
     forking. With `allow_unsandboxed=True` no profile runs, so that path is for trusted code only. `cwd` is the scratch
     root and must be a dedicated directory; the home folder, its ancestors and `/` are refused.
     """
@@ -209,33 +238,34 @@ def run_isolated(
         cmd, cwd=root, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         start_new_session=True,
     )
-    chunks: dict[str, bytearray] = {"out": bytearray(), "err": bytearray()}
-    lock = threading.Lock()
-    state = {"total": 0, "over": False}
-
-    def drain(stream, key: str) -> None:
-        try:
-            while True:
-                data = os.read(stream.fileno(), 65536)
-                if not data:
-                    return
-                with lock:
-                    state["total"] += len(data)
-                    if state["total"] > max_output_bytes:
-                        state["over"] = True
-                        return
-                    chunks[key].extend(data)
-        except OSError:
-            return
-
-    readers = [
-        threading.Thread(target=drain, args=(proc.stdout, "out"), daemon=True),
-        threading.Thread(target=drain, args=(proc.stderr, "err"), daemon=True),
-    ]
-    for reader in readers:
-        reader.start()
-    deadline = time.monotonic() + timeout
+    # Cleanup is armed the moment the child exists: nothing below may raise outside this try.
+    readers: list[threading.Thread] = []
     try:
+        chunks: dict[str, bytearray] = {"out": bytearray(), "err": bytearray()}
+        lock = threading.Lock()
+        state = {"total": 0, "over": False}
+
+        def drain(stream, key: str) -> None:
+            """Copy one pipe into its buffer until EOF, stopping and flagging when the combined cap is hit."""
+            try:
+                while True:
+                    data = os.read(stream.fileno(), 65536)
+                    if not data:
+                        return
+                    with lock:
+                        state["total"] += len(data)
+                        if state["total"] > max_output_bytes:
+                            state["over"] = True
+                            return
+                        chunks[key].extend(data)
+            except OSError:
+                return
+
+        for stream, key in ((proc.stdout, "out"), (proc.stderr, "err")):
+            reader = threading.Thread(target=drain, args=(stream, key), daemon=True)
+            reader.start()  # only a started thread is recorded, so cleanup never joins an unstarted one
+            readers.append(reader)
+        deadline = time.monotonic() + timeout
         while not _exited(proc):
             if state["over"]:
                 raise SandboxOutputLimit(f"child wrote more than {max_output_bytes} bytes and was killed")
