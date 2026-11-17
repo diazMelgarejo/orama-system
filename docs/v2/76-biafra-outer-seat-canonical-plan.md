@@ -64,8 +64,9 @@ that id. This section is otherwise unchanged.
 
 Preconditions, all required: the operator names provider, budget, request limit and deadline (given
 as W&B free-first, 2 requests, no paid credits); the model order and effort acceptance are re-probed
-the same day; the evaluator digest is pinned with `pin_evaluator` before the cycle; `BIAFRA_ORCHESTRATOR_GATE=approved` and
-`BIAFRA_ALLOW_LAUNCH=1` are set by the operator for that one run and unset afterwards. Stop and report,
+the same day; the evaluator digest is pinned with `pin_evaluator` before the cycle;
+`BIAFRA_ORCHESTRATOR_GATE=approved` and `BIAFRA_ALLOW_LAUNCH=1` are set by the operator for that one
+run and unset afterwards. Stop and report,
 without retry, if the provider needs paid credit, rejects the requested effort, or the marker file
 already exists. The result is data until a non-maker reviews it.
 

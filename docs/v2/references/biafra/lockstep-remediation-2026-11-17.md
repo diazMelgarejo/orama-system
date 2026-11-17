@@ -49,8 +49,9 @@ Finding 6 (memory) is PT-side and additive.
   `23cdc03`. The same 5 fail at the base (the sandbox lacks Git state discovery). The rerun at the
   final PT code head (`docs(spend-gate)` commit) gave 3674 passed, 13 skipped and the same 5.
 - Orama integration (all lanes plus the review fixes on `bd5931a2`): 428 passed, 18 skipped
-  (macOS-only sandbox tests) across the affected suites against the integrated PT. Docstrings are 100 percent on all touched files; docstring-only
-  commits were proven by `ast.dump` equality with docstrings stripped.
+  (macOS-only sandbox tests) across the affected suites against the integrated PT. Docstrings are
+  100 percent on all touched files; docstring-only commits were proven by `ast.dump` equality with
+  docstrings stripped.
 
 ## Independent review verdicts
 
