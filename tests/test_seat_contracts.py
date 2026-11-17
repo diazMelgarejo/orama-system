@@ -404,8 +404,8 @@ def test_default_turns_never_select_xhigh_or_max(sc) -> None:
 def test_the_plan_cites_correct_references_and_defaults() -> None:
     plan = (ROOT / "docs/v2/76-biafra-outer-seat-canonical-plan.md").read_text()
     for needle in (
-        "https://github.com/diazMelgarejo/orama-system/blob/main/bin/orama-system/skills/cline-wandb/scripts/launch_cline_wandb.py",
-        "https://github.com/diazMelgarejo/orama-system/blob/main/docs/stale-reference-ledger-2026-11-12.md",
+        "../../bin/orama-system/skills/cline-wandb/scripts/launch_cline_wandb.py",
+        "../stale-reference-ledger-2026-11-12.md",
         "https://github.com/diazMelgarejo/orama-system/pull/496",
         "https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/.agent/memory/semantic/LESSONS.md",
         "lesson_d4ff6f4278ad", "lesson_8e02c7fd391d", "lesson_8d873e4e2f73",

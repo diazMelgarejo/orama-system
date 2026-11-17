@@ -170,13 +170,17 @@ def run_isolated(
     """Run `argv` in `cwd` isolated. The scratch root is `cwd`; writes outside it are denied.
 
     The runner owns the child's whole lifecycle: stdout and stderr are drained concurrently and their
-    combined size is capped (SandboxOutputLimit), the time is capped (SandboxTimeout), forking is denied
-    by the profile so no descendant can outlive the run, and on any abnormal exit the child's own
-    process group is killed and the reader threads are joined before the error propagates.
+    combined size is capped (SandboxOutputLimit), the time is capped (SandboxTimeout), and on any abnormal
+    exit the child's own process group is killed and the reader threads are joined before the error
+    propagates. On the sandboxed path the profile also denies forking, so no descendant can outlive the
+    run. With `allow_unsandboxed=True` no profile runs: a descendant may keep a pipe open after the leader
+    exits and the output may then be partial; that path is for trusted code only. `cwd` is the scratch
+    root and must be a dedicated directory; the home folder, its ancestors and `/` are refused.
     """
     if isinstance(max_output_bytes, bool) or not isinstance(max_output_bytes, int) or max_output_bytes <= 0:
         raise ValueError("max_output_bytes must be a positive integer")
     root = Path(cwd).resolve()
+    check_read_roots([root])
     use_sandbox = sandbox_available()
     if not use_sandbox and not allow_unsandboxed:
         raise SandboxUnavailable("no kernel sandbox available; refusing to run model-written code")

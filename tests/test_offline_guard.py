@@ -33,6 +33,14 @@ def test_other_subprocess_calls_still_work(monkeypatch) -> None:
     assert out.stdout.strip() == "42"
 
 
+def test_iterator_arguments_survive_the_check(monkeypatch) -> None:
+    _offline.install(monkeypatch)
+    done = subprocess.run(iter([sys.executable, "-c", "pass"]), check=False)
+    assert done.returncode == 0
+    with pytest.raises(AssertionError):
+        subprocess.run(iter([sys.executable, "launch_cline_wandb.py"]), check=False)
+
+
 def test_the_guard_applies_to_the_biafra_modules() -> None:
     import importlib
 

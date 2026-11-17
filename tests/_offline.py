@@ -31,6 +31,8 @@ def install(monkeypatch) -> None:
         real = getattr(subprocess, entry)
 
         def guarded(args, *a, __real=real, **kw):
+            if not isinstance(args, (str, bytes, os.PathLike)):
+                args = list(args)  # an iterator would be consumed by the check, then delegated empty
             if _names_launcher(args):
                 raise AssertionError("an offline test tried to start the real launcher")
             return __real(args, *a, **kw)

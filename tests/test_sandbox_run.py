@@ -113,6 +113,15 @@ def test_reads_of_listed_secret_locations_are_denied(sb, tmp_path) -> None:
     assert "BLOCKED" in r.stdout and "top-secret" not in r.stdout
 
 
+def test_the_scratch_root_is_checked_like_a_read_root(sb) -> None:
+    import os
+    from pathlib import Path
+
+    for bad in (Path("/"), Path(os.path.expanduser("~"))):
+        with pytest.raises(sb.SandboxUnavailable):
+            sb.run_isolated(_py("print(1)"), cwd=bad, timeout=5, allow_unsandboxed=True)
+
+
 @needs_sandbox
 def test_a_runaway_child_is_killed_at_the_timeout(sb, tmp_path) -> None:
     with pytest.raises(sb.SandboxTimeout):

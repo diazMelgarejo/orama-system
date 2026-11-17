@@ -212,10 +212,15 @@ def test_the_plan_states_both_402_causes_and_the_attestation_requirement() -> No
 def test_the_evidence_ledgers_exist_and_are_not_gitignored() -> None:
     """The ledgers are versioned evidence. `*.jsonl` is ignored repo-wide, so they need an explicit allowlist."""
     base = ROOT / "docs/v2/references/biafra/live-cycle-2026-11-17"
-    names = ["ledger.jsonl", "ledger-turn-2.jsonl", "ledger-turn-3-reverted.jsonl", "ledger-turn-3b.jsonl"]
+    names = ["ledger.jsonl", "ledger-turn-2.jsonl", "ledger-turn-3-reverted.jsonl", "ledger-turn-3b.jsonl",
+             "ledger-turn-5.jsonl"]
     for name in names:
         assert (base / name).is_file(), f"missing evidence file {name}"
         ignored = subprocess.run(
             ["git", "check-ignore", "-q", str(base / name)], cwd=ROOT, capture_output=True, check=False
         )
         assert ignored.returncode == 1, f"{name} is gitignored, so a clean checkout will not have it"
+        tracked = subprocess.run(
+            ["git", "ls-files", "--error-unmatch", str(base / name)], cwd=ROOT, capture_output=True, check=False
+        )
+        assert tracked.returncode == 0, f"{name} is untracked, so a clean checkout will not have it"
