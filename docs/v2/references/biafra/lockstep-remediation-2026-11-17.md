@@ -14,22 +14,34 @@ not merged. Their heads at review were `c90feebb` (PT) and `bd5931a2` (orama).
 - Execution: isolated lane worktrees, one subagent per lane, integrator verification of every
   report, and an independent read-only reviewer per repository.
 
-## Finding to commit subject (orama side)
+## Finding to commit subject
 
-Commit subjects, not SHAs, because SHAs may change at publication. PT-side commit subjects are in
-PT #516's history and are not reproduced here.
+Commit subjects, not SHAs, because SHAs may change at publication.
+
+### Perpetua-Tools (PR #516)
+
+| Item | PT commit subjects |
+| --- | --- |
+| Finding 2 | `fix(cost): share one atomic CostGuard ledger across instances and processes` |
+| Finding 3 | `fix(cost): hold a reservation for its own declared lifetime and never drop a late commit` |
+| Findings 1 to 3 (gate) | `feat(cost): add SpendGate, the single preflight/settle/release path for paid provider requests`; `feat(spend-gate): export the exceptions a consumer must catch` |
+| Finding 1 | `fix(harness): admit the W&B request path through the shared SpendGate before dispatch`; `fix(harness): release the reservation on a definitive provider refusal (HTTP below 500)`; `fix(harness): keep the paid answer when settle fails` |
+| Finding 6 | `fix(memory): link the attestation correction with an explicit supersedes`; `fix(memory): retire the original attestation over-claim with a linked record` |
+| PT review items | `fix(cost-guard): make the legacy budget import one-time even if the store is deleted`; `docs(spend-gate): per-phase timeout, fail-closed default, legacy import and rollback` |
+| Hygiene | `docs(tests): complete docstrings on the files the spend remediation touched` |
+
+### orama-system (PR #519)
 
 | Item | Orama commit subjects |
 | --- | --- |
 | G3 | `feat(seats): pin the evaluator digest and bind a promoted card's receipt to it (G3)`; `test(seats): schema types the receipt fields; fixtures cover the G3 and G9 rules` |
 | G9 | `feat(seats): no card, no promotion: dry and live cycles name the card they checked (G9)` |
-| Findings 1 to 3 (orama share) | `feat: make the spend adapter a thin forwarder to Perpetua-Tools' SpendGate`; `fix: hold the spend reservation for the whole allowed launch`; `fix: settle a possibly sent live request as unknown and decode its output after the launch`; `fix: start and wait for the launcher explicitly so only a failed start releases` |
-| Sandbox cleanup | `fix: close two sandbox process-cleanup gaps`; `fix: observe sandbox child exit through kqueue, not ps` |
+| Findings 3 and 4 (orama share) | `feat: make the spend adapter a thin forwarder to Perpetua-Tools' SpendGate`; `fix: hold the spend reservation for the whole allowed launch`; `fix: settle a possibly sent live request as unknown and decode its output after the launch`; `fix: start and wait for the launcher explicitly so only a failed start releases` |
+| Finding 5 | `fix: close two sandbox process-cleanup gaps`; `fix: observe sandbox child exit through kqueue, not ps` |
 | Finding 7 | `docs(biafra): resolve G3 and G9; drop --confirm from the runbook attest command` |
-| Integration and hygiene | `fix: integrate the spend-gate and G9 lanes`; `test: check the runbook against the spend gate and tolerate its line wrapping`; the docstring commits (`docs: add docstrings ...`, `docs(tests): complete docstrings ...`); `ci: follow the Perpetua-Tools head after its audit-identifier fix`; `fix(ci): keep the CI checkout for the adapter tests that need the real guard` |
+| Integration and hygiene | `fix: integrate the spend-gate and G9 lanes`; `test: check the runbook against the spend gate and tolerate its line wrapping`; the docstring commits (`docs: add docstrings ...`, `docs(tests): complete docstrings ...`) |
 
-Findings 4 and 5 are not individually described in the source for this record, so they are not
-mapped. Finding 6 (memory) is PT-side and additive.
+Finding 6 (memory) is PT-side and additive.
 
 ## Verification so far
 

@@ -218,10 +218,10 @@ review verdicts is
 | Item | Disposition | Owning repo and module |
 | --- | --- | --- |
 | Finding 1 (P1) | Fixed. The PT W&B path refuses before dispatch on a missing or stale attestation or an exhausted budget, settles on success, and settles the full reservation after a possibly sent failure. | PT: `orchestrator/spend_gate.py`, `.agent/harness/llm.py` |
-| Finding 2 (P1) | Fixed. `CostGuard` is shared and atomic across instances and processes that use one budget file: one private SQLite store, every operation in BEGIN IMMEDIATE. | PT: `orchestrator/spend_gate.py` (`CostGuard`), `orchestrator/private_sqlite.py` |
+| Finding 2 (P1) | Fixed. `CostGuard` is shared and atomic across instances and processes that use one budget file: one private SQLite store, every operation in BEGIN IMMEDIATE. | PT: `orchestrator/cost_guard.py` (`CostGuard`), `orchestrator/private_sqlite.py` |
 | Finding 3 (P2) | Fixed. Declared holds `reserve(cost, hold_seconds)`; a late commit for a swept reservation still records the spend (`late_commit`). Orama's live cycle holds for `timeout_s` plus `SETTLE_MARGIN_S`. | PT: `orchestrator/spend_gate.py`; orama: `bin/agents/biafra_cycle.py` |
-| Finding 4 (P2) | Recorded as one of the seven; the source states no individual description. | Not stated in the source |
-| Finding 5 (P2) | Recorded as one of the seven; the source states no individual description. | Not stated in the source |
+| Finding 4 (P2) | Fixed. A decode failure after the launcher ran no longer looks like an unsent request: the launcher is started with Popen and awaited with `communicate`, output is decoded afterwards with `errors="replace"`, only a failed Popen releases, and a timeout, pipe error or interrupt settles the full reservation (unavailable output is not evidence of zero billed output). | orama: `bin/agents/biafra_cycle.py` |
+| Finding 5 (P2) | Fixed. The leader is never reaped before the process group is signalled; cleanup is armed right after Popen; the exit probe order is `waitid`, `kqueue`, `/proc`, else fail closed. | orama: `bin/agents/sandbox_run.py` |
 | Finding 6 (P2) | Fixed by additive memory records: `lesson_d4ac6209ce38` supersedes `lesson_762380426dc7`; `lesson_7240bbe31030` supersedes the original over-claim `lesson_15733a3316ad`. | PT: memory records |
 | Finding 7 (P2) | Fixed. The runbook's attest command no longer shows `--confirm`; the operator types the phrase at the interactive prompt. | orama: `live-pair-loop-runbook.md` |
 | G3 | Resolved (section 4): evaluator pin and receipt binding; the receipt's `delta` is also compared (decision 13 below). | orama: `bin/agents/seat_contracts.py` |
