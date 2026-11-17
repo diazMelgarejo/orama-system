@@ -45,6 +45,7 @@ class SandboxOutputLimit(RuntimeError):
 
 @dataclass(frozen=True)
 class IsolatedResult:
+    """The outcome of an isolated run: exit code, decoded output and whether a kernel sandbox was used."""
     returncode: int
     stdout: str
     stderr: str
@@ -67,6 +68,7 @@ def scrubbed_env(home: str | Path = "/var/empty", tmpdir: str | Path | None = No
 
 
 def _sbpl_quote(path: Path) -> str:
+    """Quote a path as a profile string literal, escaping backslashes and double quotes."""
     return '"' + str(path).replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
@@ -373,12 +375,14 @@ class _Vet(ast.NodeVisitor):
     name, bind a builtin's name, take parameter defaults, or be variadic, in any scope."""
 
     def __init__(self, allowed: frozenset[str]) -> None:
+        """Create a walker that accepts only the given extra names."""
         self.allowed = allowed
         self.scopes: list[set[str]] = []
         self.problems: set[str] = set()
 
     # -- bindings and reads ------------------------------------------------------------------
     def _bind(self, name: str) -> None:
+        """Record a name bound in the current scope, flagging dunder and builtin names."""
         if name.startswith("__"):
             self.problems.add(f"dunder names are not allowed: {name}")
         elif name in _BUILTIN_NAMES:
@@ -386,6 +390,7 @@ class _Vet(ast.NodeVisitor):
         self.scopes[-1].add(name)
 
     def _read(self, name: str) -> None:
+        """Check that a name read is bound in scope, allowed, or a safe builtin."""
         if name.startswith("__"):
             self.problems.add(f"dunder names are not allowed: {name}")
         elif not (any(name in scope for scope in self.scopes) or name in self.allowed or name in _SAFE_BUILTINS):
@@ -393,28 +398,33 @@ class _Vet(ast.NodeVisitor):
 
     # -- dispatch ----------------------------------------------------------------------------
     def visit(self, node: ast.AST):
+        """Visit a node, rejecting any node type outside the allowlist."""
         if not isinstance(node, _ALLOWED_NODES):
             self.problems.add(f"node not allowed: {type(node).__name__}")
             return None
         return super().visit(node)
 
     def visit_Name(self, node: ast.Name) -> None:
+        """Treat a name as a binding when stored and as a read otherwise."""
         if isinstance(node.ctx, ast.Store):
             self._bind(node.id)
         else:
             self._read(node.id)
 
     def visit_Attribute(self, node: ast.Attribute) -> None:
+        """Allow only listed, non-underscore attribute names."""
         if node.attr.startswith("_") or node.attr not in _SAFE_ATTRS:
             self.problems.add(f"attribute not allowed: {node.attr}")
         self.visit(node.value)
 
     def visit_keyword(self, node: ast.keyword) -> None:
+        """Refuse dunder keyword names and visit the value."""
         if node.arg and node.arg.startswith("__"):
             self.problems.add(f"dunder names are not allowed: {node.arg}")
         self.visit(node.value)
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        """Vet a function: no decorators, defaults or variadics; bind parameters in a new scope."""
         if self.scopes:  # a nested def binds its name in the enclosing scope
             self._bind(node.name)
         elif node.name.startswith("__"):
@@ -440,6 +450,7 @@ class _Vet(ast.NodeVisitor):
         self.scopes.pop()
 
     def _comprehension(self, node: ast.AST, elements: list[ast.AST]) -> None:
+        """Walk a comprehension in its own scope so its targets do not leak."""
         self.scopes.append(set())
         for gen in node.generators:  # type: ignore[attr-defined]
             self.visit(gen.iter)
@@ -451,15 +462,19 @@ class _Vet(ast.NodeVisitor):
         self.scopes.pop()
 
     def visit_ListComp(self, node: ast.ListComp) -> None:
+        """Vet a list comprehension."""
         self._comprehension(node, [node.elt])
 
     def visit_SetComp(self, node: ast.SetComp) -> None:
+        """Vet a set comprehension."""
         self._comprehension(node, [node.elt])
 
     def visit_GeneratorExp(self, node: ast.GeneratorExp) -> None:
+        """Vet a generator expression."""
         self._comprehension(node, [node.elt])
 
     def visit_DictComp(self, node: ast.DictComp) -> None:
+        """Vet a dict comprehension."""
         self._comprehension(node, [node.key, node.value])
 
 

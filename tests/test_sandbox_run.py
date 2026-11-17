@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 pytestmark = pytest.mark.usefixtures("offline_guard")
 
 def _load():
+    """Import bin/agents/sandbox_run.py as a fresh module."""
     spec = importlib.util.spec_from_file_location("sandbox_run", ROOT / "bin/agents/sandbox_run.py")
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -26,6 +27,7 @@ def _load():
 
 @pytest.fixture()
 def sb():
+    """The freshly loaded sandbox_run module."""
     return _load()
 
 
@@ -36,6 +38,7 @@ needs_sandbox = pytest.mark.skipif(
 
 
 def _py(code: str) -> list[str]:
+    """Build an isolated-interpreter argv that runs the given code."""
     return [sys.executable, "-I", "-c", textwrap.dedent(code)]
 
 
@@ -43,6 +46,7 @@ def _py(code: str) -> list[str]:
 
 
 def test_scrubbed_env_drops_secrets_and_keeps_a_minimal_path(sb, monkeypatch) -> None:
+    """Check that scrubbed env drops secrets and keeps a minimal path."""
     monkeypatch.setenv("DEEPSEEK_V4_FLASH_WANDB", "s3cret")
     monkeypatch.setenv("SOME_API_KEY", "s3cret")
     monkeypatch.setenv("GITHUB_TOKEN", "s3cret")
@@ -56,6 +60,7 @@ def test_scrubbed_env_drops_secrets_and_keeps_a_minimal_path(sb, monkeypatch) ->
 
 @needs_sandbox
 def test_the_child_cannot_see_the_parents_secrets(sb, tmp_path, monkeypatch) -> None:
+    """Check that the child cannot see the parents secrets."""
     monkeypatch.setenv("DEEPSEEK_V4_FLASH_WANDB", "s3cret")
     r = sb.run_isolated(_py("import os; print(sorted(os.environ))"), cwd=tmp_path, timeout=30)
     assert r.returncode == 0 and "DEEPSEEK" not in r.stdout and "s3cret" not in r.stdout + r.stderr
@@ -66,6 +71,7 @@ def test_the_child_cannot_see_the_parents_secrets(sb, tmp_path, monkeypatch) -> 
 
 @needs_sandbox
 def test_the_network_is_denied(sb, tmp_path) -> None:
+    """Check that the network is denied."""
     code = """
         import socket
         try:
@@ -80,6 +86,7 @@ def test_the_network_is_denied(sb, tmp_path) -> None:
 
 @needs_sandbox
 def test_writes_are_allowed_inside_the_scratch_root_and_denied_outside(sb, tmp_path) -> None:
+    """Check that writes are allowed inside the scratch root and denied outside."""
     outside = Path("/private/tmp") / f"sandbox-probe-{tmp_path.name}"
     code = f"""
         from pathlib import Path
@@ -97,6 +104,7 @@ def test_writes_are_allowed_inside_the_scratch_root_and_denied_outside(sb, tmp_p
 
 @needs_sandbox
 def test_reads_of_listed_secret_locations_are_denied(sb, tmp_path) -> None:
+    """Check that reads of listed secret locations are denied."""
     canary = tmp_path / "canary"
     canary.mkdir()
     (canary / "token.txt").write_text("top-secret")
@@ -114,6 +122,7 @@ def test_reads_of_listed_secret_locations_are_denied(sb, tmp_path) -> None:
 
 
 def test_the_scratch_root_is_checked_like_a_read_root(sb) -> None:
+    """Check that the scratch root is checked like a read root."""
     import os
     from pathlib import Path
 
@@ -124,17 +133,20 @@ def test_the_scratch_root_is_checked_like_a_read_root(sb) -> None:
 
 @needs_sandbox
 def test_a_runaway_child_is_killed_at_the_timeout(sb, tmp_path) -> None:
+    """Check that a runaway child is killed at the timeout."""
     with pytest.raises(sb.SandboxTimeout):
         sb.run_isolated(_py("import time; time.sleep(60)"), cwd=tmp_path, timeout=2)
 
 
 def test_it_fails_closed_when_no_sandbox_is_available(sb, tmp_path, monkeypatch) -> None:
+    """Check that it fails closed when no sandbox is available."""
     monkeypatch.setattr(sb, "sandbox_available", lambda: False)
     with pytest.raises(sb.SandboxUnavailable):
         sb.run_isolated(_py("print(1)"), cwd=tmp_path, timeout=5)
 
 
 def test_unsandboxed_runs_need_an_explicit_flag_and_still_scrub_the_env(sb, tmp_path, monkeypatch) -> None:
+    """Check that unsandboxed runs need an explicit flag and still scrub the env."""
     monkeypatch.setattr(sb, "sandbox_available", lambda: False)
     monkeypatch.setenv("DEEPSEEK_V4_FLASH_WANDB", "s3cret")
     r = sb.run_isolated(_py("import os; print(sorted(os.environ))"), cwd=tmp_path, timeout=30, allow_unsandboxed=True)
@@ -156,6 +168,7 @@ GOOD = '''def _owner_errors(owners: Any) -> list[str]:
 
 
 def test_a_forked_descendant_does_not_outlive_a_successful_run(sb, tmp_path, monkeypatch) -> None:
+    """Check that a forked descendant does not outlive a successful run."""
     import time
 
     monkeypatch.setattr(sb, "sandbox_available", lambda: False)  # the unsandboxed path, where forks are allowed
@@ -175,6 +188,7 @@ def test_a_forked_descendant_does_not_outlive_a_successful_run(sb, tmp_path, mon
 
 
 def test_the_allowlist_accepts_an_ordinary_small_function(sb) -> None:
+    """Check that the allowlist accepts an ordinary small function."""
     assert sb.vet_allowlist(GOOD, target="_owner_errors", allowed_names=NAMES) == []
 
 
@@ -200,17 +214,20 @@ def test_the_allowlist_accepts_an_ordinary_small_function(sb) -> None:
     ],
 )
 def test_the_allowlist_rejects_escape_routes(sb, body: str) -> None:
+    """Check that the allowlist rejects escape routes."""
     src = f"def _owner_errors(owners):\n    {body}"
     assert sb.vet_allowlist(src, target="_owner_errors", allowed_names=NAMES), body
 
 
 def test_the_allowlist_requires_exactly_the_target_function(sb) -> None:
+    """Check that the allowlist requires exactly the target function."""
     assert sb.vet_allowlist("x = 1", target="_owner_errors", allowed_names=NAMES)
     assert sb.vet_allowlist(GOOD + "\n\ndef other():\n    return 1", target="_owner_errors", allowed_names=NAMES)
     assert sb.vet_allowlist("def _owner_errors(owners):\n    return [", target="_owner_errors", allowed_names=NAMES)
 
 
 def test_a_nested_helper_function_is_allowed(sb) -> None:
+    """Check that a nested helper function is allowed."""
     src = '''def _owner_errors(owners):
     def ok(o):
         return bool(_OWNER_SHAPE.fullmatch(o))
@@ -237,6 +254,7 @@ def test_a_nested_helper_function_is_allowed(sb) -> None:
     ],
 )
 def test_the_vet_refuses_shadowing_and_defaults(sb, src: str) -> None:
+    """Check that the vet refuses shadowing and defaults."""
     assert sb.vet_allowlist(src, target="_owner_errors", allowed_names=NAMES), src
 
 
@@ -245,6 +263,7 @@ def test_the_vet_refuses_shadowing_and_defaults(sb, src: str) -> None:
 
 @needs_sandbox
 def test_the_profile_is_deny_by_default(sb, tmp_path) -> None:
+    """Check that the profile is deny by default."""
     profile = sb.sandbox_profile(tmp_path, read_roots=[], exec_paths=[])
     assert "(deny default)" in profile and "(allow default)" not in profile
     assert "(deny network*)" in profile
@@ -252,6 +271,7 @@ def test_the_profile_is_deny_by_default(sb, tmp_path) -> None:
 
 @needs_sandbox
 def test_an_unlisted_home_file_cannot_be_read(sb, tmp_path) -> None:
+    """Check that an unlisted home file cannot be read."""
     canary = tmp_path.parent / f"unlisted-{tmp_path.name}.txt"
     canary.write_text("top-secret")
     code = f"""
@@ -271,6 +291,7 @@ def test_an_unlisted_home_file_cannot_be_read(sb, tmp_path) -> None:
 @needs_sandbox
 @pytest.mark.parametrize("tool", ["/usr/bin/osascript", "/usr/bin/open", "/bin/echo", "/usr/bin/curl"])
 def test_the_child_cannot_launch_other_programs(sb, tmp_path, tool: str) -> None:
+    """Check that the child cannot launch other programs."""
     code = f"""
         import subprocess
         try:
@@ -285,6 +306,7 @@ def test_the_child_cannot_launch_other_programs(sb, tmp_path, tool: str) -> None
 
 @needs_sandbox
 def test_python_and_pytest_still_run_inside_the_sandbox(sb, tmp_path) -> None:
+    """Check that python and pytest still run inside the sandbox."""
     r = sb.run_isolated([sys.executable, "-I", "-m", "pytest", "--version"], cwd=tmp_path, timeout=60)
     assert r.returncode == 0 and "pytest" in (r.stdout + r.stderr).lower(), r.stdout + r.stderr
     (tmp_path / "test_x.py").write_text("def test_ok():\n    assert 1 + 1 == 2\n")
@@ -297,6 +319,7 @@ def test_python_and_pytest_still_run_inside_the_sandbox(sb, tmp_path) -> None:
 
 
 def test_the_computed_read_roots_are_never_home_root_or_an_ancestor_of_home(sb) -> None:
+    """Check that the computed read roots are never home root or an ancestor of home."""
     home = Path.home().resolve()
     roots, _execs = sb._interpreter_paths()
     assert roots
@@ -306,6 +329,7 @@ def test_the_computed_read_roots_are_never_home_root_or_an_ancestor_of_home(sb) 
 
 @pytest.mark.parametrize("bad", ["/", "/Users", "HOME", "HOME_PARENT", "/private", "/usr", "/Library"])
 def test_a_broad_read_root_is_refused(sb, bad: str) -> None:
+    """Check that a broad read root is refused."""
     home = Path.home().resolve()
     root = {"HOME": home, "HOME_PARENT": home.parent}.get(bad, Path(bad))
     with pytest.raises(sb.SandboxUnavailable):
@@ -313,11 +337,13 @@ def test_a_broad_read_root_is_refused(sb, bad: str) -> None:
 
 
 def test_ordinary_roots_are_accepted(sb) -> None:
+    """Check that ordinary roots are accepted."""
     home = Path.home().resolve()
     sb.check_read_roots([home / ".local/share/python-default-3.13", Path("/Library/Frameworks/Python.framework/Versions/3.13")])
 
 
 def test_a_broad_interpreter_layout_fails_closed(sb, tmp_path, monkeypatch) -> None:
+    """Check that a broad interpreter layout fails closed."""
     home = Path.home().resolve()
     monkeypatch.setattr(sb.sys, "prefix", str(home))
     monkeypatch.setattr(sb.sys, "base_prefix", str(home))
@@ -326,6 +352,7 @@ def test_a_broad_interpreter_layout_fails_closed(sb, tmp_path, monkeypatch) -> N
 
 
 def test_secret_locations_are_denied_by_default_even_inside_an_allowed_root(sb, tmp_path) -> None:
+    """Check that secret locations are denied by default even inside an allowed root."""
     home = Path.home().resolve()
     profile = sb.sandbox_profile(tmp_path, [home / ".local"], [], deny_read=sb.default_deny_read())
     for name in (".ssh", ".aws", ".gnupg", ".config", ".openclaw", ".claude", ".gbrain", ".netrc", ".npmrc"):
@@ -333,6 +360,7 @@ def test_secret_locations_are_denied_by_default_even_inside_an_allowed_root(sb, 
 
 
 def test_caller_denials_are_merged_with_the_defaults(sb) -> None:
+    """Check that caller denials are merged with the defaults."""
     extra = Path("/private/tmp/extra-secret")
     merged = sb.merge_deny_read([extra])
     assert extra in merged and (Path.home() / ".ssh") in merged
@@ -340,6 +368,7 @@ def test_caller_denials_are_merged_with_the_defaults(sb) -> None:
 
 
 def test_read_roots_are_exact_directories_not_a_parent_of_the_binary(sb) -> None:
+    """Check that read roots are exact directories not a parent of the binary."""
     roots, execs = sb._interpreter_paths()
     exe = Path(sys.executable).resolve()
     assert exe.parent.parent not in roots or exe.parent.parent == Path(sys.base_prefix).resolve()
@@ -369,6 +398,7 @@ SCOPE_NAMES = {"Any", "re"}
     ],
 )
 def test_the_vet_is_scope_aware_and_refuses_dunder_names(sb, src: str) -> None:
+    """Check that the vet is scope aware and refuses dunder names."""
     assert sb.vet_allowlist(src, target="f", allowed_names=SCOPE_NAMES), src
 
 
@@ -383,6 +413,7 @@ def test_the_vet_is_scope_aware_and_refuses_dunder_names(sb, src: str) -> None:
     ],
 )
 def test_ordinary_nested_helpers_and_comprehensions_are_allowed(sb, src: str) -> None:
+    """Check that ordinary nested helpers and comprehensions are allowed."""
     assert sb.vet_allowlist(src, target="f", allowed_names=SCOPE_NAMES) == [], src
 
 
@@ -391,6 +422,7 @@ def test_ordinary_nested_helpers_and_comprehensions_are_allowed(sb, src: str) ->
 
 @needs_sandbox
 def test_runaway_output_is_bounded_and_the_child_is_killed(sb, tmp_path) -> None:
+    """Check that runaway output is bounded and the child is killed."""
     import time
 
     code = """
@@ -407,6 +439,7 @@ def test_runaway_output_is_bounded_and_the_child_is_killed(sb, tmp_path) -> None
 
 @needs_sandbox
 def test_the_cap_counts_stdout_and_stderr_together(sb, tmp_path) -> None:
+    """Check that the cap counts stdout and stderr together."""
     code = """
         import sys
         sys.stdout.write("o" * 70000)
@@ -422,12 +455,14 @@ def test_the_cap_counts_stdout_and_stderr_together(sb, tmp_path) -> None:
 
 @pytest.mark.parametrize("bad", [0, -1, True, None, "10", 1.5])
 def test_a_bad_output_cap_is_refused(sb, tmp_path, bad) -> None:
+    """Check that a bad output cap is refused."""
     with pytest.raises(ValueError):
         sb.run_isolated(_py("print(1)"), cwd=tmp_path, timeout=5, max_output_bytes=bad)
 
 
 @needs_sandbox
 def test_the_child_cannot_fork_so_it_leaves_no_descendants(sb, tmp_path) -> None:
+    """Check that the child cannot fork so it leaves no descendants."""
     code = """
         import os, subprocess
         for attempt in ("fork", "spawn"):
@@ -447,6 +482,7 @@ def test_the_child_cannot_fork_so_it_leaves_no_descendants(sb, tmp_path) -> None
 
 
 def _alive(pid: int) -> bool:
+    """True when a process with this pid still exists."""
     import os
 
     try:
@@ -459,6 +495,7 @@ def _alive(pid: int) -> bool:
 @needs_sandbox
 @pytest.mark.parametrize("how", ["timeout", "output"])
 def test_the_process_is_gone_after_an_abnormal_exit(sb, tmp_path, how: str) -> None:
+    """Check that the process is gone after an abnormal exit."""
     import time
 
     code = f"""
@@ -482,6 +519,7 @@ def test_the_process_is_gone_after_an_abnormal_exit(sb, tmp_path, how: str) -> N
 
 @needs_sandbox
 def test_reader_threads_do_not_leak(sb, tmp_path) -> None:
+    """Check that reader threads do not leak."""
     import threading
 
     before = threading.active_count()
@@ -493,6 +531,7 @@ def test_reader_threads_do_not_leak(sb, tmp_path) -> None:
 
 
 def test_the_profile_does_not_allow_forking(sb, tmp_path) -> None:
+    """Check that the profile does not allow forking."""
     profile = sb.sandbox_profile(tmp_path, read_roots=[], exec_paths=[])
     assert "(allow process-fork)" not in profile
 
@@ -523,6 +562,7 @@ def _wait_until(predicate, limit: float = 10.0) -> bool:
 
 @pytest.mark.skipif(not Path("/proc/self/stat").exists(), reason="uses /proc to inspect the descendant")
 def test_a_descendant_does_not_outlive_a_run_when_waitid_is_unavailable(sb, tmp_path, monkeypatch) -> None:
+    """Check that a descendant does not outlive a run when waitid is unavailable."""
     import os
 
     monkeypatch.setattr(sb, "sandbox_available", lambda: False)
@@ -552,6 +592,7 @@ def test_a_descendant_does_not_outlive_a_run_when_waitid_is_unavailable(sb, tmp_
 
 
 def test_the_child_is_cleaned_up_when_a_reader_thread_cannot_start(sb, tmp_path, monkeypatch) -> None:
+    """Check that the child is cleaned up when a reader thread cannot start."""
     import os
     import subprocess
     import threading
@@ -562,12 +603,15 @@ def test_the_child_is_cleaned_up_when_a_reader_thread_cannot_start(sb, tmp_path,
     real_popen = subprocess.Popen  # the offline guard may already wrap it; record whatever is in place
 
     def recording_popen(*a, **kw):
+        """Start the real Popen and record the instance."""
         proc = real_popen(*a, **kw)
         spawned.append(proc)
         return proc
 
     class FailingThread(threading.Thread):
+        """A thread whose start always fails, to simulate resource exhaustion."""
         def start(self):
+            """Fail as the OS does when no thread can be created."""
             raise RuntimeError("can't start new thread")
 
     monkeypatch.setattr(sb.subprocess, "Popen", recording_popen)
@@ -629,6 +673,7 @@ def fake_kqueue(sb, monkeypatch):
 
 
 def test_the_kqueue_probe_sees_exit_without_reaping_the_leader(sb, fake_kqueue) -> None:
+    """Check that the kqueue probe sees exit without reaping the leader."""
     import subprocess
 
     proc = subprocess.Popen([sys.executable, "-I", "-c", "pass"])
@@ -647,6 +692,7 @@ def test_the_kqueue_probe_sees_exit_without_reaping_the_leader(sb, fake_kqueue) 
 
 
 def test_the_kqueue_probe_treats_esrch_as_exited(sb, fake_kqueue) -> None:
+    """Check that the kqueue probe treats esrch as exited."""
     import subprocess
 
     fake_kqueue.register_error = ProcessLookupError(3, "No such process")
@@ -660,6 +706,7 @@ def test_the_kqueue_probe_treats_esrch_as_exited(sb, fake_kqueue) -> None:
 
 
 def test_a_run_with_the_kqueue_probe_closes_it_and_leaves_no_group(sb, tmp_path, monkeypatch, fake_kqueue) -> None:
+    """Check that a run with the kqueue probe closes it and leaves no group."""
     monkeypatch.setattr(sb, "sandbox_available", lambda: False)
     fake_kqueue.register_error = ProcessLookupError(3, "No such process")  # reported as exited at once
     result = sb.run_isolated(_py("import time; time.sleep(0.2)"), cwd=tmp_path, timeout=20, allow_unsandboxed=True)
@@ -668,6 +715,7 @@ def test_a_run_with_the_kqueue_probe_closes_it_and_leaves_no_group(sb, tmp_path,
 
 
 def test_the_proc_probe_never_reaps_and_the_run_fails_closed_without_any_probe(sb, monkeypatch) -> None:
+    """Check that the proc probe never reaps and the run fails closed without any probe."""
     import os
     import subprocess
 
