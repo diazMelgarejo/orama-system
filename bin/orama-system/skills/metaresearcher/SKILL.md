@@ -78,8 +78,10 @@ Biafra is the canonical agent for this seat; the ids stay `metaresearch-outer` a
 - **Stall rule:** `stall_report(trace, window=3)`. No stall, no proposal.
 - **Writes:** a Mechanism Card candidate, validated by `validate_mechanism_card`. Pass it to
   `dry_cycle` or `live_cycle` as `mechanism_card`: a card naming Phylax, Telos or Agate as an owner
-  is then refused (`invalid-card`, `E_OWNER`) before any measurement or launch. A caller that
-  omits the card is not checked, and the result says `card_checked: false`. The JSON Schema in
+  is then refused (`invalid-card`, `E_OWNER`). `live_cycle` refuses before it launches, so before any
+  measurement. `dry_cycle` is handed its measurement, so it refuses before it records, and the proposing
+  agent must run `validate_mechanism_card` before it measures. A caller that omits the card is not
+  checked, and the result says `card_checked: false`. The JSON Schema in
   `docs/v2/references/biafra/` is shape-only.
 - **Pins:** the evaluator digest from `evaluator_digest(...)` goes in every receipt. Not yet
   enforced (open gap G3): the card's digest is not compared with its dry-run receipt, and a

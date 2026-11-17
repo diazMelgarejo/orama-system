@@ -459,3 +459,18 @@ Skillify pattern:
   tool use, git discipline, and elegance heuristics for multi-repo sessions
 - PT `.agent/AGENTS.md` § Multi-agent merge conflict protocol — portable-brain
   summary of the sister pattern for concurrent branches
+
+## Three more rules from the review of the review (2026-11-17)
+
+- **A claim must name its enforcer.** For every sentence that says "refuses", "forces", "only X writes"
+  or "never", find the line that enforces it and say which entry point does. If the check lives in the
+  command and not the guard, or in the live path and not the dry path, say so. Five threads in one
+  round were this one defect, and a bot keeps a thread open until the sentence matches the mechanism.
+- **A new default location needs a neutralizing fixture.** When a resolver gains a fallback (a CI
+  checkout), every test that asserts "nothing found" must neutralize it in the shared fixture, and one
+  test must prove the fallback is used. CI has the location and a laptop does not, so the failure shows
+  only in CI: create the location locally and run the suite before pushing.
+- **Release on every path, then check the claims.** Everything acquired after a reservation (a marker,
+  a process group, a ledger) belongs inside the cleanup block, and a status field such as `recorded`
+  is derived from what was written, never assumed. A table cell with a `|` inside code needs `\|`;
+  the lint config excludes SKILL.md, so check those tables by eye.

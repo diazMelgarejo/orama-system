@@ -24,7 +24,9 @@ activation does not charge a card; the default Free cap is 100 dollars a month o
 A Free account can have pay-as-you-go active without a card yet charged, and then turns can bill up to the
 cap. So "free with no payment method charged" is not enough. Before any live request the operator must
 **attest** that the plan is Free, pay-as-you-go is inactive and allowance remains. Only the operator can read
-the Billing page, so only the operator writes the attestation:
+the Billing page, so the `attest` command asks for an interactive terminal and a typed confirmation.
+The guard itself checks only the file's contents, so a process running as the same user could write it:
+the attestation is a speed bump, not an access control. Run:
 `python3 -m orchestrator.provider_limits attest wandb-inference --plan-free --payg-inactive
 --allowance-remaining --by <name> --confirm "I read the provider Billing page myself"`. It expires after
 seven days. An agent must never run it. Without a fresh attestation the guard refuses every live request
@@ -117,7 +119,9 @@ Distilled by the Crystal pass over the 2026-11-17 event log (one request, about 
   function that takes facts and returns a decision, prove the extraction with the existing tests, give
   that to the seat, and write the lifecycle by hand in the caller. `_launch_decision` is the example.
 - **Score against a measured baseline.** If a harness change leaves existing tests failing (a permissive
-  test guard did, 8 of them), count only failures beyond that baseline, and run a known-good reference
+  test guard did, 8 of them), count only failures beyond that baseline, comparing failed test identities, not counts (a candidate
+  that fixes one baseline failure and breaks another keeps the count and must still score as a
+  regression; the archived evaluator compares counts and is kept unchanged), and run a known-good reference
   answer through the evaluator before the live request, so evaluator bugs are not charged to the model.
 - **Start the seat in the background, then edit only what it does not import.** Incorporate its output
   test-first afterwards.

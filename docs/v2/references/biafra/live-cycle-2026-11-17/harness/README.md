@@ -27,6 +27,8 @@ supported tool.
 
 ## Known limitations of these saved copies
 
+- Drivers older than turn 5 call `run_live` without `ledger_path`. `live_cycle` now refuses that call
+  (`ledger-required`); pass `ledger_path=...` to rebuild a turn.
 - `driver_inner_turn3b.py` and `driver_outer_turn2.py` ran before the spend guard was mandatory and call
   `run_live` without `spend_guard`. `live_cycle` now refuses that call (`spend-guard-required`); add
   `spend_guard=SpendGuard()` to rebuild a turn (step 5 above).
