@@ -128,6 +128,7 @@ def is_finite_number(value: Any) -> bool:
 
 
 def _text(value: Any) -> bool:
+    """True for a string with a non-blank character."""
     return isinstance(value, str) and bool(value.strip())
 
 

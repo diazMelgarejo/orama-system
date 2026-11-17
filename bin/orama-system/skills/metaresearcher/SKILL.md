@@ -81,11 +81,15 @@ Biafra is the canonical agent for this seat; the ids stay `metaresearch-outer` a
   is then refused (`invalid-card`, `E_OWNER`). `live_cycle` refuses before it launches, so before any
   measurement. `dry_cycle` is handed its measurement, so it refuses before it records, and the proposing
   agent must run `validate_mechanism_card` before it measures. A caller that omits the card is not
-  checked, and the result says `card_checked: false`. The JSON Schema in
-  `docs/v2/references/biafra/` is shape-only.
-- **Pins:** the evaluator digest from `evaluator_digest(...)` goes in every receipt. Not yet
-  enforced (open gap G3): the card's digest is not compared with its dry-run receipt, and a
-  graduated card's receipt needs no `trace`.
+  checked, and the result says `card_checked: false`. When a valid card is passed the result also
+  carries `card_id` (`<mechanism_id>@<revision>`). A reviewed or graduated card is promoted only
+  with a receipt from a dry cycle that checked that card (`card_checked: true`, matching
+  `card_id`): no card, no promotion. The JSON Schema in `docs/v2/references/biafra/` is shape-only.
+- **Pins:** at run start the operator or gate calls `pin_evaluator(pin_path, verifier_paths)`; it
+  records the digest of exactly those files once, and a changed evaluator is refused on a repeat.
+  `read_pin(pin_path)` returns the digest. `validate_mechanism_card(card, pinned_digest=...)` then
+  requires a reviewed or graduated card's receipt to carry a valid `trace` with the card's own
+  evaluator digest, and a graduated card to match the pin.
 - **Model and effort (always explicit):** preferred and human-gated, Claude Fable 5.2 high or
   GPT-6 Astra high for Biafra, run only after explicit approval. Default and automatic, medium else
   high else low and never xhigh or max, on free W&B turns and as the fallback when no paid permission

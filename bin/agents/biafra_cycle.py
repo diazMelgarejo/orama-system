@@ -38,6 +38,7 @@ def _contracts():
 
 
 def _forbidden(path: str) -> bool:
+    """True for a verifier path (under tests/ or named test_*) that the seats may not edit."""
     parts = Path(path).parts
     name = Path(path).name
     return "tests" in parts or name.startswith("test_")
@@ -78,6 +79,7 @@ def dry_cycle(
     marker = log_dir / f"{seat}-{mode}.once"
 
     def refuse(reason: str, **extra: object) -> dict:
+        """A refused cycle: nothing launched, nothing retried."""
         return {"ok": False, "seat": seat, "mode": mode, "reason": reason, "retries": 0, "launched": False, **extra}
 
     if not (contracts.is_finite_number(metric_before) and contracts.is_finite_number(metric_after)):

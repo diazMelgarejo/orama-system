@@ -28,8 +28,9 @@ the Billing page, so the `attest` command asks for an interactive terminal and a
 The guard itself checks only the file's contents, so a process running as the same user could write it:
 the attestation is a speed bump, not an access control. Run:
 `python3 -m orchestrator.provider_limits attest wandb-inference --plan-free --payg-inactive
---allowance-remaining --by <name> --confirm "I read the provider Billing page myself"`. It expires after
-seven days. An agent must never run it. Without a fresh attestation the guard refuses every live request
+--allowance-remaining --by <name>`, then type the confirmation at the interactive prompt (the parser
+has no `--confirm` argument and refuses it). It expires after seven days. An agent must never run it.
+Without a fresh attestation the guard refuses every live request
 (`attestation-required`).
 
 Rules: never activate pay-as-you-go; stop the loop on any `402` or `429`; one call is one request, so the
@@ -175,8 +176,7 @@ blocks commands naming `node_modules` or `.venv` paths is not to be worked aroun
 
 ## Open decisions
 
-What the evaluator digest covers (G3); whether the card check must be mandatory (G9); the stall
-window; Wanda's soul card versus the W&B Cline route; a registry of declared metrics (G10).
+The stall window; Wanda's soul card versus the W&B Cline route; a registry of declared metrics (G10).
 
 ## Saved harness
 

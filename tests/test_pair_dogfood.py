@@ -225,6 +225,18 @@ def test_the_runbook_states_the_billing_basis_and_the_stop_rule() -> None:
     assert "a `402` means it was reached" not in text
 
 
+def test_the_runbook_attest_command_has_no_confirm_flag_and_g3_g9_are_closed() -> None:
+    text = (ROOT / "bin/orama-system/skills/metaresearcher/references/live-pair-loop-runbook.md").read_text()
+    assert "--confirm" not in text.replace("has no `--confirm` argument", "")  # PT's parser refuses the flag
+    assert "interactive prompt" in text
+    open_decisions = text.split("## Open decisions", 1)[1].split("## ", 1)[0]
+    assert "G3" not in open_decisions and "G9" not in open_decisions
+    plan = (ROOT / "docs/v2/76-biafra-outer-seat-canonical-plan.md").read_text()
+    for gap in ("| G3 |", "| G9 |"):
+        row = next(line for line in plan.splitlines() if line.startswith(gap))
+        assert "Resolved 2026-11-17" in row, gap
+
+
 def test_the_runbook_points_at_the_shared_guard_and_not_a_private_ledger() -> None:
     text = (ROOT / "bin/orama-system/skills/metaresearcher/references/live-pair-loop-runbook.md").read_text()
     for needle in (
