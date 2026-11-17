@@ -49,8 +49,12 @@ needs_pt = pytest.mark.skipif(
 
 
 @pytest.fixture()
-def sg():
-    return _load("bin/agents/spend_guard.py", "spend_guard")
+def sg(tmp_path_factory):
+    mod = _load("bin/agents/spend_guard.py", "spend_guard")
+    # Every default location the resolver tries must be neutralized here: CI really has a checkout at
+    # CI_CHECKOUT, which would otherwise satisfy tests that expect "no guard anywhere".
+    mod.CI_CHECKOUT = tmp_path_factory.getbasetemp() / "no-ci-checkout"
+    return mod
 
 
 @pytest.fixture()
@@ -189,7 +193,7 @@ def _kwargs(tmp_path: Path, **over):
     base = dict(
         seat="inner", task_type="harden", prompt="Improve X.", log_dir=tmp_path / "log",
         evaluate=lambda a: {"metric_after": 1.0}, metric_before=3.0, artifact="a.b",
-        evaluator_digest=DIGEST, hypothesis="h", metric_name="m",
+        evaluator_digest=DIGEST, hypothesis="h", metric_name="m", ledger_path=tmp_path / "ledger.jsonl",
     )
     base.update(over)
     return base
@@ -288,6 +292,17 @@ def test_no_argument_no_variable_and_no_symlink_fails_closed(sg, tmp_path, monke
     monkeypatch.setattr(sg, "LOCAL_LINK", tmp_path / "absent")
     with pytest.raises(sg.SpendGuardUnavailable):
         sg.resolve_pt_root(None)
+
+
+def test_the_ci_checkout_is_the_last_resort(sg, tmp_path, monkeypatch) -> None:
+    ci = _fake_pt(tmp_path / "ci")
+    monkeypatch.delenv("PERPETUA_TOOLS_ROOT", raising=False)
+    monkeypatch.setattr(sg, "LOCAL_LINK", tmp_path / "absent")
+    monkeypatch.setattr(sg, "CI_CHECKOUT", ci)
+    assert sg.resolve_pt_root(None) == ci.resolve()
+    env = _fake_pt(tmp_path / "env")
+    monkeypatch.setenv("PERPETUA_TOOLS_ROOT", str(env))
+    assert sg.resolve_pt_root(None) == env.resolve()
 
 
 def test_a_dangling_or_wrong_symlink_is_refused(sg, tmp_path, monkeypatch) -> None:
