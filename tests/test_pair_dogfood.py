@@ -47,14 +47,14 @@ def run_pair(workdir: Path) -> dict[str, Any]:
     inner_results = [
         inner.run(
             "harden", 0.20, after, workdir / f"inner-{n}", "train.py", digest,
-            hypothesis=f"change {n}", metric_name="val_bpb",
+            hypothesis=f"change {n}", metric_name="val_bpb_heldout",
         )
         for n, after in enumerate((0.24, 0.23, 0.26), start=1)
     ]
     # Scout reports one more attempt on its own seat.
     scout_trace = {
         "version": 1, "seat": "inner-scout", "attempt_id": "scout-1", "hypothesis": "plugin loop pass",
-        "artifact": "train.py", "metric_name": "val_bpb", "metric_before": 0.20, "metric_after": 0.25,
+        "artifact": "train.py", "metric_name": "val_bpb_heldout", "metric_before": 0.20, "metric_after": 0.25,
         "decision": "revert", "evaluator_digest": digest,
     }
     ledger = [r["trace"] for r in inner_results] + [scout_trace]
@@ -67,7 +67,7 @@ def run_pair(workdir: Path) -> dict[str, Any]:
 
     outer_result = outer.run(
         "harden", 0.26, 0.19, workdir / "outer", "search-rule", digest,
-        hypothesis="repeat reverts mean the proposal rule is stale", metric_name="val_bpb",
+        hypothesis="repeat reverts mean the proposal rule is stale", metric_name="val_bpb_heldout",
     )
     card = {
         "version": 1,
@@ -76,7 +76,7 @@ def run_pair(workdir: Path) -> dict[str, Any]:
         "parent": None,
         "hypothesis": "Three consecutive reverts on one artifact: change the proposal rule, not the artifact.",
         "evidence_ids": stall["entry_ids"],
-        "inner_metric": "val_bpb",
+        "inner_metric": "val_bpb_heldout",
         "held_out_metric": "val_bpb_heldout",
         "evaluator_digest": digest,
         "dry_run_receipt": {
@@ -170,7 +170,7 @@ def test_g9_a_card_is_promoted_only_after_a_dry_cycle_that_checked_that_card(rec
     # The outer dry cycle checks the candidate before measurement, in a fresh directory.
     checked = cycle.dry_cycle(
         "outer", "harden", 0.26, 0.19, tmp_path / "promote", "search-rule", receipt["digest"],
-        hypothesis="repeat reverts mean the proposal rule is stale", metric_name="val_bpb",
+        hypothesis="repeat reverts mean the proposal rule is stale", metric_name="val_bpb_heldout",
         mechanism_card=candidate,
     )
     assert checked["ok"] is True and checked["card_checked"] is True
@@ -188,7 +188,7 @@ def test_g9_a_card_is_promoted_only_after_a_dry_cycle_that_checked_that_card(rec
     # A dry cycle that never saw the card, or saw another one, cannot promote it.
     unchecked = cycle.dry_cycle(
         "outer", "harden", 0.26, 0.19, tmp_path / "nocard", "search-rule", receipt["digest"],
-        hypothesis="repeat reverts mean the proposal rule is stale", metric_name="val_bpb",
+        hypothesis="repeat reverts mean the proposal rule is stale", metric_name="val_bpb_heldout",
     )
     assert unchecked["card_checked"] is False
     assert sc.validate_mechanism_card({**reviewed, "dry_run_receipt": unchecked})

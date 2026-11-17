@@ -12,6 +12,7 @@ import math
 import sys
 import threading
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 import yaml
@@ -609,27 +610,44 @@ def test_the_cycle_refuses_a_huge_metric(tmp_path: Path) -> None:
     assert r["ok"] is False and r["reason"] == "non-finite-metric" and r["launched"] is False
 
 
-def test_large_but_representable_numbers_are_still_measurements(sc) -> None:
-    """Large numbers that fit a float still count as finite metrics."""
-    assert all(sc.is_finite_number(v) for v in (10**15, 10**308, 1.7976931348623157e308, -3, 0.25))
+def test_integer_measurements_preserve_double_precision(sc: ModuleType) -> None:
+    """Integers outside the exact double range are refused without rejecting finite floats."""
+    for value in (2**53, -(2**53), 10**15, -3, 0.25, 1.7976931348623157e308):
+        assert sc.is_finite_number(value)
+    for value in (2**53 + 1, -(2**53 + 1), 10**308, 10**400, True, float("nan"), float("inf")):
+        assert not sc.is_finite_number(value)
+    assert any("delta" in e for e in sc.validate_mechanism_card(_card(delta=2**53 + 1)))
+    assert any("metric_before" in e for e in sc.validate_trace_entry(_entry(metric_before=2**53 + 1)))
 
 
-def test_the_representable_boundary_is_pinned(sc) -> None:
-    """The finite check accepts up to the float maximum and rejects beyond it."""
-    import sys
-
-    top = int(sys.float_info.max)
-    assert sc.is_finite_number(top) is True
-    assert sc.is_finite_number(-top) is True
-    assert sc.is_finite_number(2 * top) is False
-    assert sc.is_finite_number(-2 * top) is False
-    assert sc.is_finite_number(2**1024 - 2**970) is False
+def test_default_stall_window_uses_three_valid_reverts(sc: ModuleType) -> None:
+    """The default stall threshold retains three consecutive valid reverts."""
+    assert sc.STALL_WINDOW == 3
+    reverts = [_entry(attempt_id=str(i), decision="revert", metric_after=0.9) for i in range(3)]
+    assert not sc.stall_report(reverts[:2])["stalled"]
+    assert sc.stall_report(reverts)["stalled"]
+    assert sc.stall_report(reverts)["window"] == sc.STALL_WINDOW
 
 
-def test_the_finite_helper_states_its_real_domain() -> None:
-    """The finite-number helper's source says it tests after float conversion."""
-    text = (ROOT / "bin/agents/seat_contracts.py").read_text()
-    assert "after conversion to float" in text
+@pytest.mark.parametrize("field", ["inner_metric", "held_out_metric"])
+def test_card_metrics_must_be_declared(sc: ModuleType, field: str) -> None:
+    """Both card metric fields reject undeclared names with a field-specific error."""
+    assert not sc.validate_mechanism_card(_card())
+    assert any(field in e for e in sc.validate_mechanism_card(_card(**{field: "invented_metric"})))
+
+
+def test_trace_metrics_must_be_declared(sc: ModuleType) -> None:
+    """Trace validation accepts declared names and rejects unknown or non-string values."""
+    assert not sc.validate_trace_entry(_entry())
+    for value in ("invented_metric", [], None):
+        assert not sc.is_declared_metric_name(value)
+        assert any("metric_name" in e for e in sc.validate_trace_entry(_entry(metric_name=value)))
+    for value in ("metric", "val_bpb", "val_bpb_heldout", "held_out_class_bc_comment_cases",
+                  "card_validity_and_grounding_failures", "failed_observed_defect_cases",
+                  "failed_prelaunch_cases", "failed_reviewer_cases", "failed_verified_defect_cases",
+                  "review_format_violations"):
+        assert sc.is_declared_metric_name(value)
+        assert not sc.validate_trace_entry(_entry(metric_name=value))
 
 
 # --- defect observed in the first real live turn: the outer seat's card had a sentence as owner ---

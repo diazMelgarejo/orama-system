@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import importlib.util
+import json
+from datetime import datetime, timezone
 import subprocess
 import sys
 from pathlib import Path
@@ -94,11 +96,18 @@ class _Guard:
 
 def _kwargs(tmp_path: Path, **over):
     """Test helper or fixture: kwargs."""
-    base = dict(
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    pin = tmp_path / "evaluator-pin.json"
+    pin.write_text(json.dumps({"version": 1, "evaluator_digest": DIGEST, "covers": ["verifier.py"]}))
+    probe = {"date": datetime.now(timezone.utc).date().isoformat(),
+             "provider": "https://api.inference.wandb.ai/v1",
+             "models": ["deepseek-ai/DeepSeek-V4.1-Flash-1017"],
+             "efforts": {"deepseek-ai/DeepSeek-V4.1-Flash-1017": ["high", "low"]}}
+    base = dict(pin_path=pin, probe_record=probe,
         seat="inner", task_type="harden", prompt="Improve X. Return only code.", log_dir=tmp_path,
         evaluate=lambda answer: {"metric_after": 1.0, "detail": answer}, metric_before=3.0,
         artifact="seat_contracts._owner_folded", evaluator_digest=DIGEST,
-        hypothesis="handle leetspeak", metric_name="heldout_wrong", spend_guard=_Guard(),
+        hypothesis="handle leetspeak", metric_name="metric", spend_guard=_Guard(),
         ledger_path=tmp_path / "default-ledger.jsonl",
     )
     base.update(over)
@@ -164,6 +173,9 @@ def test_a_live_cycle_keeps_a_better_metric_and_records_a_trace(cycle, tmp_path,
     r = cycle.live_cycle(**_kwargs(tmp_path, effort="high"))
     assert r["ok"] is True and r["decision"] == "keep" and r["launched"] is True and r["retries"] == 0
     assert r["recorded"] is True and r["answer"] == "ANSWER TEXT" and r["called_launcher"] is True
+    argv = calls[0][0]
+    assert argv[argv.index("--model") + 1] == cycle._contracts().WANDB_MODEL_ORDER[0]
+    assert argv[argv.index("--effort") + 1] == "high"
     assert r["trace"]["metric_before"] == 3.0 and r["trace"]["metric_after"] == 1.0
     assert len(calls) == 1 and calls[0][1]["stdin"] is subprocess.DEVNULL and calls[0][1]["timeout"] > 0
 
@@ -234,7 +246,7 @@ def test_both_programs_expose_run_live(name: str) -> None:
 
 PHYLAX_CARD = {
     "version": 1, "mechanism_id": "m-test", "revision": 1, "parent": None, "hypothesis": "h",
-    "evidence_ids": ["a-1"], "inner_metric": "m", "held_out_metric": "h", "evaluator_digest": DIGEST,
+    "evidence_ids": ["a-1"], "inner_metric": "metric", "held_out_metric": "val_bpb_heldout", "evaluator_digest": DIGEST,
     "dry_run_receipt": {}, "delta": -1.0, "reverted": False, "scope_record": {"authorizes": "nothing"},
     "owner_slices": ["kungfu"], "status": "candidate",
 }
@@ -422,7 +434,8 @@ def test_malformed_trace_fields_are_refused_before_anything_is_spent(cycle, tmp_
             return None
 
     r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=Guard(), **over))
-    assert r["ok"] is False and r["reason"] == "invalid-trace" and r["launched"] is False
+    assert r["ok"] is False and r["reason"] == ("invalid-metric-name" if "metric_name" in over else "invalid-trace")
+    assert r["launched"] is False
     assert calls == [] and Guard.preflights == 0, "nothing may be reserved or launched"
     assert not list(tmp_path.glob("*.once"))
 
@@ -531,7 +544,14 @@ def test_a_valid_effort_still_launches(cycle, tmp_path, monkeypatch, effort) -> 
     _arm(monkeypatch, cycle)
     monkeypatch.setattr(cycle.subprocess, "Popen", _fake_run())
     guard = _Guard()
-    r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard, effort=effort))
+    args = _kwargs(tmp_path, spend_guard=guard, effort=effort)
+    if effort == "medium":
+        model = cycle._contracts().WANDB_MODEL_ORDER[2]
+        args["probe_record"]["models"] = [model]
+        args["probe_record"]["efforts"] = {model: ["medium", "high", "low"]}
+    elif effort == "low":
+        args["probe_record"]["efforts"][cycle._contracts().WANDB_MODEL_ORDER[0]] = ["low"]
+    r = cycle.live_cycle(**args)
     assert r["ok"] is True and guard.open_reservations() == []
 
 
@@ -600,3 +620,144 @@ def test_a_valueerror_from_the_launcher_frees_the_reservation(cycle, tmp_path, m
     guard = _Guard()
     r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard))
     assert r["reason"] == "launcher-error" and guard.open_reservations() == [] and guard.released == ["r1"]
+
+
+def test_missing_live_evidence_refuses_before_reservation(cycle, tmp_path, monkeypatch) -> None:
+    """An armed cycle without a pin and probe cannot reserve or claim the attempt."""
+    _arm(monkeypatch, cycle)
+    guard = _Guard()
+    result = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard, pin_path=None))
+    assert result["reason"] == "evaluator-pin-invalid"
+    assert guard.preflights == 0
+    assert not list(tmp_path.glob("*.once"))
+
+
+@pytest.mark.parametrize("change", ["missing", "stale", "provider", "model", "effort", "malformed", "credentials"])
+def test_invalid_probe_refuses_before_reservation(cycle, tmp_path, monkeypatch, change: str) -> None:
+    """Probe evidence must match today's actual target, model, and accepted effort."""
+    _arm(monkeypatch, cycle)
+    guard = _Guard()
+    args = _kwargs(tmp_path, spend_guard=guard)
+    record = args["probe_record"]
+    if change == "missing":
+        args["probe_record"] = None
+    elif change == "stale":
+        record["date"] = "2000-01-01"
+    elif change == "provider":
+        record["provider"] = "https://example.com"
+    elif change == "model":
+        record["models"] = ["other"]
+    elif change == "effort":
+        record["efforts"][cycle._contracts().WANDB_MODEL_ORDER[0]] = []
+    elif change == "malformed":
+        record["models"] = [None]
+    else:
+        record["key"] = "never-store-credentials"
+    result = cycle.live_cycle(**args)
+    assert result["reason"] == "provider-probe-invalid"
+    assert guard.preflights == 0 and not list(tmp_path.glob("*.once"))
+
+
+def test_mismatched_pin_refuses_before_reservation(cycle, tmp_path, monkeypatch) -> None:
+    """A well-formed pin for a different evaluator cannot authorize a cycle."""
+    _arm(monkeypatch, cycle)
+    guard = _Guard()
+    args = _kwargs(tmp_path, spend_guard=guard)
+    args["pin_path"].write_text(json.dumps({"version": 1, "evaluator_digest": "a" * 64, "covers": ["v"]}))
+    result = cycle.live_cycle(**args)
+    assert result["reason"] == "evaluator-pin-invalid"
+    assert guard.preflights == 0 and not list(tmp_path.glob("*.once"))
+
+
+def test_unknown_metric_without_digest_refuses_before_marker(cycle, tmp_path) -> None:
+    """Dry cycles enforce the registry even when they do not record a trace."""
+    result = cycle.dry_cycle("inner", "harden", 1.0, 0.5, tmp_path, metric_name="not_declared")
+    assert result["reason"] == "invalid-metric-name"
+    assert not list(tmp_path.glob("*.once"))
+
+
+def test_malformed_pin_refuses_before_reservation(cycle, tmp_path, monkeypatch) -> None:
+    """A corrupt pin cannot authorize the evaluator."""
+    _arm(monkeypatch, cycle)
+    guard = _Guard()
+    args = _kwargs(tmp_path, spend_guard=guard)
+    args["pin_path"].write_text("not json")
+    result = cycle.live_cycle(**args)
+    assert result["reason"] == "evaluator-pin-invalid"
+    assert guard.preflights == 0 and not list(tmp_path.glob("*.once"))
+
+
+def test_unknown_live_metric_refuses_before_reservation(cycle, tmp_path, monkeypatch) -> None:
+    """A live cycle cannot reserve for an undeclared metric."""
+    _arm(monkeypatch, cycle)
+    guard = _Guard()
+    result = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard, metric_name="not_declared"))
+    assert result["reason"] == "invalid-metric-name"
+    assert guard.preflights == 0 and not list(tmp_path.glob("*.once"))
+
+
+@pytest.mark.parametrize("bad_model", ["paid-model", "invalid\x00model"])
+def test_unlisted_model_is_refused_before_reservation(cycle, tmp_path, monkeypatch, bad_model: str) -> None:
+    """An injected probe cannot authorize models outside the free policy."""
+    _arm(monkeypatch, cycle)
+    guard = _Guard()
+    args = _kwargs(tmp_path, spend_guard=guard, model=bad_model)
+    args["probe_record"]["models"] = [bad_model]
+    args["probe_record"]["efforts"] = {bad_model: ["high"]}
+    monkeypatch.setattr(cycle.subprocess, "Popen", _fake_run())
+    result = cycle.live_cycle(**args)
+    assert not result["ok"] and guard.preflights == 0
+    assert not list(tmp_path.glob("*.once"))
+
+
+def test_lower_effort_refused_when_higher_is_supported(cycle, tmp_path, monkeypatch) -> None:
+    """An explicit low effort cannot bypass the free effort ladder."""
+    _arm(monkeypatch, cycle)
+    guard = _Guard()
+    args = _kwargs(tmp_path, spend_guard=guard, effort="low")
+    monkeypatch.setattr(cycle.subprocess, "Popen", _fake_run())
+    result = cycle.live_cycle(**args)
+    assert not result["ok"] and guard.preflights == 0
+    assert not list(tmp_path.glob("*.once"))
+
+
+@pytest.mark.parametrize("index,effort", [(1, "high"), (2, "medium")])
+def test_default_selects_first_available_model_and_effort(cycle, tmp_path, monkeypatch, index: int, effort: str) -> None:
+    """Missing earlier models cause a free-policy fallback with the right launcher arguments."""
+    _arm(monkeypatch, cycle)
+    contracts = cycle._contracts()
+    model = contracts.WANDB_MODEL_ORDER[index]
+    args = _kwargs(tmp_path)
+    args["probe_record"]["models"] = [model]
+    args["probe_record"]["efforts"] = {model: list(contracts.WANDB_EFFORTS[model])}
+    calls = []
+    monkeypatch.setattr(cycle.subprocess, "Popen", _fake_run(calls=calls))
+    result = cycle.live_cycle(**args)
+    assert result["ok"]
+    argv = calls[0][0]
+    assert argv[argv.index("--model") + 1] == model
+    assert argv[argv.index("--effort") + 1] == effort
+
+
+def test_explicit_later_model_cannot_skip_available_first(cycle, tmp_path, monkeypatch) -> None:
+    """Explicit selections cannot skip an available earlier free model."""
+    _arm(monkeypatch, cycle)
+    order = cycle._contracts().WANDB_MODEL_ORDER
+    guard = _Guard()
+    args = _kwargs(tmp_path, spend_guard=guard, model=order[1])
+    args["probe_record"]["models"] = [order[1], order[0]]
+    args["probe_record"]["efforts"][order[1]] = ["high"]
+    result = cycle.live_cycle(**args)
+    assert not result["ok"] and guard.preflights == 0
+    assert not list(tmp_path.glob("*.once"))
+
+
+def test_probe_cannot_expand_canonical_effort_support(cycle, tmp_path, monkeypatch) -> None:
+    """A new provider capability requires a canonical policy update before use."""
+    _arm(monkeypatch, cycle)
+    guard = _Guard()
+    args = _kwargs(tmp_path, spend_guard=guard)
+    args["probe_record"]["efforts"][cycle._contracts().WANDB_MODEL_ORDER[0]] = ["medium", "high"]
+    result = cycle.live_cycle(**args)
+    assert not result["ok"] and guard.preflights == 0
+    assert not list(tmp_path.glob("*.once"))

@@ -17,6 +17,14 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
 TRACE_VERSION = 1
+STALL_WINDOW = 3
+# "metric" is the existing cycle and seat-wrapper default, retained for compatibility.
+DECLARED_METRIC_NAMES = frozenset({
+    "metric", "val_bpb", "val_bpb_heldout", "held_out_class_bc_comment_cases",
+    "card_validity_and_grounding_failures", "failed_observed_defect_cases",
+    "failed_prelaunch_cases", "failed_reviewer_cases", "failed_verified_defect_cases",
+    "review_format_violations",
+})
 CARD_VERSION = 1
 SEATS = ("inner", "inner-scout", "outer")
 DECISIONS = ("keep", "revert")
@@ -58,19 +66,17 @@ PREFERRED_PAID: dict[tuple[str, str], tuple[str, str]] = {
 
 
 def _finite(value: Any) -> bool:
-    """True for a real number that is finite after conversion to float.
-
-    bool, str, None, NaN and inf are not measurements. An int whose magnitude exceeds the largest
-    double (about 1.8e308) is refused instead of raising: every consumer computes in doubles, so
-    it is not a usable measurement. Ints up to that bound are accepted, including the band above
-    2**53 where the conversion loses precision.
-    """
+    """Accept finite floats and integers within the exact IEEE double integer range."""
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return False
-    try:
-        return math.isfinite(value)
-    except OverflowError:  # int too large to convert to a C double
-        return False
+    if isinstance(value, int):
+        return abs(value) <= 2**53
+    return math.isfinite(value)
+
+
+def is_declared_metric_name(value: Any) -> bool:
+    """Return whether value names a metric in the closed contract registry."""
+    return isinstance(value, str) and value in DECLARED_METRIC_NAMES
 
 
 def _owner_folded(owner: str) -> str | None:
@@ -230,9 +236,11 @@ def validate_trace_entry(entry: Mapping[str, Any]) -> list[str]:
         errors.append("version must be 1")
     if entry["seat"] not in SEATS:
         errors.append("seat must be inner or outer")
-    for key in ("attempt_id", "hypothesis", "artifact", "metric_name"):
+    for key in ("attempt_id", "hypothesis", "artifact"):
         if not _text(entry[key]):
             errors.append(f"{key} must be non-empty text")
+    if not is_declared_metric_name(entry["metric_name"]):
+        errors.append("metric_name must be a declared metric")
     for key in ("metric_before", "metric_after"):
         if not _finite(entry[key]):
             errors.append(f"{key} must be a finite number")
@@ -247,7 +255,7 @@ def validate_trace_entry(entry: Mapping[str, Any]) -> list[str]:
     return errors
 
 
-def stall_report(trace: Sequence[Mapping[str, Any]], window: int = 3) -> dict[str, Any]:
+def stall_report(trace: Sequence[Mapping[str, Any]], window: int = STALL_WINDOW) -> dict[str, Any]:
     """A stall is `window` consecutive valid reverts at the end of the trace.
 
     Invalid entries never count toward a stall; they are counted and reported.
@@ -293,9 +301,11 @@ def validate_mechanism_card(card: Mapping[str, Any], pinned_digest: str | None =
         errors.append("revision must be an integer >= 1")
     if card["parent"] is not None and not _text(card["parent"]):
         errors.append("parent must be null or non-empty text")
-    for key in ("hypothesis", "inner_metric", "held_out_metric"):
-        if not _text(card[key]):
-            errors.append(f"{key} must be non-empty text")
+    if not _text(card["hypothesis"]):
+        errors.append("hypothesis must be non-empty text")
+    for key in ("inner_metric", "held_out_metric"):
+        if not is_declared_metric_name(card[key]):
+            errors.append(f"{key} must be a declared metric")
     ids = card["evidence_ids"]
     if not (isinstance(ids, list) and ids and all(_text(i) for i in ids)):
         errors.append("evidence_ids must be a non-empty list of ledger entry ids")

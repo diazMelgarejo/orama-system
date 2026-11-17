@@ -226,10 +226,17 @@ def _arm(monkeypatch, cycle) -> None:
 
 def _kwargs(tmp_path: Path, **over):
     """Test helper or fixture: kwargs."""
-    base = dict(
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    pin = tmp_path / "evaluator-pin.json"
+    pin.write_text(json.dumps({"version": 1, "evaluator_digest": DIGEST, "covers": ["verifier.py"]}))
+    probe = {"date": datetime.now(timezone.utc).date().isoformat(),
+             "provider": "https://api.inference.wandb.ai/v1",
+             "models": ["deepseek-ai/DeepSeek-V4.1-Flash-1017"],
+             "efforts": {"deepseek-ai/DeepSeek-V4.1-Flash-1017": ["high", "low"]}}
+    base = dict(pin_path=pin, probe_record=probe,
         seat="inner", task_type="harden", prompt="Improve X.", log_dir=tmp_path / "log",
         evaluate=lambda a: {"metric_after": 1.0}, metric_before=3.0, artifact="a.b",
-        evaluator_digest=DIGEST, hypothesis="h", metric_name="m", ledger_path=tmp_path / "ledger.jsonl",
+        evaluator_digest=DIGEST, hypothesis="h", metric_name="metric", ledger_path=tmp_path / "ledger.jsonl",
     )
     base.update(over)
     return base
@@ -514,7 +521,7 @@ def test_invalid_utf8_output_is_settled_decoded_with_replacement_and_counts_as_a
     _arm(monkeypatch, cycle)
     monkeypatch.setattr(
         cycle, "launcher_argv",
-        lambda seat, prompt=None, effort=None: _child("import sys; sys.stdout.buffer.write(b'AB\\xffCD')"),
+        lambda seat, prompt=None, effort=None, model=None: _child("import sys; sys.stdout.buffer.write(b'AB\\xffCD')"),
     )
     guard = FakeGuard()
     r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard))
@@ -527,7 +534,7 @@ def test_a_launcher_that_cannot_start_still_releases_the_reservation(cycle, tmp_
     """Check that a launcher that cannot start still releases the reservation."""
     _arm(monkeypatch, cycle)
     monkeypatch.setattr(
-        cycle, "launcher_argv", lambda seat, prompt=None, effort=None: [str(tmp_path / "no-such-launcher")]
+        cycle, "launcher_argv", lambda seat, prompt=None, effort=None, model=None: [str(tmp_path / "no-such-launcher")]
     )
     guard = FakeGuard()
     r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard))
@@ -559,7 +566,7 @@ def test_a_timeout_commits_the_full_reservation_on_the_real_gate(sg, cycle, tmp_
     _arm(monkeypatch, cycle)
     guard = sg.SpendGuard(pt_root=os.environ.get("ORAMA_TEST_PT_ROOT"), state_dir=tmp_path / "spend")
     monkeypatch.setattr(
-        cycle, "launcher_argv", lambda seat, prompt=None, effort=None: _child("import time; time.sleep(30)")
+        cycle, "launcher_argv", lambda seat, prompt=None, effort=None, model=None: _child("import time; time.sleep(30)")
     )
     r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard, timeout_s=1, prompt="x" * 10_000))
     assert r["reason"] == "launcher-timeout" and r["called_launcher"] is True
@@ -574,7 +581,7 @@ def test_a_timeout_commits_the_full_reservation_on_the_real_gate(sg, cycle, tmp_
 def test_an_oserror_while_waiting_settles_as_unknown_and_counts_as_a_launch(cycle, tmp_path, monkeypatch) -> None:
     """Check that an oserror raised while waiting settles unknown, kills the child and reports a launch."""
     _arm(monkeypatch, cycle)
-    monkeypatch.setattr(cycle, "launcher_argv", lambda seat, prompt=None, effort=None: _child("pass"))
+    monkeypatch.setattr(cycle, "launcher_argv", lambda seat, prompt=None, effort=None, model=None: _child("pass"))
     procs: list = []
 
     def broken_pipe(argv, **kwargs):
@@ -594,7 +601,7 @@ def test_an_oserror_while_waiting_settles_as_unknown_and_counts_as_a_launch(cycl
 def test_a_timeout_kills_and_reaps_the_child_before_settling(cycle, tmp_path, monkeypatch) -> None:
     """Check that a timeout kills and reaps the process and then settles unknown."""
     _arm(monkeypatch, cycle)
-    monkeypatch.setattr(cycle, "launcher_argv", lambda seat, prompt=None, effort=None: _child("pass"))
+    monkeypatch.setattr(cycle, "launcher_argv", lambda seat, prompt=None, effort=None, model=None: _child("pass"))
     procs: list = []
 
     def slow(argv, **kwargs):
@@ -612,7 +619,7 @@ def test_a_timeout_kills_and_reaps_the_child_before_settling(cycle, tmp_path, mo
 def test_an_interrupt_kills_and_reaps_the_child_and_still_reraises(cycle, tmp_path, monkeypatch) -> None:
     """Check that an interrupt kills and reaps the process, settles unknown and is re-raised."""
     _arm(monkeypatch, cycle)
-    monkeypatch.setattr(cycle, "launcher_argv", lambda seat, prompt=None, effort=None: _child("pass"))
+    monkeypatch.setattr(cycle, "launcher_argv", lambda seat, prompt=None, effort=None, model=None: _child("pass"))
     procs: list = []
 
     def interrupted(argv, **kwargs):
@@ -630,7 +637,7 @@ def test_an_interrupt_kills_and_reaps_the_child_and_still_reraises(cycle, tmp_pa
 def test_a_failure_to_start_the_process_releases_and_reports_no_launch(cycle, tmp_path, monkeypatch) -> None:
     """Check that an exception raised by Popen itself releases the reservation."""
     _arm(monkeypatch, cycle)
-    monkeypatch.setattr(cycle, "launcher_argv", lambda seat, prompt=None, effort=None: _child("pass"))
+    monkeypatch.setattr(cycle, "launcher_argv", lambda seat, prompt=None, effort=None, model=None: _child("pass"))
 
     def no_start(argv, **kwargs):
         """Fail to start."""
@@ -653,7 +660,7 @@ def test_a_grandchild_holding_the_pipes_cannot_hang_the_cycle_past_the_timeout(c
     _arm(monkeypatch, cycle)
     # A harmless real shell child: it backgrounds a sleeping grandchild that inherits the pipes.
     monkeypatch.setattr(
-        cycle, "launcher_argv", lambda seat, prompt=None, effort=None: ["sh", "-c", "sleep 8 & sleep 8"]
+        cycle, "launcher_argv", lambda seat, prompt=None, effort=None, model=None: ["sh", "-c", "sleep 8 & sleep 8"]
     )
     guard = FakeGuard()
     started = time.monotonic()

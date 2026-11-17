@@ -13,6 +13,9 @@ import re
 import signal
 import subprocess
 import sys
+from datetime import datetime, timezone
+from collections.abc import Callable
+from typing import Any
 from pathlib import Path
 
 PRIMARY_MODE = "plugin-loop"
@@ -85,6 +88,8 @@ def dry_cycle(
 
     if not (contracts.is_finite_number(metric_before) and contracts.is_finite_number(metric_after)):
         return refuse("non-finite-metric")
+    if not contracts.is_declared_metric_name(metric_name):
+        return refuse("invalid-metric-name")
     if _forbidden(artifact):
         return refuse("verifier-protected")
     if mechanism_card is not None:
@@ -179,7 +184,7 @@ def extract_answer(raw: str) -> str:
     return _ANSI.sub("", _DIM_SPAN.sub("", raw))
 
 
-def launcher_argv(seat: str, prompt: str | None = None, effort: str | None = None) -> list[str]:
+def launcher_argv(seat: str, prompt: str | None = None, effort: str | None = None, model: str | None = None) -> list[str]:
     """Name the W&B summon. Naming it is not a call. `effort` is explicit or left to the launcher."""
     if effort is not None and effort not in EFFORTS:
         raise ValueError(f"effort must be one of {EFFORTS}, got {effort!r}")
@@ -197,6 +202,8 @@ def launcher_argv(seat: str, prompt: str | None = None, effort: str | None = Non
         else "Outer seat. Read the log, propose one search rule, and revert it when the metric rises."
     )
     argv = [sys.executable, str(script)]
+    if model is not None:
+        argv += ["--model", model]
     if effort is not None:
         argv += ["--effort", effort]
     return [*argv, "--", prompt if prompt is not None else default]
@@ -215,23 +222,17 @@ def run_program(
     attempt_id: str | None = None,
     mechanism_card: dict | None = None,
 ) -> dict:
-    """One dry cycle. The launcher runs only when the operator gate and the arm are both set."""
+    """Run a dry cycle; armed callers must use the governed live_cycle interface."""
+    if launch_allowed():
+        return {"ok": False, "seat": seat, "mode": select_mode(task_type) if seat == "outer" else "inner",
+                "reason": "legacy-live-path-disabled", "retries": 0, "launched": False,
+                "called_launcher": False}
     result = dry_cycle(
         seat, task_type, metric_before, metric_after, log_dir, artifact, evaluator_digest,
         hypothesis, metric_name, attempt_id, mechanism_card,
     )
     result["argv"] = launcher_argv(seat)
     result["called_launcher"] = False
-    if result.get("ok") and launch_allowed():
-        import subprocess
-
-        completed = subprocess.run(result["argv"], check=False)
-        result["called_launcher"] = True
-        result["returncode"] = completed.returncode
-        result["launched"] = completed.returncode == 0
-        if completed.returncode != 0:
-            result["ok"] = False
-            result["reason"] = "launcher-failed"
     return result
 
 
@@ -363,6 +364,8 @@ def _prelaunch(
             "metric_before": metric_before, "evaluator_digest": evaluator_digest,
         }
         trace_problems = contracts.validate_trace_entry({**trace_base, "metric_after": metric_before, "decision": "revert"})
+    if not contracts.is_declared_metric_name(metric_name):
+        return {"reason": "invalid-metric-name"}, None
     decision = _launch_decision(
         launch_allowed(), has_digest, metric_ok, _forbidden(artifact), prompt_ok, card_errors, trace_problems,
         effort, EFFORTS, spend_guard is not None, ledger_path is not None,
@@ -372,12 +375,54 @@ def _prelaunch(
     return None, trace_base
 
 
+# The launcher receives these values explicitly, so the probe describes the actual request.
+LIVE_PROVIDER = "https://api.inference.wandb.ai/v1"
+
+
+def live_preflight(pin_path: Path | None, evaluator_digest: str, probe_record: object,
+                   model: str | None, effort: str | None) -> dict:
+    """Check a local pin and same-day injected provider evidence without making a network call.
+
+    The record is trusted local evidence, not proof of operator identity or billing approval.
+    It contains date (UTC ISO date), provider, models (ordered list), and efforts (model to list).
+    Credentials must never be included. SpendGate still enforces its independent attestation.
+    """
+    try:
+        if pin_path is None or _contracts().read_pin(pin_path) != evaluator_digest:
+            return {"reason": "evaluator-pin-invalid"}
+    except (ValueError, OSError, TypeError):
+        return {"reason": "evaluator-pin-invalid"}
+    if not isinstance(probe_record, dict) or set(probe_record) != {"date", "provider", "models", "efforts"}:
+        return {"reason": "provider-probe-invalid"}
+    models, efforts = probe_record["models"], probe_record["efforts"]
+    contracts = _contracts()
+    if not (probe_record["date"] == datetime.now(timezone.utc).date().isoformat()
+            and probe_record["provider"] == LIVE_PROVIDER
+            and isinstance(models, list) and models and all(isinstance(x, str) and x for x in models)
+            and len(set(models)) == len(models)
+            and isinstance(efforts, dict) and all(isinstance(k, str) and isinstance(v, list)
+                and v and all(isinstance(x, str) and x in EFFORTS for x in v)
+                and len(set(v)) == len(v)
+                and (k not in contracts.WANDB_EFFORTS or set(v) <= set(contracts.WANDB_EFFORTS[k]))
+                for k, v in efforts.items())):
+        return {"reason": "provider-probe-invalid"}
+    selected_model = next((candidate for candidate in contracts.WANDB_MODEL_ORDER if candidate in models), None)
+    if selected_model is None or selected_model not in efforts:
+        return {"reason": "provider-probe-invalid"}
+    selected_effort = contracts.select_effort(efforts[selected_model])
+    if selected_effort is None or (model is not None and model != selected_model) or (
+        effort is not None and effort != selected_effort
+    ):
+        return {"reason": "provider-probe-invalid"}
+    return {"model": selected_model, "effort": selected_effort}
+
+
 def live_cycle(
     seat: str,
     task_type: str,
     prompt: str,
     log_dir: Path,
-    evaluate,
+    evaluate: Callable[[str], dict[str, Any]],
     metric_before: float,
     artifact: str = "search-rule",
     evaluator_digest: str | None = None,
@@ -389,6 +434,9 @@ def live_cycle(
     mechanism_card: dict | None = None,
     spend_guard: object | None = None,
     ledger_path: Path | None = None,
+    pin_path: Path | None = None,
+    probe_record: object = None,
+    model: str | None = None,
 ) -> dict:
     """One live attempt: launch the seat's model once, evaluate its answer, record the trace.
 
@@ -414,7 +462,10 @@ def live_cycle(
     )
     if problem is not None:
         return refuse(problem["reason"], **{k: v for k, v in problem.items() if k != "reason"})
-    argv = launcher_argv(seat, prompt=prompt, effort=effort)  # effort was validated by the decision table
+    preflight = live_preflight(pin_path, evaluator_digest, probe_record, model, effort)
+    if "reason" in preflight:
+        return refuse(preflight["reason"])
+    argv = launcher_argv(seat, prompt=prompt, effort=preflight["effort"], model=preflight["model"])
     pre = spend_guard.preflight(len(prompt), timeout_s + SETTLE_MARGIN_S)
     if not pre.get("ok"):
         extra = {k: v for k, v in pre.items() if k not in ("ok", "reason", "stop")}
