@@ -20,6 +20,7 @@ def test_real_openssl_trusted_bundle_cannot_expand_pinned_ca_trust(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """An extra CA accepted by OpenSSL must be rejected by the pinned peer loader."""
+    fx.isolate_synthetic_ssl_context(monkeypatch)
     approved = fx.make_ca("approved-peer-ca")[1]
     extra = fx.make_ca("unapproved-extra-ca")[1]
     bundle = tmp_path / "bundle.pem"

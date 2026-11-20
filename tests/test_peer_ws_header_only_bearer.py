@@ -123,7 +123,7 @@ def test_network_refusal_is_http_403_before_upgrade(client: TestClient) -> None:
             portal_server.app,
             host=_LOOPBACK_V4,
             port=0,
-            ws="websockets",
+            ws="auto",
             log_level="critical",
             access_log=False,
             lifespan="off",

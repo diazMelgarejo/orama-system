@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+import pytest
+
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -155,3 +157,18 @@ def start_server(tmp_path: Path, leaf=None, tls: bool = True) -> PeerServer:
     srv.port = httpd.server_address[1]
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     return srv
+
+
+def isolate_synthetic_ssl_context(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Create empty OpenSSL stores for tests that inspect synthetic anchors.
+
+    Some managed Python runtimes add explicit distrust entries to every new
+    SSLContext. Those entries appear in get_ca_certs despite being rejected.
+    This test-only patch scopes store inspection to generated certificates.
+    """
+    def new_context(cls: type[ssl.SSLContext], protocol: int, *args: object,
+                    **kwargs: object) -> ssl.SSLContext:
+        """Construct an empty native store without runtime-specific additions."""
+        return ssl._SSLContext.__new__(cls, protocol)
+
+    monkeypatch.setattr(ssl.SSLContext, "__new__", new_context)
