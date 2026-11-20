@@ -328,3 +328,10 @@ are documented rather than represented as hard real-time guarantees.
 Armed legacy `run_program` refuses: live callers must use the governed interface.
 Nothing here arms a cycle, enables serving, approves a paid model, qualifies a
 host or authorizes a merge. Publication remains held for the existing PR pair.
+
+**2026-11-20 update:** the user released the publication hold for existing
+PT #516 and Orama #519, with logical commits and one push per repository.
+The [deferred-failure catalogue](references/biafra/unrelated-failure-catalogue-2026-11-20.md)
+classifies every recorded unrelated failure and warning, with baseline evidence
+and owner-specific next steps. Publication does not waive the seven current
+baseline-reproducible failures, close G1/G2/G6/G11 or authorize a merge.
