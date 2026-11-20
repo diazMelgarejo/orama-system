@@ -547,7 +547,7 @@ def live_cycle(
         closed = True
     finally:
         if not closed and not sent:
-            # A settle that raised after the send leaves the reservation to its declared hold.
+            # A failed settle after send leaves PT's durable uncertain liability held.
             spend_guard.release(reservation)
     if completed.returncode != 0:
         tail = stderr_text[-300:]

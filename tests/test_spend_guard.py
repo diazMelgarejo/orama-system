@@ -13,6 +13,7 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 import pytest
 from _fake_popen import as_popen
@@ -754,3 +755,53 @@ def test_a_settle_failure_after_a_timeout_never_releases(cycle, tmp_path, monkey
     with pytest.raises(RuntimeError, match="settle failed"):
         cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard))
     assert guard.released == []
+
+
+@needs_pt
+def test_live_cycle_retains_uncertain_liability_through_expiry_and_reconciliation(
+    sg: Any, cycle: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A mocked sent timeout leaves real PT liability rather than reusable budget."""
+    monkeypatch.setenv("OPENCLAW_STATE_DIR", str(tmp_path))
+    _attest(tmp_path)
+    _arm(monkeypatch, cycle)
+    state = tmp_path / "spend"
+    guard = sg.SpendGuard(pt_root=os.environ.get("ORAMA_TEST_PT_ROOT"), state_dir=state)
+    before = guard.guard.snapshot()["daily_spend"]
+    now = datetime.now(timezone.utc).timestamp()
+    admitted: list[dict[str, Any]] = []
+    producer_preflight = guard.preflight
+
+    def preflight(prompt_chars: int, hold_seconds: float) -> dict[str, Any]:
+        """Observe the real admission contract without replacing its producer."""
+        result = producer_preflight(prompt_chars, hold_seconds)
+        admitted.append(result)
+        return result
+
+    def timeout(argv: list[str], **kwargs: Any) -> None:
+        """Model an already-started launcher whose response times out."""
+        raise subprocess.TimeoutExpired(argv, 1)
+
+    def unavailable(*args: Any, **kwargs: Any) -> None:
+        """Refuse settlement before the SQLite charge can commit."""
+        raise OSError("offline settlement failure")
+
+    monkeypatch.setattr(cycle.subprocess, "Popen", as_popen(timeout))
+    monkeypatch.setattr(guard, "preflight", preflight)
+    monkeypatch.setattr(guard.guard, "commit_sync", unavailable)
+    with pytest.raises(OSError, match="offline settlement failure"):
+        cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard, timeout_s=1))
+    assert len(admitted) == 1 and admitted[0]["ok"]
+    reservation, amount = admitted[0]["reservation"], admitted[0]["projected_usd"]
+    assert amount > 0
+    assert guard.guard.snapshot()["daily_spend"] == before
+
+    monkeypatch.setattr(guard.gate.cg.time, "time", lambda: now + 3600)
+    reopened = sg.SpendGuard(pt_root=os.environ.get("ORAMA_TEST_PT_ROOT"), state_dir=state)
+    assert reopened.guard.in_flight() == pytest.approx(amount)
+    refusal = reopened.preflight(100, HOLD)
+    assert refusal["reason"] == "spend-reconciliation-required" and refusal["stop"]
+    assert reopened.guard.snapshot()["daily_spend"] == before
+    reopened.settle_unknown(reservation, len("Improve X."), "reconciled", "inner", "inner")
+    assert reopened.guard.snapshot()["daily_spend"] == pytest.approx(before + amount, abs=5e-7)
+    assert reopened.guard.in_flight() == 0
