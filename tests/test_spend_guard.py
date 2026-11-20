@@ -222,6 +222,8 @@ def _arm(monkeypatch, cycle) -> None:
     """Test helper or fixture: arm."""
     monkeypatch.setenv(cycle.GATE_ENV, "approved")
     monkeypatch.setenv(cycle.ARM_ENV, "1")
+    # Historical lifecycle tests exercise an explicitly simulated supported launcher.
+    monkeypatch.setattr(cycle, "_launcher_boundary_problem", lambda: None)
 
 
 def _kwargs(tmp_path: Path, **over):
@@ -692,6 +694,51 @@ def test_a_settle_failure_after_a_successful_launch_never_releases(cycle, tmp_pa
     with pytest.raises(RuntimeError, match="settle failed"):
         cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard))
     assert guard.released == []
+
+
+def test_adapter_forwards_declared_output_limit(sg) -> None:
+    """The PT gate receives the exact declared limit, while legacy calls remain compatible."""
+    class RecordingGate:
+        """Record the producer call without loading credentials or a ledger."""
+        def preflight(self, *args: object, **kwargs: object) -> dict:
+            """Return the received arguments for inspection."""
+            return {"args": args, "kwargs": kwargs}
+
+    adapter = sg.SpendGuard.__new__(sg.SpendGuard)
+    adapter.gate = RecordingGate()
+    assert adapter.preflight(10, 60, max_tokens=123) == {"args": (10, 60), "kwargs": {"max_tokens": 123}}
+    assert adapter.preflight(10, 60) == {"args": (10, 60), "kwargs": {}}
+
+
+def test_unbounded_cline_refuses_before_reservation_or_marker(cycle, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A fully eligible governed attempt cannot launch unbounded Cline or consume a reservation."""
+    monkeypatch.setenv(cycle.GATE_ENV, "approved")
+    monkeypatch.setenv(cycle.ARM_ENV, "1")
+    guard = FakeGuard()
+    def forbidden(*args: object, **kwargs: object) -> None:
+        """Catch any attempt to reserve or start a process."""
+        pytest.fail("unbounded Cline must not reserve or launch")
+    monkeypatch.setattr(guard, "preflight", forbidden)
+    monkeypatch.setattr(cycle.subprocess, "Popen", forbidden)
+    result = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard))
+    assert result["reason"] == "launcher-output-bound-unsupported"
+    assert not result["called_launcher"]
+    assert not list((tmp_path / "log").glob("*.once"))
+
+
+@needs_pt
+def test_adapter_reserves_declared_limit_with_new_pt(sg, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The real producer reserves more when a larger output limit is forwarded."""
+    monkeypatch.setenv("OPENCLAW_STATE_DIR", str(tmp_path))
+    _attest(tmp_path)
+    guard = sg.SpendGuard(pt_root=os.environ.get("ORAMA_TEST_PT_ROOT"), state_dir=tmp_path / "spend")
+    legacy = guard.preflight(100, HOLD)
+    assert legacy["ok"]
+    guard.release(legacy["reservation"])
+    bounded = guard.preflight(100, HOLD, max_tokens=100_000)
+    assert bounded["ok"]
+    assert bounded["projected_usd"] > legacy["projected_usd"]
+    guard.release(bounded["reservation"])
 
 
 def test_a_settle_failure_after_a_timeout_never_releases(cycle, tmp_path, monkeypatch) -> None:

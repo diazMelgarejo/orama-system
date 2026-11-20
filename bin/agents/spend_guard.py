@@ -98,9 +98,11 @@ class SpendGuard:
         self.guard = self.gate.guard
         self.audit_path = self.gate.audit_path
 
-    def preflight(self, prompt_chars: int, hold_seconds: float) -> dict:
-        """Refuse (attestation, budget) or reserve the projected cost for ``hold_seconds``."""
-        return self.gate.preflight(prompt_chars, hold_seconds)
+    def preflight(self, prompt_chars: int, hold_seconds: float, max_tokens: int | None = None) -> dict:
+        """Forward the enforced output limit to PT, or preserve the legacy two-argument call."""
+        if max_tokens is None:
+            return self.gate.preflight(prompt_chars, hold_seconds)
+        return self.gate.preflight(prompt_chars, hold_seconds, max_tokens=max_tokens)
 
     def settle(self, reservation: str, input_chars: int, output_chars: int, outcome: str, seat: str, mode: str) -> float:
         """Commit the estimated actual cost of an answered request. Returns the estimate."""

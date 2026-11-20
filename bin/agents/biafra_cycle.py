@@ -417,6 +417,11 @@ def live_preflight(pin_path: Path | None, evaluator_digest: str, probe_record: o
     return {"model": selected_model, "effort": selected_effort}
 
 
+def _launcher_boundary_problem() -> str | None:
+    """Refuse Cline until total output and request count are demonstrably enforced."""
+    return "launcher-output-bound-unsupported"
+
+
 def live_cycle(
     seat: str,
     task_type: str,
@@ -465,6 +470,9 @@ def live_cycle(
     preflight = live_preflight(pin_path, evaluator_digest, probe_record, model, effort)
     if "reason" in preflight:
         return refuse(preflight["reason"])
+    boundary_problem = _launcher_boundary_problem()
+    if boundary_problem is not None:
+        return refuse(boundary_problem, stop=True)
     argv = launcher_argv(seat, prompt=prompt, effort=preflight["effort"], model=preflight["model"])
     pre = spend_guard.preflight(len(prompt), timeout_s + SETTLE_MARGIN_S)
     if not pre.get("ok"):

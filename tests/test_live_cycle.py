@@ -53,6 +53,8 @@ def _arm(monkeypatch, cycle) -> None:
     """Test helper or fixture: arm."""
     monkeypatch.setenv(cycle.GATE_ENV, "approved")
     monkeypatch.setenv(cycle.ARM_ENV, "1")
+    # Historical lifecycle tests exercise an explicitly simulated supported launcher.
+    monkeypatch.setattr(cycle, "_launcher_boundary_problem", lambda: None)
 
 
 class _Guard:
