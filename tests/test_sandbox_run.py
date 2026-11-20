@@ -756,3 +756,26 @@ def test_a_platform_with_no_exit_probe_fails_closed_before_the_child_starts(sb, 
     with pytest.raises(sb.SandboxUnavailable):
         sb.run_isolated(_py("print(1)"), cwd=tmp_path, timeout=5, allow_unsandboxed=True)
     assert started == []
+
+
+def test_caller_denials_include_symlink_targets_and_missing_descendants(sb, tmp_path: Path) -> None:
+    """Deny both spellings, including a missing child below an existing symlink."""
+    secret = tmp_path / "secret"
+    secret.mkdir()
+    alias = tmp_path / "alias"
+    alias.symlink_to(secret, target_is_directory=True)
+    missing = alias / "not-created"
+    merged = sb.merge_deny_read([alias, missing, alias])
+    assert all(path in merged for path in (alias, secret.resolve(), missing, secret.resolve() / missing.name))
+    assert merged.count(alias) == 1
+    profile = sb.sandbox_profile(tmp_path, deny_read=merged)
+    for path in (secret.resolve(), secret.resolve() / missing.name):
+        assert f'(deny file-read* (subpath "{path}"))' in profile
+
+
+def test_caller_denial_symlink_loop_does_not_drop_denial(sb, tmp_path: Path) -> None:
+    """A symlink resolution failure aborts profile construction instead of weakening it."""
+    loop = tmp_path / "loop"
+    loop.symlink_to(loop)
+    with pytest.raises((RuntimeError, OSError)):
+        sb.merge_deny_read([loop])

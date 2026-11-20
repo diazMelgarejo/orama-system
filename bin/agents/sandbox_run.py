@@ -116,11 +116,17 @@ def default_deny_read() -> list[Path]:
 
 
 def merge_deny_read(extra: Iterable[Path] | None) -> list[Path]:
-    """The default secret denials followed by any caller-supplied ones, without duplicates."""
+    """Add caller spellings and their resolved paths, including missing descendants, without duplicates.
+
+    Resolution failures propagate rather than silently omitting a denial. Paths should not be
+    retargeted between profile construction and child access.
+    """
     merged = default_deny_read()
     for p in extra or []:
-        if Path(p) not in merged:
-            merged.append(Path(p))
+        path = Path(p)
+        for candidate in (path, path.resolve(strict=False)):
+            if candidate not in merged:
+                merged.append(candidate)
     return merged
 
 
