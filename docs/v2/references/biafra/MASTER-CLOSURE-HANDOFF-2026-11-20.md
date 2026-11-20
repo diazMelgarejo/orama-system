@@ -156,3 +156,28 @@ repaired without that rewrite.
 Before further work: fetch fresh heads and comments, inspect current source, consult PT recall
 quietly, then follow the contract-migration ledger. Commit logical batches; do not repeatedly push
 intermediate patches or create duplicate PRs.
+
+## Final review follow-up and current tips
+
+This addendum supersedes the earlier tip labels while retaining their receipts.
+
+- PT #516: `7d7cdca04900a9e68fbc23761759574b11e33deb`. Its new commit is an
+  append-only correction: unresolved liability is not settled spend. Runtime
+  source is unchanged from the fully tested 305c5558.
+- PT #517: `6aad91dc130cb5ffd5c78f9914618d040e461f2d`. A normal merge carries
+  that correction onto the published replay without another history rewrite.
+- Orama #519: `1af1bf94c9d6bfd52ec4d3d34f4d9a4322279fe1` adds a paired
+  real-producer/consumer regression and updates the exact PT pin. The test fails
+  against old PT 32cfd077 because expiry loses the liability, then passes against
+  the repaired producer. The affected pair suite passes 133 tests. It mocks the
+  launcher and simulates a supported boundary; production Cline remains refused.
+- V2 draft #102: `84c281a18cdc9e7be6ac26ba6ea8ec5e39a8a515`. CI exposed a
+  test-only dependency on editable installation. The child now loads only its
+  test helper directory; production imports remain installed. Both crash cases
+  pass against a non-editable wheel with isolated Python, and all 211 controller
+  tests pass. Initial failed CI evidence is retained rather than called green.
+
+The initial one-push publication was followed by one consolidated review/CI
+repair round after new feedback. No merge or activation was performed. Default
+branch security-alert closure still awaits normal merge and GitHub evaluation.
+

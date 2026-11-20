@@ -213,3 +213,15 @@ TypeScript ESLint parents 8.73.0 select minimatch 11.0.9. The separate retained
 Frontend lint, TypeScript/Vite build and 53 tests passed; dependency audit found
 zero advisories. Checks used Node 24.22.1. The alert's default-branch state still
 requires merge and GitHub re-evaluation; this is not an alert dismissal.
+
+### Paired liability review follow-up
+
+PT `7d7cdca0` explicitly appends that a retained liability is not settled spend.
+Orama `1af1bf94` verifies the actual producer/consumer boundary with an offline
+mocked launcher: failed settlement leaves settled spend unchanged, liability
+survives expiry and reopening, further admission refuses, and explicit unknown
+settlement reconciles the full amount. The regression fails against old PT
+`32cfd077` with zero in-flight liability after expiry; it passes against the
+repaired producer. The affected pair suite passes 133 tests. Production Cline
+remains refused until its aggregate bound is proven; this is source evidence,
+not a live provider run.
