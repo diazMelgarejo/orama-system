@@ -4,6 +4,12 @@ Status: deferred investigation, not fixes, waivers or qualification evidence.
 This catalogue preserves the November 17–18 run observations for later work.
 No new full-suite run is implied by this document's November 20 date.
 
+Fresh November 20 publication checks passed: 48 PT provider/worker tests and
+400 Orama dispatch/Biafra tests, with 10 Orama skips. The paired run used
+published PT `32cfd077dabf90530afe3e44a04f2f4f3fa3316b`, now selected by
+`.github/pt-dispatch-test-ref`. These focused passes do not close the unrelated
+failures or native-platform qualification gaps catalogued below.
+
 ## Evidence boundary
 
 | Run | Revision / scope | Observed result |
@@ -118,6 +124,16 @@ and diagnostics instead of copying this historical count.
 
 Warnings have no separate unchanged-base reproduction in this evidence set;
 they are observed investigation candidates, not established new regressions.
+
+## Other publication diagnostics
+
+The November 20 PT push reported three moderate vulnerabilities on PT's default
+branch. This is an untriaged GitHub dependency-security notice, not a failed
+Biafra test or a newly established regression. Advisory IDs, affected versions
+and remediation are not verified here. Owner: PT dependency/security maintainer;
+P2 triage through the repository's existing vulnerability workflow. Inspect the
+[Dependabot queue](https://github.com/diazMelgarejo/Perpetua-Tools/security/dependabot)
+before assigning fixes; publication neither waives nor resolves those alerts.
 
 ## Repair order and publication meaning
 
