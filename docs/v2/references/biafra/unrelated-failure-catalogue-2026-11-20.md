@@ -146,3 +146,70 @@ fixing commit and actual verification are linked additively.
 The November 20 publication instruction releases the earlier push hold for
 existing PT #516 and Orama #519 only. It does not waive these failures, accept
 security risk, complete native qualification or authorize a merge/activation.
+
+## Subsequent repair addendum — 2026-11-20
+
+This addendum supersedes the investigation status above for the demonstrated
+software cases; the historical observations and commands remain intact.
+
+- **UF-TLS:** the managed Python SSL constructor preloads an explicitly rejected
+  certificate. `get_ca_certs()` includes that entry, although OpenSSL refuses it
+  with certificate-rejected error 28. The three synthetic-store assertions now
+  isolate constructor additions within those tests. Expected anchors and
+  negative pin/replacement checks remain strict; production TLS is unchanged.
+- **UF-PROC:** this container's PID 1 does not reap orphan zombies. The existing
+  Linux subreaper launcher supplies the required test runtime. All four cases
+  pass through it. A new real-process regression proves a killed but unreaped
+  descendant must still yield `unknown`; after the owned descendant is reaped,
+  its process group disappears. This is a test-runtime prerequisite repair,
+  not a relaxation of the production containment result.
+- **UW-CERT:** PT now uses the supported aware certificate expiry property.
+  Expiry-boundary tests keep deprecation warnings as errors.
+- **UW-ASYNC, GBrain:** its timeout test previously replaced `wait_for` with a
+  mock that abandoned the communicate coroutine. The test now exercises real
+  cancellation and verifies child cleanup. The separate historical
+  `connect_tcp` warning did not recur in traced original-order reproduction;
+  it remains unlocalized rather than suppressed or declared fixed.
+- **UW-WS:** the HTTP 403 upgrade-refusal test uses Uvicorn's automatic protocol
+  selection instead of forcing its deprecated implementation. Its actual
+  network refusal assertion still passes with deprecations treated as errors.
+- **UW-LEGACY:** tests intentionally exercise the retained legacy application.
+  Removing those imports would remove compatibility coverage. Retirement is
+  still a separate decision, and these warnings are not hidden.
+
+Fresh focused integration: **235 PT tests passed**, and **324 Orama tests
+passed, 32 skipped**. Orama used the subreaper launcher and the local PT producer
+containing this repair. These are working-tree checks before commit; final
+publication records supply the actual fixing commits. A subsequent documentation
+pass only added docstrings, with stripped-AST equivalence for the warning tests.
+
+For future Linux reproduction use the supported entrypoint:
+
+```bash
+python scripts/ci/run_with_subreaper.py python -m pytest -q \
+  tests/test_peer_tls_trust.py tests/test_peer_tls_trusted_bundle_regression.py \
+  tests/test_win_exec.py tests/test_subreaper_launcher.py
+```
+
+Native Windows/macOS qualification remains unexecuted. Alert 58 is now identified
+from operator-supplied metadata as minimatch advisory GHSA-g3hv-75wg-m249;
+its dependency repair is tracked separately. GitHub's alert endpoint still
+returns HTTP 403 to this integration, so no alert-state or dismissal is claimed.
+
+### Final source verification
+
+PT #516 at `305c555803f75e4844624f9aaba51d3e79956aa8` passed its full suite:
+**3,720 passed, 12 skipped, nine retained legacy-application warnings**. Orama's
+prepared backend source, committed through `304b76fe`, passed under the supported
+subreaper launcher: **4,324 passed, 145 skipped, one retained compatibility
+warning, 24 subtests passed**. No native platform result is inferred from skips.
+The launcher also reported a bounded adopted-child wait timeout after pytest
+finished; its exit code remained zero. That diagnostic is retained rather than
+represented as proof that all suite-created descendants were reaped.
+
+Alert 58's source repair is `9757e6eedfc15db618504154e6049d3287d4f42a`:
+TypeScript ESLint parents 8.73.0 select minimatch 11.0.9. The separate retained
+3.1.5 chain is outside the operator-supplied affected range `>=7.0.0,<11.0.1`.
+Frontend lint, TypeScript/Vite build and 53 tests passed; dependency audit found
+zero advisories. Checks used Node 24.22.1. The alert's default-branch state still
+requires merge and GitHub re-evaluation; this is not an alert dismissal.
