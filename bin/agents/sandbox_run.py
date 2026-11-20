@@ -124,7 +124,12 @@ def merge_deny_read(extra: Iterable[Path] | None) -> list[Path]:
     merged = default_deny_read()
     for p in extra or []:
         path = Path(p)
-        for candidate in (path, path.resolve(strict=False)):
+        resolved = path.resolve(strict=False)
+        try:
+            resolved.resolve(strict=True)
+        except FileNotFoundError:
+            pass  # Deny future descendants too; all other resolution errors refuse.
+        for candidate in (path, resolved):
             if candidate not in merged:
                 merged.append(candidate)
     return merged
