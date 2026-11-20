@@ -180,4 +180,3 @@ This addendum supersedes the earlier tip labels while retaining their receipts.
 The initial one-push publication was followed by one consolidated review/CI
 repair round after new feedback. No merge or activation was performed. Default
 branch security-alert closure still awaits normal merge and GitHub evaluation.
-
