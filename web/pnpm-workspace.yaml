@@ -6,10 +6,12 @@ onlyBuiltDependencies:
 overrides:
   esbuild: "0.28.1"
   # GHSA-eating brace-expansion DoS (dependabot #8): scoped to the
-  # minimatch@10 edge only (typescript-eslint's chain) so the unrelated
+  # minimatch@10 edge only (the historical typescript-eslint chain) so the unrelated
   # minimatch@3.1.5 -> brace-expansion@1.x edge (different major API) is
   # never touched.
   minimatch@10>brace-expansion: "^5.0.7"
+  # Alert 58 moves the current typescript-eslint chain to minimatch@11.
+  # This compatibility override does not replace that parent-package upgrade.
   # Same advisory family, the other edge (dependabot #9): minimatch@3.1.5
   # (older eslint-adjacent chain) declares brace-expansion@^1.1.7 --
   # 1.1.16 is a same-major patch release, safe within that range.

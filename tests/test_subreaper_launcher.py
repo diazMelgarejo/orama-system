@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import importlib.util
+import os
+import signal
 import subprocess
 import sys
 import textwrap
@@ -104,3 +106,59 @@ def test_launcher_bounds_wait_for_lingering_descendant(monkeypatch: pytest.Monke
     monkeypatch.setattr(launcher.os, "waitpid", waitpid)
     assert launcher.main(["command"]) == 7
     assert clock[0] <= 10
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="Linux subreaper semantics")
+def test_unreaped_adopted_zombie_keeps_containment_unknown() -> None:
+    """A dead but unreaped group member is not evidence of an empty group."""
+    source = textwrap.dedent('''\
+        import ctypes, os, signal, subprocess, sys, time
+        sys.path.insert(0, sys.argv[1])
+        from utils import win_exec
+        libc = ctypes.CDLL(None, use_errno=True)
+        assert libc.prctl(36, 1, 0, 0, 0) == 0
+        leaf_code = "import time; print('ready', flush=True); time.sleep(60)"
+        root_code = """import subprocess, sys, time
+        leaf = subprocess.Popen([sys.executable, '-c', sys.argv[1]], stdout=subprocess.PIPE, text=True)
+        assert leaf.stdout.readline().strip() == 'ready'
+        print(leaf.pid, flush=True)
+        time.sleep(60)
+        """
+        root = win_exec.launch_tree([sys.executable, '-c', root_code, leaf_code], stdout=subprocess.PIPE, text=True)
+        leaf_pid = int(root.stdout.readline())
+        # A pidfd pins the identity for cleanup even if an assertion fails.
+        leaf_fd = os.pidfd_open(leaf_pid)
+        try:
+            assert win_exec.terminate_tree(root, grace=0.1) == 'unknown'
+            status = os.waitid(os.P_PID, leaf_pid, os.WEXITED | os.WNOWAIT | os.WNOHANG)
+            assert status is not None and status.si_pid == leaf_pid
+            assert status.si_code == os.CLD_KILLED and status.si_status in (signal.SIGTERM, signal.SIGKILL)
+            os.waitpid(leaf_pid, 0)
+            try:
+                os.killpg(root.pid, 0)
+            except ProcessLookupError:
+                pass
+            else:
+                raise AssertionError('group still exists after both children were reaped')
+        finally:
+            try:
+                signal.pidfd_send_signal(leaf_fd, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            try:
+                os.waitpid(leaf_pid, 0)
+            except ChildProcessError:
+                pass
+            os.close(leaf_fd)
+            if root.returncode is None:
+                win_exec.terminate_tree(root, grace=0.1)
+            root.stdout.close()
+    ''')
+    if not hasattr(os, "pidfd_open") or not hasattr(signal, "pidfd_send_signal"):
+        pytest.skip("pidfd cleanup is unavailable")
+    result = subprocess.run(
+        [sys.executable, "-S", "-c", source, str(LAUNCHER.parents[2] / "src")],
+        capture_output=True, text=True, timeout=15,
+        env={key: value for key, value in os.environ.items() if key != "PYTHONPATH"},
+    )
+    assert result.returncode == 0, result.stderr

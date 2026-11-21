@@ -154,6 +154,7 @@ roles:
     openclaw_id: autoresearcher
     hermes_profile: autoresearcher
     display: Scout
+    seat: inner-scout
     soul_id: perpetua.autoresearch
     frugality_tier: 1
     stage: research
@@ -167,6 +168,7 @@ roles:
     openclaw_id: autoresearch-inner
     hermes_profile: autoresearch-inner
     display: Inner seat
+    seat: inner
     soul_id: perpetua.autoresearch.inner
     frugality_tier: 1
     stage: research
@@ -182,7 +184,9 @@ roles:
     native_hermes_delegate: false
     openclaw_id: metaresearch-outer
     hermes_profile: metaresearch-outer
-    display: Outer seat
+    display: Biafra
+    canonical_agent: biafra
+    seat: outer
     soul_id: perpetua.autoresearch.outer
     frugality_tier: 1
     stage: research
@@ -191,7 +195,7 @@ roles:
     openclaw_workspace: ${HOME}/autoresearch
     staged_soul: bin/agents/metaresearch-outer/SOUL.md
     staged_agent_card: bin/agents/metaresearch-outer/agent.md
-    notes: Level 2 dual-mode. Plugin-loop reading, or GPU-verify reading. Gate required.
+    notes: Biafra, the outer seat (ratified 2026-11-17; ids unchanged, additive). Level 2 dual-mode. Plugin-loop reading, or GPU-verify reading. Gate required.
 
   - staging_folder: coder
     dispatch_lane: L-Fleet

@@ -412,6 +412,18 @@ only ones touching files with a sibling copy elsewhere.
 
 ---
 
+## Two rules from the 2026-11-17 pair remediation turn
+
+- **Reproduce every finding before fixing it, and expect the reason to differ.** Rolling back a
+  committed reservation raised `UnknownReservationError`, which is what made one double-release finding
+  real; a NUL byte in an argv failed only after the one-attempt marker was claimed. A fix written from the
+  comment alone would have missed the actual defect.
+- **Saved harness drivers and run copies are evidence, not code to keep current.** Do not rewrite them to
+  satisfy a review. Document the known limit in a README beside them (for example "predates the mandatory
+  spend guard") and answer the comment with an evidence-backed decline that points at that note.
+
+---
+
 ## Enforcement — reference this doc, don't duplicate it
 
 Each consuming skill imports only the phases it needs, per the modular
@@ -447,3 +459,21 @@ Skillify pattern:
   tool use, git discipline, and elegance heuristics for multi-repo sessions
 - PT `.agent/AGENTS.md` § Multi-agent merge conflict protocol — portable-brain
   summary of the sister pattern for concurrent branches
+
+## Three more rules from the review of the review (2026-11-17)
+
+- **A claim must name its enforcer.** For every sentence that says "refuses", "forces", "only X writes"
+  or "never", find the line that enforces it and say which entry point does. If the check lives in the
+  command and not the guard, or in the live path and not the dry path, say so. Five threads in one
+  round were this one defect, and a bot keeps a thread open until the sentence matches the mechanism.
+- **A new default location needs a neutralizing fixture.** When a resolver gains a fallback (a CI
+  checkout), every test that asserts "nothing found" must neutralize it in the shared fixture, and one
+  test must prove the fallback is used. CI has the location and a laptop does not, so the failure shows
+  only in CI: create the location locally and run the suite before pushing.
+- **Account for every path, then check the claims.** Release a reservation only when the process
+  never launched. After launch, settle it; if settlement fails, retain the reservation as liability
+  until reconciliation. Process-group cleanup and operations that can fail between acquisition and
+  completion (claiming a marker, writing a ledger) belong inside the cleanup block. The attempt marker is the opposite kind of
+  thing: once an attempt is spent it stays, so the attempt cannot repeat. A status field such as
+  `recorded` is derived from what was written, never assumed. A table cell with a `|` inside code needs `\|`;
+  the lint config excludes SKILL.md, so check those tables by eye.

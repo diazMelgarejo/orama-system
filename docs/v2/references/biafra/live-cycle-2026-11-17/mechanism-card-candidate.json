@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "mechanism_id": "reviewer-comment-class-triage",
+  "revision": 1,
+  "parent": null,
+  "hypothesis": "Before touching code for any reviewer comment, classify it into exactly one class and take only that class's action: (A) contract defect - the code contradicts its own documented contract: fix in code, ship the reviewer's reproducer plus one accept-side case at the exact boundary so the fix cannot score by over-rejecting; (B) unenforced promise - skill or plan text names a control no code path executes: wire the guard at the measurement entry point in the same commit, or label the line as an unenforced open gap; (C) unsettled design - the check depends on a pinning or authority decision not yet made: record an open gap with the exact accepted-but-should-be-rejected inputs and mark the text aspirational, do not implement. A comment is closed only when the artifact it names changed to match its class, and never by a doc edit the code contradicts.",
+  "evidence_ids": [
+    "inner-inner-161cb51613ad"
+  ],
+  "inner_metric": "failed_reviewer_cases",
+  "held_out_metric": "held_out_class_bc_comment_cases",
+  "evaluator_digest": "4971c1d65c4a605af7a98433cd34e4c7d94d86c531282898052d1a52d8c6a09f",
+  "dry_run_receipt": {
+    "ok": true,
+    "retries": 0,
+    "launched": false
+  },
+  "delta": -6.0,
+  "reverted": false,
+  "scope_record": {
+    "authorizes": "nothing"
+  },
+  "owner_slices": [
+    "the repository that owns bin/agents/seat_contracts.py and bin/orama-system/skills/metaresearcher/SKILL.md"
+  ],
+  "status": "candidate"
+}
