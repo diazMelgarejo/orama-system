@@ -28,7 +28,8 @@
       "evaluator_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     },
     "card_checked": true,
-    "card_id": "m-bbbbbbbbbbbb@2"
+    "card_id": "m-bbbbbbbbbbbb@2",
+    "card_fingerprint": "fc8ce57a23550d6030303d8dfaf9f813c50c25b279814d4bb43ec73ce346a3f2"
   },
   "delta": -0.07,
   "reverted": false,

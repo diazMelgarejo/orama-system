@@ -13,7 +13,8 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from types import ModuleType
+from typing import Any, Callable
 
 import pytest
 from _fake_popen import as_popen
@@ -53,13 +54,13 @@ needs_pt = pytest.mark.skipif(
 
 
 @pytest.fixture()
-def sg():
+def sg() -> ModuleType:
     """Test helper or fixture: sg."""
     return _load("bin/agents/spend_guard.py", "spend_guard")
 
 
 @pytest.fixture()
-def sg_isolated(sg, tmp_path_factory):
+def sg_isolated(sg: ModuleType, tmp_path_factory: pytest.TempPathFactory) -> ModuleType:
     # For tests that assert "no guard anywhere" or pick the candidate themselves. CI really has a checkout
     # at CI_CHECKOUT, which would otherwise satisfy them. Tests that need the real guard use `sg`, which
     # keeps that fallback, because in CI it is the only way they find the guard.
@@ -175,7 +176,9 @@ def test_the_guard_classifies_provider_failures_with_the_shared_policy(sg, tmp_p
 
 class FakeGuard:
     """Recording fake spend guard with a canned preflight result and optional classifier."""
-    def __init__(self, pre=None, classify=None):
+    def __init__(
+        self, pre: dict[str, Any] | None = None, classify: Callable[[str], str | None] | None = None,
+    ) -> None:
         """Test helper or fixture: init  ."""
         self.pre = pre or {"ok": True, "reservation": "r1", "projected_usd": 0.05}
         self.settled = []
@@ -183,27 +186,31 @@ class FakeGuard:
         self.unknown = []
         self._classify = classify
 
-    def preflight(self, prompt_chars, hold_seconds):
+    def preflight(self, prompt_chars: int, hold_seconds: float) -> dict[str, Any]:
         """Test helper or fixture: preflight."""
         self.prompt_chars = prompt_chars
         self.hold_seconds = hold_seconds
         return self.pre
 
-    def settle(self, reservation, input_chars, output_chars, outcome, seat, mode):
+    def settle(
+        self, reservation: str, input_chars: int, output_chars: int, outcome: str, seat: str, mode: str,
+    ) -> float:
         """Test helper or fixture: settle."""
         self.settled.append((reservation, input_chars, output_chars, outcome, seat, mode))
         return 0.0123
 
-    def settle_unknown(self, reservation, input_chars, outcome, seat, mode):
+    def settle_unknown(
+        self, reservation: str, input_chars: int, outcome: str, seat: str, mode: str,
+    ) -> float:
         """Test helper or fixture: settle unknown."""
         self.unknown.append((reservation, input_chars, outcome, seat, mode))
         return 0.05
 
-    def release(self, reservation):
+    def release(self, reservation: str) -> None:
         """Test helper or fixture: release."""
         self.released.append(reservation)
 
-    def classify(self, text):
+    def classify(self, text: str) -> str | None:
         """Test helper or fixture: classify."""
         return self._classify(text) if self._classify else None
 
@@ -390,6 +397,58 @@ def test_an_environment_checkout_without_the_guard_falls_through_to_the_symlink(
     assert sg.resolve_pt_root(None) == link.resolve()
 
 
+def test_symlink_loop_falls_through_only_for_optional_roots(sg_isolated, tmp_path, monkeypatch) -> None:
+    """A broken optional candidate cannot hide a valid one; explicit roots must refuse."""
+    loop = tmp_path / "loop"
+    loop.symlink_to(loop)
+    good = _fake_pt(tmp_path / "good")
+    monkeypatch.setenv("PERPETUA_TOOLS_ROOT", str(loop))
+    monkeypatch.setattr(sg_isolated, "LOCAL_LINK", good)
+    assert sg_isolated.resolve_pt_root() == good.resolve()
+    with pytest.raises(sg_isolated.SpendGuardUnavailable):
+        sg_isolated.resolve_pt_root(loop)
+
+
+def test_mixed_producer_modules_are_refused_before_guard_construction(sg, tmp_path, monkeypatch) -> None:
+    """An older cached producer must not supply another checkout's policy or store."""
+    import importlib
+
+    gate = """import importlib, importlib.util, sys
+from pathlib import Path
+name = 'pt_orchestrator_spend_gate'
+if name not in sys.modules:
+    here = Path(__file__).parent
+    spec = importlib.util.spec_from_file_location(name, here / '__init__.py',
+                                               submodule_search_locations=[str(here)])
+    package = importlib.util.module_from_spec(spec)
+    sys.modules[name] = package
+    spec.loader.exec_module(package)
+_cg = importlib.import_module(name + '.cost_guard')
+_pl = importlib.import_module(name + '.provider_limits')
+"""
+    a, b = tmp_path / "a", tmp_path / "b"
+    for root in (a, b):
+        directory = root / "orchestrator"
+        directory.mkdir(parents=True)
+        for filename in ("__init__.py", "cost_guard.py", "provider_limits.py"):
+            (directory / filename).write_text("")
+        (directory / "spend_gate.py").write_text(gate)
+    name = "pt_orchestrator_spend_gate"
+    for key in list(sys.modules):
+        if key == name or key.startswith(name + "."):
+            monkeypatch.delitem(sys.modules, key)
+    prior = sg._load(a, "orchestrator/spend_gate.py", "pt_spend_gate")
+    try:
+        with pytest.raises(sg.SpendGuardUnavailable, match="checkout"):
+            sg._load(b, "orchestrator/spend_gate.py", "pt_spend_gate")
+        assert sys.modules["pt_spend_gate"] is prior
+    finally:
+        for key in list(sys.modules):
+            if key == name or key.startswith(name + "."):
+                sys.modules.pop(key, None)
+        importlib.invalidate_caches()
+
+
 def test_an_explicit_root_must_be_valid_and_never_falls_through(sg, tmp_path, monkeypatch) -> None:
     """Check that an explicit root must be valid and never falls through."""
     good = _fake_pt(tmp_path / "good")
@@ -467,6 +526,26 @@ def test_a_checkout_without_the_spend_gate_is_not_a_guard(sg_isolated, tmp_path,
         sg_isolated.SpendGuard(pt_root=root, state_dir=tmp_path)
 
 
+@pytest.mark.parametrize("previous", [False, True])
+def test_failed_producer_import_restores_module_and_refuses(sg, tmp_path, monkeypatch, previous: bool) -> None:
+    """A broken producer cannot leak a partial module or an untyped import error."""
+    from types import ModuleType
+
+    path = tmp_path / "orchestrator" / "spend_gate.py"
+    path.parent.mkdir()
+    path.write_text("import missing_review_test_dependency\n")
+    name = "pt_review_broken_gate"
+    old = ModuleType(name)
+    if previous:
+        monkeypatch.setitem(sys.modules, name, old)
+    else:
+        monkeypatch.delitem(sys.modules, name, raising=False)
+    with pytest.raises(sg.SpendGuardUnavailable) as error:
+        sg._load(tmp_path, "orchestrator/spend_gate.py", name)
+    assert isinstance(error.value.__cause__, ModuleNotFoundError)
+    assert sys.modules.get(name) is (old if previous else None)
+
+
 # --- review finding 3: the reservation outlives the whole allowed launch -------------------------------
 
 
@@ -488,19 +567,19 @@ def test_a_running_launch_cannot_be_swept_by_another_reservation(sg, cycle, tmp_
     _attest(tmp_path)
     _arm(monkeypatch, cycle)
     spend = tmp_path / "spend"
+    clock = {"now": datetime(2026, 11, 15, tzinfo=timezone.utc).timestamp()}
+    monkeypatch.setattr(real_time, "time", lambda: clock["now"])
     first = sg.SpendGuard(pt_root=os.environ.get("ORAMA_TEST_PT_ROOT"), state_dir=spend)
     other = sg.SpendGuard(pt_root=os.environ.get("ORAMA_TEST_PT_ROOT"), state_dir=spend)
     first.gate.guard.record_spend(89.9)  # room for exactly one request
-    clock = {"skew": 0.0}
-    base = real_time.time
-    monkeypatch.setattr(real_time, "time", lambda: base() + clock["skew"])
+    base = clock["now"]
     seen: dict = {}
 
     def slow_launch(argv, **kwargs):
         """Test helper or fixture: slow launch."""
-        clock["skew"] = 100 + 1  # the launcher is still inside its 100 s timeout, plus one second
+        clock["now"] = base + 100 + 1  # the launcher is still inside its 100 s timeout, plus one second
         seen["second"] = other.preflight(10_000, 60.0)
-        clock["skew"] = 100 + cycle.SETTLE_MARGIN_S - 1
+        clock["now"] = base + 100 + cycle.SETTLE_MARGIN_S - 1
         return subprocess.CompletedProcess(argv, 0, stdout="ANSWER", stderr="")
 
     monkeypatch.setattr(cycle.subprocess, "Popen", as_popen(slow_launch))
@@ -674,14 +753,100 @@ def test_a_grandchild_holding_the_pipes_cannot_hang_the_cycle_past_the_timeout(c
     assert elapsed < 5, f"the group was not killed: the cycle waited {elapsed:.1f}s"
 
 
+@pytest.mark.skipif(sys.platform != "linux", reason="requires Linux subreaper semantics")
+def test_exited_launcher_descendant_is_killed_before_settlement(tmp_path: Path) -> None:
+    """An exited leader cannot leave its pipe-holding descendant running after settlement."""
+    script = r"""
+import ctypes, importlib.util, os, subprocess, sys, time
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+import test_spend_guard as t
+import pytest
+assert ctypes.CDLL(None).prctl(36, 1, 0, 0, 0) == 0
+cycle = t._load("bin/agents/biafra_cycle.py", "cycle_descendant_test")
+patch = pytest.MonkeyPatch()
+t._arm(patch, cycle)
+pidfile = Path(sys.argv[2]) / "leaf.pid"
+code = "import os,time; open(%r, 'w').write(str(os.getpid())); time.sleep(60)" % str(pidfile)
+root = '''import os, subprocess, sys, time
+subprocess.Popen([sys.executable, '-c', sys.argv[1]])
+deadline = time.monotonic() + 8
+while not os.path.exists(sys.argv[2]) or not os.path.getsize(sys.argv[2]):
+    if time.monotonic() >= deadline:
+        raise RuntimeError('descendant was not ready')
+    time.sleep(0.01)
+'''
+patch.setattr(cycle, "launcher_argv", lambda *args, **kwargs: [sys.executable, "-c", root, code, str(pidfile)])
+original_reap = cycle._reap
+
+def reap_after_leader_exit(proc):
+    # WNOWAIT preserves the leader's PID and process group identity for cleanup.
+    try:
+        deadline = time.monotonic() + 8
+        while time.monotonic() < deadline:
+            if os.waitid(os.P_PID, proc.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT) is not None:
+                return
+            time.sleep(0.01)
+        raise AssertionError("launcher did not exit before cleanup")
+    finally:
+        original_reap(proc)
+
+patch.setattr(cycle, "_reap", reap_after_leader_exit)
+guard = t.FakeGuard()
+pid = None
+try:
+    result = cycle.live_cycle(**t._kwargs(Path(sys.argv[2]), spend_guard=guard, timeout_s=1))
+    assert result["reason"] == "launcher-timeout"
+    pid = int(pidfile.read_text())
+    deadline = time.monotonic() + 2
+    waited, status = os.waitpid(pid, os.WNOHANG)
+    while waited == 0 and time.monotonic() < deadline:
+        time.sleep(0.01)
+        waited, status = os.waitpid(pid, os.WNOHANG)
+    assert waited == pid, "descendant survived cycle settlement"
+    pid = None  # waitpid reaped it; do not signal a potentially reused PID.
+    assert os.WIFSIGNALED(status) and os.WTERMSIG(status) == 9
+    assert guard.unknown[0][2] == "timeout"
+finally:
+    if pid is None and pidfile.exists():
+        # If the assertion failed before the PID was read, it may still be our child.
+        try:
+            candidate = int(pidfile.read_text())
+            os.waitid(os.P_PID, candidate, os.WEXITED | os.WNOHANG | os.WNOWAIT)
+        except (ChildProcessError, ValueError):
+            pass
+        else:
+            pid = candidate
+    if pid is not None:
+        try:
+            os.kill(pid, 9)
+        except ProcessLookupError:
+            pass
+        try:
+            os.waitpid(pid, 0)
+        except ChildProcessError:
+            pass
+    patch.undo()
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script, str(ROOT / "tests"), str(tmp_path)],
+        capture_output=True, text=True, timeout=25,
+    )
+    assert result.returncode == 0, result.stderr
+
+
 class _SettleBoom(FakeGuard):
     """A guard whose settle calls fail, to model a store error after the request was sent."""
 
-    def settle(self, *args):
+    def settle(
+        self, reservation: str, input_chars: int, output_chars: int, outcome: str, seat: str, mode: str,
+    ) -> float:
         """Fail like a store error."""
         raise RuntimeError("settle failed")
 
-    def settle_unknown(self, *args):
+    def settle_unknown(
+        self, reservation: str, input_chars: int, outcome: str, seat: str, mode: str,
+    ) -> float:
         """Fail like a store error."""
         raise RuntimeError("settle failed")
 

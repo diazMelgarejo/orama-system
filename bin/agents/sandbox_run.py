@@ -22,7 +22,7 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import BinaryIO, Iterable
 
 _PATH = "/usr/bin:/bin"
 _KERNEL_SANDBOX_TOOL = "/usr/bin/sandbox-exec"  # the one place the platform tool is named
@@ -224,7 +224,7 @@ def _require_exit_probe() -> None:
     raise SandboxUnavailable("cannot observe the child's exit without reaping it on this platform")
 
 
-def _open_exit_probe(proc: subprocess.Popen):
+def _open_exit_probe(proc: subprocess.Popen[bytes]) -> _KqueueExit | _ProcExit | None:
     """The non-reaping exit probe for this platform, or None where `os.waitid` does the job.
 
     Order: waitid (Linux; macOS only from CPython 3.13), then kqueue (macOS/BSD), then /proc, otherwise
@@ -240,7 +240,7 @@ def _open_exit_probe(proc: subprocess.Popen):
     raise SandboxUnavailable("cannot observe the child's exit without reaping it on this platform")
 
 
-def _exited(proc: subprocess.Popen, probe=None) -> bool:
+def _exited(proc: subprocess.Popen[bytes], probe: _KqueueExit | _ProcExit | None = None) -> bool:
     """True once the leader has exited, WITHOUT ever reaping it, so its pid (and so the group id) stays
     reserved until the group has been killed. Uses `os.waitid(WNOWAIT)` where available, otherwise the
     `probe` from `_open_exit_probe`. It never calls poll(), which would reap the leader before the group
@@ -314,7 +314,7 @@ def run_isolated(
         lock = threading.Lock()
         state = {"total": 0, "over": False}
 
-        def drain(stream, key: str) -> None:
+        def drain(stream: BinaryIO, key: str) -> None:
             """Copy one pipe into its buffer until EOF, stopping and flagging when the combined cap is hit."""
             try:
                 while True:

@@ -27,7 +27,8 @@
       "decision": "keep",
       "evaluator_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     },
-    "card_checked": false
+    "card_checked": false,
+    "card_fingerprint": "c95a6111c253b66ddd3dfa9883b07357395e1830004b396d04903d48cc0e2c93"
   },
   "delta": -0.07,
   "reverted": false,

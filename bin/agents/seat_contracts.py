@@ -279,7 +279,8 @@ def validate_mechanism_card(card: Mapping[str, Any], pinned_digest: str | None =
     evaluator_digest. A reviewed or graduated card needs a receipt that is a real dry run of this
     card: ok, no retries, no launch, and a valid `trace` carrying the card's evaluator_digest,
     and `card_checked` true with `card_id` naming this card (so a dry run that saw no card, or
-    another one, cannot promote it). Graduated also requires `pinned_digest`, so a digest nothing ever pinned cannot graduate.
+    another one, cannot promote it). The receipt must bind the checked content fingerprint; old
+    unbound receipts must be regenerated. Graduated also requires an independent `pinned_digest`.
     """
     if not isinstance(card, Mapping):
         return ["card must be an object"]
@@ -292,6 +293,10 @@ def validate_mechanism_card(card: Mapping[str, Any], pinned_digest: str | None =
         errors.append(f"unknown field(s): {', '.join(extra)}")
     if errors:
         return errors
+    try:
+        card_fingerprint(card)
+    except (TypeError, ValueError, RecursionError):
+        errors.append("card content must be canonicalizable JSON with finite numbers and string keys")
     if card["version"] != CARD_VERSION:
         errors.append("version must be 1")
     if not _text(card["mechanism_id"]):
@@ -352,6 +357,40 @@ def card_id(card: Mapping[str, Any]) -> str:
     return f"{card['mechanism_id']}@{card['revision']}"
 
 
+def card_fingerprint(card: Mapping[str, Any]) -> str:
+    """Hash canonical checked card content, excluding lifecycle state and its receipt."""
+    content = {key: value for key, value in card.items() if key not in {"status", "reverted", "dry_run_receipt"}}
+    def check_json(value: Any, active: set[int]) -> None:
+        """Reject coercions, unsupported values and cycles before canonical serialization."""
+        if value is None or type(value) in (str, bool, int):
+            return
+        if type(value) is float:
+            if not math.isfinite(value):
+                raise ValueError("non-finite JSON number")
+            return
+        if type(value) not in (dict, list):
+            raise TypeError("unsupported JSON value")
+        identity = id(value)
+        if identity in active:
+            raise ValueError("cyclic JSON value")
+        active.add(identity)
+        try:
+            if type(value) is dict:
+                for key, item in value.items():
+                    if type(key) is not str:
+                        raise TypeError("JSON object keys must be strings")
+                    check_json(item, active)
+            else:
+                for item in value:
+                    check_json(item, active)
+        finally:
+            active.remove(identity)
+
+    check_json(content, set())
+    encoded = json.dumps(content, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
 def _receipt_binding_errors(card: Mapping[str, Any], receipt: Mapping[str, Any]) -> list[str]:
     """Errors tying a dry-run receipt to this card: trace digest and delta, and that it checked this card."""
     errors: list[str] = []
@@ -366,6 +405,15 @@ def _receipt_binding_errors(card: Mapping[str, Any], receipt: Mapping[str, Any])
         card["delta"], trace["metric_after"] - trace["metric_before"], rel_tol=0.0, abs_tol=1e-9
     ):
         errors.append("card delta does not equal the receipt trace's metric_after - metric_before")
+    if isinstance(trace, Mapping) and trace.get("decision") in DECISIONS and isinstance(card["reverted"], bool):
+        if (trace["decision"] == "revert") != card["reverted"]:
+            errors.append("dry_run_receipt.trace.decision does not agree with reverted")
+    try:
+        fingerprint = card_fingerprint(card)
+    except (TypeError, ValueError, RecursionError):
+        fingerprint = None
+    if fingerprint is None or receipt.get("card_fingerprint") != fingerprint:
+        errors.append("dry_run_receipt.card_fingerprint does not match checked card content")
     if receipt.get("card_checked") is not True:
         errors.append("dry_run_receipt must show card_checked true")
     elif receipt.get("card_id") != card_id(card):

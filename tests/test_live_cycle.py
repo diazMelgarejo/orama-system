@@ -712,6 +712,31 @@ def test_unlisted_model_is_refused_before_reservation(cycle, tmp_path, monkeypat
     assert not list(tmp_path.glob("*.once"))
 
 
+def test_live_cycle_checks_card_digest_before_launch(cycle, tmp_path, monkeypatch) -> None:
+    """A card from another evaluator cannot consume a live attempt."""
+    _arm(monkeypatch, cycle)
+    calls = []
+    monkeypatch.setattr(cycle.subprocess, "Popen", _fake_run(calls=calls))
+    result = cycle.live_cycle(**_kwargs(tmp_path, mechanism_card=_card(evaluator_digest="c" * 64)))
+    assert result["reason"] == "invalid-card" and not calls
+    assert not list(tmp_path.glob("*.once"))
+
+
+def test_live_cycle_accepts_graduated_card_only_with_matching_real_pin(cycle, tmp_path, monkeypatch) -> None:
+    """Live validation uses the separately read pin, not the supplied run digest."""
+    _arm(monkeypatch, cycle)
+    monkeypatch.setattr(cycle.subprocess, "Popen", _fake_run())
+    candidate = _card()
+    checked = cycle.dry_cycle("inner", "harden", 2.0, 1.0, tmp_path / "dry", evaluator_digest=DIGEST, mechanism_card=candidate)
+    graduated = {**candidate, "status": "graduated", "dry_run_receipt": checked}
+    result = cycle.live_cycle(**_kwargs(tmp_path / "good", mechanism_card=graduated))
+    assert result["ok"]
+    args = _kwargs(tmp_path / "bad", mechanism_card=graduated)
+    args["pin_path"].write_text(json.dumps({"version": 1, "evaluator_digest": "c" * 64, "covers": ["verifier.py"]}))
+    result = cycle.live_cycle(**args)
+    assert not result["ok"] and not list((tmp_path / "bad").glob("*.once"))
+
+
 def test_lower_effort_refused_when_higher_is_supported(cycle, tmp_path, monkeypatch) -> None:
     """An explicit low effort cannot bypass the free effort ladder."""
     _arm(monkeypatch, cycle)

@@ -752,6 +752,7 @@ def _promoted(status: str = "reviewed", **over):
         "ok": True, "retries": 0, "launched": False, "trace": trace,
         "card_checked": True, "card_id": f"{card['mechanism_id']}@{card['revision']}",
     }
+    card["dry_run_receipt"]["card_fingerprint"] = _load(CONTRACTS, "seat_contracts").card_fingerprint(card)
     card.update(over)
     return card
 
@@ -956,7 +957,7 @@ def test_g3_a_receipt_for_the_same_id_cannot_promote_a_card_with_another_delta(s
     assert sc.validate_mechanism_card(card) == []
     other = {**card, "delta": -0.02}  # same id and revision, so card_id still matches
     assert any("delta" in e for e in sc.validate_mechanism_card(other))
-    assert sc.validate_mechanism_card({**card, "delta": card["delta"] + 1e-12}) == []  # float rounding
+    assert any("fingerprint" in e for e in sc.validate_mechanism_card({**card, "delta": card["delta"] + 1e-12}))
 
 
 def test_g3_concurrent_pins_of_one_path_never_hit_a_missing_temp_file(sc, tmp_path: Path, verifier: Path) -> None:
@@ -988,3 +989,54 @@ def test_g3_concurrent_pins_of_one_path_never_hit_a_missing_temp_file(sc, tmp_pa
         assert all(o == winner for o in outcomes if not isinstance(o, BaseException))
         assert len(outcomes) == 4
         assert [f.name for f in pin.parent.iterdir()] == [pin.name]  # no temp file is left behind
+
+@pytest.mark.parametrize("field,value", [
+    ("hypothesis", "changed"), ("owner_slices", ["other"]),
+    ("inner_metric", "metric"), ("held_out_metric", "metric"),
+    ("evidence_ids", ["different"]), ("delta", -0.069999999999),
+])
+def test_receipt_fingerprint_rejects_changed_content(sc, field, value) -> None:
+    """Every checked content change invalidates a previously issued receipt."""
+    card = _promoted()
+    card[field] = value
+    assert any("fingerprint" in error for error in sc.validate_mechanism_card(card))
+
+
+def test_old_receipt_fails_closed_and_lifecycle_transition_preserves_binding(sc) -> None:
+    """Unbound receipts must be rerun; changing status alone preserves a bound receipt."""
+    card = _promoted()
+    assert sc.validate_mechanism_card({**card, "status": "graduated"}, DIGEST) == []
+    del card["dry_run_receipt"]["card_fingerprint"]
+    assert any("fingerprint" in error for error in sc.validate_mechanism_card(card))
+
+
+def test_receipt_decision_must_agree_despite_delta_tolerance(sc) -> None:
+    """A zero-change revert cannot promote a tiny negative delta as an improvement."""
+    card = _promoted()
+    card["delta"] = -5e-10
+    card["dry_run_receipt"]["trace"].update(metric_before=0.2, metric_after=0.2, decision="revert")
+    card["dry_run_receipt"]["card_fingerprint"] = sc.card_fingerprint(card)
+    assert any("decision" in error for error in sc.validate_mechanism_card(card))
+
+
+def test_dry_cycle_requires_run_digest_and_independent_graduation_pin(tmp_path: Path) -> None:
+    """A run digest cannot itself stand in for a graduation pin."""
+    cycle = _load(CYCLE, "biafra_cycle")
+    candidate = _card()
+    bad = cycle.dry_cycle("outer", "harden", .26, .19, tmp_path, evaluator_digest="c" * 64, mechanism_card=candidate)
+    assert bad["reason"] == "invalid-card"
+    graduated = _promoted("graduated")
+    bad = cycle.dry_cycle("outer", "harden", .26, .19, tmp_path, evaluator_digest=DIGEST, mechanism_card=graduated)
+    assert bad["reason"] == "invalid-card"
+    good = cycle.dry_cycle("outer", "harden", .26, .19, tmp_path, evaluator_digest=DIGEST, mechanism_card=graduated, pinned_digest=DIGEST)
+    assert good["ok"] and good["card_fingerprint"]
+
+@pytest.mark.parametrize("value", [object(), float("nan"), ("coerced",), {1: "coerced"}])
+def test_dry_cycle_refuses_non_json_card_content_before_attempt(tmp_path: Path, sc, value) -> None:
+    """Candidate content must serialize without dropping or coercing nested values."""
+    card = _card(scope_record={"authorizes": "nothing", "extra": value})
+    assert any("canonicalizable" in error for error in sc.validate_mechanism_card(card))
+    cycle = _load(CYCLE, "biafra_cycle")
+    result = cycle.dry_cycle("outer", "harden", .26, .19, tmp_path, evaluator_digest=DIGEST, mechanism_card=card)
+    assert result["reason"] == "invalid-card"
+    assert not list(tmp_path.glob("*.once"))

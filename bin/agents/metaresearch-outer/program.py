@@ -30,11 +30,12 @@ def run(
     metric_name: str = "metric",
     attempt_id: str | None = None,
     mechanism_card: dict | None = None,
+    pinned_digest: str | None = None,
 ) -> dict:
-    """Run this seat's dry program; armed callers must adopt the governed live interface."""
+    """Run the dry program with an optional independent pin; armed callers use the live interface."""
     return _cycle().run_program(
         "outer", task_type, metric_before, metric_after, log_dir, artifact, evaluator_digest, hypothesis,
-        metric_name, attempt_id, mechanism_card,
+        metric_name, attempt_id, mechanism_card, pinned_digest,
     )
 
 

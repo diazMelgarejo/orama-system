@@ -8,18 +8,25 @@ exactly where a real wait can fail. ``kill`` and a second ``communicate`` model 
 
 from __future__ import annotations
 
+import subprocess
+from collections.abc import Callable
+from typing import Any
+
+Runner = Callable[..., subprocess.CompletedProcess[Any]]
+Output = bytes | str | None
+
 
 class FakeProc:
     """A started process whose wait is simulated by ``runner``."""
 
-    def __init__(self, argv, runner, kwargs) -> None:
+    def __init__(self, argv: Any, runner: Runner, kwargs: dict[str, Any]) -> None:
         """Remember the launch; nothing runs until ``communicate``."""
         self.argv, self._runner, self.kwargs = argv, runner, kwargs
         self.returncode = None
         self.killed = False
         self.communicate_calls = 0
 
-    def communicate(self, input=None, timeout=None):
+    def communicate(self, input: Any = None, timeout: float | None = None) -> tuple[Output, Output]:
         """Run the simulated wait once; a call after ``kill`` just reaps and returns no output."""
         self.communicate_calls += 1
         if self.killed:
@@ -29,15 +36,15 @@ class FakeProc:
         self.returncode = completed.returncode
         return completed.stdout, completed.stderr
 
-    def __enter__(self):
+    def __enter__(self) -> FakeProc:
         """Context-manager entry, as the real Popen supports."""
         return self
 
-    def __exit__(self, *exc) -> None:
+    def __exit__(self, *exc: Any) -> None:
         """Context-manager exit: reap like the real Popen."""
         self.wait()
 
-    def poll(self):
+    def poll(self) -> int | None:
         """None while the process has not finished, else its return code."""
         return self.returncode
 
@@ -45,20 +52,20 @@ class FakeProc:
         """Record that the process was killed."""
         self.killed = True
 
-    def wait(self, timeout=None):
+    def wait(self, timeout: float | None = None) -> int | None:
         """Reap: the return code, -9 after a kill."""
         if self.killed and self.returncode is None:
             self.returncode = -9
         return self.returncode
 
 
-def as_popen(runner, procs: list | None = None):
+def as_popen(runner: Runner, procs: list[FakeProc] | None = None) -> Callable[..., FakeProc]:
     """A ``Popen`` replacement whose process behaves as ``runner(argv, timeout=...)`` says.
 
     Each started process is appended to ``procs`` when given, so a test can inspect kill and reap.
     """
 
-    def popen(argv, **kwargs):
+    def popen(argv: Any, **kwargs: Any) -> FakeProc:
         """Start the fake process."""
         proc = FakeProc(argv, runner, kwargs)
         if procs is not None:

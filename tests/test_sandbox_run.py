@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import shutil
 import sys
 import textwrap
 from pathlib import Path
+from types import ModuleType
+from typing import Any, Callable, Sequence
 
 import pytest
 
@@ -548,7 +551,7 @@ def _gone(pid: int) -> bool:
         return True
 
 
-def _wait_until(predicate, limit: float = 10.0) -> bool:
+def _wait_until(predicate: Callable[[], bool], limit: float = 10.0) -> bool:
     """Poll `predicate` until it holds or `limit` seconds pass."""
     import time
 
@@ -561,7 +564,9 @@ def _wait_until(predicate, limit: float = 10.0) -> bool:
 
 
 @pytest.mark.skipif(not Path("/proc/self/stat").exists(), reason="uses /proc to inspect the descendant")
-def test_a_descendant_does_not_outlive_a_run_when_waitid_is_unavailable(sb, tmp_path, monkeypatch) -> None:
+def test_a_descendant_does_not_outlive_a_run_when_waitid_is_unavailable(
+    sb: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Check that a descendant does not outlive a run when waitid is unavailable."""
     import os
 
@@ -591,7 +596,9 @@ def test_a_descendant_does_not_outlive_a_run_when_waitid_is_unavailable(sb, tmp_
             pass
 
 
-def test_the_child_is_cleaned_up_when_a_reader_thread_cannot_start(sb, tmp_path, monkeypatch) -> None:
+def test_the_child_is_cleaned_up_when_a_reader_thread_cannot_start(
+    sb: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Check that the child is cleaned up when a reader thread cannot start."""
     import os
     import subprocess
@@ -602,7 +609,7 @@ def test_the_child_is_cleaned_up_when_a_reader_thread_cannot_start(sb, tmp_path,
 
     real_popen = subprocess.Popen  # the offline guard may already wrap it; record whatever is in place
 
-    def recording_popen(*a, **kw):
+    def recording_popen(*a: Any, **kw: Any) -> subprocess.Popen[bytes]:
         """Start the real Popen and record the instance."""
         proc = real_popen(*a, **kw)
         spawned.append(proc)
@@ -610,7 +617,7 @@ def test_the_child_is_cleaned_up_when_a_reader_thread_cannot_start(sb, tmp_path,
 
     class FailingThread(threading.Thread):
         """A thread whose start always fails, to simulate resource exhaustion."""
-        def start(self):
+        def start(self) -> None:
             """Fail as the OS does when no thread can be created."""
             raise RuntimeError("can't start new thread")
 
@@ -643,7 +650,7 @@ class _FakeKqueue:
         type(self).instances.append(self)
         self.closed = False
 
-    def control(self, changelist, max_events, timeout):
+    def control(self, changelist: Sequence[object] | None, max_events: int, timeout: float | None) -> list[object]:
         """Register (raising the configured error) or poll for the exit event."""
         if changelist:
             if type(self).register_error is not None:

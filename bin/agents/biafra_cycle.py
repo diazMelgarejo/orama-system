@@ -66,6 +66,7 @@ def dry_cycle(
     metric_name: str = "metric",
     attempt_id: str | None = None,
     mechanism_card: dict | None = None,
+    pinned_digest: str | None = None,
 ) -> dict:
     """Run one cycle. A lower metric is better. A second call does not retry.
 
@@ -76,6 +77,8 @@ def dry_cycle(
     names a fixed-wall owner is refused (`invalid-card`) before anything is recorded. This cycle is handed
     its measurement, so the proposing agent must run `validate_mechanism_card` before it measures; without
     a card the result says `card_checked: false`, so a reviewer can tell checked from unchecked.
+    For graduated cards, `pinned_digest` must come from the independently recorded run pin;
+    it is not inferred from `evaluator_digest`. The run digest must match the card.
     """
     contracts = _contracts()
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -93,7 +96,9 @@ def dry_cycle(
     if _forbidden(artifact):
         return refuse("verifier-protected")
     if mechanism_card is not None:
-        card_errors = contracts.validate_mechanism_card(mechanism_card)
+        card_errors = contracts.validate_mechanism_card(mechanism_card, pinned_digest=pinned_digest)
+        if isinstance(mechanism_card, dict) and mechanism_card.get("evaluator_digest") != evaluator_digest:
+            card_errors.append("card evaluator_digest does not equal the run evaluator_digest")
         if card_errors:
             return refuse("invalid-card", errors=card_errors)
     decision = "keep" if metric_after < metric_before else "revert"
@@ -133,6 +138,7 @@ def dry_cycle(
         "armed": os.environ.get(ARM_ENV, ""),
     }
     if mechanism_card is not None:
+        result["card_fingerprint"] = contracts.card_fingerprint(mechanism_card)
         result["card_id"] = contracts.card_id(mechanism_card)  # the validated card this run checked
     if trace is None:
         result["warning"] = "no-evaluator-digest"
@@ -221,15 +227,16 @@ def run_program(
     metric_name: str = "metric",
     attempt_id: str | None = None,
     mechanism_card: dict | None = None,
+    pinned_digest: str | None = None,
 ) -> dict:
-    """Run a dry cycle; armed callers must use the governed live_cycle interface."""
+    """Run a dry cycle with an optional independently recorded pin; armed callers use live_cycle."""
     if launch_allowed():
         return {"ok": False, "seat": seat, "mode": select_mode(task_type) if seat == "outer" else "inner",
                 "reason": "legacy-live-path-disabled", "retries": 0, "launched": False,
                 "called_launcher": False}
     result = dry_cycle(
         seat, task_type, metric_before, metric_after, log_dir, artifact, evaluator_digest,
-        hypothesis, metric_name, attempt_id, mechanism_card,
+        hypothesis, metric_name, attempt_id, mechanism_card, pinned_digest,
     )
     result["argv"] = launcher_argv(seat)
     result["called_launcher"] = False
@@ -269,13 +276,15 @@ def _reap(proc) -> None:
     """Kill a launcher and everything it started, then wait for it a bounded time.
 
     The launcher runs in its own session, so the whole process group is killed while the leader is still
-    unreaped (its pid cannot yet be reused). A grandchild holding the pipes cannot keep the wait open: the
-    reap is bounded and the pipes are closed regardless. Never raises an ordinary error: cleanup must not
+    unreaped (its pid cannot yet be reused). This owner must not reap the leader before calling here;
+    a known returncode means its identity is no longer reserved, so no group signal is sent. A grandchild
+    holding the pipes cannot keep the wait open: the reap is bounded and the pipes are closed regardless.
+    Never raises an ordinary error: cleanup must not
     mask the failure that led here or skip the settle.
     """
     try:
         pid = getattr(proc, "pid", None)
-        if isinstance(pid, int) and proc.poll() is None:
+        if isinstance(pid, int) and getattr(proc, "returncode", None) is None:
             try:
                 os.killpg(pid, signal.SIGKILL)
             except OSError:
@@ -339,6 +348,7 @@ def _prelaunch(
     seat: str, mode: str, artifact: str, prompt: object, evaluator_digest: str | None, metric_before: object,
     hypothesis: str, metric_name: str, attempt_id: str | None, log_dir: Path, mechanism_card: dict | None,
     effort: str | None, spend_guard: object | None, ledger_path: Path | None = None,
+    pinned_digest: str | None = None,
 ) -> tuple[dict | None, dict | None]:
     """Decide, with no side effect, whether a live attempt may start.
 
@@ -350,7 +360,9 @@ def _prelaunch(
     has_digest = evaluator_digest is not None
     metric_ok = contracts.is_finite_number(metric_before)
     prompt_ok = isinstance(prompt, str) and bool(prompt.strip()) and "\x00" not in prompt  # NUL cannot be an argv
-    card_errors = contracts.validate_mechanism_card(mechanism_card) if mechanism_card is not None else []
+    card_errors = contracts.validate_mechanism_card(mechanism_card, pinned_digest=pinned_digest) if mechanism_card is not None else []
+    if isinstance(mechanism_card, dict) and mechanism_card.get("evaluator_digest") != evaluator_digest:
+        card_errors.append("card evaluator_digest does not equal the run evaluator_digest")
     # The trace is built with a placeholder metric_after; only the measured value and the decision it
     # implies remain to be checked after the request.
     trace_base = None
@@ -448,6 +460,7 @@ def live_cycle(
     Needs the operator gate and the arm together. Every refusal that can be known up front happens
     before the one-attempt marker is claimed; once a request is made the attempt is spent and is
     never retried. `evaluate(answer)` is the fixed evaluator and returns {"metric_after": number}.
+    The card digest must match the run digest; graduation uses the independently read `pin_path`.
     """
     contracts = _contracts()
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -461,9 +474,13 @@ def live_cycle(
             "launched": False, "called_launcher": False, **extra,
         }
 
+    try:
+        pinned_digest = contracts.read_pin(pin_path) if pin_path is not None else None
+    except (ValueError, OSError, TypeError):
+        pinned_digest = None
     problem, trace_base = _prelaunch(
         seat, mode, artifact, prompt, evaluator_digest, metric_before, hypothesis, metric_name, attempt_id,
-        log_dir, mechanism_card, effort, spend_guard, ledger_path,
+        log_dir, mechanism_card, effort, spend_guard, ledger_path, pinned_digest,
     )
     if problem is not None:
         return refuse(problem["reason"], **{k: v for k, v in problem.items() if k != "reason"})

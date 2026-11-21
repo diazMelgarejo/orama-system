@@ -16,7 +16,8 @@
     "retries": 0,
     "launched": false,
     "card_checked": true,
-    "card_id": "m-bbbbbbbbbbbb@2"
+    "card_id": "m-bbbbbbbbbbbb@2",
+    "card_fingerprint": "0a19b8f435bdd7f0f9c0f46a9e06fd4a85185e758d33a2489108f0d4789237a5"
   },
   "delta": -0.01,
   "reverted": false,

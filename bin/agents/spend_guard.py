@@ -13,6 +13,7 @@ import importlib.util
 import os
 import sys
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 DEFAULT_PROVIDER = "wandb-inference"
@@ -42,7 +43,10 @@ def resolve_pt_root(explicit: str | Path | None = None) -> Path:
     often names a checkout that predates the guard, and the symlink then supplies it.
     """
     if explicit:
-        root = Path(explicit).expanduser().resolve()
+        try:
+            root = Path(explicit).expanduser().resolve(strict=True)
+        except (OSError, RuntimeError) as exc:
+            raise SpendGuardUnavailable(f"cannot resolve checkout {explicit}") from exc
         if not _has_guard(root):
             raise SpendGuardUnavailable(f"{root} does not contain the shared spend guard")
         return root
@@ -55,15 +59,19 @@ def resolve_pt_root(explicit: str | Path | None = None) -> Path:
         if not raw:
             tried.append(f"{label}: not set")
             continue
-        root = Path(raw).expanduser().resolve()
+        try:
+            root = Path(raw).expanduser().resolve(strict=True)
+        except (OSError, RuntimeError) as exc:
+            tried.append(f"{label}: cannot resolve checkout ({type(exc).__name__})")
+            continue
         if _has_guard(root):
             return root
         tried.append(f"{label}: no shared spend guard in {root.name}")
     raise SpendGuardUnavailable("no Perpetua-Tools checkout with the shared guard (" + "; ".join(tried) + ")")
 
 
-def _load(root: Path, rel: str, name: str):
-    """Import ``rel`` under ``root`` by file path as module ``name``; SpendGuardUnavailable if it cannot load."""
+def _load(root: Path, rel: str, name: str) -> ModuleType:
+    """Import a producer module by path, refusing when it cannot be loaded."""
     path = root / rel
     if not path.is_file():
         raise SpendGuardUnavailable(f"{rel} not found under {root}")
@@ -71,8 +79,27 @@ def _load(root: Path, rel: str, name: str):
     if spec is None or spec.loader is None:
         raise SpendGuardUnavailable(f"cannot load {path}")
     module = importlib.util.module_from_spec(spec)
+    sentinel = object()
+    previous = sys.modules.get(name, sentinel)
     sys.modules[name] = module
-    spec.loader.exec_module(module)
+    try:
+        spec.loader.exec_module(module)
+        for attr, filename in (("_pl", "provider_limits.py"), ("_cg", "cost_guard.py")):
+            sibling = getattr(module, attr, None)
+            origin = getattr(sibling, "__file__", None)
+            expected = root.resolve(strict=True) / "orchestrator" / filename
+            if not isinstance(origin, str) or Path(origin).resolve(strict=True) != expected:
+                raise SpendGuardUnavailable(f"producer {attr} does not belong to checkout {root}")
+    except BaseException as exc:
+        if previous is sentinel:
+            sys.modules.pop(name, None)
+        else:
+            sys.modules[name] = previous
+        if isinstance(exc, SpendGuardUnavailable):
+            raise
+        if isinstance(exc, Exception):
+            raise SpendGuardUnavailable(f"cannot load {path}") from exc
+        raise
     return module
 
 

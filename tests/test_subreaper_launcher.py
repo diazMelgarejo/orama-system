@@ -157,7 +157,8 @@ def test_unreaped_adopted_zombie_keeps_containment_unknown() -> None:
     if not hasattr(os, "pidfd_open") or not hasattr(signal, "pidfd_send_signal"):
         pytest.skip("pidfd cleanup is unavailable")
     result = subprocess.run(
-        [sys.executable, "-c", source, str(LAUNCHER.parents[1] / "src")],
+        [sys.executable, "-S", "-c", source, str(LAUNCHER.parents[2] / "src")],
         capture_output=True, text=True, timeout=15,
+        env={key: value for key, value in os.environ.items() if key != "PYTHONPATH"},
     )
     assert result.returncode == 0, result.stderr

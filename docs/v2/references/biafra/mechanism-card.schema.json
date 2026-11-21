@@ -81,6 +81,11 @@
         },
         "card_id": {
           "type": "string"
+        },
+        "card_fingerprint": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "SHA-256 of canonical checked card content excluding status, reverted, and dry_run_receipt."
         }
       }
     },
