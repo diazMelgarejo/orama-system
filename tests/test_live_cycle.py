@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 import subprocess
 import sys
 from pathlib import Path
+from types import MappingProxyType
 
 import pytest
 from _fake_popen import as_popen
@@ -712,12 +713,14 @@ def test_unlisted_model_is_refused_before_reservation(cycle, tmp_path, monkeypat
     assert not list(tmp_path.glob("*.once"))
 
 
-def test_live_cycle_checks_card_digest_before_launch(cycle, tmp_path, monkeypatch) -> None:
+@pytest.mark.parametrize("wrap", [dict, MappingProxyType])
+def test_live_cycle_checks_card_digest_before_launch(cycle, tmp_path, monkeypatch, wrap) -> None:
     """A card from another evaluator cannot consume a live attempt."""
     _arm(monkeypatch, cycle)
     calls = []
     monkeypatch.setattr(cycle.subprocess, "Popen", _fake_run(calls=calls))
-    result = cycle.live_cycle(**_kwargs(tmp_path, mechanism_card=_card(evaluator_digest="c" * 64)))
+    card = wrap(_card(evaluator_digest="c" * 64))
+    result = cycle.live_cycle(**_kwargs(tmp_path, mechanism_card=card))
     assert result["reason"] == "invalid-card" and not calls
     assert not list(tmp_path.glob("*.once"))
 

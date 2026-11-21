@@ -229,5 +229,6 @@ not a live provider run.
 ## Pin clarification (2026-11-21)
 
 The publication sentence above records the pin selected on 2026-11-20, not the current
-selection. At the reviewed head the [pin file](../../../../.github/pt-dispatch-test-ref) selects
-`7d7cdca04900a9e68fbc23761759574b11e33deb`; consult that file for subsequent changes.
+selection. The earlier reviewed Orama revision `bddefcf5` selected PT
+`7d7cdca04900a9e68fbc23761759574b11e33deb`. Consult the
+[pin file](../../../../.github/pt-dispatch-test-ref) for the current selection.

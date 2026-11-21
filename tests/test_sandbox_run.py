@@ -9,7 +9,7 @@ import sys
 import textwrap
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Callable, Sequence
+from typing import Any, Callable, NoReturn, Sequence
 
 import pytest
 
@@ -664,7 +664,7 @@ class _FakeKqueue:
 
 
 @pytest.fixture()
-def fake_kqueue(sb, monkeypatch):
+def fake_kqueue(sb: ModuleType, monkeypatch: pytest.MonkeyPatch) -> type[_FakeKqueue]:
     """Make the module see a kqueue-only platform (no waitid) backed by _FakeKqueue."""
     import os
     import types
@@ -752,9 +752,9 @@ def test_a_platform_with_no_exit_probe_fails_closed_before_the_child_starts(sb, 
     real_exists = Path.exists
     monkeypatch.setattr(Path, "exists", lambda self: False if str(self) == "/proc/self/stat" else real_exists(self))
     monkeypatch.setattr(sb, "sandbox_available", lambda: False)
-    started: list = []
+    started: list[tuple[object, ...]] = []
 
-    def never(*args, **kwargs):
+    def never(*args: object, **kwargs: object) -> NoReturn:
         """Record a launch; the run must not get here."""
         started.append(args)
         raise AssertionError("Popen was called although no exit probe exists")

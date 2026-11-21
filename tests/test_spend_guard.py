@@ -9,8 +9,10 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from types import ModuleType
@@ -501,6 +503,47 @@ def test_two_adapter_instances_share_one_ceiling(sg, tmp_path, monkeypatch) -> N
 
 
 @needs_pt
+def test_adapters_use_their_own_checkout_ceilings(
+    sg: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Each checkout's policy applies to its own test ledger in the same process."""
+    source = sg.resolve_pt_root(os.environ.get("ORAMA_TEST_PT_ROOT"))
+    now = datetime(2026, 11, 15, tzinfo=timezone.utc)
+    timestamp = now.timestamp()
+    monkeypatch.setattr(time, "time", lambda: timestamp)
+    monkeypatch.setenv("OPENCLAW_STATE_DIR", str(tmp_path))
+    _attest(tmp_path, attested_at=now.isoformat())
+    monkeypatch.delitem(sys.modules, "pt_spend_gate", raising=False)
+    existing_modules = set(sys.modules)
+    guards = []
+    try:
+        for ceiling in (80, 90):
+            root = tmp_path / f"pt-{ceiling}"
+            shutil.copytree(source / "orchestrator", root / "orchestrator", ignore=shutil.ignore_patterns("__pycache__"))
+            policy_dir = Path("config/provider-policies")
+            shutil.copytree(source / policy_dir, root / policy_dir)
+            policy_path = root / policy_dir / "wandb-inference.json"
+            policy = json.loads(policy_path.read_text(encoding="utf-8"))
+            policy["budget"]["operator_estimate_ceiling_usd"] = ceiling
+            policy_path.write_text(json.dumps(policy), encoding="utf-8")
+            guard = sg.SpendGuard(pt_root=root, state_dir=tmp_path / f"spend-{ceiling}", now=lambda: now)
+            assert guard.policy["budget"]["operator_estimate_ceiling_usd"] == ceiling
+            guard.guard.record_spend(79.95)
+            guards.append(guard)
+
+        limited, roomy = guards
+        assert limited.preflight(10_000, HOLD)["reason"] == "budget-exhausted"
+        allowed = roomy.preflight(10_000, HOLD)
+        assert allowed["ok"]
+        roomy.release(allowed["reservation"])
+    finally:
+        sys.modules.pop("pt_spend_gate", None)
+        for name in set(sys.modules) - existing_modules:
+            if name.startswith("pt_orchestrator_spend_gate"):
+                sys.modules.pop(name, None)
+
+
+@needs_pt
 def test_settle_unknown_charges_the_whole_reservation_and_marks_the_output_unknown(sg, tmp_path, monkeypatch) -> None:
     """Check that settle unknown charges the whole reservation and marks the output unknown."""
     monkeypatch.setenv("OPENCLAW_STATE_DIR", str(tmp_path))
@@ -862,7 +905,7 @@ def test_a_settle_failure_after_a_successful_launch_never_releases(cycle, tmp_pa
     assert guard.released == []
 
 
-def test_adapter_forwards_declared_output_limit(sg) -> None:
+def test_adapter_forwards_declared_output_limit(sg: ModuleType) -> None:
     """The PT gate receives the exact declared limit, while legacy calls remain compatible."""
     class RecordingGate:
         """Record the producer call without loading credentials or a ledger."""
@@ -893,7 +936,9 @@ def test_unbounded_cline_refuses_before_reservation_or_marker(cycle, tmp_path: P
 
 
 @needs_pt
-def test_adapter_reserves_declared_limit_with_new_pt(sg, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_adapter_reserves_declared_limit_with_new_pt(
+    sg: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """The real producer reserves more when a larger output limit is forwarded."""
     monkeypatch.setenv("OPENCLAW_STATE_DIR", str(tmp_path))
     _attest(tmp_path)

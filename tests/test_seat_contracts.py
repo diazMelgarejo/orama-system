@@ -12,7 +12,7 @@ import math
 import sys
 import threading
 from pathlib import Path
-from types import ModuleType
+from types import MappingProxyType, ModuleType
 
 import pytest
 import yaml
@@ -1019,13 +1019,14 @@ def test_receipt_decision_must_agree_despite_delta_tolerance(sc) -> None:
     assert any("decision" in error for error in sc.validate_mechanism_card(card))
 
 
-def test_dry_cycle_requires_run_digest_and_independent_graduation_pin(tmp_path: Path) -> None:
+@pytest.mark.parametrize("wrap", [dict, MappingProxyType])
+def test_dry_cycle_requires_run_digest_and_independent_graduation_pin(tmp_path: Path, wrap) -> None:
     """A run digest cannot itself stand in for a graduation pin."""
     cycle = _load(CYCLE, "biafra_cycle")
-    candidate = _card()
+    candidate = wrap(_card())
     bad = cycle.dry_cycle("outer", "harden", .26, .19, tmp_path, evaluator_digest="c" * 64, mechanism_card=candidate)
     assert bad["reason"] == "invalid-card"
-    graduated = _promoted("graduated")
+    graduated = wrap(_promoted("graduated"))
     bad = cycle.dry_cycle("outer", "harden", .26, .19, tmp_path, evaluator_digest=DIGEST, mechanism_card=graduated)
     assert bad["reason"] == "invalid-card"
     good = cycle.dry_cycle("outer", "harden", .26, .19, tmp_path, evaluator_digest=DIGEST, mechanism_card=graduated, pinned_digest=DIGEST)

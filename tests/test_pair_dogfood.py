@@ -167,7 +167,8 @@ def test_g9_a_card_is_promoted_only_after_a_dry_cycle_that_checked_that_card(rec
     cycle = _load(ROOT / "bin/agents/biafra_cycle.py", "biafra_cycle")
     candidate = receipt["card"]
     assert candidate["status"] == "candidate" and sc.validate_mechanism_card(candidate) == []
-    # Pin the evaluator before the outer dry cycle measures.
+    # Record the caller-side pin before the card-checking cycle. That cycle takes
+    # the receipt's run digest and supplied measurements; graduation reads the pin below.
     pin = tmp_path / "evaluator.pin.json"
     pinned = sc.pin_evaluator(pin, [tmp_path / "verifier" / "check_metric.py"])
     checked = cycle.dry_cycle(

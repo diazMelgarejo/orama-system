@@ -14,7 +14,7 @@ import signal
 import subprocess
 import sys
 from datetime import datetime, timezone
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Any
 from pathlib import Path
 
@@ -65,7 +65,7 @@ def dry_cycle(
     hypothesis: str = "dry cycle",
     metric_name: str = "metric",
     attempt_id: str | None = None,
-    mechanism_card: dict | None = None,
+    mechanism_card: Mapping[str, Any] | None = None,
     pinned_digest: str | None = None,
 ) -> dict:
     """Run one cycle. A lower metric is better. A second call does not retry.
@@ -97,7 +97,7 @@ def dry_cycle(
         return refuse("verifier-protected")
     if mechanism_card is not None:
         card_errors = contracts.validate_mechanism_card(mechanism_card, pinned_digest=pinned_digest)
-        if isinstance(mechanism_card, dict) and mechanism_card.get("evaluator_digest") != evaluator_digest:
+        if isinstance(mechanism_card, Mapping) and mechanism_card.get("evaluator_digest") != evaluator_digest:
             card_errors.append("card evaluator_digest does not equal the run evaluator_digest")
         if card_errors:
             return refuse("invalid-card", errors=card_errors)
@@ -226,7 +226,7 @@ def run_program(
     hypothesis: str = "dry cycle",
     metric_name: str = "metric",
     attempt_id: str | None = None,
-    mechanism_card: dict | None = None,
+    mechanism_card: Mapping[str, Any] | None = None,
     pinned_digest: str | None = None,
 ) -> dict:
     """Run a dry cycle with an optional independently recorded pin; armed callers use live_cycle."""
@@ -346,7 +346,7 @@ def _launch_decision(
 
 def _prelaunch(
     seat: str, mode: str, artifact: str, prompt: object, evaluator_digest: str | None, metric_before: object,
-    hypothesis: str, metric_name: str, attempt_id: str | None, log_dir: Path, mechanism_card: dict | None,
+    hypothesis: str, metric_name: str, attempt_id: str | None, log_dir: Path, mechanism_card: Mapping[str, Any] | None,
     effort: str | None, spend_guard: object | None, ledger_path: Path | None = None,
     pinned_digest: str | None = None,
 ) -> tuple[dict | None, dict | None]:
@@ -361,7 +361,7 @@ def _prelaunch(
     metric_ok = contracts.is_finite_number(metric_before)
     prompt_ok = isinstance(prompt, str) and bool(prompt.strip()) and "\x00" not in prompt  # NUL cannot be an argv
     card_errors = contracts.validate_mechanism_card(mechanism_card, pinned_digest=pinned_digest) if mechanism_card is not None else []
-    if isinstance(mechanism_card, dict) and mechanism_card.get("evaluator_digest") != evaluator_digest:
+    if isinstance(mechanism_card, Mapping) and mechanism_card.get("evaluator_digest") != evaluator_digest:
         card_errors.append("card evaluator_digest does not equal the run evaluator_digest")
     # The trace is built with a placeholder metric_after; only the measured value and the decision it
     # implies remain to be checked after the request.
@@ -448,7 +448,7 @@ def live_cycle(
     attempt_id: str | None = None,
     effort: str | None = None,
     timeout_s: int = LIVE_TIMEOUT_S,
-    mechanism_card: dict | None = None,
+    mechanism_card: Mapping[str, Any] | None = None,
     spend_guard: object | None = None,
     ledger_path: Path | None = None,
     pin_path: Path | None = None,

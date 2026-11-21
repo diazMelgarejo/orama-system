@@ -5,7 +5,7 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 from types import ModuleType
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Any
 
 
@@ -29,7 +29,7 @@ def run(
     hypothesis: str = "dry cycle",
     metric_name: str = "metric",
     attempt_id: str | None = None,
-    mechanism_card: dict | None = None,
+    mechanism_card: Mapping[str, Any] | None = None,
     pinned_digest: str | None = None,
 ) -> dict:
     """Run the dry program with an optional independent pin; armed callers use the live interface."""
