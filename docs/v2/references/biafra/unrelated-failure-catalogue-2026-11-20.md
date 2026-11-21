@@ -225,3 +225,9 @@ settlement reconciles the full amount. The regression fails against old PT
 repaired producer. The affected pair suite passes 133 tests. Production Cline
 remains refused until its aggregate bound is proven; this is source evidence,
 not a live provider run.
+
+## Pin clarification (2026-11-21)
+
+The publication sentence above records the pin selected on 2026-11-20, not the current
+selection. At the reviewed head the [pin file](../../../../.github/pt-dispatch-test-ref) selects
+`7d7cdca04900a9e68fbc23761759574b11e33deb`; consult that file for subsequent changes.

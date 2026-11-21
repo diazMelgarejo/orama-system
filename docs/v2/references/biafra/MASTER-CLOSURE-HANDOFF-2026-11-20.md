@@ -95,8 +95,9 @@ Until then, preserve the structured refusal.
 
 ### V2-1 — reservation contract and producer integration
 
-Owner: v2 Controller with Phylax and Telos. Read
-[canonical queue register](https://github.com/diazMelgarejo/orama-system/tree/main/docs/v2/queue-fencing-and-recovery)
+Owner: v2 Controller with Phylax and Telos. Read the
+[queue decision record](../../queue-fencing-and-recovery/decision-record.md) and
+[review-synthesis amendment](../../queue-fencing-and-recovery/amendment-2026-11-16-review-synthesis.md)
 before editing.
 
 The reservation amendment still leaves owner-pinned recipient fields/arity, refusal code and
@@ -180,3 +181,52 @@ This addendum supersedes the earlier tip labels while retaining their receipts.
 The initial one-push publication was followed by one consolidated review/CI
 repair round after new feedback. No merge or activation was performed. Default
 branch security-alert closure still awaits normal merge and GitHub evaluation.
+
+## Review closure addendum — 2026-11-21
+
+The next published source batches supersede the earlier tip labels without
+erasing their evidence. PT's producer fix is
+`79bfd82da15af161e60245910726a60fb63b236e`; #517 carries it through a normal merge
+at `beb397d7c27ce2bb238deab91c4c56fdc6718915`. Orama's integrated code repair is
+`8ccad5e32e0af1b8abfc15d686c64b39463a9022`.
+
+The complete new review was collated before integration: 14 Orama inline
+findings, its outside-diff/minor import findings and five typing/test-layout
+nitpicks, plus two v2 inline findings and admission-clock feedback.
+
+- Card receipts bind canonical content, not merely identity and delta.
+  Lifecycle status, reverted outcome and the embedded receipt are excluded
+  from the hash; the trace decision separately binds the reverted flag.
+  Candidate JSON is validated before any marker, run/card evaluator digests
+  agree, and graduation needs an independently recorded pin. Old unbound
+  receipts need a new dry cycle; archived run evidence stays unchanged.
+- Both wrappers forward the optional independent dry pin. The dogfood test
+  creates the pin before measurement. Caller validation before measurement
+  remains an obligation; receipt content binding is not measurement authenticity.
+- File-path producer packages are scoped by resolved checkout. The consumer
+  verifies sibling origins and restores the prior module entry after failure.
+  Explicit bad roots refuse; optional bad candidates fall through. Older
+  producers that mix roots fail closed. This is import ownership, not new
+  claimant authentication or hot-reload generation qualification.
+- Cleanup signals an owned group before reaping an exited leader. Its real
+  process regression uses readiness and non-reaping exit barriers, then cleans
+  owned descendants even after an assertion failure. Already-reaped leader
+  identities are not signaled. The subreaper test uses the actual repo src
+  directory and proves imports without inherited paths or editable installs.
+- The reservation hold test uses a fixed mid-month producer clock. Typed test
+  doubles, pipe/exit helpers and fixtures document their actual interfaces.
+  Moving the existing evaluator-pin tests into a separate file was declined:
+  shared builders are already reused; relocation adds unrelated churn.
+- V2's new reader never treats an inline legacy receipt token as authority.
+  Only its separately consumed one-use row permits retry disclosure. This
+  does not fence old open writers or select the held cutover disposition.
+  Child imports are bound to the parent package root while preserving platform
+  environment variables. Configured admission freshness also uses elapsed
+  monotonic time and rejects backward wall-clock steps.
+
+Verification before publication: PT full suite **3721 passed, 12 skipped**;
+Orama full integrated suite **4345 passed, 145 skipped, 24 subtests passed**;
+v2 full prepared source **3127 passed, 5 skipped**, with **217 controller tests**
+passing after integration. The strengthened exited-leader proof passed
+separately. Python 3.13 sandbox checks remain **79 passed, 18 skipped**.
+Native host/activation gates stay open; no new provider requests or serving.

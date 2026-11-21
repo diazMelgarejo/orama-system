@@ -52,13 +52,23 @@ that cannot encode ownership must not be mistaken for safety.
 | G5 | The 2026-06-05 rule that `oramasys/*` is reference-only versus later direct PRs there. | Not touched here; no `oramasys/*` repository is mutated. |
 | G6 | Persona elaboration beyond the operator's wording. | Draft, for review. One boundary was added: Biafra questions the work's assumptions and does not diagnose the person. |
 | G8 | `_finite` accepts integers up to about 1.8e308, including the band above 2**53 where conversion to float loses precision. A transport that serialises the raw integer (JSON can carry 10**400) may accept a value this validator refuses. | Assumption recorded; the docstring states it. Operator to confirm that every consumer computes in doubles. |
-| G9 | The fixed-wall card check runs only when a caller passes `mechanism_card`. A caller that omits it is not checked. | Resolved 2026-11-17, decided by the operator's request in this change: no card, no promotion. Cycles stay usable without a card, because a proposal turn produces the card afterwards, and report `card_checked: false`. When a valid card is passed, `dry_cycle` and `live_cycle` results also carry `card_id` (`<mechanism_id>@<revision>`). A reviewed or graduated card needs a receipt with `card_checked: true` and a `card_id` equal to its own, so promotion follows a dry run that checked this card, fixed walls included, before measurement. |
+| G9 | The fixed-wall card check runs only when a caller passes `mechanism_card`. A caller that omits it is not checked. | Resolved 2026-11-17, decided by the operator's request in this change: no card, no promotion. Cycles stay usable without a card, because a proposal turn produces the card afterwards, and report `card_checked: false`. When a valid card is passed, `dry_cycle` and `live_cycle` results also carry `card_id` (`<mechanism_id>@<revision>`). A reviewed or graduated card needs a receipt with `card_checked: true` and a `card_id` equal to its own, so promotion follows a dry run that checked this card, fixed walls included. `dry_cycle` receives measured values; the proposing agent must call `validate_mechanism_card` before measuring. |
 | G7 | Provider state for the live cycle (W&B model order and effort acceptance, BigModel balance) was last seen on 2026-11-12. | Must be re-probed before arming. |
 
 Note (2026-11-17, section 13): an independent review led to an addition to the G3 binding, now
 implemented and tested: a receipt is also compared with the card's `delta` (the trace's
-`metric_after - metric_before`), so a receipt for `X@1` cannot promote a different card reusing
-that id. This section is otherwise unchanged.
+`metric_after - metric_before`), so a receipt for `X@1` cannot promote a card reusing that id
+with a different delta. At that revision the receipt bound identity, evaluator digest and delta,
+but did not bind `owner_slices`, `targets`, `hypothesis` or metric names. This section records the
+decision at that time; consult the current validator for the current binding.
+
+Review follow-up (2026-11-21): new card-bearing dry receipts also bind a SHA-256
+fingerprint of canonical card content. Only `status`, `reverted` and the receipt
+itself are excluded; the trace decision separately binds `reverted`. Run and
+card evaluator digests must agree, and graduated cards need an independently
+recorded pin. Existing unbound receipts must be regenerated before promotion.
+This is content binding, not proof that the caller performed the measurement;
+the proposing agent still validates the card before measuring.
 
 ## 5. Live cycle (one, bounded, not armed by this change)
 

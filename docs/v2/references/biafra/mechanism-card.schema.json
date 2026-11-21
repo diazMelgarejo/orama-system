@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Mechanism Card",
   "type": "object",
-  "description": "Shape only. The authority is validate_mechanism_card in bin/agents/seat_contracts.py. The validator also enforces what a schema cannot: fixed-wall owner names (normalized, ASCII only), reverted agreeing with the sign of delta, and, before reviewed or graduated, a real dry-run receipt bound to this card (valid trace with the card's evaluator_digest, card_checked true, card_id equal to mechanism_id@revision); graduated also needs the run's pin (pinned_digest, from pin_evaluator). Unknown fields are refused here and there.",
+  "description": "Shape only. The authority is validate_mechanism_card in bin/agents/seat_contracts.py. Semantic validation enforces normalized fixed-wall owner names, reverted agreeing with both delta and the receipt decision, and a real dry-run receipt before review or graduation. Its valid trace uses the card evaluator_digest; card_checked is true, card_id equals mechanism_id@revision, and card_fingerprint binds canonical checked content. Graduation also needs an independently recorded run pin (pinned_digest, from pin_evaluator). Unknown fields are refused here and there.",
   "required": [
     "version",
     "mechanism_id",

@@ -392,7 +392,7 @@ def card_fingerprint(card: Mapping[str, Any]) -> str:
 
 
 def _receipt_binding_errors(card: Mapping[str, Any], receipt: Mapping[str, Any]) -> list[str]:
-    """Errors tying a dry-run receipt to this card: trace digest and delta, and that it checked this card."""
+    """Bind checked content, evaluator, trace decision and measured delta to this card."""
     errors: list[str] = []
     trace = receipt.get("trace")
     if not isinstance(trace, Mapping):

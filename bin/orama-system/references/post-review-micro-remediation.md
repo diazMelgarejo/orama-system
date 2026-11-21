@@ -470,9 +470,10 @@ Skillify pattern:
   checkout), every test that asserts "nothing found" must neutralize it in the shared fixture, and one
   test must prove the fallback is used. CI has the location and a laptop does not, so the failure shows
   only in CI: create the location locally and run the suite before pushing.
-- **Release on every path, then check the claims.** A reservation and a process group are settled or
-  released on every path, so whatever can fail between acquiring them and finishing (claiming a
-  marker, writing a ledger) sits inside the cleanup block. The attempt marker is the opposite kind of
+- **Account for every path, then check the claims.** Release a reservation only when the process
+  never launched. After launch, settle it; if settlement fails, retain the reservation as liability
+  until reconciliation. Process-group cleanup and operations that can fail between acquisition and
+  completion (claiming a marker, writing a ledger) belong inside the cleanup block. The attempt marker is the opposite kind of
   thing: once an attempt is spent it stays, so the attempt cannot repeat. A status field such as
   `recorded` is derived from what was written, never assumed. A table cell with a `|` inside code needs `\|`;
   the lint config excludes SKILL.md, so check those tables by eye.

@@ -40,6 +40,10 @@ provider client is built with `max_retries=0` (the OpenAI SDK retries a 429 twic
 
 ### Monthly budget and the shared guard
 
+**Current stop condition:** even with valid preflight inputs, `live_cycle` returns
+`launcher-output-bound-unsupported` before calling the spend guard. The launch described below is
+unavailable until an enforcing boundary is implemented; see the [closure record](../../../../../docs/v2/references/biafra/review-contract-closure-2026-11-20.md).
+
 The operator set an estimated ceiling of 90 dollars a month of "free" use, kept under the 100-dollar
 cap. The guard is Perpetua-Tools' `orchestrator/spend_gate.py` `SpendGate`, built on its shared,
 atomic `CostGuard` in monthly mode and configured by the provider policy. Orama reaches it through
