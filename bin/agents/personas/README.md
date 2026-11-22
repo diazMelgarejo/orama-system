@@ -15,6 +15,7 @@ refresh from here after `git pull`.
 | `arthur.yaml` | `mac-researcher` | Arthur | `mac-researcher/` |
 | `nova.yaml` | `kimi-agent` | Nova | `nova/` |
 | `rex.yaml` | `grok-agent` | Rex | `rex/` |
+| `biafra.yaml` | `metaresearch-outer` | Biafra (outer seat) | `metaresearch-outer/` |
 | `relay-cursor.yaml` | `relay-cursor` | Relay Cursor Agent | `relay-cursor/` |
 
 Pipeline agents (Cass, Aria, Sena, Rourke, Vera, Crystal, Glen) use `bin/agents/*/SOUL.md` + hub `REGISTRY.yml`.

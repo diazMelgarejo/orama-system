@@ -135,6 +135,7 @@ def test_aguara_wrapper_rules_and_baseline_identity(tmp_path: Path) -> None:
     baseline = tmp_path / "config/agent-security/aguara-skills.baseline.json"
     baseline.parent.mkdir(parents=True)
     baseline.write_text('{"version":1,"fingerprints":[]}')
+    (baseline.parent / "aguara-agents.baseline.json").write_text('{"version":1,"fingerprints":[]}')
     env = os.environ.copy()
     env["PATH"] = str(Path(AGUARA).parent) + os.pathsep + env["PATH"]
     env["RUNNER_TEMP"] = str(tmp_path)

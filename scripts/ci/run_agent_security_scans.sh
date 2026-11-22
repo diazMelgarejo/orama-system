@@ -84,6 +84,17 @@ scan_aguara() {
       # This does not disable single-file toxic flows or credential rules.
       aguara_args+=(--baseline "$baseline" --disable-rule TOXIC_CROSS_002)
     fi
+    if [[ "$path" == "bin/agents" ]]; then
+      baseline="$ROOT/config/agent-security/aguara-agents.baseline.json"
+      if [[ ! -f "$baseline" ]]; then
+        log "FAIL aguara:$path (missing baseline: config/agent-security/aguara-agents.baseline.json)"
+        FAIL=1
+        continue
+      fi
+      # Reviewed and justified in aguara-agents.baseline.md: SUPPLY_018 is a lexical false positive on the
+      # kernel sandbox tool's own name in sandbox_run.py. New findings still gate.
+      aguara_args+=(--baseline "$baseline")
+    fi
     run "aguara:$path" aguara "${aguara_args[@]}"
   done
 }

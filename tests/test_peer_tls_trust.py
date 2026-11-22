@@ -187,12 +187,14 @@ def _subjects(ctx):
 
 def test_fingerprinted_ca_is_loaded_from_the_verified_bytes(tmp_path, monkeypatch):
     """With PEER_CA_SHA256 set the context trusts exactly the one certificate that matched."""
+    fx.isolate_synthetic_ssl_context(monkeypatch)
     _ca_files(tmp_path, monkeypatch)
     assert _subjects(peer_tls.context_for("localhost", 8443)) == ["genuine-peer-ca"]
 
 
 def test_a_file_swapped_after_the_fingerprint_check_is_never_trusted(tmp_path, monkeypatch):
     """The CA file is replaced after verification and before the context is built: the verified bytes still win."""
+    fx.isolate_synthetic_ssl_context(monkeypatch)
     path, _ = _ca_files(tmp_path, monkeypatch)
     _, planted = fx.make_ca("planted-peer-ca")
     real = peer_tls.ssl.create_default_context

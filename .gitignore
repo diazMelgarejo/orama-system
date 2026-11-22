@@ -1,5 +1,5 @@
 __pycache__/
-*.pyc
+*.py[cod]
 *.pyo
 .pytest_cache/
 *.egg-info/
@@ -116,6 +116,8 @@ pnpm-debug.log*
 docs/distill-fable-5/traces/
 docs/distill-fable-5/runs/
 *.jsonl
+# Versioned evidence: the live pair loop ledgers hold only digests, metric names and hypotheses (no prompts).
+!docs/v2/references/biafra/live-cycle-2026-11-17/*.jsonl
 trace.zip
 *.har
 *.webm
@@ -147,6 +149,10 @@ lib/
 !scripts/lib/
 !scripts/lib/**
 !bin/orama-system/skills/openclaw-skills/codex-openclaw-agent/scripts/lib/**
+# Python bytecode is never tracked. The `!…/lib/**` negations above re-include everything below
+# them, so these rules must come after them (the last matching rule wins).
+__pycache__/
+*.py[cod]
 
 # Vite operator console (web/ subdirectory)
 node_modules/

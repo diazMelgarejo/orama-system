@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Mechanism Card",
+  "type": "object",
+  "description": "Shape only. The authority is validate_mechanism_card in bin/agents/seat_contracts.py. Semantic validation enforces normalized fixed-wall owner names, reverted agreeing with both delta and the receipt decision, and a real dry-run receipt before review or graduation. Its valid trace uses the card evaluator_digest; card_checked is true, card_id equals mechanism_id@revision, and card_fingerprint binds canonical checked content. Graduation also needs an independently recorded run pin (pinned_digest, from pin_evaluator). Unknown fields are refused here and there.",
+  "required": [
+    "version",
+    "mechanism_id",
+    "revision",
+    "parent",
+    "hypothesis",
+    "evidence_ids",
+    "inner_metric",
+    "held_out_metric",
+    "evaluator_digest",
+    "dry_run_receipt",
+    "delta",
+    "reverted",
+    "scope_record",
+    "owner_slices",
+    "status"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "mechanism_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "parent": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "hypothesis": {
+      "type": "string",
+      "minLength": 1
+    },
+    "evidence_ids": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "inner_metric": {
+      "type": "string"
+    },
+    "held_out_metric": {
+      "type": "string"
+    },
+    "evaluator_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "dry_run_receipt": {
+      "type": "object",
+      "description": "A dry cycle result. Other keys are allowed. Whether a reviewed or graduated card's receipt is bound to this card, its trace and the pin is decided by the validator, not here.",
+      "properties": {
+        "ok": {
+          "type": "boolean"
+        },
+        "retries": {
+          "type": "integer"
+        },
+        "launched": {
+          "type": "boolean"
+        },
+        "trace": {
+          "type": "object"
+        },
+        "card_checked": {
+          "type": "boolean"
+        },
+        "card_id": {
+          "type": "string"
+        },
+        "card_fingerprint": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "SHA-256 of canonical checked card content excluding status, reverted, and dry_run_receipt."
+        }
+      }
+    },
+    "delta": {
+      "type": "number"
+    },
+    "reverted": {
+      "type": "boolean"
+    },
+    "scope_record": {
+      "type": "object",
+      "properties": {
+        "authorizes": {
+          "const": "nothing"
+        }
+      },
+      "required": [
+        "authorizes"
+      ]
+    },
+    "owner_slices": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    },
+    "status": {
+      "enum": [
+        "candidate",
+        "reviewed",
+        "graduated"
+      ]
+    }
+  },
+  "additionalProperties": false
+}

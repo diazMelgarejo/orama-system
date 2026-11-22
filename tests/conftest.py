@@ -115,3 +115,12 @@ class NoResponseInteraction:
     ) -> str | None:
         """Return no response for an interaction request."""
         return None
+
+
+@pytest.fixture()
+def offline_guard(monkeypatch):
+    """Offline tests: no inherited launch approval, and the real launcher can never start."""
+    import _offline
+
+    _offline.install(monkeypatch)
+
