@@ -230,3 +230,33 @@ v2 full prepared source **3127 passed, 5 skipped**, with **217 controller tests*
 passing after integration. The strengthened exited-leader proof passed
 separately. Python 3.13 sandbox checks remain **79 passed, 18 skipped**.
 Native host/activation gates stay open; no new provider requests or serving.
+
+## Continuation — 2026-11-22
+
+PT #517's subsequent review is addressed by existing commit
+`ef504a4b284aac81a831a3d52ac12a0363c2fe0f`: accepted append-only qualifications
+retire the disputed canonical LAN guidance, and identity-migration retries
+repair interrupted rendering even when they append no rows. Both inline
+comments have fixing-SHA replies. Independent continuation verification passed
+27 focused tests and confirmed both structured and Markdown recall behavior.
+
+The next PT source increment is a nondeployable private queue storage core in
+`fae0135cffcb881820ba8a0df27e07bc9fc846cf`, with its contract ledger and evidence
+in `df0e45becfac7a1984489ba9b3a57cfda9959c73`. See
+[the PT ledger](https://github.com/diazMelgarejo/Perpetua-Tools/blob/df0e45becfac7a1984489ba9b3a57cfda9959c73/docs/coordination/private-authority-core-2026-11-22.md).
+It persists generations, validates full acquisitions under the lock, and commits
+task/audit/outbox changes together. Supported journal mode is checked inside
+every transaction; unfamiliar stores and unsupported SQLite/platforms refuse.
+The final affected suite passes 76 tests without skips on SQLite 3.53.1, and
+a noneditable wheel passes import-origin and transition checks. The first
+snapshot passed 3,737 full-suite tests with 12 skips before the final narrow
+journal correction; that count is not an exact-final-tree rerun.
+
+This advances only the storage building block. It does not complete V1-2,
+authenticate claimants, connect reservations or idempotent recovery, migrate
+legacy state, close direct writers, or install a service. Existing cleanup
+holds and live-Cline refusal remain. C7/R5(b) still requires the actual deployed
+service entrypoint and configuration/policy loader chain; those details were
+requested rather than inferred from the repository's several serving options.
+PT advisory metadata remains inaccessible (HTTP 403). Both-host qualification,
+independent review and separate operator activation remain open.
