@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 START_SH = ROOT / "start.sh"
 BASH = "/bin/bash"  # macOS ships bash 3.2: the functions must work there under set -euo pipefail
 FUNCS = (
-    "_peer_tls_frontend_dir", "_peer_tls_frontend_configured", "_peer_cert_sha256", "_peer_tls_port_args",
+    "_normalize_port", "_peer_tls_frontend_dir", "_peer_tls_frontend_configured", "_peer_cert_sha256", "_peer_tls_port_args",
     "_peer_ip_from_discovery", "_peer_outbox_remap_args", "_port_listening", "_ensure_peer_tls_frontend",
     "_run_lan_peer_probe", "_flush_lan_peer_outbox", "_run_lan_peer_inbox_check", "_peer_tls_autostart_allowed",
 )
@@ -154,6 +154,37 @@ def test_port_override_and_validation(tmp_path) -> None:
     assert ok.returncode == 0 and "--portal-port 9443" in ok.stdout
     for bad in ("0", "65536", "84x3", "-1"):
         assert _bash(tmp_path, "_peer_tls_port_args", {**base, "PEER_PORTAL_TLS_PORT": bad}).returncode != 0, bad
+
+
+def test_port_override_refuses_a_port_too_long_to_compare(tmp_path) -> None:
+    """A 24-digit port is refused; a failed numeric test must not wave it through."""
+    pem, digest = _pem(b"orama-test-cert-long-port")
+    ca = tmp_path / "ca.pem"
+    ca.write_text(pem, encoding="utf-8")
+    env = {"PEER_CA_FILE": str(ca), "PEER_CA_SHA256": digest, "PEER_PORTAL_TLS_PORT": "999999999999999999999999"}
+    assert _bash(tmp_path, "_peer_tls_port_args", env).returncode != 0
+
+
+def test_port_override_uses_the_decimal_value_of_a_zero_padded_port(tmp_path) -> None:
+    """A zero-padded port is passed on as its decimal value."""
+    pem, digest = _pem(b"orama-test-cert-padded-port")
+    ca = tmp_path / "ca.pem"
+    ca.write_text(pem, encoding="utf-8")
+    env = {"PEER_CA_FILE": str(ca), "PEER_CA_SHA256": digest, "PEER_PORTAL_TLS_PORT": "09443"}
+    ok = _bash(tmp_path, '_peer_tls_port_args; echo "${_PEER_PORT_ARGS[*]}"', env)
+    assert ok.returncode == 0 and "--portal-port 9443" in ok.stdout
+
+
+def test_remap_args_compare_zero_padded_ports_by_value(tmp_path) -> None:
+    """08002 equals 8002 for the equality guard, and padded ports reach the remap as decimals."""
+    _discovery(tmp_path)
+    env = {"PEER_PORTAL_TLS_ENABLED": "1", "PEER_CA_FILE": "/x/ca.pem"}
+    same = _bash(tmp_path, '_peer_outbox_remap_args; echo "n=${#_PEER_REMAP_ARGS[@]}"',
+                 {**env, "PORTAL_PORT": "8002", "PEER_PORTAL_TLS_PORT": "08002"})
+    assert "n=0" in same.stdout
+    padded = _bash(tmp_path, '_peer_outbox_remap_args; echo "${_PEER_REMAP_ARGS[*]}"',
+                   {**env, "PORTAL_PORT": "08002", "PEER_PORTAL_TLS_PORT": "08443"})
+    assert "--remap-port 8002:8443" in padded.stdout
 
 
 def test_helper_never_touches_trust_stores_or_the_local_portal_port() -> None:
@@ -414,6 +445,16 @@ def test_frontend_rejects_proxy_target_that_does_not_match_the_portal_port(tmp_p
     assert result.returncode != 0
     assert "proxies to port 9999" in result.stderr and "PORTAL_PORT is 8002" in result.stderr
     assert not log.exists()
+
+
+def test_frontend_matches_a_zero_padded_portal_port_to_the_proxy_target(tmp_path) -> None:
+    """PORTAL_PORT=08002 is the same port as a Caddyfile proxy target of 8002, so there is no mismatch."""
+    bindir, log = _fake_caddy(tmp_path)
+    cfg = _config_dir(tmp_path, proxy="localhost:8002")
+    result = _bash(tmp_path, '_port_listening() { return 1; }; _ensure_peer_tls_frontend',
+                   {"ORAMA_LAN_CONTROL_PLANE_DIR": str(cfg), "PORTAL_PORT": "08002", "PEER_PORTAL_TLS_PORT": "9443"},
+                   path=f"{bindir}:/usr/bin:/bin")
+    assert "proxies to port" not in result.stderr
 
 
 @pytest.mark.parametrize("port", ["0", "65536", "999999999999999999999999", "84x3", "-1"])
