@@ -406,6 +406,32 @@ def test_mac_host_localhost_assigned_to_mac():
     assert result["mac"]["ip"] == "localhost"
 
 
+@pytest.mark.parametrize("owned", [False, True])
+def test_posix_probes_cached_mac_only_when_owned(owned: bool) -> None:
+    """A model response at an old address is not proof that it is this Mac."""
+    d = _load_discover()
+    d.RUNNING_ON_WINDOWS = False
+    cached = "192.0.2.52"
+    own = "192.0.2.51"
+    win = "192.0.2.238"
+    calls: list[str] = []
+    d._mac_lan_ip = lambda: own
+    d._posix_local_ipv4s = lambda: {own, cached} if owned else {own}
+    d._load_json = lambda path: {"endpoints": {"mac": {"ip": cached}, "win": {"ip": win}}}
+    d.probe_extra_win_peers = lambda exclude: []
+
+    def probe(url: str) -> list[str] | None:
+        """Record probes while a model server answers on the cached address."""
+        calls.append(url)
+        return ["model"] if url in {f"http://{cached}:1234", f"http://{win}:1234"} else None
+
+    d.probe_models = probe
+    result = d.discover_endpoints()
+    assert (f"http://{cached}:1234" in calls) is owned
+    assert (result["mac"] is not None) is owned
+    assert result["win"]["ip"] == win
+
+
 # ── filter_endpoints_for_policy on Windows endpoint data ──────────────────────
 
 def test_filter_endpoints_for_policy_win_entry():
@@ -698,6 +724,22 @@ def test_backfill_does_not_preserve_windows_ip_as_mac(tmp_path):
     D = _run_discovery_host(tmp_path, last)
     assert D.run_discovery() == 0
     assert D.saved["endpoints"]["mac"] is None
+
+
+def test_posix_backfill_drops_cached_address_no_longer_owned(tmp_path: Path) -> None:
+    """A live Windows model must not cause rediscovery to re-save the old Mac IP."""
+    old_mac = "192.0.2.52"
+    last = {
+        "endpoints": {"mac": {"ip": old_mac, "reachable": True}, "win": {"ip": "", "reachable": False}},
+        "models": {"mac": ["old-model"], "win": []},
+    }
+    d = _run_discovery_host(
+        tmp_path, last, live={"mac": None, "win": {"ip": "192.0.2.238", "models": ["win-model"]}},
+    )
+    d.RUNNING_ON_WINDOWS = False
+    d._posix_local_ipv4s = lambda: {"192.0.2.51"}
+    assert d.run_discovery(retry_self_migration=False) == 0
+    assert d.saved["endpoints"]["mac"] is None
 
 
 def test_backfill_does_not_preserve_loopback_as_mac(tmp_path):
