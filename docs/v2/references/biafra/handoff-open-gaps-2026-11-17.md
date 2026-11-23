@@ -4,6 +4,9 @@ Written 2026-11-17 at the end of the lockstep remediation session. Companion to
 [doc 76 section 13](../../76-biafra-outer-seat-canonical-plan.md) and the
 [remediation record](lockstep-remediation-2026-11-17.md).
 
+> **Current state: read section 9 first.** Sections 0 to 8 are the 2026-11-17 plan, kept as written.
+> Since then other agents finished several lanes and the operator ruled on G6 and G11 (2026-11-23).
+
 ## 0. State you inherit
 
 | Repo | PR | Branch | Head | State |
@@ -154,3 +157,84 @@ in the sandbox), identical at base.
 Native macOS kqueue verification; hard wall-clock deadline for the W&B request; route or refuse
 `AGENT_PROVIDER=openai` with a W&B `OPENAI_BASE_URL`; redundant `lesson_371473e17ad0`; generic filler
 test docstrings; PR-carried memory vs `lesson_94a6ff5363ae`.
+
+## 9. Status update (2026-11-23)
+
+### 9.1 What changed since sections 0 to 8
+
+| Item | State |
+| --- | --- |
+| Perpetua-Tools #516 and orama #519 | Merged by the operator. |
+| G4, G7, G8, G10, the live-cycle pin check | Done on main (doc 76 section 14): `STALL_WINDOW` retained, live preflight (pin plus same-day local evidence), integer guard at 2**53, one metric registry. The generic OpenAI route refuses W&B, and the W&B request runs in a killable worker with parent-owned spend. Lanes B1 to B3 are finished. |
+| G6 | Accepted as written by the operator on 2026-11-23. |
+| G11 | The operator ruled on 2026-11-23: split by role. Wanda keeps the OpenAI client and her soul card; the Biafra seats use Cline under the shared spend gate. Doc 76 section 15 records both rulings. |
+| G1, G2 | Still blocked on Anamnesis and on published Kungfu atoms with evaluable O1 to O3. Change nothing until they exist. |
+| Live activation | Not armed. Still a separate operator act (section 9.3). |
+
+### 9.2 Open pull requests and branches (none merged; the operator decides)
+
+| Repo | Item | Head at last check | Note |
+| --- | --- | --- | --- |
+| Perpetua-Tools | PR 519, MC2 rescue and LAN peer TLS notes | `ca7a94a` | CI green. Adds the 60-day leaf lifetime and its tests. |
+| orama-system | PR 524, Mac peer discovery and TLS startup | `1ad06eee` | CI green. Backup selection filters each candidate. |
+| oramasys | PR 104, controller service rescue | `5011d2d` | Review finding already fixed on the branch. |
+| Both repos | Branch `2026-11-23-001-biafra-g6-g11-rulings` | PT `18bac0f`, orama `b91e9372` | Carries the G6 and G11 rulings. No PR opened; open one only if asked. |
+
+Other agents and the operator push to these branches while you work. Fetch before every edit
+(section 9.5) and never force-push.
+
+### 9.3 What remains, in order
+
+1. **Operator decisions:** merge or hold each item in section 9.2.
+2. **Live activation (operator only).** Needs a real task with a reproducing defect, a fixed
+   evaluator, `pin_evaluator` run first, named provider, budget, request limit and deadline, a
+   same-day read-only provider probe (effort `high` for the V4.1 models), the operator's own
+   attestation at the interactive prompt, and the gate variables set for that one command only. The
+   code now enforces the pin and the same-day evidence; it cannot do the provider probe or the
+   attestation. Stop without retry on a paid-credit demand, a rejected effort, or an existing
+   marker file.
+3. **Confirm one assumption:** the 60-day leaf lifetime was recorded as renewal agreement v2 and
+   treated as current policy. Reverting is one constant, `LEAF_VALIDITY_DAYS`, and the tests derive
+   from it.
+4. **Verify what is still unverified:**
+   - the PowerShell form of the stdin bearer curl command (only curl 8.5.0 on Linux was tested);
+   - `-no-CAstore` on LibreSSL, the macOS system `openssl` (only OpenSSL 3.0.13 was tested);
+   - a frozen-lockfile `pnpm install` for the `qs` pin in `packages/alphaclaw-mcp`;
+   - the kqueue exit probe and the 18 macOS-only sandbox tests, never run natively;
+   - Windows, for the sandbox and the discovery paths.
+5. **Small carry-overs:** `lesson_371473e17ad0` is a redundant shorter correction (its `supersedes`
+   holds one id); older test helpers have generic filler docstrings; PR-carried memory overrode
+   `lesson_94a6ff5363ae` for the 2026-11-17 consolidation only.
+
+### 9.4 Known environment-only failures (not caused by this work)
+
+- orama full suite in the cloud container: 24 failures that pass in CI. Thirteen in
+  `test_spawn_dispatch_governance.py` and `test_dispatch_race.py` and nine in
+  `test_portal_dispatch_errors.py` come from the spawn guard refusing an editable install owned by
+  another checkout. Two in `test_markdown_lint_gate.py` come from `markdownlint-cli2@0.17.2` not
+  being installed.
+- Perpetua-Tools: 5 failures where Git state discovery fails in the sandbox.
+- A new failure outside these sets is yours.
+
+### 9.5 Working practices earned this session
+
+- **Do not trust a bot's claim; test it.** One review said `s_client -CAfile` leaves the default
+  trust directory active. A scratch CA pair showed it does not, while `openssl verify -CAfile` does.
+  Separately, the 60-day leaf change broke two tests that hardcoded 30 days and had never run in CI.
+- **Fetch with an explicit refspec**, for example
+  `git fetch origin +refs/heads/X:refs/remotes/origin/X`, then `git merge --ff-only` before you edit.
+  A plain `git fetch origin X` leaves no remote-tracking ref. For the same reason, after
+  `git push origin HEAD:X` the stop hook can warn of an unpushed commit even though the remote has
+  it; check the remote, then run the same fetch to clear the warning.
+- **Memory is append-only.** Use `.agent/tools/learn.py` and `.agent/tools/correct_lesson.py`; never
+  hand-edit JSONL. Keep literal temp paths and IP literals out of tracked text, because the
+  hygiene gate scans the committed range (`--address-diff-base` and `--address-diff-head`).
+- **Lint with the pinned tool:** `npx markdownlint-cli2@0.17.2`. Working-memory files under
+  `.agent/memory/working/` are excluded from the markdown lint workflow.
+- **CI test jobs wait on the hygiene job.** A failing hygiene gate hides test failures, so run the
+  tests locally before you push.
+- **Edit each file once, commit in logical batches, push once per repo,** and reply to each bot
+  thread as `@Bot we fixed this in commit SHA, description`, naming the commit that really fixed it.
+- **The platform re-adds a footer** after the attribution lines when a PR description is edited.
+- **Worktrees in the cloud container are ephemeral.** Commit and push early
+  (`lesson_d93efb48bb52`).
