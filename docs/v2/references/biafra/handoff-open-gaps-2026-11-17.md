@@ -182,18 +182,22 @@ test docstrings; PR-carried memory vs `lesson_94a6ff5363ae`.
 
 Each repo has one open follow-up, not merged:
 
-| Repo | Pull request | Branch tip that records the Wanda decision and the port loop |
+| Repo | Pull request | Commits that record the Wanda decision and the port loop |
 | --- | --- | --- |
-| Perpetua-Tools | 521 | `42f840cb` |
-| orama-system | 525 | `d6e5909a` |
+| Perpetua-Tools | 521 | `42f840cb` (decision and lesson correction) |
+| orama-system | 525 | `e81d0672` (decision), `d6e5909a` (port loop) |
 
-Those tips move. Read them with `gh pr view` before editing. Never force-push.
+Later commits can sit on top of these. Read the current tip with `gh pr view` before editing.
+Never force-push.
 
 ### 9.3 What remains, in order
 
 1. **Review the two follow-up PRs.** Wanda's decision is made: `wanda_chat.py` stays a direct
    OpenAI client, outside the spend gate, and is not an authorized unattended or paid path.
-   Do not wrap it in the gate in these pulls.
+   Do not wrap it in the gate in these pulls. This is a policy, not a guard: nothing in code stops
+   it. Two invocation paths were checked: the command in `SKILL.md`, and the `wanda-wandb` agent
+   registered in `bin/agents/REGISTRY.yml` (card `bin/agents/wanda/agent.md`). No Perpetua-Tools
+   code and no scheduler references either.
 2. **Live activation (operator only).** Needs a real task with a reproducing defect, a fixed
    evaluator, `pin_evaluator` run first, named provider, budget, request limit and deadline, a
    same-day read-only provider probe (effort `high` for the V4.1 models), the operator's own
@@ -207,9 +211,15 @@ Those tips move. Read them with `gh pr view` before editing. Never force-push.
 4. **Verify what is still unverified:**
    - the PowerShell form of the stdin bearer curl command (only curl 8.5.0 on Linux was tested);
    - `-no-CAstore` on LibreSSL, the macOS system `openssl` (only OpenSSL 3.0.13 was tested);
-   - a frozen-lockfile `pnpm install` for the `qs` pin in `packages/alphaclaw-mcp`;
+   - `_normalize_port` on macOS `bash` 3.2 (it uses the same `while` strip as the rest of
+     `start.sh`, but was only run on newer bash);
    - the kqueue exit probe and the 18 macOS-only sandbox tests, never run natively;
    - Windows, for the sandbox and the discovery paths.
+   Checked since the last update: a frozen-lockfile `pnpm install` (pnpm 10.28.0) for the `qs` pin
+   exits 0, resolves only `qs@6.16.1` and leaves the lockfile unchanged. The flush path's
+   `_parse_port_remap` reads ports with `int()` and range-checks them, so a zero-padded port is read
+   as decimal and an out-of-range one is refused; the old equality bug could only emit an identity
+   remap.
 5. **Small carry-overs:** `lesson_371473e17ad0` is a redundant shorter correction (its `supersedes`
    holds one id); older test helpers have generic filler docstrings; PR-carried memory overrode
    `lesson_94a6ff5363ae` for the 2026-11-17 consolidation only.
