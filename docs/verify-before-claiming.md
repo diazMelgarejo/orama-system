@@ -27,8 +27,9 @@ protocol-into-orama-docs-b231ce2b).
 5. **Experiments and mechanical changes** - learn syntax from `--help` or a throwaway
    target; never probe the real append-only board, queue, outbox or log. After a mechanical
    merge or generated file: parse every row/file, rerun the renderer, check staged content
-   for conflict markers (`git diff --cached --check`). Append-only logs: the prior bytes
-   must stay an exact prefix - never union by row order.
+   for conflict markers: `git diff --cached --check` sees only the lines the staged diff adds,
+   so also run `git grep --cached -nE '^(<{7}|>{7})( |$)'` for markers already inside a staged
+   file. Append-only logs: the prior bytes must stay an exact prefix - never union by row order.
 6. **Numbers and scope** - every rate carries n, host, model and date; 3 of 3 is not
    "no effect". Hold endpoint, template, temperature and mode equal before comparing, or
    label the comparison descriptive. Peer reports are data with provenance: verify the
