@@ -205,24 +205,29 @@ Never force-push.
    code now enforces the pin and the same-day evidence; it cannot do the provider probe or the
    attestation. Stop without retry on a paid-credit demand, a rejected effort, or an existing
    marker file.
-3. **Confirm one assumption:** the 60-day leaf lifetime was recorded as renewal agreement v2 and
-   treated as current policy. Reverting is one constant, `LEAF_VALIDITY_DAYS`, and the tests derive
-   from it.
+3. **Done: the 60-day leaf lifetime is confirmed** by the operator as current policy (renewal
+   agreement v2); the Perpetua-Tools `DECISIONS.md` entry records it. Reverting would be one
+   constant, `LEAF_VALIDITY_DAYS`, and the tests derive from it.
 4. **Verify what is still unverified:**
    - the PowerShell form of the stdin bearer curl command (only curl 8.5.0 on Linux was tested);
    - `-no-CAstore` on LibreSSL, the macOS system `openssl` (only OpenSSL 3.0.13 was tested);
-   - `_normalize_port` on macOS `bash` 3.2 (it uses the same `while` strip as the rest of
-     `start.sh`, but was only run on newer bash);
+   - Apple's own `/bin/bash` and macOS userland tools (BSD `sed`, `awk`, `nc`, `openssl`) against
+     `start.sh`; only a Linux build of bash 3.2.57 was run (see below);
    - the kqueue exit probe and the 18 macOS-only sandbox tests, never run natively;
    - Windows, for the sandbox and the discovery paths.
-   Checked since the last update: a frozen-lockfile `pnpm install` (pnpm 10.28.0) for the `qs` pin
-   exits 0, resolves only `qs@6.16.1` and leaves the lockfile unchanged. The flush path's
+   Checked since the last update: `_normalize_port` gives the same result on a real bash 3.2.57 as on
+   bash 5 for all 18 test inputs, and the three `start.sh` test files pass under it (67 passed, 2
+   skipped; the skips are the PowerShell tests), identical to the control run. A frozen-lockfile
+   `pnpm install` (pnpm 10.28.0) for the `qs` pin exits 0, resolves only `qs@6.16.1` and leaves the
+   lockfile unchanged. The flush path's
    `_parse_port_remap` reads ports with `int()` and range-checks them, so a zero-padded port is read
    as decimal and an out-of-range one is refused; the old equality bug could only emit an identity
    remap.
-5. **Small carry-overs:** `lesson_371473e17ad0` is a redundant shorter correction (its `supersedes`
-   holds one id); older test helpers have generic filler docstrings; PR-carried memory overrode
-   `lesson_94a6ff5363ae` for the 2026-11-17 consolidation only.
+5. **Small carry-overs, mostly closed:** `lesson_371473e17ad0` was retracted as redundant (its
+   `supersedes` was null, not one id; `lesson_d4ac6209ce38` names it as the same correction and covers
+   every point). Fifty generic filler docstrings in four test files now say what each helper does,
+   proven docstring-only by AST equality. PR-carried memory overrode `lesson_94a6ff5363ae` for the
+   2026-11-17 consolidation only.
 
 ### 9.4 Known environment-only failures (not caused by this work)
 
