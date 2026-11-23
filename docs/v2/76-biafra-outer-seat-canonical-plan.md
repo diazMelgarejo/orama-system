@@ -50,7 +50,7 @@ that cannot encode ownership must not be mistaken for safety.
 | G3 | The evaluator digest is computed by `evaluator_digest()`, and `validate_mechanism_card` did not compare a card's digest with its dry-run receipt. Accepted before this change: (1) a graduated card whose receipt has no `trace`; (2) a graduated card whose receipt `trace.evaluator_digest` differs from the card's; (3) a graduated card whose digest was never pinned by anything. | Resolved 2026-11-17, decided by the operator's request in this change. The digest covers exactly the verifier files given to `evaluator_digest(paths)`, bound by file name and bytes. `pin_evaluator(pin_path, verifier_paths)` (operator or gate, at run start) writes `{version, evaluator_digest, covers}` once with exclusive create and, if the pin exists, returns it only when the recomputed digest and covered names are identical, else `ValueError`; `read_pin` validates and returns the digest. `validate_mechanism_card(card, pinned_digest=None)`: reviewed and graduated need a receipt `trace` that is a valid trace entry whose `evaluator_digest` equals the card's and whose `metric_after - metric_before` equals the card's `delta` (tolerance 1e-9); graduated requires `pinned_digest`; a given `pinned_digest` must equal the card's digest. All three cases are refused. |
 | G4 | Stall window defaults to 3 consecutive reverts. | Operator to confirm or change. |
 | G5 | The 2026-06-05 rule that `oramasys/*` is reference-only versus later direct PRs there. | Not touched here; no `oramasys/*` repository is mutated. |
-| G6 | Persona elaboration beyond the operator's wording. | Draft, for review. One boundary was added: Biafra questions the work's assumptions and does not diagnose the person. |
+| G6 | Persona elaboration beyond the operator's wording. | Draft, for review. One boundary was added: Biafra questions the work's assumptions and does not diagnose the person. Later decision (2026-11-23): accepted as written; see section 15. |
 | G8 | `_finite` accepts integers up to about 1.8e308, including the band above 2**53 where conversion to float loses precision. A transport that serialises the raw integer (JSON can carry 10**400) may accept a value this validator refuses. | Assumption recorded; the docstring states it. Operator to confirm that every consumer computes in doubles. |
 | G9 | The fixed-wall card check runs only when a caller passes `mechanism_card`. A caller that omits it is not checked. | Resolved 2026-11-17, decided by the operator's request in this change: no card, no promotion. Cycles stay usable without a card, because a proposal turn produces the card afterwards, and report `card_checked: false`. When a valid card is passed, `dry_cycle` and `live_cycle` results also carry `card_id` (`<mechanism_id>@<revision>`). A reviewed or graduated card needs a receipt with `card_checked: true` and a `card_id` equal to its own, so promotion follows a dry run that checked this card, fixed walls included. `dry_cycle` receives measured values; the proposing agent must call `validate_mechanism_card` before measuring. |
 | G7 | Provider state for the live cycle (W&B model order and effort acceptance, BigModel balance) was last seen on 2026-11-12. | Must be re-probed before arming. |
@@ -145,6 +145,7 @@ four tasks, not a benchmark.
 
 Wanda's soul card lists the Cline CLI as forbidden for the W&B route, while `lesson_8d873e4e2f73`
 routes W&B DeepSeek through Cline. Which governs is the operator's decision; neither is edited here.
+Later decision (2026-11-23): the route is split by role; see section 15.
 
 ## 9. Pair dogfood, free dry run (2026-11-17)
 
@@ -345,3 +346,21 @@ The [deferred-failure catalogue](references/biafra/unrelated-failure-catalogue-2
 classifies every recorded unrelated failure and warning, with baseline evidence
 and owner-specific next steps. Publication does not waive the seven current
 baseline-reproducible failures, close G1/G2/G6/G11 or authorize a merge.
+
+## 15. Operator rulings on G6 and G11 (2026-11-23)
+
+The operator ruled on both gaps on 2026-11-23. These are later decisions: sections 4, 8.4, 13 and
+14 keep their historical wording, and where they call G6 or G11 open, this section applies.
+
+| Gap | Ruling |
+| --- | --- |
+| G6 | The outer-seat persona in `bin/agents/metaresearch-outer/SOUL.md` is accepted as written, including the added boundary: Biafra questions the work's assumptions and does not diagnose the person. |
+| G11 | The W&B route is split by role. Wanda keeps the OpenAI client and Weave, and her soul card stands. The Biafra seats use Cline through `launch_cline_wandb.py` (`lesson_8d873e4e2f73`), and only under the shared spend gate. |
+
+Neither earlier record is invalid. The soul card's prohibition binds Wanda, and the lesson
+describes the Biafra route. Wanda's soul card now states that scope. The launcher has no spend gate
+of its own, so any new Cline caller must go through `bin/agents/spend_guard.py`, as the live cycle
+does. The Perpetua-Tools record is its `DECISIONS.md` entries of 2026-11-23.
+
+Nothing here arms a live cycle, enables serving, approves a paid model or authorizes a merge. G1
+and G2 stay dependency-blocked, and arming one bounded live cycle remains a separate operator act.
