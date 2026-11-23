@@ -868,9 +868,15 @@ _ensure_peer_tls_frontend() {
       _info "lan-peer" "peer HTTPS front end management is disabled (ORAMA_PEER_TLS_FRONTEND=0)"
       return 0 ;;
   esac
-  local dir cfg port admin proxy i
+  local dir cfg port port_number admin proxy i
   dir="$(_peer_tls_frontend_dir)"; cfg="$dir/Caddyfile"; port="${PEER_PORTAL_TLS_PORT:-8443}"
   case "$port" in ''|*[!0-9]*) _warn "lan-peer" "PEER_PORTAL_TLS_PORT must be a TCP port between 1 and 65535"; return 1 ;; esac
+  port_number="$port"
+  while [ "${port_number#0}" != "$port_number" ]; do port_number="${port_number#0}"; done
+  if [ -z "$port_number" ] || [ "${#port_number}" -gt 5 ] || [ "$port_number" -gt 65535 ]; then
+    _warn "lan-peer" "PEER_PORTAL_TLS_PORT must be a TCP port between 1 and 65535"
+    return 1
+  fi
   if _port_listening "$port"; then
     _info "lan-peer" "peer HTTPS front end already listening on port $port; not starting another (to change it, stop it explicitly first)"
     return 0
@@ -886,6 +892,7 @@ _ensure_peer_tls_frontend() {
   proxy="$(sed -n 's/.*reverse_proxy[[:space:]]\{1,\}[^:[:space:]]*:\([0-9]\{1,5\}\).*/\1/p' "$cfg" | head -n1)"
   if [ -n "$proxy" ] && [ "$proxy" != "${PORTAL_PORT:-8002}" ]; then
     _warn "lan-peer" "the Caddyfile proxies to port $proxy but PORTAL_PORT is ${PORTAL_PORT:-8002}; peers would reach the wrong service"
+    return 1
   fi
   admin="$(sed -n 's/^[[:space:]]*admin[[:space:]]\{1,\}[^:[:space:]]*:\([0-9]\{1,5\}\).*/\1/p' "$cfg" | head -n1)"
   admin="${admin:-2019}"

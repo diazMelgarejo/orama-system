@@ -406,12 +406,45 @@ def test_frontend_already_listening_is_not_restarted(tmp_path) -> None:
     assert not log.exists() or "start" not in log.read_text(encoding="utf-8")
 
 
-def test_frontend_warns_when_the_proxy_target_does_not_match_the_portal_port(tmp_path) -> None:
-    """A Caddyfile that proxies to another port than PORTAL_PORT is flagged before anything starts."""
-    bindir, _ = _fake_caddy(tmp_path)
+def test_frontend_rejects_proxy_target_that_does_not_match_the_portal_port(tmp_path) -> None:
+    """A mismatched target fails before validation or start, even if readiness would succeed."""
+    bindir, log = _fake_caddy(tmp_path)
     cfg = _config_dir(tmp_path, proxy="localhost:9999")
-    result = _bash(tmp_path, "_ensure_peer_tls_frontend", {"ORAMA_LAN_CONTROL_PLANE_DIR": str(cfg), "PORTAL_PORT": "8002", "PEER_PORTAL_TLS_PORT": str(_free_port())}, path=f"{bindir}:/usr/bin:/bin")
+    result = _bash(tmp_path, '_port_listening() { return 1; }; _ensure_peer_tls_frontend', {"ORAMA_LAN_CONTROL_PLANE_DIR": str(cfg), "PORTAL_PORT": "8002", "PEER_PORTAL_TLS_PORT": "9443"}, path=f"{bindir}:/usr/bin:/bin")
+    assert result.returncode != 0
     assert "proxies to port 9999" in result.stderr and "PORTAL_PORT is 8002" in result.stderr
+    assert not log.exists()
+
+
+@pytest.mark.parametrize("port", ["0", "65536", "999999999999999999999999", "84x3", "-1"])
+def test_frontend_rejects_invalid_tls_port_before_probing_or_starting(tmp_path: Path, port: str) -> None:
+    """Reject invalid ports without querying or starting a listener."""
+    bindir, log = _fake_caddy(tmp_path)
+    cfg = _config_dir(tmp_path)
+    result = _bash(tmp_path, '_port_listening() { echo PROBED; return 1; }; _ensure_peer_tls_frontend',
+                   {"ORAMA_LAN_CONTROL_PLANE_DIR": str(cfg), "PEER_PORTAL_TLS_PORT": port}, path=f"{bindir}:/usr/bin:/bin")
+    assert result.returncode != 0 and "between 1 and 65535" in result.stderr
+    assert "PROBED" not in result.stdout and not log.exists()
+
+
+@pytest.mark.parametrize("port", ["1", "65535"])
+def test_frontend_accepts_tls_port_boundaries_without_restarting(tmp_path: Path, port: str) -> None:
+    """Leave an existing listener alone at either inclusive port boundary."""
+    bindir, log = _fake_caddy(tmp_path)
+    result = _bash(tmp_path, '_port_listening() { return 0; }; _ensure_peer_tls_frontend',
+                   {"PEER_PORTAL_TLS_PORT": port}, path=f"{bindir}:/usr/bin:/bin")
+    assert result.returncode == 0 and "already listening" in result.stdout
+    assert not log.exists()
+
+
+def test_frontend_does_not_restart_existing_listener_with_mismatched_config(tmp_path: Path) -> None:
+    """Leave an existing listener untouched even if the on-disk config differs."""
+    bindir, log = _fake_caddy(tmp_path)
+    cfg = _config_dir(tmp_path, proxy="localhost:9999")
+    result = _bash(tmp_path, '_port_listening() { return 0; }; _ensure_peer_tls_frontend',
+                   {"ORAMA_LAN_CONTROL_PLANE_DIR": str(cfg), "PEER_PORTAL_TLS_PORT": "9443"}, path=f"{bindir}:/usr/bin:/bin")
+    assert result.returncode == 0 and "already listening" in result.stdout
+    assert not log.exists()
 
 
 def test_portal_stays_on_loopback_only_when_the_front_end_is_configured(tmp_path) -> None:
