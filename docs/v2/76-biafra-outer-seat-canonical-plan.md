@@ -355,12 +355,21 @@ The operator ruled on both gaps on 2026-11-23. These are later decisions: sectio
 | Gap | Ruling |
 | --- | --- |
 | G6 | The outer-seat persona in `bin/agents/metaresearch-outer/SOUL.md` is accepted as written, including the added boundary: Biafra questions the work's assumptions and does not diagnose the person. |
-| G11 | The W&B route is split by role. Wanda keeps the OpenAI client and Weave, and her soul card stands. The Biafra seats use Cline through `launch_cline_wandb.py` (`lesson_8d873e4e2f73`), and only under the shared spend gate. |
+| G11 | The W&B route is split by role. Wanda keeps the OpenAI client and Weave, and her soul card stands. The Biafra seats are designated to use Cline through `launch_cline_wandb.py` (`lesson_8d873e4e2f73`) under the shared spend gate, once the launcher can bound total output and request count. |
 
 Neither earlier record is invalid. The soul card's prohibition binds Wanda, and the lesson
-describes the Biafra route. Wanda's soul card now states that scope. The launcher has no spend gate
-of its own, so any new Cline caller must go through `bin/agents/spend_guard.py`, as the live cycle
-does. The Perpetua-Tools record is its `DECISIONS.md` entries of 2026-11-23.
+describes the Biafra route. Wanda's soul card states that scope.
+
+**What runs today.** `live_cycle()` refuses with `launcher-output-bound-unsupported`, and the legacy
+`run_program` path with `legacy-live-path-disabled`, so no Cline launch happens yet. The launcher has
+no spend gate of its own, so any Cline caller must go through `bin/agents/spend_guard.py`, as the
+live cycle is designed to. Wanda's W&B calls are made directly with the OpenAI client by
+`bin/orama-system/skills/wanda-wandb/scripts/wanda_chat.py`. That script does not call the spend
+gate, and whether it should is an operator decision. The "generic OpenAI route refuses W&B" rule in
+section 14 belongs to Perpetua-Tools' `.agent/harness/llm.py`, a different consumer, so it does not
+conflict with Wanda's path. `tests/test_biafra_designation_docs.py` keeps this wording tied to the
+launcher's refusal. The Perpetua-Tools record is its `DECISIONS.md` entries of 2026-11-23, with a
+correction of the same date.
 
 Nothing here arms a live cycle, enables serving, approves a paid model or authorizes a merge. G1
 and G2 stay dependency-blocked, and arming one bounded live cycle remains a separate operator act.

@@ -167,25 +167,27 @@ test docstrings; PR-carried memory vs `lesson_94a6ff5363ae`.
 | Perpetua-Tools #516 and orama #519 | Merged by the operator. |
 | G4, G7, G8, G10, the live-cycle pin check | Done on main (doc 76 section 14): `STALL_WINDOW` retained, live preflight (pin plus same-day local evidence), integer guard at 2**53, one metric registry. The generic OpenAI route refuses W&B, and the W&B request runs in a killable worker with parent-owned spend. Lanes B1 to B3 are finished. |
 | G6 | Accepted as written by the operator on 2026-11-23. |
-| G11 | The operator ruled on 2026-11-23: split by role. Wanda keeps the OpenAI client and her soul card; the Biafra seats use Cline under the shared spend gate. Doc 76 section 15 records both rulings. |
+| G11 | The operator ruled on 2026-11-23: split by role. Wanda keeps the OpenAI client and her soul card; the Biafra seats are designated to use Cline under the shared spend gate once the launcher can bound its output (`live_cycle()` refuses today). Doc 76 section 15 records both rulings. |
 | G1, G2 | Still blocked on Anamnesis and on published Kungfu atoms with evaluable O1 to O3. Change nothing until they exist. |
 | Live activation | Not armed. Still a separate operator act (section 9.3). |
 
-### 9.2 Open pull requests and branches (none merged; the operator decides)
+### 9.2 Pull requests (all merged; as of 2026-11-23)
 
-| Repo | Item | Head at last check | Note |
-| --- | --- | --- | --- |
-| Perpetua-Tools | PR 519, MC2 rescue and LAN peer TLS notes | `ca7a94a` | CI green. Adds the 60-day leaf lifetime and its tests. |
-| orama-system | PR 524, Mac peer discovery and TLS startup | `1ad06eee` | CI green. Backup selection filters each candidate. |
-| oramasys | PR 104, controller service rescue | `5011d2d` | Review finding already fixed on the branch. |
-| Both repos | Branch `2026-11-23-001-biafra-g6-g11-rulings` | PT `18bac0f`, orama `b91e9372` | Carries the G6 and G11 rulings. No PR opened; open one only if asked. |
+| Repo | Pull request | Merge commit |
+| --- | --- | --- |
+| Perpetua-Tools | 519, MC2 rescue and LAN peer TLS notes | `97522f2` |
+| Perpetua-Tools | 520, the G6 and G11 rulings | `2045bf9` |
+| orama-system | 524, Mac peer discovery, TLS startup, the rulings and this handoff | `4caaae20` |
+| oramasys | 104, controller service rescue | `4b344626` |
 
-Other agents and the operator push to these branches while you work. Fetch before every edit
-(section 9.5) and never force-push.
+Each repo has one follow-up PR for the G11 wording and the port fix: Perpetua-Tools 521 and an
+orama-system follow-up. Moving heads go stale in minutes, so read live state with `gh pr list` and
+fetch `main` before every edit (section 9.5). Never force-push.
 
 ### 9.3 What remains, in order
 
-1. **Operator decisions:** merge or hold each item in section 9.2.
+1. **Operator decisions:** whether Wanda's W&B calls should go through the spend gate (`wanda_chat.py`
+   calls the provider directly), and review of the two follow-up PRs.
 2. **Live activation (operator only).** Needs a real task with a reproducing defect, a fixed
    evaluator, `pin_evaluator` run first, named provider, budget, request limit and deadline, a
    same-day read-only provider probe (effort `high` for the V4.1 models), the operator's own
