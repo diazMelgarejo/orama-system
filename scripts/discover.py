@@ -1116,13 +1116,30 @@ def _has_endpoint(ep) -> bool:
 def _load_tier2():
     """Load tier2 (last discovery state)."""
     return _state_to_ep(_load_json(LAST_DISCOVERY_JSON))
-def _load_tier3():
-    """Load tier3: the newest backup that still holds an endpoint."""
-    if not BACKUPS_DIR.exists(): return None
+
+
+def _load_tier3(run_win_ips: set[str] | None = None):
+    """Load tier3: newest backup that still holds an endpoint after the platform filter.
+
+    Apply the same Windows/Mac filter the recovery loop and ``--restore latest`` use
+    to each candidate before ``_has_endpoint`` accepts it. Otherwise a newest
+    backup that only holds a dropped Mac hides an older usable Windows (or Mac)
+    endpoint and recovery never sees it.
+    """
+    if not BACKUPS_DIR.exists():
+        return None
     for b in sorted(BACKUPS_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
         ep = _state_to_ep(_load_json(b))
-        if _has_endpoint(ep): return ep
+        if ep:
+            if RUNNING_ON_WINDOWS:
+                ep, _ = _drop_windows_mac(ep, run_win_ips)
+            else:
+                ep, _ = _drop_nonlocal_mac(ep)
+        if _has_endpoint(ep):
+            return ep
     return None
+
+
 def _load_tier4(profile="lan-full"):
     """Load tier4."""
     return _state_to_ep(_load_json(PROFILES_DIR / f"{profile}.json"))
@@ -1271,7 +1288,7 @@ def run_discovery(
         if not endpoints["mac"] and not endpoints["win"]:
             print("⚠️  No live endpoints — trying recovery tiers...", file=sys.stderr)
             for fn, t, name in [(_load_tier2, 2, "last known good"),
-                                  (_load_tier3, 3, "newest backup"),
+                                  (lambda: _load_tier3(run_win_ips), 3, "newest backup"),
                                   (lambda: _load_tier4("lan-full"), 4, "lan-full profile")]:
                 ep = fn()
                 if ep:  # the platform filter can empty a tier (for example a dropped Mac)
@@ -1396,18 +1413,37 @@ def _cmd_status():
 def _cmd_restore(target: str):
     """Cmd restore."""
     if target == "latest":
+        # ``_load_tier3`` already applies the platform filter per backup.
+        if not BACKUPS_DIR.exists() or not any(BACKUPS_DIR.glob("*.json")):
+            print(f"Nothing found for '{target}'.")
+            return
         ep = _load_tier3()
+        if not _has_endpoint(ep):
+            print("Nothing safe to restore.")
+            return
     elif target.startswith("profile:"):
         ep = _load_tier4(target.split(":", 1)[1])
+        if not ep:
+            print(f"Nothing found for '{target}'.")
+            return
+        if RUNNING_ON_WINDOWS:
+            ep, _ = _drop_windows_mac(ep)
+        else:
+            ep, _ = _drop_nonlocal_mac(ep)
+        if not _has_endpoint(ep):
+            print("Nothing safe to restore.")
+            return
     else:
         matches = sorted(BACKUPS_DIR.glob(f"{target}*.json")) if BACKUPS_DIR.exists() else []
         ep = _state_to_ep(_load_json(matches[-1])) if matches else None
-    if not ep: print(f"Nothing found for '{target}'."); return
-    if RUNNING_ON_WINDOWS:
-        ep, _ = _drop_windows_mac(ep)
-    else:
-        ep, _ = _drop_nonlocal_mac(ep)
-        if not ep.get("mac") and not ep.get("win"):
+        if not ep:
+            print(f"Nothing found for '{target}'.")
+            return
+        if RUNNING_ON_WINDOWS:
+            ep, _ = _drop_windows_mac(ep)
+        else:
+            ep, _ = _drop_nonlocal_mac(ep)
+        if not _has_endpoint(ep):
             print("Nothing safe to restore.")
             return
     ep = filter_endpoints_for_policy(ep)

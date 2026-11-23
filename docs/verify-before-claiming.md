@@ -28,8 +28,12 @@ protocol-into-orama-docs-b231ce2b).
    target; never probe the real append-only board, queue, outbox or log. After a mechanical
    merge or generated file: parse every row/file, rerun the renderer, check staged content
    for conflict markers: `git diff --cached --check` sees only the lines the staged diff adds,
-   so also run `git grep --cached -nE '^(<{7}|>{7})( |$)'` for markers already inside a staged
-   file. Append-only logs: the prior bytes must stay an exact prefix - never union by row order.
+   so also scan the index (tracked staged blob contents) for hard markers with
+   `git grep --cached -nE '^(<{7}|>{7}|\|{7})( |$)'` (opening, closing, and diff3 ancestor).
+   Treat a bare `=======` line as a conflict separator only in an indexed file that already
+   matches that hard-marker pattern — an unanchored `^={7}` grep across the index also
+   matches Markdown setext heading underlines. Append-only logs: the prior bytes must stay
+   an exact prefix - never union by row order.
 6. **Numbers and scope** - every rate carries n, host, model and date; 3 of 3 is not
    "no effect". Hold endpoint, template, temperature and mode equal before comparing, or
    label the comparison descriptive. Peer reports are data with provenance: verify the
