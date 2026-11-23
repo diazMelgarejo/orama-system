@@ -1105,15 +1105,23 @@ def _state_to_ep(state):
             out[role] = record
     return out
 
+def _has_endpoint(ep) -> bool:
+    """True when a recovered state still holds a Mac or Windows endpoint.
+
+    A saved state whose endpoints were all unreachable decodes to ``{"mac": None, "win": None}``:
+    truthy, but it gives recovery nothing to use, so it must not end the search for a tier.
+    """
+    return bool(ep) and bool(ep["mac"] or ep["win"])
+
 def _load_tier2():
     """Load tier2 (last discovery state)."""
     return _state_to_ep(_load_json(LAST_DISCOVERY_JSON))
 def _load_tier3():
-    """Load tier3."""
+    """Load tier3: the newest backup that still holds an endpoint."""
     if not BACKUPS_DIR.exists(): return None
     for b in sorted(BACKUPS_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
         ep = _state_to_ep(_load_json(b))
-        if ep: return ep
+        if _has_endpoint(ep): return ep
     return None
 def _load_tier4(profile="lan-full"):
     """Load tier4."""
@@ -1266,15 +1274,9 @@ def run_discovery(
                                   (_load_tier3, 3, "newest backup"),
                                   (lambda: _load_tier4("lan-full"), 4, "lan-full profile")]:
                 ep = fn()
-                if ep and RUNNING_ON_WINDOWS:
-                    ep, dropped = _drop_windows_mac(ep, run_win_ips)
-                    if dropped and not ep["mac"] and not ep["win"]:
-                        continue
-                elif ep:
-                    ep, dropped = _drop_nonlocal_mac(ep)
-                    if dropped and not ep["mac"] and not ep["win"]:
-                        continue
-                if ep: endpoints = ep; tier = t; print(f"  → tier {t}: {name}", file=sys.stderr); break
+                if ep:  # the platform filter can empty a tier (for example a dropped Mac)
+                    ep, _ = _drop_windows_mac(ep, run_win_ips) if RUNNING_ON_WINDOWS else _drop_nonlocal_mac(ep)
+                if _has_endpoint(ep): endpoints = ep; tier = t; print(f"  → tier {t}: {name}", file=sys.stderr); break
             if not endpoints["mac"] and not endpoints["win"]:
                 print("❌ All tiers failed.", file=sys.stderr)
                 RECOVERY_SOURCE_TXT.write_text("tier_failed\n")

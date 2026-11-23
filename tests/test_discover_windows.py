@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import sys
 from pathlib import Path
 from unittest.mock import patch, MagicMock
@@ -791,6 +792,43 @@ def test_recovery_tier_with_only_windows_mac_fails(tmp_path):
     tier2 = {"mac": {"ip": WIN2_NET_IP, "models": PEER_MAC_MODELS}, "win": None}
     D = _run_discovery_host(tmp_path, None, tier2=tier2, live={"mac": None, "win": None})
     assert D.run_discovery() == 1
+
+
+def test_recovery_skips_a_tier_that_holds_no_endpoint(tmp_path):
+    """Check that a tier with nothing reachable advances to the next tier instead of ending recovery."""
+    D = _run_discovery_host(tmp_path, None, live={"mac": None, "win": None})
+    D._load_tier3 = lambda: {"mac": None, "win": None}
+    D._load_tier4 = lambda profile="lan-full": {"mac": None, "win": {"ip": "localhost", "models": ["m"]}}
+    assert D.run_discovery() == 0
+    assert D.saved["tier"] == 4
+
+
+def test_posix_recovery_skips_a_tier_that_holds_no_endpoint(tmp_path: Path) -> None:
+    """Check that the POSIX path also advances past an empty tier to a tier with a local Mac."""
+    D = _run_discovery_host(tmp_path, None, tier2={"mac": None, "win": None}, live={"mac": None, "win": None})
+    D.RUNNING_ON_WINDOWS = False
+    D._posix_local_ipv4s = lambda: {"192.0.2.51"}
+    D._load_tier4 = lambda profile="lan-full": {"mac": {"ip": "192.0.2.51", "models": PEER_MAC_MODELS}, "win": None}
+    assert D.run_discovery(retry_self_migration=False) == 0
+    assert D.saved["tier"] == 4
+    assert D.saved["endpoints"]["mac"]["ip"] == "192.0.2.51"
+
+
+def test_newest_backup_without_an_endpoint_does_not_hide_an_older_one(tmp_path: Path) -> None:
+    """Check that the newest backup is the newest one that still holds an endpoint."""
+    D = _load_discover()
+    D.BACKUPS_DIR = tmp_path
+    nothing = {"endpoints": {"mac": {"ip": "", "reachable": False}, "win": {"ip": "", "reachable": False}}}
+    usable = {
+        "endpoints": {"mac": {"ip": "", "reachable": False}, "win": {"ip": "localhost", "reachable": True}},
+        "models": {"win": ["m"]},
+    }
+    older, newer = tmp_path / "1.json", tmp_path / "2.json"
+    older.write_text(json.dumps(usable))
+    newer.write_text(json.dumps(nothing))
+    os.utime(older, (1000, 1000))
+    os.utime(newer, (2000, 2000))
+    assert D._load_tier3()["win"]["ip"] == "localhost"
 
 
 def test_status_tolerates_win_peers_list(tmp_path, capsys):
