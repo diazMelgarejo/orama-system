@@ -700,13 +700,13 @@ def _run_discovery_host(tmp_path, last, tier2=None, live=None, env=None):
     D.write_env_lmstudio = lambda endpoints, paths: None
 
     class _NoLock:
-        """Helper: NoLock."""
+        """Stand-in for the discovery lock that does nothing and never suppresses errors."""
         def __enter__(self):
-            """Enter the context manager."""
+            """Return self without taking any lock."""
             return self
 
         def __exit__(self, *a):
-            """Exit the context manager."""
+            """Exit without releasing anything; never swallow an exception."""
             return False
 
     D._Lock = _NoLock
