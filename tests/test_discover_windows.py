@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import sys
 from pathlib import Path
 from unittest.mock import patch, MagicMock
@@ -406,6 +407,32 @@ def test_mac_host_localhost_assigned_to_mac():
     assert result["mac"]["ip"] == "localhost"
 
 
+@pytest.mark.parametrize("owned", [False, True])
+def test_posix_probes_cached_mac_only_when_owned(owned: bool) -> None:
+    """A model response at an old address is not proof that it is this Mac."""
+    d = _load_discover()
+    d.RUNNING_ON_WINDOWS = False
+    cached = "192.0.2.52"
+    own = "192.0.2.51"
+    win = "192.0.2.238"
+    calls: list[str] = []
+    d._mac_lan_ip = lambda: own
+    d._posix_local_ipv4s = lambda: {own, cached} if owned else {own}
+    d._load_json = lambda path: {"endpoints": {"mac": {"ip": cached}, "win": {"ip": win}}}
+    d.probe_extra_win_peers = lambda exclude: []
+
+    def probe(url: str) -> list[str] | None:
+        """Record probes while a model server answers on the cached address."""
+        calls.append(url)
+        return ["model"] if url in {f"http://{cached}:1234", f"http://{win}:1234"} else None
+
+    d.probe_models = probe
+    result = d.discover_endpoints()
+    assert (f"http://{cached}:1234" in calls) is owned
+    assert (result["mac"] is not None) is owned
+    assert result["win"]["ip"] == win
+
+
 # ── filter_endpoints_for_policy on Windows endpoint data ──────────────────────
 
 def test_filter_endpoints_for_policy_win_entry():
@@ -662,7 +689,7 @@ def _run_discovery_host(tmp_path, last, tier2=None, live=None, env=None):
     D.discover_endpoints = lambda: dict(live)
     D._load_json = lambda path: last
     D._load_tier2 = lambda: tier2
-    D._load_tier3 = lambda: None
+    D._load_tier3 = lambda *a, **k: None
     D._load_tier4 = lambda profile="lan-full": None
     D.RECOVERY_SOURCE_TXT = tmp_path / "recovery.txt"
     D.filter_endpoints_for_policy = lambda endpoints, policy=None: endpoints
@@ -698,6 +725,22 @@ def test_backfill_does_not_preserve_windows_ip_as_mac(tmp_path):
     D = _run_discovery_host(tmp_path, last)
     assert D.run_discovery() == 0
     assert D.saved["endpoints"]["mac"] is None
+
+
+def test_posix_backfill_drops_cached_address_no_longer_owned(tmp_path: Path) -> None:
+    """A live Windows model must not cause rediscovery to re-save the old Mac IP."""
+    old_mac = "192.0.2.52"
+    last = {
+        "endpoints": {"mac": {"ip": old_mac, "reachable": True}, "win": {"ip": "", "reachable": False}},
+        "models": {"mac": ["old-model"], "win": []},
+    }
+    d = _run_discovery_host(
+        tmp_path, last, live={"mac": None, "win": {"ip": "192.0.2.238", "models": ["win-model"]}},
+    )
+    d.RUNNING_ON_WINDOWS = False
+    d._posix_local_ipv4s = lambda: {"192.0.2.51"}
+    assert d.run_discovery(retry_self_migration=False) == 0
+    assert d.saved["endpoints"]["mac"] is None
 
 
 def test_backfill_does_not_preserve_loopback_as_mac(tmp_path):
@@ -749,6 +792,149 @@ def test_recovery_tier_with_only_windows_mac_fails(tmp_path):
     tier2 = {"mac": {"ip": WIN2_NET_IP, "models": PEER_MAC_MODELS}, "win": None}
     D = _run_discovery_host(tmp_path, None, tier2=tier2, live={"mac": None, "win": None})
     assert D.run_discovery() == 1
+
+
+def test_recovery_skips_a_tier_that_holds_no_endpoint(tmp_path):
+    """Check that a tier with nothing reachable advances to the next tier instead of ending recovery."""
+    D = _run_discovery_host(tmp_path, None, live={"mac": None, "win": None})
+    D._load_tier3 = lambda *a, **k: {"mac": None, "win": None}
+    D._load_tier4 = lambda profile="lan-full": {"mac": None, "win": {"ip": "localhost", "models": ["m"]}}
+    assert D.run_discovery() == 0
+    assert D.saved["tier"] == 4
+
+
+def test_posix_recovery_skips_a_tier_that_holds_no_endpoint(tmp_path: Path) -> None:
+    """Check that the POSIX path also advances past an empty tier to a tier with a local Mac."""
+    D = _run_discovery_host(tmp_path, None, tier2={"mac": None, "win": None}, live={"mac": None, "win": None})
+    D.RUNNING_ON_WINDOWS = False
+    D._posix_local_ipv4s = lambda: {"192.0.2.51"}
+    D._load_tier4 = lambda profile="lan-full": {"mac": {"ip": "192.0.2.51", "models": PEER_MAC_MODELS}, "win": None}
+    assert D.run_discovery(retry_self_migration=False) == 0
+    assert D.saved["tier"] == 4
+    assert D.saved["endpoints"]["mac"]["ip"] == "192.0.2.51"
+
+
+def test_newest_backup_without_an_endpoint_does_not_hide_an_older_one(tmp_path: Path) -> None:
+    """Check that the newest backup is the newest one that still holds an endpoint."""
+    D = _load_discover()
+    D.BACKUPS_DIR = tmp_path
+    nothing = {"endpoints": {"mac": {"ip": "", "reachable": False}, "win": {"ip": "", "reachable": False}}}
+    usable = {
+        "endpoints": {"mac": {"ip": "", "reachable": False}, "win": {"ip": "localhost", "reachable": True}},
+        "models": {"win": ["m"]},
+    }
+    older, newer = tmp_path / "1.json", tmp_path / "2.json"
+    older.write_text(json.dumps(usable))
+    newer.write_text(json.dumps(nothing))
+    os.utime(older, (1000, 1000))
+    os.utime(newer, (2000, 2000))
+    assert D._load_tier3()["win"]["ip"] == "localhost"
+
+
+def test_newest_backup_emptied_by_posix_filter_does_not_hide_an_older_one(tmp_path: Path) -> None:
+    """A nonlocal Mac in the newest backup must not hide an older usable Windows endpoint."""
+    D = _load_discover()
+    D.BACKUPS_DIR = tmp_path
+    D.RUNNING_ON_WINDOWS = False
+    D._posix_local_ipv4s = lambda: {"192.0.2.51"}
+    older_usable = {
+        "endpoints": {
+            "mac": {"ip": "", "reachable": False},
+            "win": {"ip": "localhost", "reachable": True},
+        },
+        "models": {"win": ["m"]},
+    }
+    newer_nonlocal_mac = {
+        "endpoints": {
+            "mac": {"ip": "198.51.100.9", "reachable": True},
+            "win": {"ip": "", "reachable": False},
+        },
+        "models": {"mac": PEER_MAC_MODELS},
+    }
+    older, newer = tmp_path / "1.json", tmp_path / "2.json"
+    older.write_text(json.dumps(older_usable))
+    newer.write_text(json.dumps(newer_nonlocal_mac))
+    os.utime(older, (1000, 1000))
+    os.utime(newer, (2000, 2000))
+    assert D._load_tier3()["win"]["ip"] == "localhost"
+    assert D._load_tier3()["mac"] is None
+
+
+def test_newest_backup_emptied_by_windows_filter_does_not_hide_an_older_one(tmp_path: Path) -> None:
+    """A Windows-address Mac in the newest backup must not hide an older usable Mac."""
+    D = _load_discover()
+    D.BACKUPS_DIR = tmp_path
+    D.RUNNING_ON_WINDOWS = True
+    older_usable = {
+        "endpoints": {
+            "mac": {"ip": MAC_NET_IP, "reachable": True},
+            "win": {"ip": "localhost", "reachable": True},
+        },
+        "models": {"mac": PEER_MAC_MODELS, "win": ["m"]},
+    }
+    newer_windows_mac = {
+        "endpoints": {
+            "mac": {"ip": WIN2_NET_IP, "reachable": True},
+            "win": {"ip": "", "reachable": False},
+        },
+        "models": {"mac": PEER_MAC_MODELS},
+    }
+    older, newer = tmp_path / "1.json", tmp_path / "2.json"
+    older.write_text(json.dumps(older_usable))
+    newer.write_text(json.dumps(newer_windows_mac))
+    os.utime(older, (1000, 1000))
+    os.utime(newer, (2000, 2000))
+    selected = D._load_tier3(run_win_ips={WIN2_NET_IP})
+    assert selected["mac"]["ip"] == MAC_NET_IP
+    assert selected["win"]["ip"] == "localhost"
+
+
+def test_restore_latest_uses_filtered_backup_selection(tmp_path: Path, capsys) -> None:
+    """`--restore latest` must pick the newest backup that stays usable after the platform filter."""
+    D = _load_discover()
+    D.BACKUPS_DIR = tmp_path
+    D.RUNNING_ON_WINDOWS = False
+    D._posix_local_ipv4s = lambda: {"192.0.2.51"}
+    older_usable = {
+        "endpoints": {
+            "mac": {"ip": "192.0.2.51", "reachable": True},
+            "win": {"ip": "", "reachable": False},
+        },
+        "models": {"mac": PEER_MAC_MODELS},
+    }
+    newer_nonlocal_mac = {
+        "endpoints": {
+            "mac": {"ip": "198.51.100.9", "reachable": True},
+            "win": {"ip": "", "reachable": False},
+        },
+        "models": {"mac": PEER_MAC_MODELS},
+    }
+    older, newer = tmp_path / "1.json", tmp_path / "2.json"
+    older.write_text(json.dumps(older_usable))
+    newer.write_text(json.dumps(newer_nonlocal_mac))
+    os.utime(older, (1000, 1000))
+    os.utime(newer, (2000, 2000))
+
+    class _NoLock:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    D._Lock = _NoLock
+    D.filter_endpoints_for_policy = lambda endpoints, policy=None: endpoints
+    D.backup_current_state = lambda: None
+    D.get_repo_paths = lambda: {}
+    D.patch_openclaw_json = lambda endpoints: None
+    D.write_env_lmstudio = lambda endpoints, paths: None
+    D.saved = {}
+    D.save_discovery_state = lambda endpoints, tier=1: D.saved.update(endpoints=endpoints, tier=tier)
+    D.RECOVERY_SOURCE_TXT = tmp_path / "recovery.txt"
+    D._cmd_restore("latest")
+    out = capsys.readouterr().out
+    assert "Nothing safe to restore" not in out
+    assert D.saved["endpoints"]["mac"]["ip"] == "192.0.2.51"
 
 
 def test_status_tolerates_win_peers_list(tmp_path, capsys):

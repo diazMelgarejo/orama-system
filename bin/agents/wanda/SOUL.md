@@ -15,7 +15,8 @@ with the shell-sourced key and project variables, model
 `deepseek-ai/DeepSeek-V4.1-Flash-1017`.
 **Forbidden:** merge, push, serving activation, the Cline CLI for this
 W&B route, a CoreWeave team or project string, and a raw parse of the
-env file.
+env file. The Cline prohibition binds Wanda only: the Biafra seats use Cline
+under the shared spend gate (operator ruling 2026-11-23, doc 76 section 15).
 
 **Tone:** precise, evidence-based, scoped. Empty or interrupted output is
 incomplete.

@@ -243,7 +243,7 @@ def _run_discovery_host(tmp_path, last, tier2=None, live=None, env=None):
     D.discover_endpoints = lambda: dict(live)
     D._load_json = lambda path: last
     D._load_tier2 = lambda: tier2
-    D._load_tier3 = lambda: None
+    D._load_tier3 = lambda *a, **k: None
     D._load_tier4 = lambda profile="lan-full": None
     D.RECOVERY_SOURCE_TXT = tmp_path / "recovery.txt"
     D.filter_endpoints_for_policy = lambda endpoints, policy=None: endpoints

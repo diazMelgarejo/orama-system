@@ -34,6 +34,17 @@ V2-2 (plan line 196) and V2-3 (plan line 197).
 
 ### 1.3 Draft amendment text
 
+> **Non-authoritative clarification (2026-11-23):** The A4/A6 references to
+> migration version 2 and `claim_store_v2_reservations` below are historical
+> draft assumptions, not a migration assignment.
+> [Oramasys #102](https://github.com/oramasys/oramasys/pull/102)
+> is database migration 2 for bounded claim replay while retaining wire schema `1`.
+> The proposed wire schema 2 and reserved handoff are separate work; wire
+> schema versions and database migration numbers are independent. The
+> Controller owner must determine and review any subsequent migration number,
+> digest and upgrade/rollback disposition. This clarification does not ratify
+> amendment text or complete its normative integration.
+
 **A1 — doc 68 envelope amendment (orama-system repository; the normative text is external to this
 clone, U for its current wording):**
 

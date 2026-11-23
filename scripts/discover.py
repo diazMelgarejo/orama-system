@@ -444,6 +444,40 @@ def _local_ipv4s() -> set[str]:
     return {ip for ip in ips if ip and not _is_loopback_host(ip)}
 
 
+def _posix_local_ipv4s() -> set[str]:
+    """Interface-owned IPv4 addresses; fail closed if enumeration fails."""
+    ips: set[str] = set()
+    try:
+        import netifaces  # type: ignore
+        for iface in netifaces.interfaces():
+            for addr in netifaces.ifaddresses(iface).get(netifaces.AF_INET, []):
+                if addr.get("addr"):
+                    ips.add(addr["addr"])
+    except Exception:
+        pass
+    for command in (("ifconfig",), ("ip", "-4", "-o", "addr", "show")):
+        try:
+            output = subprocess.run(command, capture_output=True, text=True, timeout=2, check=True).stdout
+            ips.update(re.findall(r"\binet\s+(\d+\.\d+\.\d+\.\d+)", output))
+        except (OSError, subprocess.SubprocessError):
+            continue
+    return ips
+
+
+def _local_mac_host(host: str) -> bool:
+    """Accept a loopback target or an interface-owned Mac address."""
+    return bool(host) and (_is_loopback_host(host) or host in _posix_local_ipv4s())
+
+
+def _drop_nonlocal_mac(endpoints: dict) -> tuple[dict, bool]:
+    """Discard a saved Mac model endpoint that is no longer local."""
+    mac = endpoints.get("mac") or {}
+    if mac and not _local_mac_host(mac.get("ip", "")):
+        print(f"  discarding nonlocal Mac address {mac.get('ip', '')}", file=sys.stderr)
+        return {**endpoints, "mac": None}, True
+    return endpoints, False
+
+
 def _env_ip_list(key: str) -> list[str]:
     """Env ip list."""
     return [p.strip() for p in os.getenv(key, "").split(",") if p.strip()]
@@ -746,7 +780,7 @@ def discover_endpoints() -> dict:
     last = _load_json(LAST_DISCOVERY_JSON)
     if not result["mac"] and last:
         mac_last_ip = (last.get("endpoints", {}).get("mac", {}) or {}).get("ip", "")
-        if mac_last_ip and mac_last_ip not in ("", "localhost", "127.0.0.1"):
+        if mac_last_ip and not _is_loopback_host(mac_last_ip) and _local_mac_host(mac_last_ip):
             mac_models_seed = probe_models(f"http://{mac_last_ip}:1234")
             if mac_models_seed:
                 result["mac"] = {"ip": mac_last_ip, "models": mac_models_seed}
@@ -1071,16 +1105,41 @@ def _state_to_ep(state):
             out[role] = record
     return out
 
+def _has_endpoint(ep) -> bool:
+    """True when a recovered state still holds a Mac or Windows endpoint.
+
+    A saved state whose endpoints were all unreachable decodes to ``{"mac": None, "win": None}``:
+    truthy, but it gives recovery nothing to use, so it must not end the search for a tier.
+    """
+    return bool(ep) and bool(ep["mac"] or ep["win"])
+
 def _load_tier2():
     """Load tier2 (last discovery state)."""
     return _state_to_ep(_load_json(LAST_DISCOVERY_JSON))
-def _load_tier3():
-    """Load tier3."""
-    if not BACKUPS_DIR.exists(): return None
+
+
+def _load_tier3(run_win_ips: set[str] | None = None):
+    """Load tier3: newest backup that still holds an endpoint after the platform filter.
+
+    Apply the same Windows/Mac filter the recovery loop and ``--restore latest`` use
+    to each candidate before ``_has_endpoint`` accepts it. Otherwise a newest
+    backup that only holds a dropped Mac hides an older usable Windows (or Mac)
+    endpoint and recovery never sees it.
+    """
+    if not BACKUPS_DIR.exists():
+        return None
     for b in sorted(BACKUPS_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
         ep = _state_to_ep(_load_json(b))
-        if ep: return ep
+        if ep:
+            if RUNNING_ON_WINDOWS:
+                ep, _ = _drop_windows_mac(ep, run_win_ips)
+            else:
+                ep, _ = _drop_nonlocal_mac(ep)
+        if _has_endpoint(ep):
+            return ep
     return None
+
+
 def _load_tier4(profile="lan-full"):
     """Load tier4."""
     return _state_to_ep(_load_json(PROFILES_DIR / f"{profile}.json"))
@@ -1214,7 +1273,10 @@ def run_discovery(
             if state:
                 age = (datetime.now(timezone.utc) -
                        datetime.fromisoformat(state["timestamp"])).total_seconds()
-                if age < GOSSIP_TTL_SECONDS:
+                mac = (state.get("endpoints") or {}).get("mac") or {}
+                mac_ip = mac.get("ip", "")
+                valid_mac = RUNNING_ON_WINDOWS or not mac_ip or _local_mac_host(mac_ip)
+                if age < GOSSIP_TTL_SECONDS and valid_mac:
                     return 0
 
         print("🔍 Probing LM Studio endpoints...", file=sys.stderr)
@@ -1226,14 +1288,12 @@ def run_discovery(
         if not endpoints["mac"] and not endpoints["win"]:
             print("⚠️  No live endpoints — trying recovery tiers...", file=sys.stderr)
             for fn, t, name in [(_load_tier2, 2, "last known good"),
-                                  (_load_tier3, 3, "newest backup"),
+                                  (lambda: _load_tier3(run_win_ips), 3, "newest backup"),
                                   (lambda: _load_tier4("lan-full"), 4, "lan-full profile")]:
                 ep = fn()
-                if ep and RUNNING_ON_WINDOWS:
-                    ep, dropped = _drop_windows_mac(ep, run_win_ips)
-                    if dropped and not ep["mac"] and not ep["win"]:
-                        continue
-                if ep: endpoints = ep; tier = t; print(f"  → tier {t}: {name}", file=sys.stderr); break
+                if ep:  # the platform filter can empty a tier (for example a dropped Mac)
+                    ep, _ = _drop_windows_mac(ep, run_win_ips) if RUNNING_ON_WINDOWS else _drop_nonlocal_mac(ep)
+                if _has_endpoint(ep): endpoints = ep; tier = t; print(f"  → tier {t}: {name}", file=sys.stderr); break
             if not endpoints["mac"] and not endpoints["win"]:
                 print("❌ All tiers failed.", file=sys.stderr)
                 RECOVERY_SOURCE_TXT.write_text("tier_failed\n")
@@ -1249,10 +1309,13 @@ def run_discovery(
                     # seed the next try instead of wiping the endpoint.
                     if not endpoints[role] and prev.get("ip"):
                         role_ip = prev.get("ip", "")
-                        if role == "mac" and (role_ip in win_known or _is_loopback_host(role_ip)):
-                            print("⚠️  mac last-good is a known Windows address — not preserving",
-                                  file=sys.stderr)
-                            continue
+                        if role == "mac":
+                            invalid = (role_ip in win_known or _is_loopback_host(role_ip)
+                                       if RUNNING_ON_WINDOWS else not _local_mac_host(role_ip))
+                            if invalid:
+                                reason = "a known Windows address" if RUNNING_ON_WINDOWS else "not local"
+                                print(f"⚠️  mac last-good is {reason} — not preserving", file=sys.stderr)
+                                continue
                         # Discover already tried this address and it was offline.
                         # Keep it so the next run can try it again, but do not
                         # save it as reachable.
@@ -1350,15 +1413,39 @@ def _cmd_status():
 def _cmd_restore(target: str):
     """Cmd restore."""
     if target == "latest":
+        # ``_load_tier3`` already applies the platform filter per backup.
+        if not BACKUPS_DIR.exists() or not any(BACKUPS_DIR.glob("*.json")):
+            print(f"Nothing found for '{target}'.")
+            return
         ep = _load_tier3()
+        if not _has_endpoint(ep):
+            print("Nothing safe to restore.")
+            return
     elif target.startswith("profile:"):
         ep = _load_tier4(target.split(":", 1)[1])
+        if not ep:
+            print(f"Nothing found for '{target}'.")
+            return
+        if RUNNING_ON_WINDOWS:
+            ep, _ = _drop_windows_mac(ep)
+        else:
+            ep, _ = _drop_nonlocal_mac(ep)
+        if not _has_endpoint(ep):
+            print("Nothing safe to restore.")
+            return
     else:
         matches = sorted(BACKUPS_DIR.glob(f"{target}*.json")) if BACKUPS_DIR.exists() else []
         ep = _state_to_ep(_load_json(matches[-1])) if matches else None
-    if not ep: print(f"Nothing found for '{target}'."); return
-    if RUNNING_ON_WINDOWS:
-        ep, _ = _drop_windows_mac(ep)
+        if not ep:
+            print(f"Nothing found for '{target}'.")
+            return
+        if RUNNING_ON_WINDOWS:
+            ep, _ = _drop_windows_mac(ep)
+        else:
+            ep, _ = _drop_nonlocal_mac(ep)
+        if not _has_endpoint(ep):
+            print("Nothing safe to restore.")
+            return
     ep = filter_endpoints_for_policy(ep)
     backup_current_state()
     repo_paths = get_repo_paths()
