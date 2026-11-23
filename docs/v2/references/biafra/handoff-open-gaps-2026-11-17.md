@@ -167,7 +167,7 @@ test docstrings; PR-carried memory vs `lesson_94a6ff5363ae`.
 | Perpetua-Tools #516 and orama #519 | Merged by the operator. |
 | G4, G7, G8, G10, the live-cycle pin check | Done on main (doc 76 section 14): `STALL_WINDOW` retained, live preflight (pin plus same-day local evidence), integer guard at 2**53, one metric registry. The generic OpenAI route refuses W&B, and the W&B request runs in a killable worker with parent-owned spend. Lanes B1 to B3 are finished. |
 | G6 | Accepted as written by the operator on 2026-11-23. |
-| G11 | The operator ruled on 2026-11-23: split by role. Wanda keeps the OpenAI client and her soul card; the Biafra seats are designated to use Cline under the shared spend gate once the launcher can bound its output (`live_cycle()` refuses today). Doc 76 section 15 records both rulings. |
+| G11 | The operator ruled on 2026-11-23: split by role. Wanda keeps the OpenAI client and her soul card. That client stays outside the spend gate and is not an authorized unattended or paid path. The Biafra seats are designated to use Cline under the shared spend gate once the launcher can bound its output (`live_cycle()` refuses today). Doc 76 section 15 records both rulings. |
 | G1, G2 | Still blocked on Anamnesis and on published Kungfu atoms with evaluable O1 to O3. Change nothing until they exist. |
 | Live activation | Not armed. Still a separate operator act (section 9.3). |
 
@@ -180,14 +180,20 @@ test docstrings; PR-carried memory vs `lesson_94a6ff5363ae`.
 | orama-system | 524, Mac peer discovery, TLS startup, the rulings and this handoff | `4caaae20` |
 | oramasys | 104, controller service rescue | `4b344626` |
 
-Each repo has one follow-up PR for the G11 wording and the port fix: Perpetua-Tools 521 and an
-orama-system follow-up. Moving heads go stale in minutes, so read live state with `gh pr list` and
-fetch `main` before every edit (section 9.5). Never force-push.
+Each repo has one open follow-up, not merged:
+
+| Repo | Pull request | Branch tip that records the Wanda decision and the port loop |
+| --- | --- | --- |
+| Perpetua-Tools | 521 | `42f840cb` |
+| orama-system | 525 | `d6e5909a` |
+
+Those tips move. Read them with `gh pr view` before editing. Never force-push.
 
 ### 9.3 What remains, in order
 
-1. **Operator decisions:** whether Wanda's W&B calls should go through the spend gate (`wanda_chat.py`
-   calls the provider directly), and review of the two follow-up PRs.
+1. **Review the two follow-up PRs.** Wanda's decision is made: `wanda_chat.py` stays a direct
+   OpenAI client, outside the spend gate, and is not an authorized unattended or paid path.
+   Do not wrap it in the gate in these pulls.
 2. **Live activation (operator only).** Needs a real task with a reproducing defect, a fixed
    evaluator, `pin_evaluator` run first, named provider, budget, request limit and deadline, a
    same-day read-only provider probe (effort `high` for the V4.1 models), the operator's own
