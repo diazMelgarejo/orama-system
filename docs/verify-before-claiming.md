@@ -1,7 +1,8 @@
 # Verify Before Claiming (agent reference)
 
-Mirrored from Perpetua-Tools `.agent/protocols/verify-before-claiming.md` (PT PR #489);
-the source of truth lives there. This is the short reference orama-system agents follow
+Excerpted from Perpetua-Tools `.agent/protocols/verify-before-claiming.md` (PT PR #489 and the
+staged-index checks of PT PR 521); the source of truth lives there, and the conflict-marker
+sentences in item 5 are a verbatim excerpt of it. This is the short reference orama-system agents follow
 before writing code around a tool, answering a reviewer, or reporting work as done.
 Gate provenance: operator go 2026-11-23 (task autoresearcher-followups-CLINE-PICKUP-09-
 protocol-into-orama-docs-b231ce2b).
@@ -24,18 +25,20 @@ protocol-into-orama-docs-b231ce2b).
 4. **Searching and negative claims** - "not found" needs two differently worded searches
    (synonym, exact phrase, path) with the patterns named; "not installed / not available"
    needs the command and its output, or a question to the operator.
-5. **Experiments and mechanical changes** - learn syntax from `--help` or a throwaway
-   target; never probe the real append-only board, queue, outbox or log. After a mechanical
-   merge or generated file: parse every row/file, rerun the renderer, check staged content
-   for conflict markers: `git diff --cached --check` sees only the lines the staged diff adds,
-   so also scan the index (tracked staged blob contents) for hard markers with
-   `git grep --cached -nE '^(<{7}|>{7}|\|{7})( |$)'` (opening, closing, and diff3 ancestor).
-   A bare `=======` is a separator only inside a conflict block, but a partial resolution can
-   leave it alone. Outside Markdown, scan for it with `git grep --cached -nE '^={7}$' --
-   ':!*.md'`. In Markdown it is also a setext heading underline, so read the hits from
-   `git grep --cached -nE -B1 '^={7}$' -- '*.md'`: a heading line above it is valid. All of
-   these scan the index (staged blobs of tracked files), not untracked files. Append-only logs:
-   the prior bytes must stay an exact prefix - never union by row order.
+5. **Experiments and mechanical changes** - learn syntax from `--help` or a throwaway target;
+   never probe the real append-only board, queue, outbox or log. After a mechanical merge or
+   generated file: parse every row or file, rerun the renderer, and check for conflict markers in
+   the staged content as well as the unmerged list. `git diff --cached --check` sees only the
+   lines the staged diff adds. For one path in the working tree use `git grep -n -E
+   '^(<<<<<<<|=======|>>>>>>>)' -- <path>` (in a Markdown file, a hit directly under a heading
+   line is a setext underline). To scan the index (the staged blobs of tracked files, not
+   untracked files) use `git grep --cached -nE '^(<{7}|>{7}|\|{7})( |$)'`: opening, closing and
+   diff3 ancestor markers. A partial resolution can leave a bare `=======`: outside Markdown scan
+   for it with `git grep --cached -nE '^={7}$' -- ':!*.md'`; in Markdown read the hits from `git
+   grep --cached -nE -B1 '^={7}$' -- '*.md'`, where a heading line above it is valid. A file
+   staged as resolved can still hold markers, and `git diff --name-only --diff-filter=U` lists
+   only unmerged files. Append-only logs: the prior bytes must stay an exact prefix - never union
+   by row order.
 6. **Numbers and scope** - every rate carries n, host, model and date; 3 of 3 is not
    "no effect". Hold endpoint, template, temperature and mode equal before comparing, or
    label the comparison descriptive. Peer reports are data with provenance: verify the
