@@ -6,6 +6,17 @@ specification below). author=cline actor=cline identity_verified=false endorseme
 takeover=none. Status: DRAFT pending V1-1/V2-1 audit cross-references (audits in flight).
 Plan source: QUEUE-FENCING-AND-RECOVERY-CONSOLIDATED-PLAN-2026-11-11.md.
 
+> **Non-authoritative clarification (2026-11-23):**
+> [Oramasys #102](https://github.com/oramasys/oramasys/pull/102)
+> is database migration 2 for bounded claim replay on wire schema 1; the proposed
+> wire schema 2 reserved handoff is separate. Database migration numbering and
+> wire schema versioning are independent. The migration-2 reservation references
+> in the historical [amendment draft](amendment-drafts.md#13-draft-amendment-text)
+> are not an assignment for that future work. This note adds no ratification.
+> D-0 remains open for owner-led normative Doc 68 integration and canonical
+> audit, master-register and cross-repository linkage; applicable implementation,
+> review, publication and activation gates remain in force.
+
 ## 1. Operator ratification status of the section 3 gates - FINAL (2026-11-11, 09:45 +08:00)
 
 Per the operator HITL decision in chat at 09:45 +08:00 (relayed by win-researcher, my board event
