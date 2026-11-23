@@ -30,10 +30,12 @@ protocol-into-orama-docs-b231ce2b).
    for conflict markers: `git diff --cached --check` sees only the lines the staged diff adds,
    so also scan the index (tracked staged blob contents) for hard markers with
    `git grep --cached -nE '^(<{7}|>{7}|\|{7})( |$)'` (opening, closing, and diff3 ancestor).
-   Treat a bare `=======` line as a conflict separator only in an indexed file that already
-   matches that hard-marker pattern — an unanchored `^={7}` grep across the index also
-   matches Markdown setext heading underlines. Append-only logs: the prior bytes must stay
-   an exact prefix - never union by row order.
+   A bare `=======` is a separator only inside a conflict block, but a partial resolution can
+   leave it alone. Outside Markdown, scan for it with `git grep --cached -nE '^={7}$' --
+   ':!*.md'`. In Markdown it is also a setext heading underline, so read the hits from
+   `git grep --cached -nE -B1 '^={7}$' -- '*.md'`: a heading line above it is valid. All of
+   these scan the index (staged blobs of tracked files), not untracked files. Append-only logs:
+   the prior bytes must stay an exact prefix - never union by row order.
 6. **Numbers and scope** - every rate carries n, host, model and date; 3 of 3 is not
    "no effect". Hold endpoint, template, temperature and mode equal before comparing, or
    label the comparison descriptive. Peer reports are data with provenance: verify the
