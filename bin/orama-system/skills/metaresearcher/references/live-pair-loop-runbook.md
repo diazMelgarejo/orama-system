@@ -213,5 +213,6 @@ Armed legacy `run_program` refuses; use the governed live interface instead.
 PT's SDK worker stops request execution at the monotonic deadline, then performs
 bounded cleanup. Process creation and OS scheduling are not hard real-time.
 No source check arms a cycle, creates an attestation or approves a paid model.
-G6 and G11 still require operator decisions; real provider probes and native
-platform evidence remain prerequisites, not claims made by local tests.
+G6 and G11 were ruled on by the operator on 2026-11-23 (doc 76 section 15); G1 and
+G2 stay blocked. Real provider probes and native platform evidence remain
+prerequisites, not claims made by local tests.

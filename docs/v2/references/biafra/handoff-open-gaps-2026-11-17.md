@@ -169,6 +169,7 @@ test docstrings; PR-carried memory vs `lesson_94a6ff5363ae`.
 | G6 | Accepted as written by the operator on 2026-11-23. |
 | G11 | The operator ruled on 2026-11-23: split by role. Wanda keeps the OpenAI client and her soul card. That client stays outside the spend gate and is not an authorized unattended or paid path. The Biafra seats are designated to use Cline under the shared spend gate once the launcher can bound its output (`live_cycle()` refuses today). Doc 76 section 15 records both rulings. |
 | G1, G2 | Still blocked on Anamnesis and on published Kungfu atoms with evaluable O1 to O3. Change nothing until they exist. |
+| 60-day leaf lifetime | Confirmed by the operator as current policy (renewal agreement v2). The Perpetua-Tools `DECISIONS.md` entry records it; reverting would be one constant, `LEAF_VALIDITY_DAYS`, and the tests derive from it. |
 | Live activation | Not armed. Still a separate operator act (section 9.3). |
 
 ### 9.2 Pull requests (all merged; as of 2026-11-23)
@@ -205,10 +206,7 @@ Never force-push.
    code now enforces the pin and the same-day evidence; it cannot do the provider probe or the
    attestation. Stop without retry on a paid-credit demand, a rejected effort, or an existing
    marker file.
-3. **Done: the 60-day leaf lifetime is confirmed** by the operator as current policy (renewal
-   agreement v2); the Perpetua-Tools `DECISIONS.md` entry records it. Reverting would be one
-   constant, `LEAF_VALIDITY_DAYS`, and the tests derive from it.
-4. **Verify what is still unverified:**
+3. **Verify what is still unverified:**
    - the PowerShell form of the stdin bearer curl command (only curl 8.5.0 on Linux was tested);
    - `-no-CAstore` on LibreSSL, the macOS system `openssl` (only OpenSSL 3.0.13 was tested);
    - Apple's own `/bin/bash` and macOS userland tools (BSD `sed`, `awk`, `nc`, `openssl`) against
@@ -223,7 +221,7 @@ Never force-push.
    `_parse_port_remap` reads ports with `int()` and range-checks them, so a zero-padded port is read
    as decimal and an out-of-range one is refused; the old equality bug could only emit an identity
    remap.
-5. **Small carry-overs, mostly closed:** `lesson_371473e17ad0` was retracted as redundant (its
+4. **Small carry-overs, mostly closed:** `lesson_371473e17ad0` was retracted as redundant (its
    `supersedes` was null, not one id; `lesson_d4ac6209ce38` names it as the same correction and covers
    every point). Fifty generic filler docstrings in four test files now say what each helper does,
    proven docstring-only by AST equality. PR-carried memory overrode `lesson_94a6ff5363ae` for the
