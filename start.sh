@@ -745,7 +745,7 @@ PY
 _normalize_port() {
   local s="$1"
   case "$s" in ''|*[!0-9]*) return 1 ;; esac
-  s="${s#"${s%%[!0]*}"}"
+  while [ "${s#0}" != "$s" ]; do s="${s#0}"; done
   [ -n "$s" ] && [ "${#s}" -le 5 ] && [ "$s" -le 65535 ] || return 1
   printf '%s\n' "$s"
 }
