@@ -364,9 +364,10 @@ describes the Biafra route. Wanda's soul card states that scope.
 `run_program` path with `legacy-live-path-disabled`, so no Cline launch happens yet. The launcher has
 no spend gate of its own, so any Cline caller must go through `bin/agents/spend_guard.py`, as the
 live cycle is designed to. Wanda's W&B calls are made directly with the OpenAI client by
-`bin/orama-system/skills/wanda-wandb/scripts/wanda_chat.py`. That script does not call the spend
-gate, and whether it should is an operator decision. The "generic OpenAI route refuses W&B" rule in
-section 14 belongs to Perpetua-Tools' `.agent/harness/llm.py`, a different consumer, so it does not
+`bin/orama-system/skills/wanda-wandb/scripts/wanda_chat.py`. That client stays outside the
+spend gate in this change and is not an authorized unattended or paid path. The
+"generic OpenAI route refuses W&B" rule in section 14 belongs to
+Perpetua-Tools' `.agent/harness/llm.py`, a different consumer, so it does not
 conflict with Wanda's path. `tests/test_biafra_designation_docs.py` keeps this wording tied to the
 launcher's refusal. The Perpetua-Tools record is its `DECISIONS.md` entries of 2026-11-23, with a
 correction of the same date.
