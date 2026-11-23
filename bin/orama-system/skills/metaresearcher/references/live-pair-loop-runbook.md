@@ -187,7 +187,9 @@ blocks commands naming `node_modules` or `.venv` paths is not to be worked aroun
 
 ## Open decisions
 
-The stall window; Wanda's soul card versus the W&B Cline route; a registry of declared metrics (G10).
+The stall window; a registry of declared metrics (G10).
+
+Settled 2026-11-23: the persona is accepted and the W&B route is split by role (doc 76 section 15).
 
 Later follow-ups from the 2026-11-17 lockstep remediation (for example
 reading the pin inside `live_cycle`) are listed in
