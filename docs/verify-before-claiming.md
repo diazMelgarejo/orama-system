@@ -1,9 +1,14 @@
 # Verify Before Claiming (agent reference)
 
 Excerpted from Perpetua-Tools `.agent/protocols/verify-before-claiming.md` (PT PR #489 and the
-staged-index checks of PT PR 521); the source of truth lives there, and the conflict-marker
-sentences in item 5 are a verbatim excerpt of it. This is the short reference orama-system agents follow
-before writing code around a tool, answering a reviewer, or reporting work as done.
+staged-index checks of PT PR #521); the source of truth lives there. The conflict-scan block in
+item 5 is a copy of the PT block, identical apart from the list indentation.
+`tests/test_verify_before_claiming_conflict_scan.py` (the same file in both repositories) pins its
+hash and, when both checkouts sit side by side, compares the two copies. Change the block in PT
+first, copy it here, update the pin in both tests, and run that test with
+`VERIFY_BLOCK_REQUIRE_SIBLING=1` before pushing: continuous integration sees one repository only,
+so it checks the pin alone. This is the short reference orama-system agents follow before writing
+code around a tool, answering a reviewer, or reporting work as done.
 Gate provenance: operator go 2026-11-23 (task autoresearcher-followups-CLINE-PICKUP-09-
 protocol-into-orama-docs-b231ce2b).
 
@@ -27,20 +32,32 @@ protocol-into-orama-docs-b231ce2b).
    needs the command and its output, or a question to the operator.
 5. **Experiments and mechanical changes** - learn syntax from `--help` or a throwaway target;
    never probe the real append-only board, queue, outbox or log. After a mechanical merge or
-   generated file: parse every row or file, rerun the renderer, and check for conflict markers in
-   the staged content as well as the unmerged list. `git diff --cached --check` sees only the
-   lines the staged diff adds. For one path in the working tree use `grep -n -E
-   '^(<<<<<<<|\|\|\|\|\|\|\||=======|>>>>>>>)' -- <path>`
-   (in a Markdown file, a hit directly under a heading line is a setext underline). Run all three
-   index scans from the repository root to include staged files in every subdirectory. To scan the
-   index (the staged blobs of tracked files, not untracked files) use
-   `git grep --cached -nE '^(<{7}|>{7}|\|{7})( |$)'`: opening, closing and
-   diff3 ancestor markers. A partial resolution can leave a bare `=======`: outside Markdown scan
-   for it with `git grep --cached -nE '^={7}$' -- ':!*.md'`; in Markdown read the hits from `git
-   grep --cached -nE -B1 '^={7}$' -- '*.md'`, where a heading line above it is valid. A file
-   staged as resolved can still hold markers, and `git diff --name-only --diff-filter=U` lists
-   only unmerged files. Append-only logs: the prior bytes must stay an exact prefix - never union
-   by row order.
+   generated file: parse every row or file and rerun the renderer, then check for conflict markers
+   with the block below.
+
+   <!-- conflict-scan:begin -->
+   Scan for conflict markers in the working tree and in the index. A file staged as resolved can
+   still hold markers, `git diff --cached --check` sees only the lines the staged diff adds, and
+   `git diff --name-only --diff-filter=U` lists only unmerged files. Run both commands from any
+   directory (`:/` is the whole repository). The pattern matches opening, diff3 ancestor and closing
+   markers and a bare separator, of seven or more characters, in LF and CRLF files:
+
+   ```sh
+   git grep --untracked -nE -B1 '^(<{7,}|>{7,}|\|{7,}|={7,})([[:space:]]|$)' -- ':/'
+   git grep --cached -nE -B1 '^(<{7,}|>{7,}|\|{7,}|={7,})([[:space:]]|$)' -- ':/'
+   ```
+
+   The first command reads the tracked and untracked files in the working tree, the second the
+   staged blobs. Treat each hit as a candidate: a `<<<<<<<`, `|||||||` or `>>>>>>>` line is a
+   conflict marker unless it is quoted text, such as a fixture or documentation about conflicts. A
+   bare `=======` is often an underline: when the line above it (shown by `-B1`) is heading or
+   title text, it is a Markdown setext heading or a reST title, and only a separator with no title
+   above it is a leftover. Not searched: ignored files, submodule contents and markers shorter than
+   seven characters. A binary file is reported without a line number, and a byte-order mark before
+   a marker on line 1 hides it. Check such paths by hand.
+   <!-- conflict-scan:end -->
+
+   Append-only logs: the prior bytes must stay an exact prefix - never union by row order.
 6. **Numbers and scope** - every rate carries n, host, model and date; 3 of 3 is not
    "no effect". Hold endpoint, template, temperature and mode equal before comparing, or
    label the comparison descriptive. Peer reports are data with provenance: verify the
