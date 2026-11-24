@@ -69,14 +69,14 @@ def _head(repo: Path) -> str:
     ).stdout.strip()
 
 
-def _guard_sync_test_names() -> list[str]:
-    """Drift-guard tests listed in guard-sync-manifest.sh (GUARD_SYNC_TESTS)."""
+def _guard_parity_required_paths() -> list[str]:
+    """Repository-relative files required for canonical guard parity."""
     manifest = ROOT / "scripts" / "git" / "guard-sync-manifest.sh"
     result = subprocess.run(
         [
             "bash",
             "-c",
-            'source "$1" && printf "%s\\n" "${GUARD_SYNC_TESTS[@]}"',
+            'source "$1" && printf "%s\\n" "${GUARD_PARITY_ROOT_REQUIRED[@]}"',
             "_",
             str(manifest),
         ],
@@ -110,13 +110,14 @@ def _setup_repo_with_origin(base: Path) -> Path:
     shutil.copytree(ROOT / "scripts", local / "scripts", dirs_exist_ok=True)
     shutil.copytree(ROOT / ".githooks", local / ".githooks", dirs_exist_ok=True)
     shutil.copytree(ROOT / ".cursor", local / ".cursor", dirs_exist_ok=True)
-    for rel in _guard_sync_test_names():
-        src = ROOT / "tests" / rel
-        if not src.is_file():
-            continue
-        dest = local / "tests" / rel
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(src, dest)
+    for rel in _guard_parity_required_paths():
+        source = ROOT / rel
+        if not source.is_file():
+            raise FileNotFoundError(f"Required guard parity source missing: {source}")
+        dest = local / rel
+        if not dest.is_file():
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, dest)
     subprocess.run(
         ["git", "config", "core.hooksPath", ".githooks"],
         cwd=local,
