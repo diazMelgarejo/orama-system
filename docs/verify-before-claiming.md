@@ -52,11 +52,12 @@ protocol-into-orama-docs-b231ce2b).
    conflict marker unless it is quoted text, such as a fixture or documentation about conflicts. A
    bare `=======` may be an underline or a leftover separator. The line above it (shown by `-B1`) is
    a clue, not proof: heading- or title-like text can also be conflict side content left after a
-   partial resolution (for example `ours` then `=======` then `theirs`). Inspect the surrounding
-   content or the merge diff before dismissing the hit; only then treat a confirmed Markdown setext
-   heading or reST title as intentional. Not searched: ignored files, submodule contents and markers
-   shorter than seven characters. A binary file is reported without a line number, and a byte-order
-   mark before a marker on line 1 hides it. Check such paths by hand.
+   partial resolution (for example `ours` then `=======` then `theirs`), and a separator after
+   ordinary code (for example `value = 1`) is a leftover. Inspect the surrounding content or the
+   merge diff before dismissing the hit; only then treat a confirmed Markdown setext heading or
+   reST title as intentional. Not searched: ignored files, submodule contents and markers shorter
+   than seven characters. A binary file is reported without a line number, and a byte-order mark
+   before a marker on line 1 hides it. Check such paths by hand.
    <!-- conflict-scan:end -->
 
    Append-only logs: the prior bytes must stay an exact prefix - never union by row order.
