@@ -125,11 +125,12 @@ re-interpret silence, a tangential reply, or a vague "sure" as a decision.
 ### 6. Resolve, re-verify, then complete the merge for real
 
 ```bash
-# after resolving every marker, rerun the conflict-scan block from step 3 on the files that had
-# conflicts (working tree and index): each remaining hit must be quoted text or an underline you
-# have read, never a marker
-
+# after resolving every marker, stage the resolved files first so the index scan sees the content
+# that will be committed (git grep --cached reads index blobs, not a later working-tree edit):
 git add <resolved files>
+# then rerun the conflict-scan block from step 3 on those paths (working tree and index): each
+# remaining hit must be quoted text or an underline you have read, never a marker
+
 python3 scripts/review/repo_hygiene.py .          # or repo's equivalent
 python3 scripts/review/md_lint_fix.py --check <touched .md>   # mechanical lint, see markdown-lint-fix.md
 markdownlint-cli2 <any touched .md files>          # or repo's equivalent
