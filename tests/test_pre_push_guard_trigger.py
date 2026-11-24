@@ -91,6 +91,30 @@ def _setup_repo_with_origin(base: Path) -> Path:
     shutil.copytree(ROOT / "scripts", local / "scripts", dirs_exist_ok=True)
     shutil.copytree(ROOT / ".githooks", local / ".githooks", dirs_exist_ok=True)
     shutil.copytree(ROOT / ".cursor", local / ".cursor", dirs_exist_ok=True)
+    # GUARD_SYNC_TESTS participate in GUARD_PARITY_ROOT_REQUIRED; pre-push runs
+    # verify-guard-parity and fails closed when they are absent from the clone.
+    manifest = ROOT / "scripts" / "git" / "guard-sync-manifest.sh"
+    sync_tests = subprocess.run(
+        [
+            "bash",
+            "-c",
+            'source "$1" && printf "%s\\n" "${GUARD_SYNC_TESTS[@]}"',
+            "_",
+            str(manifest),
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=True,
+    )
+    for rel in sync_tests.stdout.splitlines():
+        if not rel:
+            continue
+        src = ROOT / "tests" / rel
+        assert src.is_file(), f"canonical drift-guard test missing: {src}"
+        dest = local / "tests" / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dest)
     subprocess.run(
         ["git", "config", "core.hooksPath", ".githooks"],
         cwd=local,
