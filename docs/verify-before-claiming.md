@@ -31,7 +31,8 @@ protocol-into-orama-docs-b231ce2b).
    the staged content as well as the unmerged list. `git diff --cached --check` sees only the
    lines the staged diff adds. For one path in the working tree use `grep -n -E
    '^(<<<<<<<|\|\|\|\|\|\|\||=======|>>>>>>>)' -- <path>`
-   (in a Markdown file, a hit directly under a heading line is a setext underline). To scan the
+   (in a Markdown file, a hit directly under a heading line is a setext underline). Run all three
+   index scans from the repository root to include staged files in every subdirectory. To scan the
    index (the staged blobs of tracked files, not untracked files) use
    `git grep --cached -nE '^(<{7}|>{7}|\|{7})( |$)'`: opening, closing and
    diff3 ancestor markers. A partial resolution can leave a bare `=======`: outside Markdown scan

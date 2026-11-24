@@ -167,7 +167,7 @@ test docstrings; PR-carried memory vs `lesson_94a6ff5363ae`.
 | Perpetua-Tools #516 and orama #519 | Merged by the operator. |
 | G4, G7, G8, G10, the live-cycle pin check | Done on main (doc 76 section 14): `STALL_WINDOW` retained, live preflight (pin plus same-day local evidence), integer guard at 2**53, one metric registry. The generic OpenAI route refuses W&B, and the W&B request runs in a killable worker with parent-owned spend. Lanes B1 to B3 are finished. |
 | G6 | Accepted as written by the operator on 2026-11-23. |
-| G11 | The operator ruled on 2026-11-23: split by role. Wanda keeps the OpenAI client and her soul card. That client stays outside the spend gate and is not an authorized unattended or paid path. The Biafra seats are designated to use Cline under the shared spend gate once the launcher can bound its output (`live_cycle()` refuses today). Doc 76 section 15 records both rulings. |
+| G11 | The operator ruled on 2026-11-23: split by role. Wanda keeps the OpenAI client and her soul card. That client stays outside the spend gate and is not an authorized unattended or paid path. The Biafra seats are designated to use Cline under the shared spend gate once the launcher can bound both total output and request count (`live_cycle()` refuses today). Doc 76 section 15 records both rulings. |
 | G1, G2 | Still blocked on Anamnesis and on published Kungfu atoms with evaluable O1 to O3. Change nothing until they exist. |
 | 60-day leaf lifetime | Confirmed by the operator as current policy (renewal agreement v2). The Perpetua-Tools `DECISIONS.md` entry records it; reverting would be one constant, `LEAF_VALIDITY_DAYS`, and the tests derive from it. |
 | Live activation | Not armed. Still a separate operator act (section 9.3). |
