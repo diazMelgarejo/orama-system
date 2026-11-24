@@ -360,8 +360,10 @@ The operator ruled on both gaps on 2026-11-23. These are later decisions: sectio
 Neither earlier record is invalid. The soul card's prohibition binds Wanda, and the lesson
 describes the Biafra route. Wanda's soul card states that scope.
 
-**What runs today.** `live_cycle()` refuses with `launcher-output-bound-unsupported`, and the legacy
-`run_program` path with `legacy-live-path-disabled`, so no Cline launch happens yet. The launcher has
+**What runs today.** `live_cycle()` refuses with `launcher-output-bound-unsupported`. The legacy
+`run_program` path refuses with `legacy-live-path-disabled` **only when armed** (`launch_allowed()`
+returns true); when the gate and arm variables are unset, `run_program()` calls `dry_cycle()` and
+sets `called_launcher=False` instead. Neither path launches Cline. The launcher has
 no spend gate of its own, so any Cline caller must go through `bin/agents/spend_guard.py`, as the
 live cycle is designed to. Wanda's W&B calls are made directly with the OpenAI client by
 `bin/orama-system/skills/wanda-wandb/scripts/wanda_chat.py`. That client stays outside the
