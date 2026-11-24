@@ -69,6 +69,25 @@ def _head(repo: Path) -> str:
     ).stdout.strip()
 
 
+def _guard_sync_test_names() -> list[str]:
+    """Drift-guard tests listed in guard-sync-manifest.sh (GUARD_SYNC_TESTS)."""
+    manifest = ROOT / "scripts" / "git" / "guard-sync-manifest.sh"
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            'source "$1" && printf "%s\\n" "${GUARD_SYNC_TESTS[@]}"',
+            "_",
+            str(manifest),
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return [line for line in result.stdout.splitlines() if line]
+
+
 def _setup_repo_with_origin(base: Path) -> Path:
     """Bare origin + a local clone with main pushed, so origin/main resolves
     as the base for range_for_ref's diff — matching how the real hook is
@@ -91,6 +110,13 @@ def _setup_repo_with_origin(base: Path) -> Path:
     shutil.copytree(ROOT / "scripts", local / "scripts", dirs_exist_ok=True)
     shutil.copytree(ROOT / ".githooks", local / ".githooks", dirs_exist_ok=True)
     shutil.copytree(ROOT / ".cursor", local / ".cursor", dirs_exist_ok=True)
+    for rel in _guard_sync_test_names():
+        src = ROOT / "tests" / rel
+        if not src.is_file():
+            continue
+        dest = local / "tests" / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dest)
     subprocess.run(
         ["git", "config", "core.hooksPath", ".githooks"],
         cwd=local,
