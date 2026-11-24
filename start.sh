@@ -893,7 +893,7 @@ _ensure_peer_tls_frontend() {
     _warn "lan-peer" "no Caddyfile at $cfg; the peer HTTPS front end is not provisioned"
     return 1
   fi
-  proxy="$(sed -n 's/.*reverse_proxy[[:space:]]\{1,\}[^:[:space:]]*:\([0-9]\{1,5\}\).*/\1/p' "$cfg" | head -n1)"
+  proxy="$(sed -n 's/.*reverse_proxy[[:space:]]\{1,\}[^:[:space:]]*:\([0-9]\{1,\}\).*/\1/p' "$cfg" | head -n1)"
   proxy_n="$(_normalize_port "$proxy")" || proxy_n="$proxy"
   portal_n="$(_normalize_port "${PORTAL_PORT:-8002}")" || portal_n="${PORTAL_PORT:-8002}"
   if [ -n "$proxy" ] && [ "$proxy_n" != "$portal_n" ]; then

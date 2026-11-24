@@ -33,7 +33,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ORAMA_DOC = "docs/verify-before-claiming.md"
 PT_DOC = ".agent/protocols/verify-before-claiming.md"
 # Update this value in BOTH repositories when the block changes; run this test to see the new hash.
-PINNED_SHA256 = "1c443414e9fc972172657722f6b06f83cc2d2f4bac58b7d12ea8e042f83f2f4c"
+PINNED_SHA256 = "0aeb13d3dbfd0fbfa910b6c487170eb331ea9c8716a6ff2d9e414fc862693415"
 BLOCK = re.compile(
     r"^[ \t]*<!-- conflict-scan:begin -->[ \t]*\n(.*?)^[ \t]*<!-- conflict-scan:end -->",
     re.DOTALL | re.MULTILINE,

@@ -50,11 +50,13 @@ protocol-into-orama-docs-b231ce2b).
    The first command reads the tracked and untracked files in the working tree, the second the
    staged blobs. Treat each hit as a candidate: a `<<<<<<<`, `|||||||` or `>>>>>>>` line is a
    conflict marker unless it is quoted text, such as a fixture or documentation about conflicts. A
-   bare `=======` is often an underline: when the line above it (shown by `-B1`) is heading or
-   title text, it is a Markdown setext heading or a reST title, and only a separator with no title
-   above it is a leftover. Not searched: ignored files, submodule contents and markers shorter than
-   seven characters. A binary file is reported without a line number, and a byte-order mark before
-   a marker on line 1 hides it. Check such paths by hand.
+   bare `=======` may be an underline or a leftover separator. The line above it (shown by `-B1`) is
+   a clue, not proof: heading- or title-like text can also be conflict side content left after a
+   partial resolution (for example `ours` then `=======` then `theirs`). Inspect the surrounding
+   content or the merge diff before dismissing the hit; only then treat a confirmed Markdown setext
+   heading or reST title as intentional. Not searched: ignored files, submodule contents and markers
+   shorter than seven characters. A binary file is reported without a line number, and a byte-order
+   mark before a marker on line 1 hides it. Check such paths by hand.
    <!-- conflict-scan:end -->
 
    Append-only logs: the prior bytes must stay an exact prefix - never union by row order.

@@ -482,6 +482,21 @@ def test_frontend_matches_a_zero_padded_portal_port_to_the_proxy_target(tmp_path
     assert "proxies to port" not in result.stderr
 
 
+def test_frontend_rejects_a_long_proxy_port_that_shares_a_five_digit_prefix(tmp_path) -> None:
+    """Capture the full reverse_proxy port so 040002 does not normalize as PORTAL_PORT 4000."""
+    bindir, log = _fake_caddy(tmp_path)
+    cfg = _config_dir(tmp_path, proxy="localhost:040002")
+    result = _bash(
+        tmp_path,
+        '_port_listening() { return 1; }; _ensure_peer_tls_frontend',
+        {"ORAMA_LAN_CONTROL_PLANE_DIR": str(cfg), "PORTAL_PORT": "4000", "PEER_PORTAL_TLS_PORT": "9443"},
+        path=f"{bindir}:/usr/bin:/bin",
+    )
+    assert result.returncode != 0
+    assert "proxies to port 040002" in result.stderr and "PORTAL_PORT is 4000" in result.stderr
+    assert not log.exists()
+
+
 @pytest.mark.parametrize("port", ["0", "65536", "999999999999999999999999", "84x3", "-1"])
 def test_frontend_rejects_invalid_tls_port_before_probing_or_starting(tmp_path: Path, port: str) -> None:
     """Reject invalid ports without querying or starting a listener."""
