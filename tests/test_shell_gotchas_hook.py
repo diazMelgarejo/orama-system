@@ -1,0 +1,151 @@
+"""The shell-gotchas hook: every rule's fixtures, real session incidents, the hook protocol and log."""
+
+from __future__ import annotations
+
+import importlib.util
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[1]
+HOOKS = ROOT / "bin/orama-system/skills/shell-hygiene/hooks"
+GOTCHAS = HOOKS / "shell-gotchas.py"
+
+_spec = importlib.util.spec_from_file_location("shell_gotchas", GOTCHAS)
+assert _spec is not None and _spec.loader is not None
+sg = importlib.util.module_from_spec(_spec)
+sys.modules["shell_gotchas"] = sg
+_spec.loader.exec_module(sg)
+
+CASES = [(rule.id, case, True) for rule in sg.RULES for case in rule.bad] + [
+    (rule.id, case, False) for rule in sg.RULES for case in rule.good
+]
+
+
+@pytest.fixture
+def cwd(tmp_path: Path) -> str:
+    """A scratch working directory holding one file, for the glob rule."""
+    (tmp_path / "exists.txt").write_text("x", encoding="utf-8")
+    return str(tmp_path)
+
+
+def _ids(command: str, where: str) -> set[str]:
+    return {rule.id for rule in sg.evaluate(command, where)}
+
+
+def _hook(command: str, where: str, **env: str) -> subprocess.CompletedProcess[str]:
+    payload = json.dumps({"tool_name": "Bash", "tool_input": {"command": command}, "cwd": where})
+    full_env = {**os.environ, "SHELL_GOTCHAS_LOG": os.devnull, **env}
+    return subprocess.run([sys.executable, str(GOTCHAS)], input=payload, capture_output=True, text=True, env=full_env)
+
+
+def test_rule_ids_are_unique_and_levels_valid() -> None:
+    """Every rule has a unique id, a valid level, a hint, and fixtures on both sides."""
+    ids = [rule.id for rule in sg.RULES]
+    assert len(ids) == len(set(ids))
+    for rule in sg.RULES:
+        assert rule.level in {"deny", "warn"} and rule.hint and rule.summary
+        assert rule.bad and rule.good, f"{rule.id} needs bad and good fixtures"
+
+
+@pytest.mark.parametrize(("rule_id", "command", "should_fire"), CASES)
+def test_rule_fixtures(rule_id: str, command: str, should_fire: bool, cwd: str) -> None:
+    """Each rule fires on its bad fixtures and stays silent on its good ones."""
+    assert (rule_id in _ids(command, cwd)) is should_fire, command
+
+
+SESSION_INCIDENTS = [
+    ('for spec in "orama-system 525" "Perpetua-Tools 521"; do set -- $spec; echo $1; done', "zsh-set-unquoted"),
+    ('F="$(ls tests | grep -iE \'identity|attribution\' | sed \'s|^|tests/|\' | tr \'\\n\' \' \')"; python3 -m pytest $F -q', "zsh-unquoted-list-var"),
+    ("env | grep -i supabase", "secret-env-dump"),
+    ("cat -A file.txt", "bsd-cat-A"),
+]
+
+
+@pytest.mark.parametrize(("command", "rule_id"), SESSION_INCIDENTS)
+def test_real_session_incidents_are_caught(command: str, rule_id: str, cwd: str) -> None:
+    """Commands that actually failed in practice are blocked, each by the rule that names the trap."""
+    assert rule_id in _ids(command, cwd)
+
+
+KNOWN_GOOD = [
+    "git commit -q -F - <<'E'\nfix: x\n\nMentions git commit and set -- $x as text.\nE",
+    "codex exec --sandbox read-only --cd /repo -c 'model_reasoning_effort=\"medium\"' - <<'E'\nrun `git commit` carefully\nE",
+    "gh api -X POST repos/o/r/pulls/1/comments/2/replies -f body='@bot fixed in abc' --jq '{id,html_url}'",
+    "cd /repo && git status -sb | head -2",
+    "python3 - <<'E'\nstatus = 1\npath = '/x'\nE",
+    "for f in a b; do cmp \"$f\" \"$f\"; done",
+    "bash -c 'set -- $x; echo ${y,,}'",
+    "git add a b && git commit -m 'x'",
+    "awk 'length>100{print FILENAME\": line \"FNR}' a b",
+    "grep -rIn --exclude-dir=.git -E 'a|b' dir | cut -c1-190 | head -20",
+    "printf '%s\\n' a b",
+    "sed -n 1,60p file",
+    "git push origin HEAD",
+]
+
+
+@pytest.mark.parametrize("command", KNOWN_GOOD)
+def test_known_good_commands_are_never_flagged(command: str, cwd: str) -> None:
+    """Heredoc bodies, bash bodies and ordinary commands do not trip any rule."""
+    assert _ids(command, cwd) == set(), command
+
+
+def test_escape_marker_skips_named_rules_only(cwd: str) -> None:
+    """`# gotcha-ok: id` suppresses that rule for that command; other rules still fire."""
+    command = "git commit  # gotcha-ok: git-commit-no-message"
+    assert "git-commit-no-message" not in _ids(command, cwd)
+    assert "git-commit-no-message" in _ids("git commit  # gotcha-ok: other-rule", cwd)
+    assert _ids("env | cat  # gotcha-ok: all", cwd) == set()
+
+
+def test_hook_blocks_with_exit_2_and_names_the_rule(cwd: str) -> None:
+    """A deny rule exits 2 and tells the model the rule, the fix and the escape."""
+    done = _hook("git commit", cwd)
+    assert done.returncode == 2
+    assert "[git-commit-no-message]" in done.stderr and "gotcha-ok" in done.stderr
+
+
+def test_hook_allows_clean_commands_silently(cwd: str) -> None:
+    done = _hook("git status -sb", cwd)
+    assert (done.returncode, done.stdout, done.stderr) == (0, "", "")
+
+
+def test_warn_rules_add_context_without_blocking(cwd: str) -> None:
+    done = _hook("pkill -f server", cwd)
+    assert done.returncode == 0
+    context = json.loads(done.stdout)["hookSpecificOutput"]
+    assert context["hookEventName"] == "PreToolUse" and "kill-by-pattern" in context["additionalContext"]
+
+
+def test_mode_warn_downgrades_blocks_and_off_disables(cwd: str) -> None:
+    warned = _hook("git commit", cwd, SHELL_GOTCHAS_MODE="warn")
+    assert warned.returncode == 0 and "git-commit-no-message" in warned.stdout
+    off = _hook("git commit", cwd, SHELL_GOTCHAS_MODE="off")
+    assert (off.returncode, off.stdout) == (0, "")
+
+
+def test_malformed_input_never_blocks() -> None:
+    done = subprocess.run([sys.executable, str(GOTCHAS)], input="not json", capture_output=True, text=True)
+    assert done.returncode == 0
+
+
+def test_log_records_rule_ids_and_a_hash_never_the_command(tmp_path: Path, cwd: str) -> None:
+    """The usage log is safe to keep: it holds no command text, so no secret can land in it."""
+    log = tmp_path / "gotchas.log"
+    secret_command = "env | grep SUPER_SECRET_TOKEN_VALUE"
+    payload = json.dumps({"tool_input": {"command": secret_command}, "cwd": cwd})
+    subprocess.run([sys.executable, str(GOTCHAS)], input=payload, capture_output=True, text=True,
+                   env={**os.environ, "SHELL_GOTCHAS_LOG": str(log)})
+    entry = json.loads(log.read_text(encoding="utf-8"))
+    assert entry["rules"] == ["secret-env-dump"] and len(entry["cmd"]) == 12
+    assert "SUPER_SECRET" not in log.read_text(encoding="utf-8")
+
+
+def test_self_test_passes() -> None:
+    done = subprocess.run([sys.executable, str(GOTCHAS), "--self-test"], capture_output=True, text=True)
+    assert done.returncode == 0, done.stderr
