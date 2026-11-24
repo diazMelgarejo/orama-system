@@ -342,6 +342,31 @@ def test_frontend_skipped_when_disabled_and_honest_when_prerequisites_missing(tm
     assert "start" not in log.read_text(encoding="utf-8"), "an invalid config must never be started"
 
 
+def test_frontend_port_validation_matches_normalize_port(tmp_path) -> None:
+    """The front end accepts only normalized TCP ports before any side effects."""
+    warning = "PEER_PORTAL_TLS_PORT must be a TCP port between 1 and 65535"
+    stub = "_port_listening() { echo \"CHECK $1\"; return 1; }; command() { return 1; }; "
+    for bad in ("0", "00", "65536", "099999", "84x3", " 8443", "-1", "999999999999999999999999"):
+        result = _bash(
+            tmp_path,
+            stub + "_ensure_peer_tls_frontend",
+            {"PEER_PORTAL_TLS_PORT": bad},
+            path="/usr/bin:/bin",
+        )
+        assert result.returncode == 1, bad
+        assert warning in result.stderr, bad
+        assert result.stdout == "", bad
+    for good, normalized in (("1", "1"), ("65535", "65535"), ("08443", "8443"), ("0000000000000443", "443")):
+        result = _bash(
+            tmp_path,
+            stub + "_ensure_peer_tls_frontend",
+            {"PEER_PORTAL_TLS_PORT": good},
+            path="/usr/bin:/bin",
+        )
+        assert warning not in result.stderr, good
+        assert result.stdout == f"CHECK {normalized}\n", good
+
+
 def test_frontend_without_admin_directive_uses_default_without_host_probe(tmp_path: Path) -> None:
     """An absent admin directive resolves to 2019 without probing a real listener."""
     bindir, log = _fake_caddy(tmp_path)

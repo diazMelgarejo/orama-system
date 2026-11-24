@@ -875,12 +875,9 @@ _ensure_peer_tls_frontend() {
       _info "lan-peer" "peer HTTPS front end management is disabled (ORAMA_PEER_TLS_FRONTEND=0)"
       return 0 ;;
   esac
-  local dir cfg port port_number admin proxy proxy_n portal_n i
+  local dir cfg port admin proxy proxy_n portal_n i
   dir="$(_peer_tls_frontend_dir)"; cfg="$dir/Caddyfile"; port="${PEER_PORTAL_TLS_PORT:-8443}"
-  case "$port" in ''|*[!0-9]*) _warn "lan-peer" "PEER_PORTAL_TLS_PORT must be a TCP port between 1 and 65535"; return 1 ;; esac
-  port_number="$port"
-  while [ "${port_number#0}" != "$port_number" ]; do port_number="${port_number#0}"; done
-  if [ -z "$port_number" ] || [ "${#port_number}" -gt 5 ] || [ "$port_number" -gt 65535 ]; then
+  if ! port="$(_normalize_port "$port")"; then
     _warn "lan-peer" "PEER_PORTAL_TLS_PORT must be a TCP port between 1 and 65535"
     return 1
   fi
