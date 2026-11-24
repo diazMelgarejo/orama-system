@@ -62,8 +62,14 @@ Either way, nothing is lost yet, and nothing has been decided yet.
 
 ```bash
 git status --short | grep '^UU\|^AA\|^DD'
-grep -rn '^<<<<<<<\|^=======$\|^>>>>>>>' <each conflicted file>
+git diff --name-only --diff-filter=U
 ```
+
+Then locate every marker region with the conflict-scan block in
+[`docs/verify-before-claiming.md`](../../../docs/verify-before-claiming.md) item 5, replacing its
+`':/'` pathspec with the paths listed above to narrow it. That block is the one tested copy of the
+commands (diff3 ancestors, CRLF files, untracked files and the index), so this card does not repeat
+them.
 
 Know the full scope before resolving anything. Resolving file 1 while
 file 2 is still unexamined risks a resolution style that doesn't generalize
@@ -119,9 +125,9 @@ re-interpret silence, a tangential reply, or a vague "sure" as a decision.
 ### 6. Resolve, re-verify, then complete the merge for real
 
 ```bash
-# after resolving every marker:
-grep -rn '^<<<<<<<\|^=======$\|^>>>>>>>' <every file that had conflicts>
-# must be empty before proceeding
+# after resolving every marker, rerun the conflict-scan block from step 3 on the files that had
+# conflicts (working tree and index): each remaining hit must be quoted text or an underline you
+# have read, never a marker
 
 git add <resolved files>
 python3 scripts/review/repo_hygiene.py .          # or repo's equivalent
