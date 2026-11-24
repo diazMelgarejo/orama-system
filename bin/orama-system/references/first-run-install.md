@@ -50,6 +50,7 @@ Run components **in order**. The installer is idempotent: satisfied components a
 | 0.5.1 | Unified embeddings | `setup-embeddings` reports bge-m3 wired | Re-probe only if `ok`; re-run `setup-embeddings` manually to heal |
 | 0.6 | Claude Code + profiles | `claude` on PATH; profiles dir exists under code-review skill | Re-check only |
 | 0.7 | PreCompact hook | `PreCompact` present in `.claude/settings.local.json` | Re-check only |
+| 0.8 | Shell-safety hooks | `install-shell-hooks.sh --check` passes: `shell-gotchas.py` and `no-workstation-paths.py` match the canonical copies and are registered in `~/.claude/settings.json` | `install` runs `--apply` (idempotent, settings backed up first; new installs start in warn mode, promote with `--mode enforce`); never blocks first-run |
 | — | MCP orchestration stack | **Separate** — see [`install-mcp-stack.sh`](../scripts/install-mcp-stack.sh) | Not part of first-run.done |
 | A.1 | OmniRoute (optional) | Probe only — never blocks first-run | Probe only |
 
@@ -196,6 +197,23 @@ grep -A5 '"PreCompact"' "$OPENCLAW_ROOT/.claude/settings.local.json"
 ```
 
 **Idempotent satisfied:** `PreCompact` hook block found in settings.local.json.
+
+---
+
+## 0.8 Shell-Safety Hooks (zsh and macOS traps, workstation paths)
+
+Canonical hooks live in [`skills/shell-hygiene/hooks/`](../skills/shell-hygiene/hooks/); the installer
+copies them to `~/.claude/hooks/` and registers them under `hooks.PreToolUse` in
+`~/.claude/settings.json`. Rules, controls and the generated rule table:
+[`skills/shell-hygiene/SKILL.md`](../skills/shell-hygiene/SKILL.md) § Enforced by hooks.
+
+```bash
+bash bin/orama-system/scripts/install-shell-hooks.sh --check   # read-only; exit 1 on drift
+bash bin/orama-system/scripts/install-shell-hooks.sh --apply   # idempotent; backs up settings first
+```
+
+**Idempotent satisfied:** both hook files match the canonical copies, both are registered, the
+superseded `zsh-reserved-vars.py` registration is gone, and `shell-gotchas.py --self-test` passes.
 
 ---
 
