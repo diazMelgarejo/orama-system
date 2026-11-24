@@ -13,7 +13,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PLAN = ROOT / "docs/v2/76-biafra-outer-seat-canonical-plan.md"
+HANDOFF = ROOT / "docs/v2/references/biafra/handoff-open-gaps-2026-11-17.md"
 WANDA = ROOT / "bin/agents/wanda/SOUL.md"
+BOTH_BOUNDS = "total output and request count"
 PRESENT_TENSE_CLAIMS = ("seats use Cline", "already launches", "already runs")
 
 
@@ -32,6 +34,14 @@ def _flat(text: str) -> str:
     return " ".join(text.split())
 
 
+def _g11_handoff_row(text: str) -> str:
+    """Return the flattened G11 status-table row from the handoff."""
+    for line in text.splitlines():
+        if line.startswith("| G11 |"):
+            return _flat(line)
+    raise AssertionError("handoff is missing a | G11 | status row")
+
+
 def test_section_15_matches_the_launcher_boundary() -> None:
     """Section 15 names the refusal and calls the Biafra Cline route a designation."""
     reason = _boundary_reason()
@@ -40,14 +50,25 @@ def test_section_15_matches_the_launcher_boundary() -> None:
     section = _flat(text.split("## 15.", 1)[1].split("\n## ", 1)[0])
     assert reason in section
     assert "designated" in section
+    assert BOTH_BOUNDS in section, "section 15 must name both launcher bounds"
     for claim in PRESENT_TENSE_CLAIMS:
         assert claim not in section, claim
+
+
+def test_handoff_g11_row_names_both_launcher_bounds() -> None:
+    """The handoff G11 row keeps the same both-bounds designation as section 15 and Wanda."""
+    row = _g11_handoff_row(HANDOFF.read_text(encoding="utf-8"))
+    assert "designated" in row
+    assert BOTH_BOUNDS in row, "handoff G11 must name both launcher bounds"
+    assert "live_cycle()" in row
+    for claim in PRESENT_TENSE_CLAIMS:
+        assert claim not in row, claim
 
 
 def test_wanda_card_calls_the_biafra_cline_route_a_designation() -> None:
     """Wanda's card scopes the Cline ban to her and does not say the Biafra route runs."""
     card = _flat(WANDA.read_text(encoding="utf-8"))
     assert "binds Wanda only" in card and "designated" in card
-    assert "total output and request count" in card, "the designation needs both bounds, as doc 76 section 15 says"
+    assert BOTH_BOUNDS in card, "the designation needs both bounds, as doc 76 section 15 says"
     for claim in PRESENT_TENSE_CLAIMS:
         assert claim not in card, claim
