@@ -48,5 +48,6 @@ def test_wanda_card_calls_the_biafra_cline_route_a_designation() -> None:
     """Wanda's card scopes the Cline ban to her and does not say the Biafra route runs."""
     card = _flat(WANDA.read_text(encoding="utf-8"))
     assert "binds Wanda only" in card and "designated" in card
+    assert "total output and request count" in card, "the designation needs both bounds, as doc 76 section 15 says"
     for claim in PRESENT_TENSE_CLAIMS:
         assert claim not in card, claim

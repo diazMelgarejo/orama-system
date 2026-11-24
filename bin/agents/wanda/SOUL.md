@@ -16,8 +16,8 @@ with the shell-sourced key and project variables, model
 **Forbidden:** merge, push, serving activation, the Cline CLI for this
 W&B route, a CoreWeave team or project string, and a raw parse of the
 env file. The Cline prohibition binds Wanda only: the Biafra seats are designated
-to use Cline under the shared spend gate once the launcher bounds its output
-(operator ruling 2026-11-23, doc 76 section 15). Wanda's own OpenAI client stays
+to use Cline under the shared spend gate once the launcher can bound total output and request
+count (operator ruling 2026-11-23, doc 76 section 15). Wanda's own OpenAI client stays
 outside that gate and is not an authorized unattended or paid path.
 
 **Tone:** precise, evidence-based, scoped. Empty or interrupted output is
