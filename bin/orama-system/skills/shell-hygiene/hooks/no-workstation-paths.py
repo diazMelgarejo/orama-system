@@ -6,7 +6,25 @@ so the leak is caught at write-time, not just at commit/CI.
 Exit 2 => block the tool call (Claude must fix). Exit 0 => allow.
 Registered as a PreToolUse hook (matcher: Write|Edit) in the user-level Claude settings.
 """
-import sys, json, os, re, subprocess
+import sys, json, re, subprocess
+from pathlib import Path
+
+
+def repository_target(file_path: str) -> tuple[str, str] | None:
+    """Find the Git root and full target path, including missing directories."""
+    target = Path(file_path)
+    directory = target.parent.resolve()
+    ancestor = directory
+    while not ancestor.is_dir() and ancestor != ancestor.parent:
+        ancestor = ancestor.parent
+    probe = subprocess.run(
+        ["git", "-C", str(ancestor), "rev-parse", "--show-toplevel"],
+        capture_output=True, text=True, timeout=5,
+    )
+    if probe.returncode != 0:
+        return None
+    root = probe.stdout.rstrip("\n")
+    return root, (directory / target.name).relative_to(root).as_posix()
 
 def main():
     try:
@@ -24,20 +42,17 @@ def main():
     if not content:
         return 0
     # only enforce inside a git work tree (tracked area); skip ~/.claude, /tmp, scratch docs
-    d = os.path.dirname(fp) or "."
     try:
-        inrepo = subprocess.run(
-            ["git", "-C", d, "rev-parse", "--is-inside-work-tree"],
-            capture_output=True, text=True, timeout=5
-        ).stdout.strip() == "true"
-    except Exception:
-        inrepo = False
-    if not inrepo:
+        location = repository_target(fp)
+    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError):
         return 0
+    if location is None:
+        return 0
+    root, relative_path = location
     # gitignored files (e.g. .env, pyvenv.cfg) are exempt
     try:
         ignored = subprocess.run(
-            ["git", "-C", d, "check-ignore", os.path.basename(fp)],
+            ["git", "-C", root, "check-ignore", "--", relative_path],
             capture_output=True, text=True, timeout=5
         ).returncode == 0
         if ignored:
