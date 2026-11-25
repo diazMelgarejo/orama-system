@@ -101,7 +101,8 @@ The task from the real feedback, quoted as data; the target function; the **sour
 it calls** (turn 3 reverted because the model assumed `_text` returned the text, and it returns a
 bool); the exact required behaviour, matching the evaluator; the output format (one code block, one
 function, three sentences naming the assumption); and "do not call tools". Tell the outer seat which
-numbers are real: she caught that one count in a prompt was wrong.
+numbers are real: she caught that one count in a prompt was wrong. Compute every number in a prompt
+from the evaluator instead of typing it: a case count typed as 24 when the evaluator had 28.
 
 ## Safety for model-written code
 
@@ -213,5 +214,6 @@ Armed legacy `run_program` refuses; use the governed live interface instead.
 PT's SDK worker stops request execution at the monotonic deadline, then performs
 bounded cleanup. Process creation and OS scheduling are not hard real-time.
 No source check arms a cycle, creates an attestation or approves a paid model.
-G6 and G11 still require operator decisions; real provider probes and native
-platform evidence remain prerequisites, not claims made by local tests.
+G6 and G11 were ruled on by the operator on 2026-11-23 (doc 76 section 15); G1 and
+G2 stay blocked. Real provider probes and native platform evidence remain
+prerequisites, not claims made by local tests.

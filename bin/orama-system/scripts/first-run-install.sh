@@ -455,6 +455,45 @@ check_precompact() {
   return 0
 }
 
+check_shell_hooks() {
+  local installer="$SCRIPT_DIR/install-shell-hooks.sh"
+  if [ ! -f "$installer" ]; then
+    _warn "0.8 shell hooks: install-shell-hooks.sh missing"
+    _json_set_component "shell_hooks" "warn" "no installer"
+    return 0
+  fi
+  if out="$(bash "$installer" --check 2>&1)"; then
+    _ok "0.8 shell hooks installed and registered (shell-gotchas, no-workstation-paths)"
+    _json_set_component "shell_hooks" "ok" "in sync"
+  else
+    _warn "0.8 shell hooks drifted: run bash bin/orama-system/scripts/install-shell-hooks.sh --apply"
+    printf '%s\n' "$out" >&2
+    _json_set_component "shell_hooks" "warn" "drift"
+  fi
+  return 0
+}
+
+run_shell_hooks() {
+  local installer="$SCRIPT_DIR/install-shell-hooks.sh"
+  if [ ! -f "$installer" ]; then
+    _warn "0.8 shell hooks: install-shell-hooks.sh missing"
+    _json_set_component "shell_hooks" "warn" "no installer"
+    return 0
+  fi
+  if $DRY_RUN; then
+    echo "[dry-run] bash \"$installer\" --apply"
+    return 0
+  fi
+  if bash "$installer" --apply; then
+    _ok "0.8 shell hooks provisioned (idempotent; settings backed up before any change)"
+    _json_set_component "shell_hooks" "ok" "applied"
+  else
+    _warn "0.8 shell hooks: install-shell-hooks.sh --apply reported a problem (non-fatal)"
+    _json_set_component "shell_hooks" "warn" "apply failed"
+  fi
+  return 0
+}
+
 probe_omniroute() {
   local url="${OMNIROUTE_URL:-http://127.0.0.1:20128/api/mcp/stream}"
   local tok="${OMNIROUTE_TOKEN:-}"
@@ -496,6 +535,7 @@ cmd_status() {
   check_embeddings || true
   check_claude || true
   check_precompact || true
+  check_shell_hooks || true
   probe_omniroute || true
   echo ""
   _log "Next: bash bin/orama-system/scripts/install-mcp-stack.sh (MCP workers, separate)"
@@ -523,6 +563,7 @@ cmd_run() {
   run_embeddings || true
   _run_component_check claude check_claude || true
   _run_component_check precompact check_precompact || true
+  run_shell_hooks || true
   probe_omniroute || true
 
   echo ""

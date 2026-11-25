@@ -37,6 +37,26 @@ runner as the verify substrate. This mode reads that metric. A lower metric
 is better. If the metric rises, the search rule reverts. The seat does not
 SSH, does not dispatch the GPU, and does not edit the verifier.
 
+## Keep or revert: one inequality, no English
+
+Both seats use the same test, the one in `bin/agents/biafra_cycle.py`. The metric is lower-is-better
+(`val_bpb` is an example). A rewrite is kept only when `metric_after < metric_before`. Anything else reverts.
+
+| English | Also written | Meaning |
+| --- | --- | --- |
+| lower, smaller, decreases, drops, falls | better | `metric_after < metric_before`, kept |
+| higher, larger, increases, rises, grows | worse | `metric_after > metric_before`, reverted |
+| equal, unchanged, a tie | no gain | `metric_after == metric_before`, reverted |
+
+A tie is neither a rise nor a drop, and it reverts. Never read "drops" as bad here: in a lower-is-better
+metric a drop is the good outcome. A higher-is-better metric is not a supported mode of the comparator.
+
+| metric_before | metric_after | direction | decision |
+| --- | --- | --- | --- |
+| 1.00 | 0.98 | lower | keep |
+| 1.00 | 1.00 | equal | revert |
+| 1.00 | 1.02 | higher | revert |
+
 ## Programs
 
 The inner program proposes, measures, and keeps or reverts. The outer program
@@ -91,7 +111,7 @@ Biafra is the canonical agent for this seat; the ids stay `metaresearch-outer` a
   requires a reviewed or graduated card's receipt to carry a valid `trace` with the card's own
   evaluator digest, and a graduated card to match the pin.
 - **Model and effort (always explicit):** preferred and human-gated, Claude Fable 5.2 high or
-  GPT-6 Astra high for Biafra, run only after explicit approval. Default and automatic, medium else
+  GPT-6.2 Astra high for Biafra, run only after explicit approval. Default and automatic, medium else
   high else low and never xhigh or max, on free W&B turns and as the fallback when no paid permission
   is granted. `plan_turn` in `seat_contracts.py` encodes both tiers.
   Free default on W&B: `V4.1-Flash-1017` at `high` (V4.1 rejects `medium`); sources and the full
@@ -100,3 +120,7 @@ Biafra is the canonical agent for this seat; the ids stay `metaresearch-outer` a
   request limit and deadline first. Plan: `docs/v2/76-biafra-outer-seat-canonical-plan.md`.
 - **Runbook:** `references/live-pair-loop-runbook.md` (interim) holds the checklist, the sandbox
   rules for model-written code, how to vet a seat's output and the results of the live turns so far.
+- **Paired offline review:** `references/paired-offline-review.md` is the pattern for reviewing a
+  lockstep PR pair with Biafra as the reviewer and the AutoResearcher inner seat running bounded
+  hypotheses and offline measurement. It starts by reading both repositories' agent and seat cards,
+  and a live cycle or promotion stays a separate operator decision.

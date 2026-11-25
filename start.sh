@@ -739,6 +739,17 @@ print(hashlib.sha256(der).hexdigest())
 PY
 }
 
+# Print the decimal value of TCP port string $1, or return 1. Refuses empty or non-digit input, 0, and anything
+# above 65535, including digit strings too long for a numeric test. Leading zeros are stripped, never read as octal,
+# so 08443 and 8443 compare equal.
+_normalize_port() {
+  local s="$1"
+  case "$s" in ''|*[!0-9]*) return 1 ;; esac
+  while [ "${s#0}" != "$s" ]; do s="${s#0}"; done
+  [ -n "$s" ] && [ "${#s}" -le 5 ] && [ "$s" -le 65535 ] || return 1
+  printf '%s\n' "$s"
+}
+
 # Decide whether peer calls use the peer's HTTPS front end; sets _PEER_PORT_ARGS (empty or --portal-port N).
 # A CA found on disk is NOT trusted just because it is there: only an operator-authenticated CA is used
 # (PEER_CA_FILE, checked against PEER_CA_SHA256 when set, or a win-ca-*/orama-lan-ca.pem whose single
@@ -786,14 +797,10 @@ _peer_tls_port_args() {
     fi
   fi
   if [ -n "${PEER_PORTAL_TLS_PORT:-}" ]; then
-    case "$PEER_PORTAL_TLS_PORT" in
-      ''|*[!0-9]*) _warn "lan-peer" "PEER_PORTAL_TLS_PORT must be a TCP port between 1 and 65535"; return 1 ;;
-    esac
-    if [ "$PEER_PORTAL_TLS_PORT" -lt 1 ] || [ "$PEER_PORTAL_TLS_PORT" -gt 65535 ]; then
+    if ! port="$(_normalize_port "$PEER_PORTAL_TLS_PORT")"; then
       _warn "lan-peer" "PEER_PORTAL_TLS_PORT must be a TCP port between 1 and 65535"
       return 1
     fi
-    port="$PEER_PORTAL_TLS_PORT"
   fi
   _PEER_PORT_ARGS=(--portal-port "$port")
   _info "lan-peer" "peer calls use https on port $port (CA authenticated, trusted for this process only)"
@@ -821,8 +828,8 @@ _peer_outbox_remap_args() {
   enabled="$(printf '%s' "${PEER_PORTAL_TLS_ENABLED:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
   case "$enabled" in 1|true|yes|on) ;; *) return 0 ;; esac
   [ -n "${PEER_CA_FILE:-}${PEER_PINNED_FINGERPRINTS:-}" ] || return 0
-  case "${PEER_PORTAL_TLS_PORT:-}" in ''|*[!0-9]*) ;; *) tls="$PEER_PORTAL_TLS_PORT" ;; esac
-  case "${PORTAL_PORT:-}" in ''|*[!0-9]*) ;; *) plain="$PORTAL_PORT" ;; esac
+  tls="$(_normalize_port "${PEER_PORTAL_TLS_PORT:-}")" || tls=8443
+  plain="$(_normalize_port "${PORTAL_PORT:-}")" || plain=8002
   [ "$plain" != "$tls" ] || return 0
   ip="$(_peer_ip_from_discovery)"
   [ -n "$ip" ] || return 0
@@ -868,12 +875,9 @@ _ensure_peer_tls_frontend() {
       _info "lan-peer" "peer HTTPS front end management is disabled (ORAMA_PEER_TLS_FRONTEND=0)"
       return 0 ;;
   esac
-  local dir cfg port port_number admin proxy i
+  local dir cfg port admin proxy proxy_n portal_n i
   dir="$(_peer_tls_frontend_dir)"; cfg="$dir/Caddyfile"; port="${PEER_PORTAL_TLS_PORT:-8443}"
-  case "$port" in ''|*[!0-9]*) _warn "lan-peer" "PEER_PORTAL_TLS_PORT must be a TCP port between 1 and 65535"; return 1 ;; esac
-  port_number="$port"
-  while [ "${port_number#0}" != "$port_number" ]; do port_number="${port_number#0}"; done
-  if [ -z "$port_number" ] || [ "${#port_number}" -gt 5 ] || [ "$port_number" -gt 65535 ]; then
+  if ! port="$(_normalize_port "$port")"; then
     _warn "lan-peer" "PEER_PORTAL_TLS_PORT must be a TCP port between 1 and 65535"
     return 1
   fi
@@ -889,8 +893,10 @@ _ensure_peer_tls_frontend() {
     _warn "lan-peer" "no Caddyfile at $cfg; the peer HTTPS front end is not provisioned"
     return 1
   fi
-  proxy="$(sed -n 's/.*reverse_proxy[[:space:]]\{1,\}[^:[:space:]]*:\([0-9]\{1,5\}\).*/\1/p' "$cfg" | head -n1)"
-  if [ -n "$proxy" ] && [ "$proxy" != "${PORTAL_PORT:-8002}" ]; then
+  proxy="$(sed -n 's/.*reverse_proxy[[:space:]]\{1,\}[^:[:space:]]*:\([0-9]\{1,\}\).*/\1/p' "$cfg" | head -n1)"
+  proxy_n="$(_normalize_port "$proxy")" || proxy_n="$proxy"
+  portal_n="$(_normalize_port "${PORTAL_PORT:-8002}")" || portal_n="${PORTAL_PORT:-8002}"
+  if [ -n "$proxy" ] && [ "$proxy_n" != "$portal_n" ]; then
     _warn "lan-peer" "the Caddyfile proxies to port $proxy but PORTAL_PORT is ${PORTAL_PORT:-8002}; peers would reach the wrong service"
     return 1
   fi

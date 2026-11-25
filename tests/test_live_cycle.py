@@ -22,7 +22,7 @@ RESET = "\x1b[0m"
 pytestmark = pytest.mark.usefixtures("offline_guard")
 
 def _load(path: Path, name: str):
-    """Test helper or fixture: load."""
+    """Import the file at path as a fresh module registered in sys.modules under name."""
     spec = importlib.util.spec_from_file_location(name, path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -33,16 +33,16 @@ def _load(path: Path, name: str):
 
 @pytest.fixture()
 def cycle():
-    """Test helper or fixture: cycle."""
+    """Load the Biafra cycle module; wire the recording guard's classifier at its stop check."""
     module = _load(ROOT / "bin/agents/biafra_cycle.py", "biafra_cycle")
     _Guard.stop = staticmethod(module._provider_stop)
     return module
 
 
 def _fake_run(stdout: str = DIM + "thinking..." + RESET + "ANSWER TEXT", returncode: int = 0, calls=None):
-    """Test helper or fixture: fake run."""
+    """Build a fake Popen factory whose process returns the given stdout and exit code."""
     def run(argv, **kwargs):
-        """Test helper or fixture: run."""
+        """Record (argv, kwargs) in calls when given; return a completed process, canned output."""
         if calls is not None:
             calls.append((argv, kwargs))
         return subprocess.CompletedProcess(argv, returncode, stdout=stdout.encode(), stderr=b"")
@@ -51,7 +51,7 @@ def _fake_run(stdout: str = DIM + "thinking..." + RESET + "ANSWER TEXT", returnc
 
 
 def _arm(monkeypatch, cycle) -> None:
-    """Test helper or fixture: arm."""
+    """Open the live-cycle gate and arm it, and stub out the launcher boundary check."""
     monkeypatch.setenv(cycle.GATE_ENV, "approved")
     monkeypatch.setenv(cycle.ARM_ENV, "1")
     # Historical lifecycle tests exercise an explicitly simulated supported launcher.
@@ -62,43 +62,43 @@ class _Guard:
     """A recording spend guard: every reservation must end settled or released, never left open."""
 
     def __init__(self) -> None:
-        """Test helper or fixture: init  ."""
+        """Start with no preflights and empty settled and released lists."""
         self.preflights = 0
         self.settled: list = []
         self.released: list = []
 
     def preflight(self, n, hold_seconds):
-        """Test helper or fixture: preflight."""
+        """Count the preflight and approve it with a reservation id of the form r<N>."""
         self.preflights += 1
         return {"ok": True, "reservation": f"r{self.preflights}", "projected_usd": 0.0}
 
     def settle(self, reservation, *a, **k):
-        """Test helper or fixture: settle."""
+        """Record the reservation as settled."""
         self.settled.append(reservation)
         return 0.0
 
     def settle_unknown(self, reservation, *a, **k):
-        """Test helper or fixture: settle unknown."""
+        """Record the reservation as settled, since unknown output still counts as spent."""
         self.settled.append(reservation)
         return 0.0
 
     def release(self, reservation):
-        """Test helper or fixture: release."""
+        """Record the reservation as released."""
         self.released.append(reservation)
 
     stop = staticmethod(lambda text: None)  # set by the `cycle` fixture to the real classifier
 
     def classify(self, text):
-        """Test helper or fixture: classify."""
+        """Delegate to the real provider stop classifier installed by the cycle fixture."""
         return type(self).stop(text)
 
     def open_reservations(self) -> list:
-        """Test helper or fixture: open reservations."""
+        """Return the reservation ids that were preflighted but neither settled nor released."""
         return [f"r{i}" for i in range(1, self.preflights + 1) if f"r{i}" not in self.settled + self.released]
 
 
 def _kwargs(tmp_path: Path, **over):
-    """Test helper or fixture: kwargs."""
+    """Write an evaluator pin under tmp_path and return live_cycle kwargs; over overrides them."""
     tmp_path.mkdir(parents=True, exist_ok=True)
     pin = tmp_path / "evaluator-pin.json"
     pin.write_text(json.dumps({"version": 1, "evaluator_digest": DIGEST, "covers": ["verifier.py"]}))
@@ -207,7 +207,7 @@ def test_a_timeout_is_reported_not_raised(cycle, tmp_path, monkeypatch) -> None:
     _arm(monkeypatch, cycle)
 
     def boom(argv, **kwargs):
-        """Test helper or fixture: boom."""
+        """Fake launcher that always times out."""
         raise subprocess.TimeoutExpired(argv, 1)
 
     monkeypatch.setattr(cycle.subprocess, "Popen", as_popen(boom))
@@ -231,7 +231,7 @@ def test_an_evaluator_that_raises_is_reported(cycle, tmp_path, monkeypatch) -> N
     monkeypatch.setattr(cycle.subprocess, "Popen", _fake_run())
 
     def bad(answer):
-        """Test helper or fixture: bad."""
+        """Evaluator that raises RuntimeError."""
         raise RuntimeError("boom")
 
     r = cycle.live_cycle(**_kwargs(tmp_path, evaluate=bad))
@@ -256,7 +256,7 @@ PHYLAX_CARD = {
 
 
 def _card(**over):
-    """Test helper or fixture: card."""
+    """Return a copy of PHYLAX_CARD with the given fields overridden."""
     card = dict(PHYLAX_CARD)
     card.update(over)
     return card
@@ -333,9 +333,9 @@ def test_the_programs_pass_the_card_through(name: str, tmp_path: Path) -> None:
 
 
 def _fake_run_err(stderr: str, stdout: str = "", returncode: int = 1, calls=None):
-    """Test helper or fixture: fake run err."""
+    """Build a fake Popen factory whose process returns the given stderr, stdout and exit code."""
     def run(argv, **kwargs):
-        """Test helper or fixture: run."""
+        """Record argv in calls when given; return a completed process with the canned output."""
         if calls is not None:
             calls.append(argv)
         return subprocess.CompletedProcess(argv, returncode, stdout=stdout, stderr=stderr)
@@ -420,20 +420,20 @@ def test_malformed_trace_fields_are_refused_before_anything_is_spent(cycle, tmp_
         preflights = 0
 
         def preflight(self, n, hold_seconds):
-            """Test helper or fixture: preflight."""
+            """Approve every request and count the preflights."""
             Guard.preflights += 1
             return {"ok": True, "reservation": "r", "projected_usd": 0.0}
 
         def release(self, r):
-            """Test helper or fixture: release."""
+            """Ignore the release."""
             pass
 
         def settle(self, *a, **k):
-            """Test helper or fixture: settle."""
+            """Return a zero cost estimate."""
             return 0.0
 
         def classify(self, t):
-            """Test helper or fixture: classify."""
+            """Report no provider stop condition."""
             return None
 
     r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=Guard(), **over))
@@ -448,7 +448,7 @@ def test_a_timeout_reports_that_the_launcher_was_called(cycle, tmp_path, monkeyp
     _arm(monkeypatch, cycle)
 
     def boom(argv, **kwargs):
-        """Test helper or fixture: boom."""
+        """Fake launcher that always times out."""
         raise subprocess.TimeoutExpired(argv, 1)
 
     monkeypatch.setattr(cycle.subprocess, "Popen", as_popen(boom))
@@ -498,7 +498,7 @@ def test_an_unwritable_marker_releases_the_reservation(cycle, tmp_path, monkeypa
     monkeypatch.setattr(cycle.subprocess, "Popen", _fake_run(calls=calls))
 
     def denied(marker):
-        """Test helper or fixture: denied."""
+        """Fake marker claim that fails because the log directory is not writable."""
         raise PermissionError("log_dir is not writable")
 
     monkeypatch.setattr(cycle, "_claim_once", denied)
@@ -575,7 +575,7 @@ def test_an_oserror_from_the_launcher_releases_the_reservation(cycle, tmp_path, 
     _arm(monkeypatch, cycle)
 
     def boom(argv, **kwargs):
-        """Test helper or fixture: boom."""
+        """Fake launcher whose exec fails with OSError."""
         raise OSError("exec failed")
 
     monkeypatch.setattr(cycle.subprocess, "Popen", boom)
@@ -590,7 +590,7 @@ def test_an_interrupt_during_the_run_settles_the_possibly_sent_request(cycle, tm
     _arm(monkeypatch, cycle)
 
     def interrupted(argv, **kwargs):
-        """Test helper or fixture: interrupted."""
+        """Fake launcher that is interrupted by the operator."""
         raise KeyboardInterrupt
 
     monkeypatch.setattr(cycle.subprocess, "Popen", as_popen(interrupted))
@@ -616,7 +616,7 @@ def test_a_valueerror_from_the_launcher_frees_the_reservation(cycle, tmp_path, m
     _arm(monkeypatch, cycle)
 
     def refuses(argv, **kwargs):
-        """Test helper or fixture: refuses."""
+        """Fake launcher that rejects its argv with ValueError."""
         raise ValueError("embedded null byte")
 
     monkeypatch.setattr(cycle.subprocess, "Popen", refuses)

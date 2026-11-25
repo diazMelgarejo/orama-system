@@ -167,25 +167,38 @@ test docstrings; PR-carried memory vs `lesson_94a6ff5363ae`.
 | Perpetua-Tools #516 and orama #519 | Merged by the operator. |
 | G4, G7, G8, G10, the live-cycle pin check | Done on main (doc 76 section 14): `STALL_WINDOW` retained, live preflight (pin plus same-day local evidence), integer guard at 2**53, one metric registry. The generic OpenAI route refuses W&B, and the W&B request runs in a killable worker with parent-owned spend. Lanes B1 to B3 are finished. |
 | G6 | Accepted as written by the operator on 2026-11-23. |
-| G11 | The operator ruled on 2026-11-23: split by role. Wanda keeps the OpenAI client and her soul card; the Biafra seats use Cline under the shared spend gate. Doc 76 section 15 records both rulings. |
+| G11 | The operator ruled on 2026-11-23: split by role. Wanda keeps the OpenAI client and her soul card. That client stays outside the spend gate and is not an authorized unattended or paid path. The Biafra seats are designated to use Cline under the shared spend gate once the launcher can bound both total output and request count (`live_cycle()` refuses today). Doc 76 section 15 records both rulings. |
 | G1, G2 | Still blocked on Anamnesis and on published Kungfu atoms with evaluable O1 to O3. Change nothing until they exist. |
+| 60-day leaf lifetime | Confirmed by the operator as current policy (renewal agreement v2). The Perpetua-Tools `DECISIONS.md` entry records it; reverting would be one constant, `LEAF_VALIDITY_DAYS`, and the tests derive from it. |
 | Live activation | Not armed. Still a separate operator act (section 9.3). |
 
-### 9.2 Open pull requests and branches (none merged; the operator decides)
+### 9.2 Pull requests (all merged; as of 2026-11-23)
 
-| Repo | Item | Head at last check | Note |
-| --- | --- | --- | --- |
-| Perpetua-Tools | PR 519, MC2 rescue and LAN peer TLS notes | `ca7a94a` | CI green. Adds the 60-day leaf lifetime and its tests. |
-| orama-system | PR 524, Mac peer discovery and TLS startup | `1ad06eee` | CI green. Backup selection filters each candidate. |
-| oramasys | PR 104, controller service rescue | `5011d2d` | Review finding already fixed on the branch. |
-| Both repos | Branch `2026-11-23-001-biafra-g6-g11-rulings` | PT `18bac0f`, orama `b91e9372` | Carries the G6 and G11 rulings. No PR opened; open one only if asked. |
+| Repo | Pull request | Merge commit |
+| --- | --- | --- |
+| Perpetua-Tools | 519, MC2 rescue and LAN peer TLS notes | `97522f2` |
+| Perpetua-Tools | 520, the G6 and G11 rulings | `2045bf9` |
+| orama-system | 524, Mac peer discovery, TLS startup, the rulings and this handoff | `4caaae20` |
+| oramasys | 104, controller service rescue | `4b344626` |
 
-Other agents and the operator push to these branches while you work. Fetch before every edit
-(section 9.5) and never force-push.
+Each repo has one open follow-up, not merged:
+
+| Repo | Pull request | Commits that record the Wanda decision and the port loop |
+| --- | --- | --- |
+| Perpetua-Tools | 521 | `42f840cb` (decision and lesson correction) |
+| orama-system | 525 | `e81d0672` (decision), `d6e5909a` (port loop) |
+
+Later commits can sit on top of these. Read the current tip with `gh pr view` before editing.
+Never force-push.
 
 ### 9.3 What remains, in order
 
-1. **Operator decisions:** merge or hold each item in section 9.2.
+1. **Review the two follow-up PRs.** Wanda's decision is made: `wanda_chat.py` stays a direct
+   OpenAI client, outside the spend gate, and is not an authorized unattended or paid path.
+   Do not wrap it in the gate in these pulls. This is a policy, not a guard: nothing in code stops
+   it. Two invocation paths were checked: the command in `SKILL.md`, and the `wanda-wandb` agent
+   registered in `bin/agents/REGISTRY.yml` (card `bin/agents/wanda/agent.md`). No Perpetua-Tools
+   code and no scheduler references either.
 2. **Live activation (operator only).** Needs a real task with a reproducing defect, a fixed
    evaluator, `pin_evaluator` run first, named provider, budget, request limit and deadline, a
    same-day read-only provider probe (effort `high` for the V4.1 models), the operator's own
@@ -193,18 +206,26 @@ Other agents and the operator push to these branches while you work. Fetch befor
    code now enforces the pin and the same-day evidence; it cannot do the provider probe or the
    attestation. Stop without retry on a paid-credit demand, a rejected effort, or an existing
    marker file.
-3. **Confirm one assumption:** the 60-day leaf lifetime was recorded as renewal agreement v2 and
-   treated as current policy. Reverting is one constant, `LEAF_VALIDITY_DAYS`, and the tests derive
-   from it.
-4. **Verify what is still unverified:**
+3. **Verify what is still unverified:**
    - the PowerShell form of the stdin bearer curl command (only curl 8.5.0 on Linux was tested);
    - `-no-CAstore` on LibreSSL, the macOS system `openssl` (only OpenSSL 3.0.13 was tested);
-   - a frozen-lockfile `pnpm install` for the `qs` pin in `packages/alphaclaw-mcp`;
+   - Apple's own `/bin/bash` and macOS userland tools (BSD `sed`, `awk`, `nc`, `openssl`) against
+     `start.sh`; only a Linux build of bash 3.2.57 was run (see below);
    - the kqueue exit probe and the 18 macOS-only sandbox tests, never run natively;
    - Windows, for the sandbox and the discovery paths.
-5. **Small carry-overs:** `lesson_371473e17ad0` is a redundant shorter correction (its `supersedes`
-   holds one id); older test helpers have generic filler docstrings; PR-carried memory overrode
-   `lesson_94a6ff5363ae` for the 2026-11-17 consolidation only.
+   Checked since the last update: `_normalize_port` gives the same result on a real bash 3.2.57 as on
+   bash 5 for all 18 test inputs, and the three `start.sh` test files pass under it (67 passed, 2
+   skipped; the skips are the PowerShell tests), identical to the control run. A frozen-lockfile
+   `pnpm install` (pnpm 10.28.0) for the `qs` pin exits 0, resolves only `qs@6.16.1` and leaves the
+   lockfile unchanged. The flush path's
+   `_parse_port_remap` reads ports with `int()` and range-checks them, so a zero-padded port is read
+   as decimal and an out-of-range one is refused; the old equality bug could only emit an identity
+   remap.
+4. **Small carry-overs, mostly closed:** `lesson_371473e17ad0` was retracted as redundant (its
+   `supersedes` was null, not one id; `lesson_d4ac6209ce38` names it as the same correction and covers
+   every point). Fifty generic filler docstrings in four test files now say what each helper does,
+   proven docstring-only by AST equality. PR-carried memory overrode `lesson_94a6ff5363ae` for the
+   2026-11-17 consolidation only.
 
 ### 9.4 Known environment-only failures (not caused by this work)
 

@@ -477,3 +477,23 @@ Skillify pattern:
   thing: once an attempt is spent it stays, so the attempt cannot repeat. A status field such as
   `recorded` is derived from what was written, never assumed. A table cell with a `|` inside code needs `\|`;
   the lint config excludes SKILL.md, so check those tables by eye.
+
+## Dependency order of a remediation batch (2026-11-25)
+
+Build the task list from what each step needs, not from the order the requests arrived in. A batch
+that touches research, docs, memory, commits and a push has one workable order:
+
+- **Independent reads first, in parallel.** Research (a model's release date, an upstream document)
+  and diagnosis (why a pull request shows a merge conflict, what a failing check actually says) need
+  nothing from each other, so run them together before any edit.
+- **Research feeds the docs and the code.** Record a fact only after its source is read, with the
+  source and the date it was checked. When the best source carries no date, say so and name the one
+  that does.
+- **Docs and memory feed the commits.** A commit message cites the doc and the lesson, so write and
+  verify them first, then commit in logical batches. Tests come before the docs they prove.
+- **One push per repository comes last,** with every ref in a single command. Review replies and
+  pull-request-body follow-ups cite pushed SHAs, so they follow the push; the body follow-up also
+  needs the operator's grant.
+- **Restack in order before that push.** The base pull request first, then each stacked branch on
+  the previous tip, so the chain is linear. A pushed stacked branch that must move goes out in the
+  same push, with a lease.

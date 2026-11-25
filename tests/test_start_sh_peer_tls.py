@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 START_SH = ROOT / "start.sh"
 BASH = "/bin/bash"  # macOS ships bash 3.2: the functions must work there under set -euo pipefail
 FUNCS = (
-    "_peer_tls_frontend_dir", "_peer_tls_frontend_configured", "_peer_cert_sha256", "_peer_tls_port_args",
+    "_normalize_port", "_peer_tls_frontend_dir", "_peer_tls_frontend_configured", "_peer_cert_sha256", "_peer_tls_port_args",
     "_peer_ip_from_discovery", "_peer_outbox_remap_args", "_port_listening", "_ensure_peer_tls_frontend",
     "_run_lan_peer_probe", "_flush_lan_peer_outbox", "_run_lan_peer_inbox_check", "_peer_tls_autostart_allowed",
 )
@@ -154,6 +154,37 @@ def test_port_override_and_validation(tmp_path) -> None:
     assert ok.returncode == 0 and "--portal-port 9443" in ok.stdout
     for bad in ("0", "65536", "84x3", "-1"):
         assert _bash(tmp_path, "_peer_tls_port_args", {**base, "PEER_PORTAL_TLS_PORT": bad}).returncode != 0, bad
+
+
+def test_port_override_refuses_a_port_too_long_to_compare(tmp_path) -> None:
+    """A 24-digit port is refused; a failed numeric test must not wave it through."""
+    pem, digest = _pem(b"orama-test-cert-long-port")
+    ca = tmp_path / "ca.pem"
+    ca.write_text(pem, encoding="utf-8")
+    env = {"PEER_CA_FILE": str(ca), "PEER_CA_SHA256": digest, "PEER_PORTAL_TLS_PORT": "999999999999999999999999"}
+    assert _bash(tmp_path, "_peer_tls_port_args", env).returncode != 0
+
+
+def test_port_override_uses_the_decimal_value_of_a_zero_padded_port(tmp_path) -> None:
+    """A zero-padded port is passed on as its decimal value."""
+    pem, digest = _pem(b"orama-test-cert-padded-port")
+    ca = tmp_path / "ca.pem"
+    ca.write_text(pem, encoding="utf-8")
+    env = {"PEER_CA_FILE": str(ca), "PEER_CA_SHA256": digest, "PEER_PORTAL_TLS_PORT": "09443"}
+    ok = _bash(tmp_path, '_peer_tls_port_args; echo "${_PEER_PORT_ARGS[*]}"', env)
+    assert ok.returncode == 0 and "--portal-port 9443" in ok.stdout
+
+
+def test_remap_args_compare_zero_padded_ports_by_value(tmp_path) -> None:
+    """08002 equals 8002 for the equality guard, and padded ports reach the remap as decimals."""
+    _discovery(tmp_path)
+    env = {"PEER_PORTAL_TLS_ENABLED": "1", "PEER_CA_FILE": "/x/ca.pem"}
+    same = _bash(tmp_path, '_peer_outbox_remap_args; echo "n=${#_PEER_REMAP_ARGS[@]}"',
+                 {**env, "PORTAL_PORT": "8002", "PEER_PORTAL_TLS_PORT": "08002"})
+    assert "n=0" in same.stdout
+    padded = _bash(tmp_path, '_peer_outbox_remap_args; echo "${_PEER_REMAP_ARGS[*]}"',
+                   {**env, "PORTAL_PORT": "08002", "PEER_PORTAL_TLS_PORT": "08443"})
+    assert "--remap-port 8002:8443" in padded.stdout
 
 
 def test_helper_never_touches_trust_stores_or_the_local_portal_port() -> None:
@@ -311,6 +342,31 @@ def test_frontend_skipped_when_disabled_and_honest_when_prerequisites_missing(tm
     assert "start" not in log.read_text(encoding="utf-8"), "an invalid config must never be started"
 
 
+def test_frontend_port_validation_matches_normalize_port(tmp_path) -> None:
+    """The front end accepts only normalized TCP ports before any side effects."""
+    warning = "PEER_PORTAL_TLS_PORT must be a TCP port between 1 and 65535"
+    stub = "_port_listening() { echo \"CHECK $1\"; return 1; }; command() { return 1; }; "
+    for bad in ("0", "00", "65536", "099999", "84x3", " 8443", "-1", "999999999999999999999999"):
+        result = _bash(
+            tmp_path,
+            stub + "_ensure_peer_tls_frontend",
+            {"PEER_PORTAL_TLS_PORT": bad},
+            path="/usr/bin:/bin",
+        )
+        assert result.returncode == 1, bad
+        assert warning in result.stderr, bad
+        assert result.stdout == "", bad
+    for good, normalized in (("1", "1"), ("65535", "65535"), ("08443", "8443"), ("0000000000000443", "443")):
+        result = _bash(
+            tmp_path,
+            stub + "_ensure_peer_tls_frontend",
+            {"PEER_PORTAL_TLS_PORT": good},
+            path="/usr/bin:/bin",
+        )
+        assert warning not in result.stderr, good
+        assert result.stdout == f"CHECK {normalized}\n", good
+
+
 def test_frontend_without_admin_directive_uses_default_without_host_probe(tmp_path: Path) -> None:
     """An absent admin directive resolves to 2019 without probing a real listener."""
     bindir, log = _fake_caddy(tmp_path)
@@ -413,6 +469,31 @@ def test_frontend_rejects_proxy_target_that_does_not_match_the_portal_port(tmp_p
     result = _bash(tmp_path, '_port_listening() { return 1; }; _ensure_peer_tls_frontend', {"ORAMA_LAN_CONTROL_PLANE_DIR": str(cfg), "PORTAL_PORT": "8002", "PEER_PORTAL_TLS_PORT": "9443"}, path=f"{bindir}:/usr/bin:/bin")
     assert result.returncode != 0
     assert "proxies to port 9999" in result.stderr and "PORTAL_PORT is 8002" in result.stderr
+    assert not log.exists()
+
+
+def test_frontend_matches_a_zero_padded_portal_port_to_the_proxy_target(tmp_path) -> None:
+    """PORTAL_PORT=08002 is the same port as a Caddyfile proxy target of 8002, so there is no mismatch."""
+    bindir, log = _fake_caddy(tmp_path)
+    cfg = _config_dir(tmp_path, proxy="localhost:8002")
+    result = _bash(tmp_path, '_port_listening() { return 1; }; _ensure_peer_tls_frontend',
+                   {"ORAMA_LAN_CONTROL_PLANE_DIR": str(cfg), "PORTAL_PORT": "08002", "PEER_PORTAL_TLS_PORT": "9443"},
+                   path=f"{bindir}:/usr/bin:/bin")
+    assert "proxies to port" not in result.stderr
+
+
+def test_frontend_rejects_a_long_proxy_port_that_shares_a_five_digit_prefix(tmp_path) -> None:
+    """Capture the full reverse_proxy port so 040002 does not normalize as PORTAL_PORT 4000."""
+    bindir, log = _fake_caddy(tmp_path)
+    cfg = _config_dir(tmp_path, proxy="localhost:040002")
+    result = _bash(
+        tmp_path,
+        '_port_listening() { return 1; }; _ensure_peer_tls_frontend',
+        {"ORAMA_LAN_CONTROL_PLANE_DIR": str(cfg), "PORTAL_PORT": "4000", "PEER_PORTAL_TLS_PORT": "9443"},
+        path=f"{bindir}:/usr/bin:/bin",
+    )
+    assert result.returncode != 0
+    assert "proxies to port 040002" in result.stderr and "PORTAL_PORT is 4000" in result.stderr
     assert not log.exists()
 
 

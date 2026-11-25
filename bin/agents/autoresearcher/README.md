@@ -12,7 +12,8 @@ Secondary audit reference for the original single-track ML loop only:
 `https://github.com/karpathy/autoresearch`.
 
 Renewed 2026-11-14. Those two repos are not the bilevel system. Qu and Lu, arXiv:2603.23420, add an
-outer loop that writes a new search mechanism. The experimental branch `experimental/tri-level-pr2`
+outer loop that writes a new search mechanism: Level 2 mechanism research, and organizational
+meta-learning in Visser's sense. The experimental branch `experimental/tri-level-pr2`
 of EdwardOptimization/Bilevel-Autoresearch adds a Level 3 meta-mechanism pass. Its own report says
 tri-level did not beat bi-level, so bi-level stays the default and tri-level stays optional
 research. Scout does not occupy that outer seat. The agent-neutral MetaResearcher role is a separate
@@ -76,6 +77,11 @@ Scout does not choose or edit the evaluator: the digest is pinned by the operato
 and Scout reports it unchanged.
 Biafra, the outer seat, reads the trace and proposes search-rule changes as Mechanism Cards; Scout
 never takes the outer seat, and the outer seat never takes Scout's commands. Effort is explicit.
-Preferred and human-gated for the AutoResearcher seat: Claude Opus 5.5 medium or GPT-6.1 Sol
+Preferred and human-gated for the AutoResearcher seat: Claude Opus 5.5 medium or GPT-6.2 Sol
 medium, run only after explicit approval. Default and automatic: medium, else high, else low,
 never xhigh or max, on free W&B turns and as the fallback when no paid permission is granted.
+
+Paired offline review: the generic inner seat (`autoresearch-inner`, distinct from Scout) takes
+bounded hypotheses and offline measurement while Biafra (`metaresearch-outer`) reviews. Read both
+repositories' agent and seat cards before dispatch; see
+`bin/orama-system/skills/metaresearcher/references/paired-offline-review.md`.

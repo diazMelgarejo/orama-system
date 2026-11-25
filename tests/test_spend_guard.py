@@ -29,7 +29,7 @@ HOLD = 60.0
 pytestmark = pytest.mark.usefixtures("offline_guard")
 
 def _load(rel: str, name: str):
-    """Test helper or fixture: load."""
+    """Import the file at ROOT/rel as a fresh module registered in sys.modules under name."""
     spec = importlib.util.spec_from_file_location(name, ROOT / rel)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -57,7 +57,7 @@ needs_pt = pytest.mark.skipif(
 
 @pytest.fixture()
 def sg() -> ModuleType:
-    """Test helper or fixture: sg."""
+    """Load the spend guard adapter module fresh for each test."""
     return _load("bin/agents/spend_guard.py", "spend_guard")
 
 
@@ -66,14 +66,14 @@ def sg_isolated(sg: ModuleType, tmp_path_factory: pytest.TempPathFactory) -> Mod
     # For tests that assert "no guard anywhere" or pick the candidate themselves. CI really has a checkout
     # at CI_CHECKOUT, which would otherwise satisfy them. Tests that need the real guard use `sg`, which
     # keeps that fallback, because in CI it is the only way they find the guard.
-    """Test helper or fixture: sg isolated."""
+    """The adapter with CI_CHECKOUT redirected to a missing directory (no CI fallback)."""
     sg.CI_CHECKOUT = tmp_path_factory.getbasetemp() / "no-ci-checkout"
     return sg
 
 
 @pytest.fixture()
 def cycle():
-    """Test helper or fixture: cycle."""
+    """Load the Biafra cycle module fresh for each test."""
     return _load("bin/agents/biafra_cycle.py", "biafra_cycle")
 
 
@@ -91,7 +91,7 @@ def test_a_missing_perpetua_tools_checkout_fails_closed(sg_isolated, tmp_path, m
 
 
 def _attest(tmp_path: Path, **over) -> None:
-    """Test helper or fixture: attest."""
+    """Write a valid free-plan attestation record in tmp_path; kwargs override its fields."""
     path = tmp_path / "provider-attestations" / "wandb-inference.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     record = {
@@ -181,7 +181,7 @@ class FakeGuard:
     def __init__(
         self, pre: dict[str, Any] | None = None, classify: Callable[[str], str | None] | None = None,
     ) -> None:
-        """Test helper or fixture: init  ."""
+        """Store the canned preflight result and classifier; start with empty call logs."""
         self.pre = pre or {"ok": True, "reservation": "r1", "projected_usd": 0.05}
         self.settled = []
         self.released = []
@@ -189,7 +189,7 @@ class FakeGuard:
         self._classify = classify
 
     def preflight(self, prompt_chars: int, hold_seconds: float) -> dict[str, Any]:
-        """Test helper or fixture: preflight."""
+        """Record the arguments and return the canned preflight result."""
         self.prompt_chars = prompt_chars
         self.hold_seconds = hold_seconds
         return self.pre
@@ -197,30 +197,30 @@ class FakeGuard:
     def settle(
         self, reservation: str, input_chars: int, output_chars: int, outcome: str, seat: str, mode: str,
     ) -> float:
-        """Test helper or fixture: settle."""
+        """Record the settlement as a tuple and return a fixed cost estimate."""
         self.settled.append((reservation, input_chars, output_chars, outcome, seat, mode))
         return 0.0123
 
     def settle_unknown(
         self, reservation: str, input_chars: int, outcome: str, seat: str, mode: str,
     ) -> float:
-        """Test helper or fixture: settle unknown."""
+        """Record the unknown-output settlement as a tuple and return a fixed cost estimate."""
         self.unknown.append((reservation, input_chars, outcome, seat, mode))
         return 0.05
 
     def release(self, reservation: str) -> None:
-        """Test helper or fixture: release."""
+        """Record the released reservation id."""
         self.released.append(reservation)
 
     def classify(self, text: str) -> str | None:
-        """Test helper or fixture: classify."""
+        """Return the injected classifier's verdict for text, or None when none was given."""
         return self._classify(text) if self._classify else None
 
 
 def _fake_run(stdout="ANSWER", stderr="", returncode=0, calls=None):
-    """Test helper or fixture: fake run."""
+    """Build a fake Popen factory whose process returns the given output and exit code."""
     def run(argv, **kwargs):
-        """Test helper or fixture: run."""
+        """Fake Popen factory whose process returns the given output and exit code."""
         if calls is not None:
             calls.append(argv)
         return subprocess.CompletedProcess(argv, returncode, stdout=stdout.encode(), stderr=stderr.encode())
@@ -229,7 +229,7 @@ def _fake_run(stdout="ANSWER", stderr="", returncode=0, calls=None):
 
 
 def _arm(monkeypatch, cycle) -> None:
-    """Test helper or fixture: arm."""
+    """Open the live-cycle gate and arm it, and stub out the launcher boundary check."""
     monkeypatch.setenv(cycle.GATE_ENV, "approved")
     monkeypatch.setenv(cycle.ARM_ENV, "1")
     # Historical lifecycle tests exercise an explicitly simulated supported launcher.
@@ -237,7 +237,7 @@ def _arm(monkeypatch, cycle) -> None:
 
 
 def _kwargs(tmp_path: Path, **over):
-    """Test helper or fixture: kwargs."""
+    """Write an evaluator pin under tmp_path and return live_cycle kwargs; over overrides them."""
     tmp_path.mkdir(parents=True, exist_ok=True)
     pin = tmp_path / "evaluator-pin.json"
     pin.write_text(json.dumps({"version": 1, "evaluator_digest": DIGEST, "covers": ["verifier.py"]}))
@@ -311,7 +311,7 @@ def test_a_timeout_settles_as_unknown_output_never_as_zero(cycle, tmp_path, monk
     _arm(monkeypatch, cycle)
 
     def boom(argv, **kwargs):
-        """Test helper or fixture: boom."""
+        """Fake launcher that always times out."""
         raise subprocess.TimeoutExpired(argv, 1)
 
     monkeypatch.setattr(cycle.subprocess, "Popen", as_popen(boom))
@@ -335,7 +335,7 @@ def test_the_old_ledger_parameters_are_gone(cycle) -> None:
 
 
 def _fake_pt(root: Path) -> Path:
-    """Test helper or fixture: fake pt."""
+    """Create the stub Perpetua-Tools layout under root (orchestrator/ with empty modules)."""
     (root / "orchestrator").mkdir(parents=True)
     for name in ("provider_limits.py", "cost_guard.py", "spend_gate.py"):
         (root / "orchestrator" / name).write_text("# stub\n")
@@ -619,7 +619,7 @@ def test_a_running_launch_cannot_be_swept_by_another_reservation(sg, cycle, tmp_
     seen: dict = {}
 
     def slow_launch(argv, **kwargs):
-        """Test helper or fixture: slow launch."""
+        """Fake launcher that outlives its timeout by a second while another guard preflights."""
         clock["now"] = base + 100 + 1  # the launcher is still inside its 100 s timeout, plus one second
         seen["second"] = other.preflight(10_000, 60.0)
         clock["now"] = base + 100 + cycle.SETTLE_MARGIN_S - 1
@@ -637,7 +637,7 @@ def test_a_running_launch_cannot_be_swept_by_another_reservation(sg, cycle, tmp_
 
 
 def _child(code: str) -> list[str]:
-    """Test helper or fixture: child."""
+    """Return an argv that runs the given Python source in the current interpreter."""
     return [sys.executable, "-c", code]
 
 
@@ -672,7 +672,7 @@ def test_an_interrupt_settles_unknown_and_reraises(cycle, tmp_path, monkeypatch)
     _arm(monkeypatch, cycle)
 
     def interrupted(argv, **kwargs):
-        """Test helper or fixture: interrupted."""
+        """Fake launcher that is interrupted by the operator."""
         raise KeyboardInterrupt
 
     monkeypatch.setattr(cycle.subprocess, "Popen", as_popen(interrupted))
