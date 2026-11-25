@@ -36,7 +36,7 @@ from typing import Callable
 
 STMT = r"(?:^|[;&|(\n]|\bthen\b|\bdo\b|\belse\b)[ \t]*"
 HEREDOC = re.compile(r"<<-?[ \t]*(['\"]?)(\w+)\1[^\n]*\n.*?^[ \t]*\2[ \t]*$", re.S | re.M)
-BASH_BODY = re.compile(r"(?:^|[\s;&|(])(?:\S*/)?bash(?:[ \t]+-[A-Za-z]+)*[ \t]*(?:-c\b|-s\b|<<|<\()|^#!.*\bbash\b", re.M)
+BASH_COMMAND = re.compile(r"(?:^|[\s;&|(])(?:[^\s;&|()]*/)?bash[ \t]+(?:-[A-Za-z]*[ \t]+)*-c[ \t]+(?P<body>'[^']*'|\"(?:\\.|[^\"\\])*\")")
 ESCAPE = re.compile(r"#[ \t]*gotcha-ok[ \t]*:[ \t]*([\w,*-]+)")
 CREATES_FILES = re.compile(r"\b(?:touch|mkdir|cp|mv|tar|unzip|gunzip|make|cmake|npm|pnpm|yarn|pip3?|python3?|node|cargo|go|curl|wget|git[ \t]+(?:checkout|pull|clone|restore|reset|stash|merge|rebase))\b|>")
 NO_WORDS = {"echo", "printf", "test", "[", "[[", "cd", "export", "read", "unset", "return", "local"}
@@ -63,6 +63,36 @@ def pat(pattern: str) -> Callable[[str, str], bool]:
     """Return a check that fires when *pattern* matches anywhere in the command."""
     regex = re.compile(pattern, re.M)
     return lambda command, _cwd: bool(regex.search(command))
+
+
+def _mask_quotes(command: str, *, double: bool = True) -> str:
+    """Mask quoted text, retaining double-quoted expansions when requested."""
+    chars = list(command)
+    quote = None
+    i = 0
+    while i < len(command):
+        c = command[i]
+        if c == "\\" and quote != "'" and i + 1 < len(command):
+            chars[i:i + 2] = "  "
+            i += 2
+            continue
+        if quote is None and c in "'\"":
+            quote = c
+            chars[i] = " "
+        elif c == quote:
+            quote = None
+            chars[i] = " "
+        elif quote == "'" or (quote == '"' and double):
+            chars[i] = " "
+        i += 1
+    return "".join(chars)
+
+
+def _bash4_in_zsh(command: str, _cwd: str) -> bool:
+    expansions = _mask_quotes(command, double=False)
+    executable = _mask_quotes(command)
+    return bool(re.search(r"\$\{[A-Za-z_]\w*(?:,,|\^\^|,|\^)\}", expansions)
+                or re.search(STMT + r"(?:mapfile|readarray)\b", executable, re.M))
 
 
 def _after_cmdsub(command: str, start: int) -> int:
@@ -117,14 +147,14 @@ def _unmatched_glob(command: str, cwd: str) -> bool:
 def _env_dump(command: str, _cwd: str) -> bool:
     """`env`, `printenv` or `export -p` with no filter that drops the values."""
     start = STMT + r"(?:env|printenv|export[ \t]+-p|declare[ \t]+-x|typeset[ \t]+-x)[ \t]*(?=\||;|&&|$)"
-    safe = r"\|[ \t]*(?:cut[ \t]+-d[ \t]*=[ \t]*-f[ \t]*1|wc\b|grep[ \t]+-\w*[cq]\w*)"
+    safe = r"\|[ \t]*(?:cut[ \t]+-d[ \t]*=[ \t]*-f[ \t]*1(?=[ \t|]|$)|wc\b|grep[ \t]+-\w*[cq]\w*)"
     # Only this statement's pipeline counts: cut it at the first `;`, `&`, `&&`, `||` or newline (an `N>&M` redirection is not a separator).
     return any(not re.search(safe, re.split(r";|(?<!>)&|\|\||\n", command[m.end():], maxsplit=1)[0]) for m in re.finditer(start, command, re.M))
 
 
 def _commit_without_message(command: str, _cwd: str) -> bool:
     """`git commit` that would open an editor: no message flag in its arguments."""
-    flags = r"(?:^|[ \t])(?:-[A-Za-z]*[mFCc][A-Za-z]*(?:[ \t=]|$)|--message|--file|--no-edit|--allow-empty-message|--reuse-message)"
+    flags = r"(?:^|[ \t])(?:-[A-Za-z]*[mFC][A-Za-z]*(?:[ \t=]|$)|--message|--file|--no-edit|--allow-empty-message|--reuse-message)"
     return any(
         not re.search(flags, m.group(1))
         for m in re.finditer(STMT + r"git[ \t]+(?:-[cC][ \t]+\S+[ \t]+)*commit\b([^;&|\n]*)", command, re.M)
@@ -217,7 +247,7 @@ RULES: tuple[Rule, ...] = (
          ("pkill -f server", "kill $(pgrep -f server)"), ("kill 1234", "pgrep -f '[s]erver'")),
     Rule("bash4-in-zsh", "deny", "`${var,,}`, `${var^^}`, `mapfile` and `readarray` are bash 4+; they fail in zsh and bash 3.2",
          "use `tr '[:upper:]' '[:lower:]'` and `while IFS= read -r line`",
-         pat(r"\$\{[A-Za-z_]\w*(?:,,|\^\^|,|\^)\}|\bmapfile\b|\breadarray\b"),
+         _bash4_in_zsh,
          ("x=${y,,}", "mapfile -t a < f"), ("x=$(echo \"$y\" | tr A-Z a-z)", "echo ok"), zsh_only=True),
     Rule("gnu-only-flags", "deny", "GNU-only flags that BSD tools on macOS reject (`date -d`, `stat -c`, `find -printf`, ...)",
          "use `date -v`, `stat -f`, `python3`, `base64 | tr -d '\\n'`, `sed '$d'`, `xargs -0`",
@@ -239,11 +269,13 @@ def evaluate(command: str, cwd: str) -> list[Rule]:
     escaped = {i for m in ESCAPE.finditer(command) for i in m.group(1).split(",")}
     if escaped & {"all", "*"}:
         return []
-    body_is_bash = bool(BASH_BODY.search(command))
     stripped = strip_heredocs(command)
+    outer = BASH_COMMAND.sub(lambda m: m.group(0)[:m.start("body") - m.start()] + "''", stripped)
+    if re.match(r"^#!.*\bbash\b", command):
+        outer = ""
     return [
         rule for rule in RULES
-        if rule.id not in escaped and not (rule.zsh_only and body_is_bash) and rule.check(stripped, cwd)
+        if rule.id not in escaped and rule.check(outer if rule.zsh_only else stripped, cwd)
     ]
 
 

@@ -181,6 +181,38 @@ def test_env_dump_safe_filter_applies_to_the_env_pipeline_only(cwd: str) -> None
     assert "secret-env-dump" not in _ids("env | grep -c X 2>&1 | cat", cwd)
 
 
+@pytest.mark.parametrize(("selection", "fires"), [("1", False), ("1-", True), ("1,2", True)])
+def test_env_dump_cut_field_selection(selection: str, fires: bool, cwd: str) -> None:
+    assert ("secret-env-dump" in _ids(f"env | cut -d= -f{selection}", cwd)) is fires
+
+
+@pytest.mark.parametrize(("args", "fires"), [("-c HEAD", True), ("-C HEAD", False),
+                                             ("-c HEAD --no-edit", False)])
+def test_commit_reuse_message_options(args: str, fires: bool, cwd: str) -> None:
+    assert ("git-commit-no-message" in _ids(f"git commit {args}", cwd)) is fires
+
+
+@pytest.mark.parametrize(("command", "fires"), [
+    ("rg -n 'mapfile|readarray' .", False),
+    ("printf '%s' '${value,,}'", False),
+    ('printf "%s" "${value,,}"', True),
+    ("mapfile -t items < file", True),
+    ("printf x | readarray -t items", True),
+])
+def test_bash4_rule_distinguishes_quoted_text(command: str, fires: bool, cwd: str) -> None:
+    assert ("bash4-in-zsh" in _ids(command, cwd)) is fires
+
+
+@pytest.mark.parametrize(("command", "fires"), [
+    ("bash -c 'status=$?'", False),
+    ("bash -c 'true'; status=$?", True),
+    ("status=1; bash -c 'true'", True),
+    ('bash -c "status=1" && path=example', True),
+])
+def test_bash_exemption_is_limited_to_quoted_body(command: str, fires: bool, cwd: str) -> None:
+    assert ("zsh-reserved-var" in _ids(command, cwd)) is fires
+
+
 def test_codex_review_accepts_fd_redirections_before_dev_null(cwd: str) -> None:
     """`2>&1 < /dev/null` is the same safe call; `2>&1` alone is still the silent hang."""
     assert "codex-review-stdin" not in _ids('codex review "x" 2>&1 < /dev/null', cwd)
