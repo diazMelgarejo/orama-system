@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -37,9 +38,14 @@ def _ids(command: str, where: str) -> set[str]:
     return {rule.id for rule in sg.evaluate(command, where)}
 
 
+def _clean_env() -> dict[str, str]:
+    """The inherited environment minus the hook's own controls, so a developer's exports cannot change a test."""
+    return {k: v for k, v in os.environ.items() if k not in {"SHELL_GOTCHAS_MODE", "SHELL_GOTCHAS_LOG"}}
+
+
 def _hook(command: str, where: str, **env: str) -> subprocess.CompletedProcess[str]:
     payload = json.dumps({"tool_name": "Bash", "tool_input": {"command": command}, "cwd": where})
-    full_env = {**os.environ, "SHELL_GOTCHAS_LOG": os.devnull, **env}
+    full_env = {**_clean_env(), "SHELL_GOTCHAS_LOG": os.devnull, **env}
     return subprocess.run([sys.executable, str(GOTCHAS)], input=payload, capture_output=True, text=True, env=full_env)
 
 
@@ -140,7 +146,7 @@ def test_log_records_rule_ids_and_a_hash_never_the_command(tmp_path: Path, cwd: 
     secret_command = "env | grep SUPER_SECRET_TOKEN_VALUE"
     payload = json.dumps({"tool_input": {"command": secret_command}, "cwd": cwd})
     subprocess.run([sys.executable, str(GOTCHAS)], input=payload, capture_output=True, text=True,
-                   env={**os.environ, "SHELL_GOTCHAS_LOG": str(log)})
+                   env={**_clean_env(), "SHELL_GOTCHAS_LOG": str(log)})
     entry = json.loads(log.read_text(encoding="utf-8"))
     assert entry["rules"] == ["secret-env-dump"] and len(entry["cmd"]) == 12
     assert "SUPER_SECRET" not in log.read_text(encoding="utf-8")
@@ -150,7 +156,7 @@ def test_default_log_lives_in_the_state_directory_never_in_the_claude_config(tmp
     """With no SHELL_GOTCHAS_LOG the hook logs under XDG_STATE_HOME and writes nothing inside a .claude dir."""
     home, state = tmp_path / "home", tmp_path / "state"
     (home / ".claude" / "hooks").mkdir(parents=True)
-    env = {k: v for k, v in os.environ.items() if k != "SHELL_GOTCHAS_LOG"}
+    env = _clean_env()
     env.update({"HOME": str(home), "XDG_STATE_HOME": str(state)})
     payload = json.dumps({"tool_input": {"command": "env | grep x"}, "cwd": cwd})
     subprocess.run([sys.executable, str(GOTCHAS)], input=payload, capture_output=True, text=True, env=env)
@@ -158,6 +164,36 @@ def test_default_log_lives_in_the_state_directory_never_in_the_claude_config(tmp
     assert list((home / ".claude").rglob("*")) == [home / ".claude" / "hooks"], "nothing may be written under .claude"
     report = subprocess.run([sys.executable, str(GOTCHAS), "--report"], capture_output=True, text=True, env=env)
     assert "1 firing(s) across 1 rule(s)" in report.stdout
+
+
+def test_hook_is_hermetic_against_an_exported_mode(cwd: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    """An operator who exports SHELL_GOTCHAS_MODE=off still gets the same test results."""
+    monkeypatch.setenv("SHELL_GOTCHAS_MODE", "off")
+    assert _hook("git commit", cwd).returncode == 2
+
+
+def test_env_dump_safe_filter_applies_to_the_env_pipeline_only(cwd: str) -> None:
+    """A later `| wc` on another statement cannot excuse the dump; counting after a filter stays allowed."""
+    assert "secret-env-dump" in _ids("env | grep X; echo | wc -l", cwd)
+    assert "secret-env-dump" in _ids("env | grep X && echo | wc -l", cwd)
+    assert "secret-env-dump" in _ids("env | grep X & echo | wc -l", cwd)
+    assert "secret-env-dump" not in _ids("env | grep PATH | wc -l", cwd)
+    assert "secret-env-dump" not in _ids("env | grep -c X 2>&1 | cat", cwd)
+
+
+def test_codex_review_accepts_fd_redirections_before_dev_null(cwd: str) -> None:
+    """`2>&1 < /dev/null` is the same safe call; `2>&1` alone is still the silent hang."""
+    assert "codex-review-stdin" not in _ids('codex review "x" 2>&1 < /dev/null', cwd)
+    assert "codex-review-stdin" not in _ids('codex review --base main < /dev/null 2>&1 | tail -5', cwd)
+    assert "codex-review-stdin" in _ids('codex review "x" 2>&1', cwd)
+    assert "codex-review-stdin" in _ids('codex review "x" 2>&1 | tail -5', cwd)
+    assert "codex-review-stdin" in _ids('codex review "x" > /dev/null', cwd), "an output redirect is not a stdin redirect"
+
+
+def test_rendered_table_rows_never_split_on_a_pipe_inside_a_cell() -> None:
+    """GFM splits cells on every unescaped pipe, code spans included; each row must keep four cells."""
+    for row in sg.markdown().splitlines():
+        assert len(re.split(r"(?<!\\)\|", row.strip())[1:-1]) == 4, row
 
 
 def test_self_test_passes() -> None:

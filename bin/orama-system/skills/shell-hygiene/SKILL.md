@@ -417,17 +417,17 @@ Controls, for the rare command that is correct as written:
 | `zsh-colon-modifier` | warn | `$var:x` starts a history-style modifier in zsh (`$sha:src/a.py` is rewritten) | brace the name: `"${sha}:src/a.py"` |
 | `git-worktree-relative` | warn | `git -C <repo> worktree add <relative>` resolves the path from <repo>, not the shell | pass an absolute path, then `git -C <repo> status` to confirm the checkout stayed clean |
 | `echo-backslash` | deny | zsh and BSD `echo` interpret backslash sequences (`\copy`, `\n`) inside quotes | use `printf '%s\n' 'text'` for literal text |
-| `bsd-cat-A` | deny | macOS `cat` has no `-A` | use `cat -et file` or `od -c file | head` |
+| `bsd-cat-A` | deny | macOS `cat` has no `-A` | use `cat -et file` or `od -c file \| head` |
 | `bsd-grep-P` | deny | macOS `grep` has no `-P` (Perl regex) | use `grep -E`, `rg -P`, or `git grep -P` |
 | `bsd-sed-inplace` | deny | BSD `sed -i` needs a suffix argument; `sed -i 's/a/b/' f` fails | use `sed -i '' 's/a/b/' f`, or write with python3 |
 | `bsd-sed-word-boundary` | warn | BSD `sed` has no `\b` word boundary | use `[[:<:]]`/`[[:>:]]`, or python3 |
-| `secret-env-dump` | deny | dumping the environment prints every secret in it | list names only (`env | cut -d= -f1`) or test one value (`printenv NAME | wc -c`) |
+| `secret-env-dump` | deny | dumping the environment prints every secret in it | list names only (`env \| cut -d= -f1`) or test one value (`printenv NAME \| wc -c`) |
 | `secret-file-read` | warn | reading a credentials or `.env` file prints its values | count or list keys (`grep -c`, `cut -d= -f1`) and never paste the values |
 | `git-interactive` | deny | interactive git commands wait for a terminal that is not there | use non-interactive forms (`git add <paths>`, `git rebase <base>`, `git diff`) |
 | `git-commit-no-message` | deny | `git commit` without a message opens an editor and hangs | pass `-m "msg"` or `-F -` with a heredoc, or `--no-edit` when amending |
 | `codex-review-stdin` | deny | `codex review` blocks silently on stdin | end the command with `< /dev/null` |
 | `kill-by-pattern` | warn | `pkill -f` and `kill $(pgrep -f ...)` match the wrapper shell and this command itself | match with a bracket (`pgrep -f '[s]erver'`), use a pid file, or kill a known pid |
 | `bash4-in-zsh` | deny | `${var,,}`, `${var^^}`, `mapfile` and `readarray` are bash 4+; they fail in zsh and bash 3.2 | use `tr '[:upper:]' '[:lower:]'` and `while IFS= read -r line` |
-| `gnu-only-flags` | deny | GNU-only flags that BSD tools on macOS reject (`date -d`, `stat -c`, `find -printf`, ...) | use `date -v`, `stat -f`, `python3`, `base64 | tr -d '\n'`, `sed '$d'`, `xargs -0` |
+| `gnu-only-flags` | deny | GNU-only flags that BSD tools on macOS reject (`date -d`, `stat -c`, `find -printf`, ...) | use `date -v`, `stat -f`, `python3`, `base64 \| tr -d '\n'`, `sed '$d'`, `xargs -0` |
 | `bsd-date-nanoseconds` | warn | BSD `date` has no `%N`; it prints a literal `N` | use python3 `time.time_ns()` |
 <!-- shell-gotchas:end -->

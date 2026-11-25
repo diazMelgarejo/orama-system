@@ -118,7 +118,8 @@ def _env_dump(command: str, _cwd: str) -> bool:
     """`env`, `printenv` or `export -p` with no filter that drops the values."""
     start = STMT + r"(?:env|printenv|export[ \t]+-p|declare[ \t]+-x|typeset[ \t]+-x)[ \t]*(?=\||;|&&|$)"
     safe = r"\|[ \t]*(?:cut[ \t]+-d[ \t]*=[ \t]*-f[ \t]*1|wc\b|grep[ \t]+-\w*[cq]\w*)"
-    return any(not re.search(safe, command[m.end():].split("\n")[0]) for m in re.finditer(start, command, re.M))
+    # Only this statement's pipeline counts: cut it at the first `;`, `&`, `&&`, `||` or newline (an `N>&M` redirection is not a separator).
+    return any(not re.search(safe, re.split(r";|(?<!>)&|\|\||\n", command[m.end():], maxsplit=1)[0]) for m in re.finditer(start, command, re.M))
 
 
 def _commit_without_message(command: str, _cwd: str) -> bool:
@@ -132,7 +133,8 @@ def _commit_without_message(command: str, _cwd: str) -> bool:
 
 def _codex_review_stdin(command: str, _cwd: str) -> bool:
     """`codex review` without `< /dev/null` waits silently on stdin."""
-    return any("/dev/null" not in m.group(1) for m in re.finditer(STMT + r"codex[ \t]+review\b([^;&|\n]*)", command, re.M))
+    args = r"((?:[0-9]*>&[0-9-]*|[^;&|\n])*)"  # arguments, keeping `2>&1`-style fd redirections inside the capture
+    return any(not re.search(r"<[ \t]*/dev/null", m.group(1)) for m in re.finditer(STMT + r"codex[ \t]+review\b" + args, command, re.M))
 
 
 RULES: tuple[Rule, ...] = (
@@ -192,8 +194,8 @@ RULES: tuple[Rule, ...] = (
          pat(r"\bsed\b[^|;\n]*\\b"), (r"sed 's/\bfoo\b/x/' f",), ("sed 's/foo/x/' f", "sed -E 's/foo|bar/x/' f")),
     Rule("secret-env-dump", "deny", "dumping the environment prints every secret in it",
          "list names only (`env | cut -d= -f1`) or test one value (`printenv NAME | wc -c`)",
-         _env_dump, ("env | grep -i url", "printenv", "export -p | grep DB"),
-         ("env FOO=1 python3 x.py", "printenv HOME", "env | cut -d= -f1", "env | wc -l")),
+         _env_dump, ("env | grep -i url", "printenv", "export -p | grep DB", "env | grep X; echo | wc -l"),
+         ("env FOO=1 python3 x.py", "printenv HOME", "env | cut -d= -f1", "env | wc -l", "env | grep PATH | wc -l")),
     Rule("secret-file-read", "warn", "reading a credentials or `.env` file prints its values",
          "count or list keys (`grep -c`, `cut -d= -f1`) and never paste the values",
          pat(r"\b(?:cat|head|tail|less|more|bat)[ \t]+[^|;&\n]*(?:\.env(?:\.\w+)?\b|\.netrc|credentials|id_rsa|id_ed25519|\.pem\b|\.gbrain/config\.json|\.aws/|\.ssh/)"),
@@ -207,7 +209,8 @@ RULES: tuple[Rule, ...] = (
          _commit_without_message, ("git commit", "git commit -a", "git commit --amend"),
          ("git commit -m x", "git commit -q -F -", "git commit --amend --no-edit", 'git commit -am "x"', "git commit -qm x")),
     Rule("codex-review-stdin", "deny", "`codex review` blocks silently on stdin", "end the command with `< /dev/null`",
-         _codex_review_stdin, ('codex review "x"',), ('codex review "x" < /dev/null',)),
+         _codex_review_stdin, ('codex review "x"', 'codex review "x" 2>&1'),
+         ('codex review "x" < /dev/null', 'codex review "x" 2>&1 < /dev/null')),
     Rule("kill-by-pattern", "warn", "`pkill -f` and `kill $(pgrep -f ...)` match the wrapper shell and this command itself",
          "match with a bracket (`pgrep -f '[s]erver'`), use a pid file, or kill a known pid",
          pat(STMT + r"pkill[ \t]+-f\b|\bkill[ \t]+(?:-\w+[ \t]+)*\$\([ \t]*pgrep[ \t]+-f"),
@@ -248,7 +251,8 @@ def markdown() -> str:
     """Render the rule table embedded in shell-hygiene/SKILL.md."""
     lines = ["| Rule | Level | What goes wrong | Fix |", "| --- | --- | --- | --- |"]
     for r in RULES:
-        lines.append(f"| `{r.id}` | {r.level} | {r.summary} | {r.hint} |".replace("|`", "|`"))
+        summary, hint = (text.replace("|", "\\|") for text in (r.summary, r.hint))  # an unescaped pipe splits a GFM cell
+        lines.append(f"| `{r.id}` | {r.level} | {summary} | {hint} |")
     return "\n".join(lines)
 
 
