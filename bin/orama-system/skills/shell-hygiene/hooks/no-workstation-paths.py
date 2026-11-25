@@ -23,8 +23,8 @@ def repository_target(file_path: str) -> tuple[str, str] | None:
     )
     if probe.returncode != 0:
         return None
-    root = probe.stdout.rstrip("\n")
-    return root, (directory / target.name).relative_to(root).as_posix()
+    root = Path(probe.stdout.rstrip("\n")).resolve()
+    return str(root), (directory / target.name).relative_to(root).as_posix()
 
 def main():
     try:
