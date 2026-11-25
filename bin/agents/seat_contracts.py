@@ -56,12 +56,14 @@ WANDB_EFFORTS: dict[str, tuple[str, ...]] = {
     "deepseek-ai/DeepSeek-V4.1-Flash": ("high", "low"),
     "deepseek-ai/DeepSeek-V4-Flash-0731": ("medium", "high", "low"),
 }
-# Preferred paid occupants are human-gated: they run only after explicit approval.
+# Preferred paid occupants are human-gated: they run only after explicit approval. The OpenAI pair is the
+# durable ruling of 2026-11-25 (GPT-6.2 Astra high outer, GPT-6.2 Sol medium inner; both first public
+# 2026-11-17), subject to change when OpenAI updates its frontier models.
 PREFERRED_PAID: dict[tuple[str, str], tuple[str, str]] = {
     ("outer", "anthropic"): ("Claude Fable 5.2", "high"),
     ("inner", "anthropic"): ("Claude Opus 5.5", "medium"),
-    ("outer", "openai"): ("GPT-6 Astra", "high"),
-    ("inner", "openai"): ("GPT-6.1 Sol", "medium"),
+    ("outer", "openai"): ("GPT-6.2 Astra", "high"),
+    ("inner", "openai"): ("GPT-6.2 Sol", "medium"),
 }
 
 

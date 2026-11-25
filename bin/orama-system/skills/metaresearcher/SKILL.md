@@ -91,7 +91,7 @@ Biafra is the canonical agent for this seat; the ids stay `metaresearch-outer` a
   requires a reviewed or graduated card's receipt to carry a valid `trace` with the card's own
   evaluator digest, and a graduated card to match the pin.
 - **Model and effort (always explicit):** preferred and human-gated, Claude Fable 5.2 high or
-  GPT-6 Astra high for Biafra, run only after explicit approval. Default and automatic, medium else
+  GPT-6.2 Astra high for Biafra, run only after explicit approval. Default and automatic, medium else
   high else low and never xhigh or max, on free W&B turns and as the fallback when no paid permission
   is granted. `plan_turn` in `seat_contracts.py` encodes both tiers.
   Free default on W&B: `V4.1-Flash-1017` at `high` (V4.1 rejects `medium`); sources and the full
@@ -100,3 +100,7 @@ Biafra is the canonical agent for this seat; the ids stay `metaresearch-outer` a
   request limit and deadline first. Plan: `docs/v2/76-biafra-outer-seat-canonical-plan.md`.
 - **Runbook:** `references/live-pair-loop-runbook.md` (interim) holds the checklist, the sandbox
   rules for model-written code, how to vet a seat's output and the results of the live turns so far.
+- **Paired offline review:** `references/paired-offline-review.md` is the pattern for reviewing a
+  lockstep PR pair with Biafra as the reviewer and the AutoResearcher inner seat running bounded
+  hypotheses and offline measurement. It starts by reading both repositories' agent and seat cards,
+  and a live cycle or promotion stays a separate operator decision.

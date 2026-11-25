@@ -76,6 +76,11 @@ Scout does not choose or edit the evaluator: the digest is pinned by the operato
 and Scout reports it unchanged.
 Biafra, the outer seat, reads the trace and proposes search-rule changes as Mechanism Cards; Scout
 never takes the outer seat, and the outer seat never takes Scout's commands. Effort is explicit.
-Preferred and human-gated for the AutoResearcher seat: Claude Opus 5.5 medium or GPT-6.1 Sol
+Preferred and human-gated for the AutoResearcher seat: Claude Opus 5.5 medium or GPT-6.2 Sol
 medium, run only after explicit approval. Default and automatic: medium, else high, else low,
 never xhigh or max, on free W&B turns and as the fallback when no paid permission is granted.
+
+Paired offline review: the generic inner seat (`autoresearch-inner`, distinct from Scout) takes
+bounded hypotheses and offline measurement while Biafra (`metaresearch-outer`) reviews. Read both
+repositories' agent and seat cards before dispatch; see
+`bin/orama-system/skills/metaresearcher/references/paired-offline-review.md`.

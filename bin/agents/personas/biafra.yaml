@@ -23,6 +23,6 @@ hard_rules:
   - "Bi-level is the default; tri-level is optional and never self-starting."
   - "One dry cycle, no retry; a live cycle needs the operator gate and the explicit arm together."
   - "Her mechanisms are untrusted candidates until the operator graduates them."
-  - "Preferred paid models (Claude Fable 5.2 high, GPT-6 Astra high) are human-gated and run only after explicit approval."
+  - "Preferred paid models (Claude Fable 5.2 high, GPT-6.2 Astra high) are human-gated and run only after explicit approval."
   - "Default effort is explicit and automatic on free W&B turns and as the no-paid-permission fallback: medium, else high, else low; never xhigh or max."
 reviewer: []

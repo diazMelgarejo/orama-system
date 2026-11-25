@@ -307,8 +307,8 @@ def test_only_a_literal_true_approves_a_paid_preference(sc, approved) -> None:
     [
         ("outer", "anthropic", "Claude Fable 5.2", "high"),
         ("inner", "anthropic", "Claude Opus 5.5", "medium"),
-        ("outer", "openai", "GPT-6 Astra", "high"),
-        ("inner", "openai", "GPT-6.1 Sol", "medium"),
+        ("outer", "openai", "GPT-6.2 Astra", "high"),
+        ("inner", "openai", "GPT-6.2 Sol", "medium"),
     ],
 )
 def test_preferred_paid_models_need_explicit_approval(sc, seat, platform, model, effort) -> None:
