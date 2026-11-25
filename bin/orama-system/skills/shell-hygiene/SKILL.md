@@ -369,3 +369,65 @@ Rules:
 ## Related skills
 
 - [[fable5-git-rebase-safety]] — when a shell audit turns up branches/worktrees that look stale, divergent, or "N behind" — use its tree-twin doctrine and per-file triage (patch-id matching, structural-supersession checks) instead of trusting raw ahead/behind output.
+
+## Enforced by hooks (provision and re-create)
+
+The traps above, and the other zsh and macOS ones agents keep hitting, are stopped before the
+command runs by `hooks/shell-gotchas.py`, a table-driven PreToolUse hook for the Bash tool. Each rule
+carries bad and good fixtures that `shell-gotchas.py --self-test` executes, so the rules, this table
+and the tests come from one registry. `hooks/no-workstation-paths.py` does the same for Write and
+Edit (no `/Users/<name>/` paths in tracked files).
+
+Provision or repair (idempotent; `--check` is read-only and is the default):
+
+```bash
+bash bin/orama-system/scripts/install-shell-hooks.sh --check
+bash bin/orama-system/scripts/install-shell-hooks.sh --apply
+```
+
+`--apply` copies the canonical hooks into `~/.claude/hooks/`, merges their registrations into
+`~/.claude/settings.json` (a timestamped backup first, no other key or hook touched), retires the
+superseded `zsh-reserved-vars.py` registration, and runs the self-test.
+
+Rollout: a new install registers `shell-gotchas.py` in warn mode (`SHELL_GOTCHAS_MODE=warn`), so
+findings reach the model and the log but nothing is blocked while the rules are tuned. Review what
+fired with `python3 ~/.claude/hooks/shell-gotchas.py --report`, then promote with
+`install-shell-hooks.sh --apply --mode enforce`. Re-applying keeps the current mode unless `--mode`
+is given. Rules marked `warn` below are heuristics that guess at runtime state and never block.
+`bin/orama-system/scripts/first-run-install.sh` runs the same check and apply as one of its steps.
+
+Controls, for the rare command that is correct as written:
+
+- `# gotcha-ok: <rule-id>` (comma-separated, or `all`) inside the command skips those rules for it.
+- `SHELL_GOTCHAS_MODE=warn` turns every block into a warning (staged rollout); `off` disables the
+  hook. The default is `enforce`.
+- Blocks and warnings are logged to `$XDG_STATE_HOME/shell-gotchas/usage.log` (default
+  `~/.local/state/shell-gotchas/usage.log`, outside the Claude configuration directory) as rule ids
+  and a command hash, never the command text, so false positives can be counted and a rule tuned.
+
+<!-- shell-gotchas:begin -->
+| Rule | Level | What goes wrong | Fix |
+| --- | --- | --- | --- |
+| `zsh-set-unquoted` | deny | `set -- $var` does not word-split in zsh | use an array (`args=(a b); set -- "${args[@]}"`) or loop with `while IFS= read -r x` |
+| `zsh-for-scalar` | warn | `for x in $var` iterates once over a scalar in zsh | iterate an array (`"${arr[@]}"`), a glob, or `while IFS= read -r x` over the lines |
+| `zsh-unquoted-list-var` | warn | a multi-line `$(...)` result is passed unquoted, so zsh sends it as one word | build an array, pass globs, or use `xargs`/`while IFS= read -r`; never `cmd $LIST` |
+| `zsh-command-in-variable` | deny | a command line stored in a string variable is not split into words by zsh | use a function or an array (`GIT=(git -C dir); "${GIT[@]}" status`) |
+| `zsh-reserved-var` | deny | assigning `status`, `path`, `argv`... clobbers a zsh special parameter | rename it (`job_status`, `file_path`); `path` is tied to PATH and breaks every later command |
+| `zsh-unmatched-glob` | warn | an unquoted glob with no match aborts the whole command in zsh (`no matches found`) | quote the pattern for the tool, use `find`, or add `(N)`; check the files exist first |
+| `zsh-colon-modifier` | warn | `$var:x` starts a history-style modifier in zsh (`$sha:src/a.py` is rewritten) | brace the name: `"${sha}:src/a.py"` |
+| `git-worktree-relative` | warn | `git -C <repo> worktree add <relative>` resolves the path from <repo>, not the shell | pass an absolute path, then `git -C <repo> status` to confirm the checkout stayed clean |
+| `echo-backslash` | deny | zsh and BSD `echo` interpret backslash sequences (`\copy`, `\n`) inside quotes | use `printf '%s\n' 'text'` for literal text |
+| `bsd-cat-A` | deny | macOS `cat` has no `-A` | use `cat -et file` or `od -c file | head` |
+| `bsd-grep-P` | deny | macOS `grep` has no `-P` (Perl regex) | use `grep -E`, `rg -P`, or `git grep -P` |
+| `bsd-sed-inplace` | deny | BSD `sed -i` needs a suffix argument; `sed -i 's/a/b/' f` fails | use `sed -i '' 's/a/b/' f`, or write with python3 |
+| `bsd-sed-word-boundary` | warn | BSD `sed` has no `\b` word boundary | use `[[:<:]]`/`[[:>:]]`, or python3 |
+| `secret-env-dump` | deny | dumping the environment prints every secret in it | list names only (`env | cut -d= -f1`) or test one value (`printenv NAME | wc -c`) |
+| `secret-file-read` | warn | reading a credentials or `.env` file prints its values | count or list keys (`grep -c`, `cut -d= -f1`) and never paste the values |
+| `git-interactive` | deny | interactive git commands wait for a terminal that is not there | use non-interactive forms (`git add <paths>`, `git rebase <base>`, `git diff`) |
+| `git-commit-no-message` | deny | `git commit` without a message opens an editor and hangs | pass `-m "msg"` or `-F -` with a heredoc, or `--no-edit` when amending |
+| `codex-review-stdin` | deny | `codex review` blocks silently on stdin | end the command with `< /dev/null` |
+| `kill-by-pattern` | warn | `pkill -f` and `kill $(pgrep -f ...)` match the wrapper shell and this command itself | match with a bracket (`pgrep -f '[s]erver'`), use a pid file, or kill a known pid |
+| `bash4-in-zsh` | deny | `${var,,}`, `${var^^}`, `mapfile` and `readarray` are bash 4+; they fail in zsh and bash 3.2 | use `tr '[:upper:]' '[:lower:]'` and `while IFS= read -r line` |
+| `gnu-only-flags` | deny | GNU-only flags that BSD tools on macOS reject (`date -d`, `stat -c`, `find -printf`, ...) | use `date -v`, `stat -f`, `python3`, `base64 | tr -d '\n'`, `sed '$d'`, `xargs -0` |
+| `bsd-date-nanoseconds` | warn | BSD `date` has no `%N`; it prints a literal `N` | use python3 `time.time_ns()` |
+<!-- shell-gotchas:end -->
