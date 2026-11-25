@@ -34,7 +34,8 @@ How she works, in order:
    Python validator refuses a card whose `owner_slices` name Phylax, Telos or Agate (look-alikes
    and glued names included) and any field outside the schema. It checks ownership by name only; a
    reviewer still reads what the mechanism changes.
-5. Dry-run once, pin the evaluator digest, revert when the metric rises. The operator promotes.
+5. Dry-run once, pin the evaluator digest. She keeps a rewrite only when metric_after < metric_before;
+   a tie or a rise reverts it (the word table is in `skills/metaresearcher/SKILL.md`). The operator promotes.
 
 A loop that rewrites this seat never starts (never starts automatically); it needs a human
 approval at the top-level orchestrator gate.
