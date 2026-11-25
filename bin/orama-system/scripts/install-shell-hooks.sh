@@ -52,6 +52,7 @@ case "$HOOK_MODE" in ""|warn|enforce) ;; *) echo "install-shell-hooks: --mode mu
 exec python3 - "$MODE" "$SRC_DIR" "$CLAUDE_HOME_DIR" "$HOOK_MODE" <<'PY'
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -60,6 +61,8 @@ import time
 from pathlib import Path
 
 mode, src, home, hook_mode = sys.argv[1], Path(sys.argv[2]), Path(sys.argv[3]), sys.argv[4]
+default_home = home.absolute() == Path.home() / ".claude"
+resolved_home = home.resolve()
 apply = mode == "apply"
 HOOKS = (("shell-gotchas.py", "Bash"), ("no-workstation-paths.py", "Write|Edit"))
 LEGACY = (("zsh-reserved-vars.py", "Bash"),)  # superseded by the zsh-reserved-var rule
@@ -68,9 +71,10 @@ issues, actions = [], []
 
 def command_for(name: str, want: str = "warn") -> str:
     """The registered command: $HOME-relative for the default home, absolute otherwise."""
-    base = "$HOME/.claude" if home.resolve() == (Path.home() / ".claude").resolve() else str(home)
+    path = (f'"$HOME/.claude/hooks/{name}"' if default_home
+            else shlex.quote(str(resolved_home / "hooks" / name)))
     prefix = "SHELL_GOTCHAS_MODE=warn " if name == "shell-gotchas.py" and want == "warn" else ""
-    return f'{prefix}python3 "{base}/hooks/{name}"'
+    return f'{prefix}python3 {path}'
 
 
 def atomic_write(path: Path, data: bytes, mode_bits: int) -> None:
@@ -91,7 +95,23 @@ try:
     settings = json.loads(original) if original.strip() else {}
 except ValueError as exc:
     sys.exit(f"install-shell-hooks: {settings_path} is not valid JSON ({exc}); fix it first, nothing was changed")
-groups = settings.setdefault("hooks", {}).setdefault("PreToolUse", [])
+
+
+def invalid_settings() -> None:
+    sys.exit(f"install-shell-hooks: {settings_path} has invalid hooks.PreToolUse structure; nothing was changed")
+
+
+if not isinstance(settings, dict) or not isinstance(settings.get("hooks", {}), dict):
+    invalid_settings()
+groups = settings["hooks"].get("PreToolUse", []) if "hooks" in settings else []
+if not isinstance(groups, list):
+    invalid_settings()
+for group in groups:
+    if not isinstance(group, dict) or not isinstance(group.get("matcher", ""), str) or not isinstance(group.get("hooks"), list):
+        invalid_settings()
+    if any(not isinstance(h, dict) or not isinstance(h.get("command", ""), str) for h in group.get("hooks", [])):
+        invalid_settings()
+settings.setdefault("hooks", {}).setdefault("PreToolUse", groups)
 
 for name, _ in HOOKS:
     wanted, dest = (src / name).read_bytes(), home / "hooks" / name
@@ -103,33 +123,60 @@ for name, _ in HOOKS:
 
 
 
-def registered(name: str, matcher: str) -> bool:
-    return any(g.get("matcher") == matcher and any(name in h.get("command", "") for h in g.get("hooks", [])) for g in groups)
+def managed_mode(entry: dict, name: str) -> str | None:
+    """Identify direct managed registrations without taking over custom commands."""
+    if entry.get("type") != "command":
+        return None
+    try:
+        words = shlex.split(entry.get("command", ""))
+    except ValueError:
+        return None
+    mode_prefix = words.pop(0) if words[:1] and words[0] in {
+        "SHELL_GOTCHAS_MODE=warn", "SHELL_GOTCHAS_MODE=enforce",
+    } else ""
+    if len(words) != 2 or words[0] != "python3" or Path(words[1]).name != name:
+        return None
+    return "warn" if mode_prefix == "SHELL_GOTCHAS_MODE=warn" else "enforce"
 
 
 for name, matcher in HOOKS:
-    current = [h for g in groups if g.get("matcher") == matcher for h in g.get("hooks", []) if name in h.get("command", "")]
-    in_mode = "warn" if current and "SHELL_GOTCHAS_MODE=warn" in current[0]["command"] else "enforce"
-    want = hook_mode or (in_mode if current else "warn")  # no --mode: keep the current mode, new installs start in warn
-    if current and name == "shell-gotchas.py" and in_mode != want:
-        issues.append(f"{name} is registered in {in_mode} mode, not --mode {want}")
-        if apply:
-            current[0]["command"] = command_for(name, want)
-            actions.append(f"registered {name} in {want} mode")
-    elif not registered(name, matcher):
+    current = [
+        (entry, registered_mode)
+        for group in groups if group.get("matcher") == matcher
+        for entry in group["hooks"]
+        if (registered_mode := managed_mode(entry, name)) is not None
+    ]
+    if not current:
         issues.append(f"{name} is not registered for {matcher}")
         if apply:
-            groups.append({"matcher": matcher, "hooks": [{"type": "command", "command": command_for(name, want), "timeout": 10}]})
+            groups.append({"matcher": matcher, "hooks": [{"type": "command", "command": command_for(name, hook_mode or "warn"), "timeout": 10}]})
             actions.append(f"registered {name} for {matcher}")
+    for entry, registered_mode in current:
+        want = hook_mode or registered_mode
+        expected = command_for(name, want)
+        if entry["command"] == expected:
+            continue
+        if name == "shell-gotchas.py" and registered_mode != want:
+            issues.append(f"{name} is registered in {registered_mode} mode, not --mode {want}")
+            action = f"registered {name} in {want} mode"
+        else:
+            issues.append(f"{name} has a stale or noncanonical registered command")
+            action = f"registered {name} for {matcher}"
+        if apply:
+            entry["command"] = expected
+            actions.append(action)
 
 for name, matcher in LEGACY:
-    if registered(name, matcher):
+    legacy_groups = [
+        g for g in groups if g.get("matcher") == matcher
+        and any(managed_mode(h, name) is not None for h in g["hooks"])
+    ]
+    if legacy_groups:
         issues.append(f"{name} is registered but superseded by shell-gotchas.py")
         if apply:
-            for g in groups:
-                if g.get("matcher") == matcher:
-                    g["hooks"] = [h for h in g.get("hooks", []) if name not in h.get("command", "")]
-            groups[:] = [g for g in groups if g.get("hooks")]
+            for g in legacy_groups:
+                g["hooks"] = [h for h in g["hooks"] if managed_mode(h, name) is None]
+            groups[:] = [g for g in groups if g["hooks"] or not any(g is old for old in legacy_groups)]
             actions.append(f"retired the {name} registration")
 
 merged = json.dumps(settings, indent=2, ensure_ascii=False) + "\n"
@@ -142,7 +189,7 @@ if apply and (merged != original) and any(a.startswith(("registered", "retired")
     json.loads(settings_path.read_text(encoding="utf-8"))  # must still parse
 
 installed = home / "hooks" / "shell-gotchas.py"
-if installed.is_file():
+if installed.is_file() and installed.read_bytes() == (src / "shell-gotchas.py").read_bytes():
     done = subprocess.run([sys.executable, str(installed), "--self-test"], capture_output=True, text=True)
     if done.returncode:
         issues.append("shell-gotchas.py --self-test failed: " + (done.stderr.strip().splitlines() or ["?"])[0])

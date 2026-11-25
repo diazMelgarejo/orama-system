@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import json
+import os
+import shlex
 import subprocess
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 HOOKS = ROOT / "bin/orama-system/skills/shell-hygiene/hooks"
@@ -138,3 +142,69 @@ def test_apply_writes_through_symlinks_and_keeps_the_links(tmp_path: Path) -> No
     assert json.loads((dotfiles / "settings.json").read_text(encoding="utf-8"))["model"] == "keep-me"
     assert any("shell-gotchas.py" in c for c in _commands(home))
     assert (dotfiles / "shell-gotchas.py").read_bytes() == GOTCHAS.read_bytes()
+
+
+def test_relative_custom_home_is_absolute_and_shell_quoted(tmp_path: Path) -> None:
+    home = tmp_path / "claude $literal ' space"
+    relative = os.path.relpath(home, Path.cwd())
+    done = _install(Path(relative), "--apply")
+    assert done.returncode == 0, done.stderr
+    command = _gotchas_command(home)
+    assert shlex.split(command)[-1] == str(home / "hooks/shell-gotchas.py")
+    result = subprocess.run(command, shell=True, cwd="/", input='{}', capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    assert _install(Path(relative), "--check").returncode == 0
+
+
+@pytest.mark.parametrize("settings", [
+    [], {"hooks": None}, {"hooks": {"PreToolUse": None}},
+    {"hooks": {"PreToolUse": [None]}},
+    {"hooks": {"PreToolUse": [{"hooks": None}]}},
+    {"hooks": {"PreToolUse": [{"hooks": [None]}]}},
+    {"hooks": {"PreToolUse": [{"hooks": [{"command": None}]}]}},
+])
+def test_invalid_settings_structure_is_rejected_before_writes(tmp_path: Path, settings: object) -> None:
+    path = tmp_path / "settings.json"
+    original = json.dumps(settings)
+    path.write_text(original, encoding="utf-8")
+    done = _install(tmp_path, "--apply")
+    assert done.returncode != 0 and "invalid hooks.PreToolUse structure" in done.stderr
+    assert path.read_text(encoding="utf-8") == original
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["settings.json"]
+
+
+@pytest.mark.parametrize("warn", [True, False])
+def test_stale_registration_is_repaired_preserving_mode(tmp_path: Path, warn: bool) -> None:
+    assert _install(tmp_path, "--apply").returncode == 0
+    settings = _settings(tmp_path)
+    entry = next(h for g in settings["hooks"]["PreToolUse"] for h in g["hooks"]
+                 if "shell-gotchas.py" in h["command"])
+    entry["command"] = ("SHELL_GOTCHAS_MODE=warn " if warn else "") + "python3 /removed/hooks/shell-gotchas.py"
+    (tmp_path / "settings.json").write_text(json.dumps(settings), encoding="utf-8")
+    assert _install(tmp_path, "--check").returncode == 1
+    assert _install(tmp_path, "--apply").returncode == 0
+    assert _gotchas_command(tmp_path).startswith("SHELL_GOTCHAS_MODE=warn ") == warn
+    assert shlex.split(_gotchas_command(tmp_path))[-1] == str(tmp_path / "hooks/shell-gotchas.py")
+    assert _install(tmp_path, "--check").returncode == 0
+
+
+def test_check_does_not_run_drifted_hook(tmp_path: Path) -> None:
+    assert _install(tmp_path, "--apply").returncode == 0
+    hook = tmp_path / "hooks/shell-gotchas.py"
+    marker = tmp_path / "executed"
+    hook.write_text(f"from pathlib import Path\nPath({str(marker)!r}).touch()\n", encoding="utf-8")
+    assert _install(tmp_path, "--check").returncode == 1
+    assert not marker.exists()
+    assert _install(tmp_path, "--apply").returncode == 0
+    assert hook.read_bytes() == GOTCHAS.read_bytes()
+
+
+def test_install_preserves_custom_hooks_that_mention_a_managed_filename(tmp_path: Path) -> None:
+    """The installer owns only direct registrations of the bundled Python scripts."""
+    custom = {"type": "command", "command": "echo shell-gotchas.py"}
+    settings = {"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [custom]}]}}
+    (tmp_path / "settings.json").write_text(json.dumps(settings), encoding="utf-8")
+    done = _install(tmp_path, "--apply")
+    assert done.returncode == 0, done.stderr
+    assert custom["command"] in _commands(tmp_path)
+    assert _install(tmp_path, "--check").returncode == 0
