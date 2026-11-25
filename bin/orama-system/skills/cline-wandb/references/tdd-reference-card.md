@@ -4,12 +4,13 @@
 > (the adopted, authoritative policy — this card never contradicts it)
 > with content it doesn't cover: the Iron Law and rationalization table
 > from
-> [`obra/superpowers`'s TDD skill](https://github.com/obra/superpowers/blob/main/skills/test-driven-development/SKILL.md),
+> [`obra/superpowers`'s TDD skill](https://github.com/obra/superpowers/blob/22f0b463e7a5e579904dd6211a520321035526f7/skills/test-driven-development/SKILL.md),
 > and the detailed RED-GREEN-REFACTOR mechanics, plan-handoff discipline,
 > and evidence-report format from
-> [`affaan-m/ECC`'s tdd-workflow skill](https://github.com/affaan-m/ECC/blob/main/skills/tdd-workflow/SKILL.md).
-> Links throughout resolve to the live source for progressive disclosure
-> — follow one only when the summary here isn't enough.
+> [`affaan-m/ECC`'s tdd-workflow skill](https://github.com/affaan-m/ECC/blob/c05b2d6614f62f6db0047669aa4eefb223d478f9/skills/tdd-workflow/SKILL.md).
+> The upstream citations use verified release commits: Superpowers v7.0.2
+> and ECC v2.2.3. Orama's policy remains the live first-party authority.
+> Follow a citation only when the summary here isn't enough.
 
 ## The Iron Law
 
@@ -19,7 +20,7 @@ Wrote code before the test? Delete it. Don't keep it as "reference,"
 don't adapt it while writing tests, don't look at it. Implement fresh
 from tests. Violating the letter of this rule is violating its spirit.
 (Full source:
-[superpowers § The Iron Law](https://github.com/obra/superpowers/blob/main/skills/test-driven-development/SKILL.md#the-iron-law).)
+[superpowers § The Iron Law](https://github.com/obra/superpowers/blob/22f0b463e7a5e579904dd6211a520321035526f7/skills/test-driven-development/SKILL.md#the-iron-law).)
 
 ## Source of Truth (unchanged from docs/TDD.md)
 
@@ -54,7 +55,7 @@ See the quarantined literal examples in
 [`plan-handoff-bad-examples.md`](plan-handoff-bad-examples.md).
 
 Full source, including the plan-safety checklist:
-[ECC tdd-workflow § Plan Handoff](https://github.com/affaan-m/ECC/blob/main/skills/tdd-workflow/SKILL.md#plan-handoff).
+[ECC tdd-workflow § Plan Handoff](https://github.com/affaan-m/ECC/blob/c05b2d6614f62f6db0047669aa4eefb223d478f9/skills/tdd-workflow/SKILL.md#plan-handoff).
 
 ## RED — Write the Failing Test
 
@@ -69,9 +70,9 @@ passes immediately is testing existing behavior — fix the test.
 
 Detailed RED-gate criteria (runtime vs. compile-time RED, what does
 and doesn't count):
-[ECC tdd-workflow § Step 3](https://github.com/affaan-m/ECC/blob/main/skills/tdd-workflow/SKILL.md#step-3-run-tests-they-should-fail).
+[ECC tdd-workflow § Step 3](https://github.com/affaan-m/ECC/blob/c05b2d6614f62f6db0047669aa4eefb223d478f9/skills/tdd-workflow/SKILL.md#step-3-run-tests-they-should-fail).
 Good vs. bad RED test examples:
-[superpowers § RED](https://github.com/obra/superpowers/blob/main/skills/test-driven-development/SKILL.md#red---write-failing-test).
+[superpowers § RED](https://github.com/obra/superpowers/blob/22f0b463e7a5e579904dd6211a520321035526f7/skills/test-driven-development/SKILL.md#red---write-failing-test).
 
 ## GREEN — Minimal Code
 
@@ -90,7 +91,7 @@ Don't add behavior here.
 
 Full RED-GREEN-REFACTOR step detail, including test-runner detection
 across npm/pnpm/yarn/Bun:
-[ECC tdd-workflow § TDD Workflow Steps](https://github.com/affaan-m/ECC/blob/main/skills/tdd-workflow/SKILL.md#tdd-workflow-steps).
+[ECC tdd-workflow § TDD Workflow Steps](https://github.com/affaan-m/ECC/blob/c05b2d6614f62f6db0047669aa4eefb223d478f9/skills/tdd-workflow/SKILL.md#tdd-workflow-steps).
 
 ## Git Checkpoints (from ECC)
 
@@ -106,7 +107,7 @@ Don't treat commits from other branches or distant history as valid
 checkpoint evidence. Squash merges are fine once the RED/GREEN/refactor
 summary is preserved in the PR body or squash commit message. Full
 source:
-[ECC tdd-workflow § Git Checkpoints](https://github.com/affaan-m/ECC/blob/main/skills/tdd-workflow/SKILL.md#4-git-checkpoints).
+[ECC tdd-workflow § Git Checkpoints](https://github.com/affaan-m/ECC/blob/c05b2d6614f62f6db0047669aa4eefb223d478f9/skills/tdd-workflow/SKILL.md#4-git-checkpoints).
 
 ## Pre-Code-Change Checklist (from docs/TDD.md)
 
@@ -158,7 +159,7 @@ source:
 | "This is different because..." | It isn't. Delete code, start over with TDD. |
 
 Full table plus "Red Flags — STOP and Start Over":
-[superpowers § Common Rationalizations](https://github.com/obra/superpowers/blob/main/skills/test-driven-development/SKILL.md#common-rationalizations).
+[superpowers § Common Rationalizations](https://github.com/obra/superpowers/blob/22f0b463e7a5e579904dd6211a520321035526f7/skills/test-driven-development/SKILL.md#common-rationalizations).
 
 ## Coverage Gate (Python — before Evidence Report)
 
@@ -184,7 +185,7 @@ test file/command and PASS/FAIL result. Quote real commands and real
 outcomes — never invent a PASS for a test that wasn't run. If
 checkpoint commits get squashed, copy the RED/GREEN summary into the
 PR body too. Full format and example table:
-[ECC tdd-workflow § Step 8](https://github.com/affaan-m/ECC/blob/main/skills/tdd-workflow/SKILL.md#step-8-write-a-tdd-evidence-report).
+[ECC tdd-workflow § Step 8](https://github.com/affaan-m/ECC/blob/c05b2d6614f62f6db0047669aa4eefb223d478f9/skills/tdd-workflow/SKILL.md#step-8-write-a-tdd-evidence-report).
 
 ## Verification Checklist
 
@@ -197,7 +198,7 @@ PR body too. Full format and example table:
 
 Can't check every box? TDD was skipped somewhere — go back. Full
 checklist:
-[superpowers § Verification Checklist](https://github.com/obra/superpowers/blob/main/skills/test-driven-development/SKILL.md#verification-checklist).
+[superpowers § Verification Checklist](https://github.com/obra/superpowers/blob/22f0b463e7a5e579904dd6211a520321035526f7/skills/test-driven-development/SKILL.md#verification-checklist).
 
 ## Related
 
@@ -207,7 +208,7 @@ checklist:
 - [`docs/testing-anti-patterns.md`](https://github.com/diazMelgarejo/orama-system/blob/main/docs/testing-anti-patterns.md)
   — mocking pitfalls, testing implementation details instead of
   behavior.
-- [ECC tdd-workflow SKILL.md](https://github.com/affaan-m/ECC/blob/main/skills/tdd-workflow/SKILL.md)
+- [ECC tdd-workflow SKILL.md](https://github.com/affaan-m/ECC/blob/c05b2d6614f62f6db0047669aa4eefb223d478f9/skills/tdd-workflow/SKILL.md)
   — full source for the ECC-derived sections above.
-- [superpowers test-driven-development SKILL.md](https://github.com/obra/superpowers/blob/main/skills/test-driven-development/SKILL.md)
+- [superpowers test-driven-development SKILL.md](https://github.com/obra/superpowers/blob/22f0b463e7a5e579904dd6211a520321035526f7/skills/test-driven-development/SKILL.md)
   — full source for the superpowers-derived sections above.
