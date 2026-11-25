@@ -12,7 +12,8 @@ Secondary audit reference for the original single-track ML loop only:
 `https://github.com/karpathy/autoresearch`.
 
 Renewed 2026-11-14. Those two repos are not the bilevel system. Qu and Lu, arXiv:2603.23420, add an
-outer loop that writes a new search mechanism. The experimental branch `experimental/tri-level-pr2`
+outer loop that writes a new search mechanism: Level 2 mechanism research, and organizational
+meta-learning in Visser's sense. The experimental branch `experimental/tri-level-pr2`
 of EdwardOptimization/Bilevel-Autoresearch adds a Level 3 meta-mechanism pass. Its own report says
 tri-level did not beat bi-level, so bi-level stays the default and tri-level stays optional
 research. Scout does not occupy that outer seat. The agent-neutral MetaResearcher role is a separate

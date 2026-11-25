@@ -101,7 +101,8 @@ The task from the real feedback, quoted as data; the target function; the **sour
 it calls** (turn 3 reverted because the model assumed `_text` returned the text, and it returns a
 bool); the exact required behaviour, matching the evaluator; the output format (one code block, one
 function, three sentences naming the assumption); and "do not call tools". Tell the outer seat which
-numbers are real: she caught that one count in a prompt was wrong.
+numbers are real: she caught that one count in a prompt was wrong. Compute every number in a prompt
+from the evaluator instead of typing it: a case count typed as 24 when the evaluator had 28.
 
 ## Safety for model-written code
 
