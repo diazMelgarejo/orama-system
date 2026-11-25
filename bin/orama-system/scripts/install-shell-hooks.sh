@@ -29,7 +29,8 @@ HOOK_MODE=""
 CLAUDE_HOME_DIR="${CLAUDE_HOME:-$HOME/.claude}"
 
 usage() {
-  sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'
+  # The leading comment block only: stops at the first non-comment line, so editing the header never leaks code.
+  awk 'NR > 1 { if (!/^#/) exit; sub(/^# ?/, ""); print }' "$0"
 }
 
 while [ $# -gt 0 ]; do
@@ -73,7 +74,8 @@ def command_for(name: str, want: str = "warn") -> str:
 
 
 def atomic_write(path: Path, data: bytes, mode_bits: int) -> None:
-    """Write via a temp file in the same directory, then rename over the target."""
+    """Write via a temp file beside the real target, then rename over it; a symlinked path keeps its link."""
+    path = path.resolve()
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
     with os.fdopen(fd, "wb") as fh:

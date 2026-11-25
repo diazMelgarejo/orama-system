@@ -12,8 +12,12 @@ GOTCHAS = HOOKS / "shell-gotchas.py"
 INSTALL = ROOT / "bin/orama-system/scripts/install-shell-hooks.sh"
 
 
-def _install(home: Path, mode: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(["bash", str(INSTALL), mode, "--claude-home", str(home)], capture_output=True, text=True)
+def _install(home: Path, mode: str, *extra: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(["bash", str(INSTALL), mode, "--claude-home", str(home), *extra], capture_output=True, text=True)
+
+
+def _gotchas_command(home: Path) -> str:
+    return next(c for c in _commands(home) if "shell-gotchas.py" in c)
 
 
 def _settings(home: Path) -> dict:
@@ -89,3 +93,48 @@ def test_installer_is_bash_3_2_clean() -> None:
     """The installer and the first-run script must parse under the macOS system bash."""
     for script in (INSTALL, ROOT / "bin/orama-system/scripts/first-run-install.sh"):
         assert subprocess.run(["/bin/bash", "-n", str(script)], capture_output=True).returncode == 0, script
+
+
+def test_help_prints_only_the_header_comment_never_script_code() -> None:
+    """--help and usage errors show documentation lines only: no `set -euo` or other code leaks in."""
+    for args in (["--help"], ["--bogus"]):
+        done = subprocess.run(["bash", str(INSTALL), *args], capture_output=True, text=True)
+        text = done.stdout + done.stderr
+        assert "install-shell-hooks.sh" in text and "--mode enforce" in text
+        assert "set -euo" not in text and "SCRIPT_DIR" not in text
+
+
+def test_fresh_apply_registers_warn_and_mode_is_preserved_until_changed(tmp_path: Path) -> None:
+    """New installs start in warn; --mode enforce promotes; a later plain --apply keeps enforce."""
+    _install(tmp_path, "--apply")
+    assert _gotchas_command(tmp_path).startswith("SHELL_GOTCHAS_MODE=warn ")
+    promoted = _install(tmp_path, "--apply", "--mode", "enforce")
+    assert promoted.returncode == 0 and "registered shell-gotchas.py in enforce mode" in promoted.stdout
+    assert not _gotchas_command(tmp_path).startswith("SHELL_GOTCHAS_MODE=")
+    again = _install(tmp_path, "--apply")
+    assert "nothing changed" in again.stdout and not _gotchas_command(tmp_path).startswith("SHELL_GOTCHAS_MODE=")
+    assert _install(tmp_path, "--check").returncode == 0
+
+
+def test_check_reports_drift_when_the_registered_mode_differs_from_the_requested_one(tmp_path: Path) -> None:
+    _install(tmp_path, "--apply", "--mode", "enforce")
+    drift = _install(tmp_path, "--check", "--mode", "warn")
+    assert drift.returncode == 1 and "DRIFT" in drift.stdout and "enforce mode, not --mode warn" in drift.stdout
+    assert _install(tmp_path, "--check", "--mode", "enforce").returncode == 0
+
+
+def test_apply_writes_through_symlinks_and_keeps_the_links(tmp_path: Path) -> None:
+    """A dotfiles-managed settings.json or hook file stays a symlink and its target receives the update."""
+    home, dotfiles = tmp_path / "home", tmp_path / "dotfiles"
+    (home / "hooks").mkdir(parents=True)
+    dotfiles.mkdir()
+    (dotfiles / "settings.json").write_text(json.dumps({"model": "keep-me"}), encoding="utf-8")
+    (dotfiles / "shell-gotchas.py").write_text("# stale\n", encoding="utf-8")
+    (home / "settings.json").symlink_to(dotfiles / "settings.json")
+    (home / "hooks" / "shell-gotchas.py").symlink_to(dotfiles / "shell-gotchas.py")
+    done = _install(home, "--apply")
+    assert done.returncode == 0, done.stderr
+    assert (home / "settings.json").is_symlink() and (home / "hooks" / "shell-gotchas.py").is_symlink()
+    assert json.loads((dotfiles / "settings.json").read_text(encoding="utf-8"))["model"] == "keep-me"
+    assert any("shell-gotchas.py" in c for c in _commands(home))
+    assert (dotfiles / "shell-gotchas.py").read_bytes() == GOTCHAS.read_bytes()
