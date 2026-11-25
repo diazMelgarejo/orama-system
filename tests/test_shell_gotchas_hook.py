@@ -237,6 +237,22 @@ def test_bash_double_quoted_caller_expansions(cwd: str) -> None:
     assert "bash4-in-zsh" not in _ids('bash -c "mapfile -t items"', cwd)
 
 
+@pytest.mark.parametrize(("command", "rule", "fires"), [
+    ('bash -c "echo $(status=1)"', "zsh-reserved-var", True),
+    ('echo "it\'s $(status=1)"', "zsh-reserved-var", True),
+    ('result="$(( $(mapfile -t a < f) + 1 ))"', "bash4-in-zsh", True),
+    ('status=1', "zsh-reserved-var", True),
+    ('result="$((mapfile + 1))"', "bash4-in-zsh", False),
+    ("bash -c 'status=1'", "zsh-reserved-var", False),
+    (r'''printf '%s\n' 'example: bash -c "echo $(status=1)"' ''', "zsh-reserved-var", False),
+    ("echo 'it is $(status=1)'", "zsh-reserved-var", False),
+    ('''echo 'it'"'"'s $(status=1)' ''', "zsh-reserved-var", False),
+    (r'echo \$(status=1)', "zsh-reserved-var", False),
+])
+def test_quote_sensitive_substitution_corpus(command: str, rule: str, fires: bool, cwd: str) -> None:
+    assert (rule in _ids(command, cwd)) is fires
+
+
 def test_codex_review_accepts_fd_redirections_before_dev_null(cwd: str) -> None:
     """`2>&1 < /dev/null` is the same safe call; `2>&1` alone is still the silent hang."""
     assert "codex-review-stdin" not in _ids('codex review "x" 2>&1 < /dev/null', cwd)

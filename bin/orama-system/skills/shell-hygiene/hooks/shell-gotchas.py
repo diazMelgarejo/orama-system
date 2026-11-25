@@ -96,20 +96,37 @@ def _bash4_in_zsh(command: str, _cwd: str) -> bool:
                 or any(_bash4_in_zsh(body, _cwd) for body in _cmdsubs(command)))
 
 
-def _cmdsubs(command: str, *, quote: str | None = None) -> list[str]:
-    """Find executable $(...) bodies, ignoring single quotes and escaped dollars."""
-    bodies = []
+def _quote_contexts(command: str) -> list[str | None]:
+    """Track simple shell quote context; this is not a shell parser."""
+    contexts: list[str | None] = []
+    quote = None
     i = 0
     while i < len(command):
         c = command[i]
-        if c == "\\" and quote != "'":
+        contexts.append(quote)
+        if c == "\\" and quote != "'" and i + 1 < len(command) and (
+            quote is None or command[i + 1] in '$`"\\\n'
+        ):
+            contexts.append("escaped")
             i += 2
             continue
-        if c == "'" and quote != '"':
-            quote = None if quote == "'" else "'"
-        elif c == '"' and quote != "'":
-            quote = None if quote == '"' else '"'
-        elif c == "$" and quote != "'" and command[i:i + 2] == "$(" and command[i:i + 3] != "$((":
+        if quote is None and c in "'\"":
+            quote = c
+        elif c == quote:
+            quote = None
+        i += 1
+    return contexts
+
+
+def _cmdsubs(command: str, *, contexts: list[str | None] | None = None) -> list[str]:
+    """Find executable $(...) bodies, ignoring single quotes and escaped dollars."""
+    bodies = []
+    if contexts is None:
+        contexts = _quote_contexts(command)
+    i = 0
+    while i < len(command):
+        c = command[i]
+        if c == "$" and contexts[i] not in ("'", "escaped") and command[i:i + 2] == "$(" and command[i:i + 3] != "$((":
             start = i + 2
             j, depth, inner_quote = start, 1, None
             while j < len(command) and depth:
@@ -301,21 +318,9 @@ def strip_heredocs(command: str) -> str:
     return HEREDOC.sub(lambda m: m.group(0).split("\n", 1)[0], command)
 
 
-def _in_single_quotes(command: str, index: int) -> bool:
+def _in_single_quotes(contexts: list[str | None], index: int) -> bool:
     """True when *index* sits inside a single-quoted shell span."""
-    quote = None
-    i = 0
-    while i < index:
-        c = command[i]
-        if c == "\\" and quote != "'" and i + 1 < len(command):
-            i += 2
-            continue
-        if quote is None and c in "'\"":
-            quote = c
-        elif c == quote:
-            quote = None
-        i += 1
-    return quote == "'"
+    return contexts[index] == "'"
 
 
 def evaluate(command: str, cwd: str) -> list[Rule]:
@@ -324,14 +329,19 @@ def evaluate(command: str, cwd: str) -> list[Rule]:
     if escaped & {"all", "*"}:
         return []
     stripped = strip_heredocs(command)
-    caller_expansions: list[str] = []
+    contexts = _quote_contexts(stripped)
+    caller_expansions = _cmdsubs(stripped, contexts=contexts)
+    # Prevent raw statement patterns from interpreting literal openers as syntax.
+    outer_chars = list(stripped)
+    for i in range(len(stripped) - 1):
+        if stripped[i:i + 2] == "$(" and contexts[i] in ("'", "escaped"):
+            outer_chars[i + 1] = " "
+    outer_input = "".join(outer_chars)
 
     def mask_bash_body(match: re.Match[str]) -> str:
         body = match.group("body")
-        # Still blank the body for outer-shell checks, but only promote caller
-        # expansions from executable (non-single-quoted) bash -c arguments.
-        if body.startswith('"') and not _in_single_quotes(stripped, match.start()):
-            caller_expansions.extend(_cmdsubs(body[1:-1], quote='"'))
+        # Parameter expansions in double-quoted bash arguments run in the caller.
+        if body.startswith('"') and not _in_single_quotes(contexts, match.start()):
             caller_expansions.extend(re.findall(
                 r"\$\{[A-Za-z_]\w*(?:,,|\^\^|,|\^)\}", _mask_quotes(body, double=False),
             ))
@@ -340,7 +350,7 @@ def evaluate(command: str, cwd: str) -> list[Rule]:
     if re.match(r"^#!.*\bbash\b", command):
         outer_scopes = ()
     else:
-        outer = BASH_COMMAND.sub(mask_bash_body, stripped)
+        outer = BASH_COMMAND.sub(mask_bash_body, outer_input)
         outer_scopes = (outer, *caller_expansions)
     return [
         rule for rule in RULES
