@@ -204,6 +204,8 @@ def test_commit_reuse_message_options(args: str, fires: bool, cwd: str) -> None:
     ("printf '%s' '$(mapfile -t items)'", False),
     (r'printf "%s" "\$(mapfile -t items)"', False),
     ('result="$(printf \'%s\' mapfile)"', False),
+    ('result="$((mapfile + 1))"', False),
+    ('result="$(( $(mapfile -t items < file) + 1 ))"', True),
 ])
 def test_bash4_rule_distinguishes_quoted_text(command: str, fires: bool, cwd: str) -> None:
     assert ("bash4-in-zsh" in _ids(command, cwd)) is fires
@@ -222,6 +224,7 @@ def test_bash4_rule_distinguishes_quoted_text(command: str, fires: bool, cwd: st
     ('bash -c "status=1"', False),
     (r'bash -c "echo \$(status=1)"', False),
     ("bash -c 'echo $(status=1)'", False),
+    (r"""printf '%s\n' 'example: bash -c "echo $(status=1)"'""", False),
 ])
 def test_bash_exemption_is_limited_to_quoted_body(command: str, fires: bool, cwd: str) -> None:
     assert ("zsh-reserved-var" in _ids(command, cwd)) is fires

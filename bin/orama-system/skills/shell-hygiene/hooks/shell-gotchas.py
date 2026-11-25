@@ -109,7 +109,7 @@ def _cmdsubs(command: str, *, quote: str | None = None) -> list[str]:
             quote = None if quote == "'" else "'"
         elif c == '"' and quote != "'":
             quote = None if quote == '"' else '"'
-        elif c == "$" and quote != "'" and command[i:i + 2] == "$(":
+        elif c == "$" and quote != "'" and command[i:i + 2] == "$(" and command[i:i + 3] != "$((":
             start = i + 2
             j, depth, inner_quote = start, 1, None
             while j < len(command) and depth:
@@ -301,6 +301,23 @@ def strip_heredocs(command: str) -> str:
     return HEREDOC.sub(lambda m: m.group(0).split("\n", 1)[0], command)
 
 
+def _in_single_quotes(command: str, index: int) -> bool:
+    """True when *index* sits inside a single-quoted shell span."""
+    quote = None
+    i = 0
+    while i < index:
+        c = command[i]
+        if c == "\\" and quote != "'" and i + 1 < len(command):
+            i += 2
+            continue
+        if quote is None and c in "'\"":
+            quote = c
+        elif c == quote:
+            quote = None
+        i += 1
+    return quote == "'"
+
+
 def evaluate(command: str, cwd: str) -> list[Rule]:
     """Return the rules that fire for *command*, after the escape marker and bash-body skips."""
     escaped = {i for m in ESCAPE.finditer(command) for i in m.group(1).split(",")}
@@ -311,7 +328,9 @@ def evaluate(command: str, cwd: str) -> list[Rule]:
 
     def mask_bash_body(match: re.Match[str]) -> str:
         body = match.group("body")
-        if body.startswith('"'):
+        # Still blank the body for outer-shell checks, but only promote caller
+        # expansions from executable (non-single-quoted) bash -c arguments.
+        if body.startswith('"') and not _in_single_quotes(stripped, match.start()):
             caller_expansions.extend(_cmdsubs(body[1:-1], quote='"'))
             caller_expansions.extend(re.findall(
                 r"\$\{[A-Za-z_]\w*(?:,,|\^\^|,|\^)\}", _mask_quotes(body, double=False),
