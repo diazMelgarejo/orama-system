@@ -100,6 +100,7 @@ def _quote_contexts(command: str) -> list[str | None]:
     """Track simple shell quote context; this is not a shell parser."""
     contexts: list[str | None] = []
     quote = None
+    substitutions: list[tuple[str | None, int]] = []
     i = 0
     while i < len(command):
         c = command[i]
@@ -110,7 +111,21 @@ def _quote_contexts(command: str) -> list[str | None]:
             contexts.append("escaped")
             i += 2
             continue
-        if quote is None and c in "'\"":
+        if c == "$" and quote != "'" and command[i:i + 2] == "$(":
+            substitutions.append((quote, 1))
+            contexts.append(quote)
+            quote = None
+            i += 2
+            continue
+        if quote is None and substitutions and c in "()":
+            parent_quote, depth = substitutions[-1]
+            depth += 1 if c == "(" else -1
+            if depth:
+                substitutions[-1] = (parent_quote, depth)
+            else:
+                substitutions.pop()
+                quote = parent_quote
+        elif quote is None and c in "'\"":
             quote = c
         elif c == quote:
             quote = None

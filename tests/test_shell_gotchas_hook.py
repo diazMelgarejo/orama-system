@@ -253,6 +253,14 @@ def test_quote_sensitive_substitution_corpus(command: str, rule: str, fires: boo
     assert (rule in _ids(command, cwd)) is fires
 
 
+@pytest.mark.parametrize("command", [
+    """echo "$(printf '%s' "'")"; echo "$(status=1)" """,
+    """echo "$(printf '%s' "$(printf '%s' "'")")"; echo "$(status=1)" """,
+])
+def test_substitution_quotes_do_not_leak_into_later_statement(command: str, cwd: str) -> None:
+    assert "zsh-reserved-var" in _ids(command, cwd)
+
+
 def test_codex_review_accepts_fd_redirections_before_dev_null(cwd: str) -> None:
     """`2>&1 < /dev/null` is the same safe call; `2>&1` alone is still the silent hang."""
     assert "codex-review-stdin" not in _ids('codex review "x" 2>&1 < /dev/null', cwd)
