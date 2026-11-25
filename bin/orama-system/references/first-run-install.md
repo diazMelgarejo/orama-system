@@ -6,12 +6,14 @@
 > **Navigator (outline only):** `OpenClaw/CLAUDE-instru.md` § 0
 > **Last updated:** 2026-05-23
 
-Run components **in order**. The installer is idempotent: satisfied components are skipped on re-run. `--force` re-validates and repairs configuration only — it never reinstalls components already marked satisfied.
+Run components **in order**. The installer is idempotent: satisfied components are skipped on
+re-run. `--force` re-validates and repairs configuration only — it never reinstalls components
+already marked satisfied.
 
 ## Path variables
 
 | Variable | Detection |
-|----------|-----------|
+| ---------- | ----------- |
 | `ORAMA_REPO_ROOT` | Git root of orama-system (parent of `bin/`; script auto-detects via `git rev-parse` fallback) |
 | `OPENCLAW_ROOT` / `ORAMA_OPENCLAW_ROOT` | Explicit override, else parent of `ORAMA_REPO_ROOT` (package install: `…/OpenClaw/orama-system` → `…/OpenClaw`) |
 | `ORAMA_INSTALL_DIR` | Same as `ORAMA_REPO_ROOT` when set — package install discovery |
@@ -21,7 +23,7 @@ Run components **in order**. The installer is idempotent: satisfied components a
 ## State markers
 
 | Path | Purpose |
-|------|---------|
+| ------ | --------- |
 | `~/.orama-system/first-run.done` | Set when all mandatory components pass |
 | `~/.orama-system/first-run.json` | Per-component status (`ok` / `warn` / `fail` / `skip` / `running`) and timestamps; `ollama.models` tracks per-model pull resume |
 
@@ -32,16 +34,17 @@ Run components **in order**. The installer is idempotent: satisfied components a
 `run` performs heavy steps with **visible output**:
 
 | Step | Progress | Resume |
-|------|----------|--------|
+| ------ | ---------- | -------- |
 | 0.3 Ollama models | `ollama pull` streams progress to the terminal | Per-model entries in `first-run.json` → `components.ollama.models.<name>` (`pulling` / `interrupted` / `ok` / `fail`). Re-run `run` after Ctrl+C resumes only missing models. |
 | 0.5.1 Embeddings | `setup-embeddings` prints step banners to stdout | Skipped when `embeddings` status is `ok`. Set `embeddings` to `warn` or delete the key to retry. |
 
-`--force` **re-validates** config-only checks (node, CRG, gbrain, etc.) but **does not** re-pull Ollama models or re-run `setup-embeddings` when those components are already `ok`.
+`--force` **re-validates** config-only checks (node, CRG, gbrain, etc.) but **does not** re-pull
+Ollama models or re-run `setup-embeddings` when those components are already `ok`.
 
 ## Idempotency matrix
 
 | ID | Component | Satisfied when | `--force` behavior |
-|----|-----------|----------------|---------------------|
+| ---- | ----------- | ---------------- | --------------------- |
 | 0.1 | Node.js (NVM) | NVM node ≥ v20 active; `node --version` matches expected major | Re-check PATH hint in shell profile only |
 | 0.2 | Python 3.13+ | `python3.13 --version` succeeds | Re-check only |
 | 0.3 | Ollama + models | Ollama API up; `qwen3.5:9b-mlx` and `bge-m3` in `/api/tags` | Re-probe only; **does not** re-pull if component `ok` |
@@ -51,10 +54,13 @@ Run components **in order**. The installer is idempotent: satisfied components a
 | 0.6 | Claude Code + profiles | `claude` on PATH; profiles dir exists under code-review skill | Re-check only |
 | 0.7 | PreCompact hook | `PreCompact` present in `.claude/settings.local.json` | Re-check only |
 | 0.8 | Shell-safety hooks | `install-shell-hooks.sh --check` passes: `shell-gotchas.py` and `no-workstation-paths.py` match the canonical copies and are registered in `~/.claude/settings.json` | `install` runs `--apply` (idempotent, settings backed up first; new installs start in warn mode, promote with `--mode enforce`); never blocks first-run |
+| 0.9 | OpenClaw runtime | `install-openclaw-runtime.sh --check` passes: node 24.22.3 is the nvm default, the global openclaw equals the version AlphaClaw pins, the fork build is installed in `~/.alphaclaw`, and the gateway service uses the stable node link | `--apply` repoints and reloads only on change; macOS only; `OPENCLAW_RUNTIME=skip` opts out |
 | — | MCP orchestration stack | **Separate** — see [`install-mcp-stack.sh`](../scripts/install-mcp-stack.sh) | Not part of first-run.done |
 | A.1 | OmniRoute (optional) | Probe only — never blocks first-run | Probe only |
 
-Hardware policy (fail closed for orchestration startup) matches [`orama-system/CLAUDE.md`](../../../CLAUDE.md) and [`CLAUDE-instru.md`](../../../../CLAUDE-instru.md) § 5:
+Hardware policy (fail closed for orchestration startup) matches
+[`orama-system/CLAUDE.md`](../../../CLAUDE.md) and
+[`CLAUDE-instru.md`](../../../../CLAUDE-instru.md) § 5:
 
 - **Mac hard:** Ollama `localhost:11434` with `qwen3.5:9b-mlx` + `bge-m3`
 - **Windows hard:** LM Studio at `$LM_STUDIO_WIN_ENDPOINTS` (see `scripts/ensure_requirements.ps1`)
@@ -129,7 +135,8 @@ code-review-graph build-graph --repo .
 
 PostToolUse hooks in `.claude/settings.json` keep the graph fresh during normal work.
 
-**Idempotent satisfied:** `uvx code-review-graph --version` OK and `.mcp.json` contains `code-review-graph` server entry.
+**Idempotent satisfied:** `uvx code-review-graph --version` OK and `.mcp.json` contains
+`code-review-graph` server entry.
 
 ---
 
@@ -217,6 +224,33 @@ superseded `zsh-reserved-vars.py` registration is gone, and `shell-gotchas.py --
 
 ---
 
+## 0.9 OpenClaw runtime (node, openclaw, AlphaClaw build, stable node link)
+
+Perpetua-Tools owns these steps (the runtime and state authority); first-run only calls them. Step
+list, gotchas, the
+staged restore and the operator provider order: `docs/openclaw-setup.md` § Reproducible install in Perpetua-Tools.
+
+```bash
+bash "$PT_DIR/scripts/install-openclaw-runtime.sh"          # --check: read-only; exit 1 on drift
+bash "$PT_DIR/scripts/install-openclaw-runtime.sh" --plan   # print the exact commands, run nothing
+bash "$PT_DIR/scripts/install-openclaw-runtime.sh" --apply  # nvm node, global openclaw pin, stable link
+```
+
+**Manual, never part of first-run:** the AlphaClaw fork build needs a tarball
+(`--alphaclaw-tarball`; build it with `pnpm install --frozen-lockfile` then `npm pack` in the
+AlphaClaw worktree), and a
+clean gateway state needs `--fresh-gateway --accept-risk`, which renames `~/.openclaw` aside and
+onboards fresh on loopback.
+Restore state afterwards in baby steps with a gateway check after each stage.
+
+An optional drift watcher alerts (and never fixes) every 30 minutes:
+`bash scripts/install_openclaw_runtime_watch.sh` (`--status`, `--uninstall`).
+
+**Idempotent satisfied:** the check prints OK for all four steps and `openclaw gateway status` shows
+the service running.
+
+---
+
 ## MCP orchestration stack (separate installer)
 
 First-run does **not** install ai-cli-mcp or Gemini. After first-run completes:
@@ -227,7 +261,9 @@ bash "${ORAMA_REPO_ROOT}/bin/orama-system/scripts/install-mcp-stack.sh" --mirror
 # bash "${ORAMA_REPO_ROOT}/bin/orama-system/scripts/install-mcp-stack.sh" --include-gemini
 ```
 
-When AntiGravity (`~/.antigravity`) or Gemini (`~/.gemini`) are detected, the installer harmonizes the ECC runtime overlay (`~/.antigravity/ANTIGRAVITY.md`) and registers cross-stack MCP endpoints without overwriting native configs.
+When AntiGravity (`~/.antigravity`) or Gemini (`~/.gemini`) are detected, the installer harmonizes
+the ECC runtime overlay (`~/.antigravity/ANTIGRAVITY.md`) and registers cross-stack MCP endpoints
+without overwriting native configs.
 
 See [`../mcp-install/SKILL.md`](../mcp-install/SKILL.md) and [`../skills/mcp-orchestration/references/antigravity-claude-client-reference-card.md`](../skills/mcp-orchestration/references/antigravity-claude-client-reference-card.md).
 
@@ -237,7 +273,8 @@ See [`../mcp-install/SKILL.md`](../mcp-install/SKILL.md) and [`../skills/mcp-orc
 
 > **NEVER install in first-run. NEVER fail closed. NEVER add to mandatory checklist.**
 
-OmniRoute is a user-managed HTTP MCP sidecar (ports 20128 MCP, 20129 UI). Skills probe at session start; workflow continues unchanged when absent.
+OmniRoute is a user-managed HTTP MCP sidecar (ports 20128 MCP, 20129 UI). Skills probe at session
+start; workflow continues unchanged when absent.
 
 ```bash
 # Probe only (first-run-install.sh does this automatically):
@@ -245,14 +282,15 @@ curl -sf --max-time 2 "http://127.0.0.1:20128/api/mcp/stream" \
   -H "Authorization: Bearer ${OMNIROUTE_TOKEN:-}" >/dev/null && echo "omniroute: up" || echo "omniroute: unavailable"
 ```
 
-Full install and daisy-chain documentation: user-managed; defer to operator docs and [`../mcp-install/SKILL.md`](../mcp-install/SKILL.md) — not duplicated here to avoid drift.
+Full install and daisy-chain documentation: user-managed; defer to operator docs and
+[`../mcp-install/SKILL.md`](../mcp-install/SKILL.md) — not duplicated here to avoid drift.
 
 ---
 
 ## Heal / resume
 
 | Situation | Action |
-|-----------|--------|
+| ----------- | -------- |
 | Fresh machine | `bash bin/orama-system/scripts/first-run-install.sh run` |
 | Check only | `bash bin/orama-system/scripts/first-run-install.sh status` |
 | After partial failure / interrupted pull | Re-run `run` — resumes per-model pulls from `first-run.json` |
@@ -265,7 +303,8 @@ Full install and daisy-chain documentation: user-managed; defer to operator docs
 
 ## Open TODOs (installer)
 
-- [x] **`uvx code-review-graph --help`** — `first-run-install.sh` uses `uvx code-review-graph --version` in `status` (not `--help`); cold `uvx` download can take ~60s once per machine
+- [x] **`uvx code-review-graph --help`** — `first-run-install.sh` uses `uvx code-review-graph
+  --version` in `status` (not `--help`); cold `uvx` download can take ~60s once per machine
 - [ ] Cursor agents: CRG MCP registration is **not** part of `first-run.done` — see [`docs/reference/agent-first-open-visibility.md`](../../../docs/reference/agent-first-open-visibility.md)
 
 ## Appendix B — SKILL.md First-Run Bootstrap (moved verbatim from the mother skill)
@@ -288,7 +327,9 @@ Full steps: [`references/first-run-install.md`](../references/first-run-install.
 
 - [`../../../docs/reference/agent-first-open-visibility.md`](../../../docs/reference/agent-first-open-visibility.md) — Cursor vs Claude Code vs OpenClaw surfaces
 - [`../../../docs/how-to/first-run-and-code-review.md`](../../../docs/how-to/first-run-and-code-review.md) — **E2E:** fresh machine → first-run → MCP → CRG graph → code-review skill
-- [`../../../docs/local-env-catch-up.md`](../../../docs/local-env-catch-up.md) — `.env.local`, OpenClaw secrets after redaction, `check-local-env.sh`
-- [`../skills/code-review/references/tool-chain.md`](../skills/code-review/references/tool-chain.md) — code exploration order
+- [`../../../docs/local-env-catch-up.md`](../../../docs/local-env-catch-up.md) — `.env.local`,
+  OpenClaw secrets after redaction, `check-local-env.sh`
+- [`../skills/code-review/references/tool-chain.md`](../skills/code-review/references/tool-chain.md)
+  — code exploration order
 - [`../../../CLAUDE.md`](../../../CLAUDE.md) — repo navigator + hardware summary
 - [`../../../docs/v2/17-hardware-policy-enforcement.md`](../../../docs/v2/17-hardware-policy-enforcement.md) — D14 mirror policy
