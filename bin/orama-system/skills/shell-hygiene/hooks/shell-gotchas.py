@@ -92,7 +92,44 @@ def _bash4_in_zsh(command: str, _cwd: str) -> bool:
     expansions = _mask_quotes(command, double=False)
     executable = _mask_quotes(command)
     return bool(re.search(r"\$\{[A-Za-z_]\w*(?:,,|\^\^|,|\^)\}", expansions)
-                or re.search(STMT + r"(?:mapfile|readarray)\b", executable, re.M))
+                or re.search(STMT + r"(?:mapfile|readarray)\b", executable, re.M)
+                or any(_bash4_in_zsh(body, _cwd) for body in _cmdsubs(command)))
+
+
+def _cmdsubs(command: str, *, quote: str | None = None) -> list[str]:
+    """Find executable $(...) bodies, ignoring single quotes and escaped dollars."""
+    bodies = []
+    i = 0
+    while i < len(command):
+        c = command[i]
+        if c == "\\" and quote != "'":
+            i += 2
+            continue
+        if c == "'" and quote != '"':
+            quote = None if quote == "'" else "'"
+        elif c == '"' and quote != "'":
+            quote = None if quote == '"' else '"'
+        elif c == "$" and quote != "'" and command[i:i + 2] == "$(":
+            start = i + 2
+            j, depth, inner_quote = start, 1, None
+            while j < len(command) and depth:
+                ch = command[j]
+                if ch == "\\" and inner_quote != "'":
+                    j += 2
+                    continue
+                if ch == "'" and inner_quote != '"':
+                    inner_quote = None if inner_quote == "'" else "'"
+                elif ch == '"' and inner_quote != "'":
+                    inner_quote = None if inner_quote == '"' else '"'
+                elif inner_quote is None:
+                    depth += (ch == "(") - (ch == ")")
+                j += 1
+            if depth == 0:
+                bodies.append(command[start:j - 1])
+                i = j
+                continue
+        i += 1
+    return bodies
 
 
 def _after_cmdsub(command: str, start: int) -> int:
@@ -146,7 +183,7 @@ def _unmatched_glob(command: str, cwd: str) -> bool:
 
 def _env_dump(command: str, _cwd: str) -> bool:
     """`env`, `printenv` or `export -p` with no filter that drops the values."""
-    start = STMT + r"(?:env|printenv|export[ \t]+-p|declare[ \t]+-x|typeset[ \t]+-x)[ \t]*(?=\||;|&&|$)"
+    start = STMT + r"(?:env|printenv|export[ \t]+-p|declare[ \t]+-x|typeset[ \t]+-x)[ \t]*(?=\||;|&|$)"
     safe = r"\|[ \t]*(?:cut[ \t]+-d[ \t]*=[ \t]*-f[ \t]*1(?=[ \t|]|$)|wc\b|grep[ \t]+-\w*[cq]\w*)"
     # Only this statement's pipeline counts: cut it at the first `;`, `&`, `&&`, `||` or newline (an `N>&M` redirection is not a separator).
     return any(not re.search(safe, re.split(r";|(?<!>)&|\|\||\n", command[m.end():], maxsplit=1)[0]) for m in re.finditer(start, command, re.M))
@@ -270,12 +307,26 @@ def evaluate(command: str, cwd: str) -> list[Rule]:
     if escaped & {"all", "*"}:
         return []
     stripped = strip_heredocs(command)
-    outer = BASH_COMMAND.sub(lambda m: m.group(0)[:m.start("body") - m.start()] + "''", stripped)
+    caller_expansions: list[str] = []
+
+    def mask_bash_body(match: re.Match[str]) -> str:
+        body = match.group("body")
+        if body.startswith('"'):
+            caller_expansions.extend(_cmdsubs(body[1:-1], quote='"'))
+            caller_expansions.extend(re.findall(
+                r"\$\{[A-Za-z_]\w*(?:,,|\^\^|,|\^)\}", _mask_quotes(body, double=False),
+            ))
+        return match.group(0)[:match.start("body") - match.start()] + "''"
+
     if re.match(r"^#!.*\bbash\b", command):
-        outer = ""
+        outer_scopes = ()
+    else:
+        outer = BASH_COMMAND.sub(mask_bash_body, stripped)
+        outer_scopes = (outer, *caller_expansions)
     return [
         rule for rule in RULES
-        if rule.id not in escaped and rule.check(outer if rule.zsh_only else stripped, cwd)
+        if rule.id not in escaped
+        and any(rule.check(scope, cwd) for scope in (outer_scopes if rule.zsh_only else (stripped,)))
     ]
 
 

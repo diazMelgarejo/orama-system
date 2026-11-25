@@ -177,6 +177,7 @@ def test_env_dump_safe_filter_applies_to_the_env_pipeline_only(cwd: str) -> None
     assert "secret-env-dump" in _ids("env | grep X; echo | wc -l", cwd)
     assert "secret-env-dump" in _ids("env | grep X && echo | wc -l", cwd)
     assert "secret-env-dump" in _ids("env | grep X & echo | wc -l", cwd)
+    assert "secret-env-dump" in _ids("env & echo | wc -l", cwd)
     assert "secret-env-dump" not in _ids("env | grep PATH | wc -l", cwd)
     assert "secret-env-dump" not in _ids("env | grep -c X 2>&1 | cat", cwd)
 
@@ -198,6 +199,11 @@ def test_commit_reuse_message_options(args: str, fires: bool, cwd: str) -> None:
     ('printf "%s" "${value,,}"', True),
     ("mapfile -t items < file", True),
     ("printf x | readarray -t items", True),
+    ('result="$(mapfile -t items < file)"', True),
+    ('result="$(echo $(readarray -t items))"', True),
+    ("printf '%s' '$(mapfile -t items)'", False),
+    (r'printf "%s" "\$(mapfile -t items)"', False),
+    ('result="$(printf \'%s\' mapfile)"', False),
 ])
 def test_bash4_rule_distinguishes_quoted_text(command: str, fires: bool, cwd: str) -> None:
     assert ("bash4-in-zsh" in _ids(command, cwd)) is fires
@@ -208,9 +214,24 @@ def test_bash4_rule_distinguishes_quoted_text(command: str, fires: bool, cwd: st
     ("bash -c 'true'; status=$?", True),
     ("status=1; bash -c 'true'", True),
     ('bash -c "status=1" && path=example', True),
+    ('bash -c "echo $(status=1)"', True),
+    ('bash -c "echo \'$(status=1)\'"', True),
+    ('bash -c "echo \'ordinary text\'"', False),
+    ('bash -c "echo $(status=1)"suffix', True),
+    ('bash -c "echo $(echo $(path=example))"', True),
+    ('bash -c "status=1"', False),
+    (r'bash -c "echo \$(status=1)"', False),
+    ("bash -c 'echo $(status=1)'", False),
 ])
 def test_bash_exemption_is_limited_to_quoted_body(command: str, fires: bool, cwd: str) -> None:
     assert ("zsh-reserved-var" in _ids(command, cwd)) is fires
+
+
+def test_bash_double_quoted_caller_expansions(cwd: str) -> None:
+    assert "bash4-in-zsh" in _ids('bash -c "echo $(mapfile -t items)"', cwd)
+    assert "bash4-in-zsh" in _ids('bash -c "echo ${value,,}"', cwd)
+    assert "bash4-in-zsh" in _ids('bash -c "echo \'${value,,}\'"', cwd)
+    assert "bash4-in-zsh" not in _ids('bash -c "mapfile -t items"', cwd)
 
 
 def test_codex_review_accepts_fd_redirections_before_dev_null(cwd: str) -> None:
