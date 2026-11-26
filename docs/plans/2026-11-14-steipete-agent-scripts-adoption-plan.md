@@ -5,7 +5,9 @@ clones into `~/.agent-scripts` and points `~/Projects/agent-scripts` at that
 clone. This document does not vendor `AGENTS.MD`.
 **Date:** 2026-11-14
 **Base:** orama-system PR #498 tip after the OpenHands allowlist commit.
-This branch is stacked on that tip and must not be folded into PR #498.
+This branch was stacked on that tip and must not be folded into PR #498.
+**Update 2026-11-26:** the six commits were re-applied on current `main` inside the
+consolidated draft PR #531, and the installer clone is now pinned (Phase 4).
 **Source note:** operator brief `pete-Steinberger.md` (2026-11-14).
 **Upstream inspected:** [steipete/agent-scripts](https://github.com/steipete/agent-scripts)
 `main` README and `skills/` listing (54 skill directories) on 2026-11-14.
@@ -195,8 +197,13 @@ own repo; upstream skills are exposed via tracked relative symlinks only.
 - Point `~/Projects/agent-scripts` at that clone with a symlink.
 - Skip when git is missing, when `~/.agent-scripts` is not that origin, or
   when `~/Projects/agent-scripts` already exists and is not that symlink.
-- Refresh with `git pull --ff-only` only after the origin URL is
-  `steipete/agent-scripts`. Never `--force`.
+- Pin the clone to one reviewed upstream commit (`STEIPETE_REF` in `install.sh`,
+  `deb19f5896fa`, upstream `main` on 2026-11-23). Clone with `--no-checkout`, then
+  `git checkout --detach` the pinned commit, so nothing from the upstream tip lands on
+  disk unless the pin checks out. A re-run keeps the pin and never follows the tip.
+  Move the pin only on purpose, after reviewing the upstream diff, by editing the id
+  or exporting `AGENT_SCRIPTS_REF` for one run. Check the origin URL first. Never
+  `--force`.
 - Never run `sync-skills` from the installer.
 - `install.sh --help` lists the flag.
 

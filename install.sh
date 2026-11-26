@@ -29,7 +29,10 @@ SKILL_SOURCE="bin/orama-system"
 
 # steipete/agent-scripts bootstrap (opt-in, Phase 4)
 # The clone is ~/.agent-scripts. ~/Projects/agent-scripts is a symlink to it.
-STEIPETE_REPO="https://github.com/steipete/agent-scripts"
+STEIPETE_REPO="${STEIPETE_REPO:-https://github.com/steipete/agent-scripts}"
+# Pinned to one reviewed upstream commit (main tip on 2026-11-23). The installer never follows the tip:
+# bump it on purpose after reviewing the upstream diff, or export AGENT_SCRIPTS_REF for a one-off run.
+STEIPETE_REF="${AGENT_SCRIPTS_REF:-deb19f5896fa652c2731186f5d03bcd0193c123c}"
 AGENT_SCRIPTS_CLONE="$HOME/.agent-scripts"
 AGENT_SCRIPTS_LINK="$HOME/Projects/agent-scripts"
 WITH_AGENT_SCRIPTS=0
@@ -209,17 +212,28 @@ agent_scripts_origin_ok() {
   [[ "$url" == "$expected" || "$url" == "git@github.com:steipete/agent-scripts" ]]
 }
 
+pin_agent_scripts() {
+  local dir="$1" current
+  current="$(git -C "$dir" rev-parse HEAD 2>/dev/null || true)"
+  if [[ "$current" == "$STEIPETE_REF" ]]; then
+    ok "steipete/agent-scripts is at the pinned commit ${STEIPETE_REF:0:12}"
+    return 0
+  fi
+  git -C "$dir" fetch --quiet origin 2>/dev/null || true
+  if git -C "$dir" checkout --detach --quiet "$STEIPETE_REF" 2>/dev/null; then
+    ok "steipete/agent-scripts pinned at ${STEIPETE_REF:0:12}"
+  else
+    warn "pinned commit $STEIPETE_REF is not available in $dir — fix with: git -C $dir fetch origin && git -C $dir checkout --detach $STEIPETE_REF"
+  fi
+}
+
 refresh_agent_scripts() {
   local dir="$1"
   if ! agent_scripts_origin_ok "$dir"; then
     warn "$dir origin is not steipete/agent-scripts — skipping refresh"
     return 0
   fi
-  if git -C "$dir" pull --ff-only; then
-    ok "steipete/agent-scripts refreshed (--ff-only)"
-  else
-    warn "steipete/agent-scripts refresh failed — run: git -C $dir pull --ff-only"
-  fi
+  pin_agent_scripts "$dir"
 }
 
 bootstrap_agent_scripts() {
@@ -246,8 +260,10 @@ bootstrap_agent_scripts() {
     return 0
   else
     info "Cloning steipete/agent-scripts to $clone_dir..."
-    if git clone "$STEIPETE_REPO" "$clone_dir"; then
+    # --no-checkout: nothing from the upstream tip lands on disk unless the pinned commit checks out.
+    if git clone --no-checkout "$STEIPETE_REPO" "$clone_dir"; then
       ok "steipete/agent-scripts cloned to $clone_dir"
+      pin_agent_scripts "$clone_dir"
     else
       warn "steipete/agent-scripts clone failed — run manually: git clone $STEIPETE_REPO $clone_dir"
       return 0
