@@ -119,6 +119,28 @@ def test_missing_key_exits_without_echoing_anything_secret(monkeypatch: pytest.M
     assert launcher.KEYVAR in str(exc.value)
 
 
+STUB_RECORD_ENV = "FAKE_CLINE_RECORD"
+
+
+def _windows_stub_python() -> str:
+    """Return the Python source the Windows cline.cmd stub runs.
+
+    The record directory comes from the STUB_RECORD_ENV variable and never from this text, so a
+    directory name containing an apostrophe or a quote cannot break the source.
+    """
+    return (
+        "import sys, os, shutil, json, pathlib; "
+        f"rec = pathlib.Path(os.environ['{STUB_RECORD_ENV}']); "
+        "(rec / 'argv.txt').write_text('\\n'.join(sys.argv[1:])); "
+        "cfg = sys.argv[sys.argv.index('--config')+1] if '--config' in sys.argv else None; "
+        "shutil.copy(os.path.join(cfg, 'data', 'settings', 'providers.json'), rec / 'providers.json') if cfg else None; "
+        "(rec / 'cfgdir.txt').write_text(cfg) if cfg else None; "
+        "(rec / 'dirmode.txt').write_text('700'); "
+        "(rec / 'filemode.txt').write_text('600'); "
+        "sys.exit(0)"
+    )
+
+
 @pytest.fixture
 def stub_cline(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Path]:
     """Put a fake `cline` first on PATH; it records argv and a copy of the config it was given."""
@@ -129,35 +151,46 @@ def stub_cline(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Pat
     script = bindir / "cline"
     script.write_text(
         "#!/bin/sh\n"
-        f'printf "%s\\n" "$@" > "{record}/argv.txt"\n'
+        'printf "%s\\n" "$@" > "$FAKE_CLINE_RECORD/argv.txt"\n'
         'while [ $# -gt 0 ]; do if [ "$1" = "--config" ]; then CFG="$2"; fi; shift; done\n'
-        f'cp "$CFG/data/settings/providers.json" "{record}/providers.json"\n'
-        f'echo "$CFG" > "{record}/cfgdir.txt"\n'
-        f'stat -f "%Lp" "$CFG" > "{record}/dirmode.txt" 2>/dev/null || stat -c "%a" "$CFG" > "{record}/dirmode.txt"\n'
-        f'stat -f "%Lp" "$CFG/data/settings/providers.json" > "{record}/filemode.txt" 2>/dev/null '
-        f'|| stat -c "%a" "$CFG/data/settings/providers.json" > "{record}/filemode.txt"\n'
+        'cp "$CFG/data/settings/providers.json" "$FAKE_CLINE_RECORD/providers.json"\n'
+        'echo "$CFG" > "$FAKE_CLINE_RECORD/cfgdir.txt"\n'
+        'stat -f "%Lp" "$CFG" > "$FAKE_CLINE_RECORD/dirmode.txt" 2>/dev/null || stat -c "%a" "$CFG" > "$FAKE_CLINE_RECORD/dirmode.txt"\n'
+        'stat -f "%Lp" "$CFG/data/settings/providers.json" > "$FAKE_CLINE_RECORD/filemode.txt" 2>/dev/null '
+        '|| stat -c "%a" "$CFG/data/settings/providers.json" > "$FAKE_CLINE_RECORD/filemode.txt"\n'
         "exit 0\n"
     )
     script.chmod(script.stat().st_mode | stat.S_IXUSR)
     if sys.platform == "win32":
         cmd_script = bindir / "cline.cmd"
-        cmd_script.write_text(
-            f"@echo off\r\n"
-            f"\"{sys.executable}\" -c \"import sys, os, shutil, json, pathlib; "
-            f"rec = pathlib.Path(r'{record}'); "
-            f"(rec / 'argv.txt').write_text('\\n'.join(sys.argv[1:])); "
-            f"cfg = sys.argv[sys.argv.index('--config')+1] if '--config' in sys.argv else None; "
-            f"shutil.copy(os.path.join(cfg, 'data', 'settings', 'providers.json'), rec / 'providers.json') if cfg else None; "
-            f"(rec / 'cfgdir.txt').write_text(cfg) if cfg else None; "
-            f"(rec / 'dirmode.txt').write_text('700'); "
-            f"(rec / 'filemode.txt').write_text('600'); "
-            f"sys.exit(0)\" %*\r\n"
-        )
+        cmd_script.write_text(f'@echo off\r\n"{sys.executable}" -c "{_windows_stub_python()}" %*\r\n')
     monkeypatch.setenv("PATH", f"{bindir}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setenv(launcher.KEYVAR, FAKE_KEY)
+    monkeypatch.setenv(STUB_RECORD_ENV, str(record))
     # Execution tests simulate a future client whose two enforcing bounds are verified.
     monkeypatch.setattr(launcher, "BOUND_CONTRACT", {"max_requests": True, "max_total_output": True})
     return {"record": record}
+
+
+def test_windows_stub_source_never_embeds_the_record_path(tmp_path: Path) -> None:
+    """The stub source holds no path text, so a record directory with an apostrophe still runs."""
+    import subprocess
+
+    record = tmp_path / "O'Neil \"temp\""
+    record.mkdir()
+    cfg = tmp_path / "cfg"
+    (cfg / "data" / "settings").mkdir(parents=True)
+    (cfg / "data" / "settings" / "providers.json").write_text("{}", encoding="utf-8")
+    source = _windows_stub_python()
+    assert str(record) not in source and "O'Neil" not in source
+    done = subprocess.run(
+        [sys.executable, "-c", source, "--config", str(cfg), "--probe"],
+        env={**os.environ, STUB_RECORD_ENV: str(record)}, capture_output=True, text=True, check=False,
+    )
+    assert done.returncode == 0, done.stderr
+    assert (record / "argv.txt").read_text(encoding="utf-8").split("\n") == ["--config", str(cfg), "--probe"]
+    assert (record / "providers.json").read_text(encoding="utf-8") == "{}"
+    assert (record / "cfgdir.txt").read_text(encoding="utf-8") == str(cfg)
 
 
 def test_run_passes_explicit_route_and_keeps_key_out_of_argv(stub_cline: dict[str, Path]) -> None:
