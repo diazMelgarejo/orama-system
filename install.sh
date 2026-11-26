@@ -11,6 +11,7 @@
 #   bash install.sh
 #   bash install.sh --project     # install to ./.claude/skills/ instead of global
 #   bash install.sh --with-test-deps  # also install Python deps for pytest/PoCs
+#   bash install.sh --with-agent-scripts  # also bootstrap steipete/agent-scripts (opt-in)
 #   bash install.sh --uninstall   # remove the skill
 
 set -euo pipefail
@@ -25,6 +26,16 @@ SKILL_NAME="orama-system"
 REPO_URL="https://github.com/diazMelgarejo/orama-system"
 BRANCH="main"
 SKILL_SOURCE="bin/orama-system"
+
+# steipete/agent-scripts bootstrap (opt-in, Phase 4)
+# The clone is ~/.agent-scripts. ~/Projects/agent-scripts is a symlink to it.
+STEIPETE_REPO="${STEIPETE_REPO:-https://github.com/steipete/agent-scripts}"
+# Pinned to one reviewed upstream commit (main tip on 2026-11-23). The installer never follows the tip:
+# bump it on purpose after reviewing the upstream diff, or export AGENT_SCRIPTS_REF for a one-off run.
+STEIPETE_REF="${AGENT_SCRIPTS_REF:-deb19f5896fa652c2731186f5d03bcd0193c123c}"
+AGENT_SCRIPTS_CLONE="$HOME/.agent-scripts"
+AGENT_SCRIPTS_LINK="$HOME/Projects/agent-scripts"
+WITH_AGENT_SCRIPTS=0
 
 # Default: global install
 INSTALL_DIR="$HOME/.claude/skills/$SKILL_NAME"
@@ -50,10 +61,15 @@ for arg in "$@"; do
     --with-test-deps)
       WITH_TEST_DEPS=1
       ;;
+    --with-agent-scripts)
+      WITH_AGENT_SCRIPTS=1
+      ;;
     --help|-h)
-      echo "Usage: install.sh [--project] [--with-test-deps] [--uninstall]"
+      echo "Usage: install.sh [--project] [--with-test-deps] [--with-agent-scripts] [--uninstall]"
       echo "  --project   Install to ./.claude/skills/ (project-local)"
       echo "  --with-test-deps  Install runtime/test deps for pytest and FastAPI PoCs"
+      echo "  --with-agent-scripts  Clone steipete/agent-scripts into ~/.agent-scripts"
+      echo "                        and point ~/Projects/agent-scripts at that clone"
       echo "  --uninstall Remove the ultrathink skill"
       exit 0
       ;;
@@ -183,6 +199,112 @@ elif [[ -f "$HARNESS_DIR/install_hermes_profiles.py" ]]; then
   else
     hermes_sync "idempotent, trusted checkout"
   fi
+fi
+
+# ─── steipete/agent-scripts bootstrap (opt-in, Phase 4) ─────────────────────
+agent_scripts_origin_ok() {
+  local dir="$1"
+  local url expected
+  url="$(git -C "$dir" remote get-url origin 2>/dev/null || true)"
+  url="${url%.git}"
+  url="${url%/}"
+  expected="${STEIPETE_REPO%.git}"
+  [[ "$url" == "$expected" || "$url" == "git@github.com:steipete/agent-scripts" ]]
+}
+
+pin_agent_scripts() {
+  local dir="$1" current first_file
+  current="$(git -C "$dir" rev-parse HEAD 2>/dev/null || true)"
+  first_file="$(git -C "$dir" ls-files 2>/dev/null | head -n 1 || true)"
+  if [[ "$current" == "$STEIPETE_REF" && -n "$first_file" && -e "$dir/$first_file" ]]; then
+    ok "steipete/agent-scripts is at the pinned commit ${STEIPETE_REF:0:12}"
+    return 0
+  fi
+  git -C "$dir" fetch --quiet origin 2>/dev/null || true
+  if git -C "$dir" checkout --detach --quiet "$STEIPETE_REF" 2>/dev/null; then
+    first_file="$(git -C "$dir" ls-files 2>/dev/null | head -n 1 || true)"
+    if [[ -z "$first_file" || -e "$dir/$first_file" ]]; then
+      ok "steipete/agent-scripts pinned at ${STEIPETE_REF:0:12}"
+      return 0
+    fi
+  fi
+  warn "pinned commit $STEIPETE_REF is not available in $dir — fix with: git -C $dir fetch origin && git -C $dir checkout --detach $STEIPETE_REF"
+  return 1
+}
+
+refresh_agent_scripts() {
+  local dir="$1"
+  if ! agent_scripts_origin_ok "$dir"; then
+    warn "$dir origin is not steipete/agent-scripts — skipping refresh"
+    return 1
+  fi
+  pin_agent_scripts "$dir"
+}
+
+bootstrap_agent_scripts() {
+  info "Bootstrapping steipete/agent-scripts (shared agent rules + skills)..."
+
+  if ! command -v git >/dev/null 2>&1; then
+    warn "git not found on PATH — skipping steipete/agent-scripts bootstrap"
+    return 0
+  fi
+
+  local clone_dir="$AGENT_SCRIPTS_CLONE"
+  local link_path="$AGENT_SCRIPTS_LINK"
+
+  if [[ -L "$clone_dir" ]]; then
+    warn "$clone_dir is a symlink — the clone must be a real checkout there. Skipping."
+    return 0
+  fi
+
+  if [[ -d "$clone_dir/.git" || -f "$clone_dir/.git" ]]; then
+    info "steipete/agent-scripts clone already present at $clone_dir"
+    if ! refresh_agent_scripts "$clone_dir"; then
+      return 0
+    fi
+  elif [[ -e "$clone_dir" ]]; then
+    warn "$clone_dir exists and is not a git checkout — skipping"
+    return 0
+  else
+    info "Cloning steipete/agent-scripts to $clone_dir..."
+    # --no-checkout: nothing from the upstream tip lands on disk unless the pinned commit checks out.
+    if git clone --no-checkout "$STEIPETE_REPO" "$clone_dir"; then
+      ok "steipete/agent-scripts cloned to $clone_dir"
+      if ! pin_agent_scripts "$clone_dir"; then
+        return 0
+      fi
+    else
+      warn "steipete/agent-scripts clone failed — run manually: git clone $STEIPETE_REPO $clone_dir"
+      return 0
+    fi
+  fi
+
+  if [[ -L "$link_path" ]]; then
+    local current_target
+    current_target="$(readlink "$link_path")"
+    if [[ "$current_target" == "$clone_dir" ]]; then
+      ok "symlink already present at $link_path -> $clone_dir"
+    else
+      warn "$link_path points to $current_target, not $clone_dir — skipping"
+    fi
+  elif [[ -e "$link_path" ]]; then
+    warn "$link_path exists and is not a symlink — skipping so the existing checkout is left in place"
+  else
+    mkdir -p "$(dirname "$link_path")"
+    if ln -s "$clone_dir" "$link_path"; then
+      ok "symlinked $link_path -> $clone_dir"
+    else
+      warn "Could not create symlink $link_path -> $clone_dir — create manually"
+    fi
+  fi
+
+  info "NOTE: Never run scripts/sync-skills from this installer — it rewrites"
+  info "      ~/.codex/skills and ~/.claude/skills and may collide with existing"
+  info "      orama skill links. Run it manually after reviewing."
+}
+
+if [[ "${WITH_AGENT_SCRIPTS:-0}" == "1" ]]; then
+  bootstrap_agent_scripts
 fi
 
 # ─── Verify ──────────────────────────────────────────────────────────────────

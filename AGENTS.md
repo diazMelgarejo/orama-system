@@ -1,5 +1,7 @@
 # Agent instructions — orama-system
 
+READ ~/Projects/agent-scripts/AGENTS.MD BEFORE ANYTHING (skip if missing).
+
 ## Claude Code runtime — read before touching the binary
 
 Two install paths exist on this machine (`~/.local/bin/claude` + npm global) — intentionally.

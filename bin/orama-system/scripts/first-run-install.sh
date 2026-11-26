@@ -494,6 +494,69 @@ run_shell_hooks() {
   return 0
 }
 
+# 0.9 OpenClaw runtime. Perpetua-Tools owns the steps (scripts/install-openclaw-runtime.sh); first-run only calls
+# it: macOS only, idempotent, and never the destructive fresh-state option (moving the OpenClaw state aside stays an
+# explicit operator action, documented in references/first-run-install.md section 0.9).
+_openclaw_runtime_script() {
+  local root
+  for root in "${PT_DIR:-}" "${PERPETUA_TOOLS_ROOT:-}" "${OPENCLAW_ROOT:+$OPENCLAW_ROOT/perplexity-api/Perpetua-Tools}" "$ORAMA_REPO_ROOT/../perplexity-api/Perpetua-Tools"; do
+    if [ -n "$root" ] && [ -f "$root/scripts/install-openclaw-runtime.sh" ]; then
+      printf '%s\n' "$root/scripts/install-openclaw-runtime.sh"
+      return 0
+    fi
+  done
+  return 1
+}
+
+check_openclaw_runtime() {
+  local script
+  if [ "$(uname -s 2>/dev/null)" != "Darwin" ]; then
+    _ok "0.9 OpenClaw runtime: macOS only, skipped"
+    _json_set_component "openclaw_runtime" "ok" "skipped (not macOS)"
+    return 0
+  fi
+  if ! script="$(_openclaw_runtime_script)"; then
+    _warn "0.9 OpenClaw runtime: Perpetua-Tools install-openclaw-runtime.sh not found"
+    _json_set_component "openclaw_runtime" "warn" "no installer"
+    return 0
+  fi
+  if out="$(bash "$script" --check 2>&1)"; then
+    _ok "0.9 OpenClaw runtime matches the baseline (node, openclaw, AlphaClaw build, stable node link)"
+    _json_set_component "openclaw_runtime" "ok" "in sync"
+  else
+    _warn "0.9 OpenClaw runtime drifted: run bash \"$script\" --plan, then --apply"
+    printf '%s\n' "$out" >&2
+    _json_set_component "openclaw_runtime" "warn" "drift"
+  fi
+  return 0
+}
+
+run_openclaw_runtime() {
+  local script
+  if [ "$(uname -s 2>/dev/null)" != "Darwin" ] || [ "${OPENCLAW_RUNTIME:-}" = "skip" ]; then
+    _ok "0.9 OpenClaw runtime: skipped (not macOS, or OPENCLAW_RUNTIME=skip)"
+    _json_set_component "openclaw_runtime" "ok" "skipped"
+    return 0
+  fi
+  if ! script="$(_openclaw_runtime_script)"; then
+    _warn "0.9 OpenClaw runtime: Perpetua-Tools install-openclaw-runtime.sh not found"
+    _json_set_component "openclaw_runtime" "warn" "no installer"
+    return 0
+  fi
+  if $DRY_RUN; then
+    echo "[dry-run] bash \"$script\" --apply"
+    return 0
+  fi
+  if bash "$script" --apply; then
+    _ok "0.9 OpenClaw runtime applied (idempotent; the AlphaClaw build needs --alphaclaw-tarball, run it by hand)"
+    _json_set_component "openclaw_runtime" "ok" "applied"
+  else
+    _warn "0.9 OpenClaw runtime: --apply reported a problem (non-fatal); run it by hand and read the output"
+    _json_set_component "openclaw_runtime" "warn" "apply failed"
+  fi
+  return 0
+}
+
 probe_omniroute() {
   local url="${OMNIROUTE_URL:-http://127.0.0.1:20128/api/mcp/stream}"
   local tok="${OMNIROUTE_TOKEN:-}"
@@ -536,6 +599,7 @@ cmd_status() {
   check_claude || true
   check_precompact || true
   check_shell_hooks || true
+  check_openclaw_runtime || true
   probe_omniroute || true
   echo ""
   _log "Next: bash bin/orama-system/scripts/install-mcp-stack.sh (MCP workers, separate)"
@@ -564,6 +628,7 @@ cmd_run() {
   _run_component_check claude check_claude || true
   _run_component_check precompact check_precompact || true
   run_shell_hooks || true
+  run_openclaw_runtime || true
   probe_omniroute || true
 
   echo ""

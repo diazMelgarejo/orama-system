@@ -350,18 +350,72 @@ Permanent **User PATH** entries (idempotent — safe to re-run):
 | cursor-agent | `%LOCALAPPDATA%\cursor-agent` | `cursor-agent --version` |
 | Hermes | `%LOCALAPPDATA%\hermes\hermes-agent\venv\Scripts` | `hermes --version` |
 
-Use the LM Studio Node/npm toolchain for Codex install when needed:
+Prefer the operator-managed installation above. For an approved npm
+fallback, use a fully patched, [supported Node.js LTS](https://nodejs.org/en/about/previous-releases/)
+and a fresh, versioned user-local prefix.
+The versions below are the stable registry releases verified on 2026-11-25.
+Recheck the publisher and advisories before adopting any replacement pin.
 
 ```powershell
-$env:PATH = "$env:USERPROFILE\.lmstudio\.internal\utils;$env:PATH"
-npm install -g @openai/codex@latest --audit=moderate
-npm install -g @google/gemini-cli --audit=moderate
+$prefix = Join-Path $env:LOCALAPPDATA 'oramasys\cli-codex-0.172.0-gemini-0.71.1'
+if (Test-Path -LiteralPath $prefix) {
+    throw "Prefix $prefix already exists. Retain working prefixes for rollback; do not overwrite."
+}
+New-Item -ItemType Directory -Path $prefix -ErrorAction Stop | Out-Null
+Set-Content -LiteralPath (Join-Path $prefix 'package.json') -Value '{"private":true}' -Encoding utf8
+Push-Location -LiteralPath $prefix
+try {
+    npm install --package-lock-only --ignore-scripts --save-exact '@openai/codex@0.172.0' '@google/gemini-cli@0.71.1'
+    if ($LASTEXITCODE -ne 0) { throw 'Toolchain lockfile generation failed.' }
+    npm audit --omit=dev --audit-level=moderate
+    if ($LASTEXITCODE -ne 0) { throw 'Toolchain advisory audit failed; stop for operator review.' }
+    npm ci --omit=dev --ignore-scripts
+    if ($LASTEXITCODE -ne 0) { throw 'Toolchain installation failed.' }
+    & (Join-Path $prefix 'node_modules\.bin\codex.cmd') --version
+    if ($LASTEXITCODE -ne 0) { throw 'Codex smoke check failed.' }
+    & (Join-Path $prefix 'node_modules\.bin\gemini.cmd') --version
+    if ($LASTEXITCODE -ne 0) { throw 'Gemini smoke check failed.' }
+} finally {
+    Pop-Location
+}
 ```
 
-`--audit=moderate` flags known-vulnerable transitive packages at install time
-without pinning to a version number that will immediately go stale in this
-doc. If `npm audit` reports a moderate-or-higher finding, stop and review
-before continuing.
+This does not modify global npm packages or the system PATH. Keep the
+audited lockfile with the prefix. If an install fails, remove only that
+failed `$prefix` directory before retrying.
+
+Calling the CLIs via their shim paths (e.g.
+`& (Join-Path $prefix 'node_modules\.bin\codex.cmd')`) works for manual use,
+but repository tools (portal status, agent probes, `_dispatch_gemini`) resolve
+CLIs only through `PATH`. To allow these tools to discover the local
+installation without global npm installs, prepend `$prefix\node_modules\.bin`
+to the permanent **User PATH** (never system PATH):
+
+```powershell
+$userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+[Environment]::SetEnvironmentVariable('Path', "$prefix\node_modules\.bin;$userPath", 'User')
+```
+
+On a fresh Windows host, system PATH entries precede User PATH. Open a **new**
+PowerShell session (so it inherits the updated User PATH with no session-only
+prepend) and confirm resolution before any `$env:Path` override:
+
+```powershell
+Get-Command codex, gemini | Format-Table Name, Source
+```
+
+If an older CLI appears earlier than `$prefix\node_modules\.bin`, launch tools
+with the shim directory first for that session (do not edit system PATH):
+
+```powershell
+$env:Path = "$prefix\node_modules\.bin;$env:Path"
+```
+
+An already-running portal does not inherit the updated PATH; restart the portal
+from a process that already has the shim directory first so its `shutil.which`
+lookup can find Gemini.
+
+Retain the prior install for rollback.
 
 Install Antigravity CLI with the same fail-closed digest gate — save the
 bootstrap script, verify a pinned SHA-256, then execute (never pipe into
