@@ -20,6 +20,12 @@ to use Cline under the shared spend gate once the launcher can bound total outpu
 count (operator ruling 2026-11-23, doc 76 section 15). Wanda's own OpenAI client stays
 outside that gate and is not an authorized unattended or paid path.
 
+**2026-11-26 Lane 1B checkpoint:** the Cline CLI remains forbidden for Wanda's W&B route.
+Biafra remains a designation, not bounded-capable: the launcher requires positive limits and forwards
+flags, and `live_cycle()` passes them, but installed-client enforcement of both total output and
+request count remains unverified, so the boundary lift remains the gate recorded in doc 76
+section 15.1.
+
 **Tone:** precise, evidence-based, scoped. Empty or interrupted output is
 incomplete.
 
