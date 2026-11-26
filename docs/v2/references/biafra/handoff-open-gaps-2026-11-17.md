@@ -244,6 +244,39 @@ Never force-push.
    proven docstring-only by AST equality. PR-carried memory overrode `lesson_94a6ff5363ae` for the
    2026-11-17 consolidation only.
 
+**2026-11-27 Phase 1A Platform Verification & Shell-Gotchas Rollout Receipt (Lane 1).**
+Native macOS Darwin verification completed; Windows receipts tracked:
+
+- **Shell-gotchas hook rollout (`~/.claude`):** Ran `install-shell-hooks.sh --check` then
+  `--apply` in default `warn` mode. Cleanly preserved `~/.claude/settings.json` keys, hooks,
+  and plugin configurations; backup created (`settings.json.bak-*`). Verified
+  `python3 ~/.claude/hooks/shell-gotchas.py --self-test` (22 rules, 0 failures). Historical
+  audit log (`shell-gotchas.py --report`) records 19 firings across 7 rules (`echo-backslash`,
+  `secret-file-read`, `bash4-in-zsh`, `zsh-reserved-var`, `zsh-unquoted-list-var`,
+  `zsh-set-unquoted`, `git-worktree-relative`). Rollout remains in `--mode warn` pending
+  explicit operator sign-off before any switch to `--mode enforce`.
+- **Native macOS verification (`start.sh` under Apple `/bin/bash` 3.2.57 & BSD userland):**
+  Verified `start.sh --help` and `start.sh --validate` execute cleanly with `PATH=/usr/bin:/bin`
+  under Apple native `/bin/bash` and BSD userland (`sed`, `awk`, `nc`, `openssl`). All 71 tests
+  passed across the three `start.sh` CLI and peer TLS suites (`test_start_sh_cli.py`,
+  `test_start_sh_peer_tls.py`, `test_start_sh_peer_flush_control.py`).
+- **macOS LibreSSL `-no-CAstore` behavior:** Verified on macOS system `/usr/bin/openssl`
+  (LibreSSL 3.3.6) that `-no-CAstore` is an unsupported flag (exits 1 with usage). Confirmed
+  via scratch CA pair (`ca1`, `ca2`, `leaf1`) that LibreSSL `verify -CAfile ca1.pem leaf1.pem`
+  succeeds (exit 0) and fails when untrusted (`ca2`, exit 2), proving trust is strictly confined
+  to the explicit `-CAfile` without standard certificate directory leakage. Homebrew OpenSSL
+  3.6.3 was tested side-by-side to verify `-no-CAstore` flag acceptance (exit 0).
+- **Native macOS kqueue exit probe & sandbox tests:** Ran `tests/test_sandbox_run.py` natively
+  under macOS Darwin: 96 passed, 1 skipped (test for `/proc` descendant inspection, expected
+  skip on Darwin). All 18 macOS kernel sandbox tests (`@needs_sandbox` via
+  `/usr/bin/sandbox-exec`) and all 3 kqueue exit probe tests passed natively.
+  `tests/test_peer_tls_trust.py` (17 passed) and
+  `tests/test_peer_tls_trusted_bundle_regression.py` (1 passed) also passed.
+- **Windows host verification status (OPEN):** The Windows RTX 3080 host is currently in
+  standby/offline state. Native Windows checks (PowerShell stdin-bearer curl, Windows sandbox job
+  objects, and host discovery paths) are recorded as an OPEN host receipt per governing protocol
+  until host power-on.
+
 ### 9.4 Known environment-only failures (not caused by this work)
 
 - orama full suite in the cloud container: 24 failures that pass in CI. Thirteen in
