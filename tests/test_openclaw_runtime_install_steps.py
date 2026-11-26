@@ -157,16 +157,18 @@ def test_first_run_behavioral_dry_run_and_skip(tmp_path: Path) -> None:
     fake_pt = tmp_path / "pt_root"
     script = fake_pt / "scripts/install-openclaw-runtime.sh"
     script.parent.mkdir(parents=True)
-    script.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    marker = tmp_path / "called.marker"
+    script.write_text(f'#!/bin/sh\ntouch "{marker}"\nexit 0\n', encoding="utf-8")
     script.chmod(script.stat().st_mode | stat.S_IXUSR)
 
     funcs = _extract_runtime_functions()
 
-    # Test DRY_RUN=true
+    # Test DRY_RUN=true on simulated Darwin host
     harness_dry = f"""
     _ok(){{ echo "OK: $*"; }}
     _warn(){{ echo "WARN: $*"; }}
     _json_set_component(){{ :; }}
+    uname(){{ echo Darwin; }}
     PT_DIR=""
     PERPETUA_TOOLS_ROOT="{fake_pt}"
     OPENCLAW_ROOT=""
@@ -179,12 +181,14 @@ def test_first_run_behavioral_dry_run_and_skip(tmp_path: Path) -> None:
     done_dry = subprocess.run(["bash", "-c", harness_dry], capture_output=True, text=True)
     assert done_dry.returncode == 0
     assert "dry-run" in done_dry.stdout
+    assert not marker.exists(), "dry-run must not execute installer"
 
-    # Test OPENCLAW_RUNTIME=skip
+    # Test OPENCLAW_RUNTIME=skip on simulated Darwin host
     harness_skip = f"""
     _ok(){{ echo "OK: $*"; }}
     _warn(){{ echo "WARN: $*"; }}
     _json_set_component(){{ :; }}
+    uname(){{ echo Darwin; }}
     PT_DIR=""
     PERPETUA_TOOLS_ROOT="{fake_pt}"
     OPENCLAW_ROOT=""
@@ -197,3 +201,24 @@ def test_first_run_behavioral_dry_run_and_skip(tmp_path: Path) -> None:
     done_skip = subprocess.run(["bash", "-c", harness_skip], capture_output=True, text=True)
     assert done_skip.returncode == 0
     assert "skipped" in done_skip.stdout
+    assert not marker.exists(), "OPENCLAW_RUNTIME=skip must not execute installer"
+
+    # Test non-Darwin host platform skip
+    harness_linux = f"""
+    _ok(){{ echo "OK: $*"; }}
+    _warn(){{ echo "WARN: $*"; }}
+    _json_set_component(){{ :; }}
+    uname(){{ echo Linux; }}
+    PT_DIR=""
+    PERPETUA_TOOLS_ROOT="{fake_pt}"
+    OPENCLAW_ROOT=""
+    ORAMA_REPO_ROOT="/nonexistent"
+    DRY_RUN=false
+    OPENCLAW_RUNTIME=""
+    {funcs}
+    run_openclaw_runtime
+    """
+    done_linux = subprocess.run(["bash", "-c", harness_linux], capture_output=True, text=True)
+    assert done_linux.returncode == 0
+    assert "not macOS" in done_linux.stdout
+    assert not marker.exists(), "non-macOS host must not execute installer"

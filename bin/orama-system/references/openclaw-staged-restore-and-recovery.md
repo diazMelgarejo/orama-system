@@ -31,10 +31,13 @@ accounts, phone numbers or key values. Keep those in a private folder outside ev
 
 ## Staged restore order
 
-Every stage uses the same loop: copy the config to a stage-named backup, dry-run the change
-(`openclaw config patch --dry-run`), apply it, and wait until the gateway reports connectivity ok
-(a restart takes minutes when many agents are configured). In stages 1–3, verify connectivity only;
-run a live turn per affected agent starting in stage 4, once providers and credentials are restored.
+Every stage uses the same loop: copy all files modified by the stage to stage-named backups
+(including config and, for stage 3, the global env file), dry-run the change with
+`openclaw config patch --file <stage-patch>.json5 --dry-run`, apply it with
+`openclaw config patch --file <stage-patch>.json5`, and wait until the gateway reports connectivity
+ok (a restart takes minutes when many agents are configured). In stages 1–3, verify connectivity
+only; run a live turn per affected agent starting in stage 4, once providers and credentials are
+restored.
 
 | Stage | What | Notes |
 | --- | --- | --- |
@@ -85,7 +88,8 @@ Before the cutover:
    global packages. Record checksums. Folder mode 700, files mode 600. Keep it out of synced folders
    and exclude it from machine backups if the operator wants the secrets gone for good.
 2. Keep the old state folder renamed aside, untouched, until the restore has been healthy a while.
-3. Keep one config copy per stage, named by stage, mode 600.
+3. Keep backups of all files modified by each stage, named by stage, mode 600 (including config
+   and, for stage 3, the global env file).
 
 Rolling back a stage: copy that stage's file backups (including config and, for stage 3, the global
 env file) over the live files, then restart and wait for connectivity ok.
@@ -95,8 +99,10 @@ Rolling back the whole cutover:
 ```bash
 launchctl bootout gui/$(id -u)/ai.openclaw.gateway       # stop the new gateway
 failed="$HOME/.openclaw.fresh-failed-$(date +%Y%m%d)"    # unique dated path
-[ -e "$failed" ] && mv "$failed" "$failed.old"           # avoid collision
-mv ~/.openclaw "$failed" && \
+if [ -e "$failed" ]; then
+  mv "$failed" "$failed.old" || { echo "failed to rotate $failed" >&2; exit 1; }
+fi
+[ ! -e "$failed" ] && mv ~/.openclaw "$failed" && \
   mv ~/.openclaw.pre-clean ~/.openclaw                   # put old state back
 # restore saved service definition into ~/Library/LaunchAgents, then bootstrap
 ```

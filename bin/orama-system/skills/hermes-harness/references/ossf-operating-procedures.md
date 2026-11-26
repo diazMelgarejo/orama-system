@@ -359,7 +359,7 @@ Recheck the publisher and advisories before adopting any replacement pin.
 ```powershell
 $prefix = Join-Path $env:LOCALAPPDATA 'oramasys\cli-codex-0.172.0-gemini-0.71.1'
 if (Test-Path -LiteralPath $prefix) {
-    throw "Prefix $prefix exists. To retry: Remove-Item -Recurse -LiteralPath '$prefix'"
+    throw "Prefix $prefix already exists. Retain working prefixes for rollback; do not overwrite."
 }
 New-Item -ItemType Directory -Path $prefix -ErrorAction Stop | Out-Null
 Set-Content -LiteralPath (Join-Path $prefix 'package.json') -Value '{"private":true}' -Encoding utf8
@@ -381,14 +381,21 @@ try {
 ```
 
 This does not modify global npm packages or the system PATH. Keep the
-audited lockfile with the prefix. After smoke checks pass, call the CLIs
-via their shim paths (e.g. `& (Join-Path $prefix 'node_modules\.bin\codex.cmd')`)
-or prepend `$prefix\node_modules\.bin` to the permanent **User PATH** (never
-system PATH) with:
+audited lockfile with the prefix. If an install fails, remove only that
+failed `$prefix` directory before retrying.
+
+Calling the CLIs via their shim paths (e.g.
+`& (Join-Path $prefix 'node_modules\.bin\codex.cmd')`) works for manual use,
+but repository tools (portal status, agent probes, `_dispatch_gemini`) resolve
+CLIs only through `PATH`. To allow these tools to discover the local
+installation without global npm installs, prepend `$prefix\node_modules\.bin`
+to the permanent **User PATH** (never system PATH) and update the current
+PowerShell session:
 
 ```powershell
 $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
 [Environment]::SetEnvironmentVariable('Path', "$prefix\node_modules\.bin;$userPath", 'User')
+$env:Path = "$prefix\node_modules\.bin;$env:Path"
 ```
 
 Retain the prior install for rollback.
