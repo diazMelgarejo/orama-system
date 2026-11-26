@@ -172,17 +172,28 @@ def stub_cline(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Pat
     return {"record": record}
 
 
-def test_windows_stub_source_never_embeds_the_record_path(tmp_path: Path) -> None:
-    """The stub source holds no path text, so a record directory with an apostrophe still runs."""
+@pytest.mark.parametrize(
+    "dirname",
+    [
+        pytest.param("O'Neil temp", id="apostrophe"),
+        pytest.param(
+            'say "hi" temp', id="double-quote",
+            marks=pytest.mark.skipif(sys.platform == "win32", reason="Windows forbids double quotes in file names"),
+        ),
+    ],
+)
+def test_windows_stub_source_never_embeds_the_record_path(tmp_path: Path, dirname: str) -> None:
+    """The stub source holds no path text, so a record directory with an apostrophe (every platform) or
+    double quotes (not Windows, which forbids them in names) still runs."""
     import subprocess
 
-    record = tmp_path / "O'Neil \"temp\""
+    record = tmp_path / dirname
     record.mkdir()
     cfg = tmp_path / "cfg"
     (cfg / "data" / "settings").mkdir(parents=True)
     (cfg / "data" / "settings" / "providers.json").write_text("{}", encoding="utf-8")
     source = _windows_stub_python()
-    assert str(record) not in source and "O'Neil" not in source
+    assert str(record) not in source and dirname not in source
     done = subprocess.run(
         [sys.executable, "-c", source, "--config", str(cfg), "--probe"],
         env={**os.environ, STUB_RECORD_ENV: str(record)}, capture_output=True, text=True, check=False,
