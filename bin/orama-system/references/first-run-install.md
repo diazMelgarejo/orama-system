@@ -13,7 +13,7 @@ already marked satisfied.
 ## Path variables
 
 | Variable | Detection |
-| ---------- | ----------- |
+| -------- | --------- |
 | `ORAMA_REPO_ROOT` | Git root of orama-system (parent of `bin/`; script auto-detects via `git rev-parse` fallback) |
 | `OPENCLAW_ROOT` / `ORAMA_OPENCLAW_ROOT` | Explicit override, else parent of `ORAMA_REPO_ROOT` (package install: `…/OpenClaw/orama-system` → `…/OpenClaw`) |
 | `ORAMA_INSTALL_DIR` | Same as `ORAMA_REPO_ROOT` when set — package install discovery |
@@ -23,7 +23,7 @@ already marked satisfied.
 ## State markers
 
 | Path | Purpose |
-| ------ | --------- |
+| ---- | ------- |
 | `~/.orama-system/first-run.done` | Set when all mandatory components pass |
 | `~/.orama-system/first-run.json` | Per-component status (`ok` / `warn` / `fail` / `skip` / `running`) and timestamps; `ollama.models` tracks per-model pull resume |
 
@@ -34,7 +34,7 @@ already marked satisfied.
 `run` performs heavy steps with **visible output**:
 
 | Step | Progress | Resume |
-| ------ | ---------- | -------- |
+| ---- | -------- | ------ |
 | 0.3 Ollama models | `ollama pull` streams progress to the terminal | Per-model entries in `first-run.json` → `components.ollama.models.<name>` (`pulling` / `interrupted` / `ok` / `fail`). Re-run `run` after Ctrl+C resumes only missing models. |
 | 0.5.1 Embeddings | `setup-embeddings` prints step banners to stdout | Skipped when `embeddings` status is `ok`. Set `embeddings` to `warn` or delete the key to retry. |
 
@@ -44,7 +44,7 @@ Ollama models or re-run `setup-embeddings` when those components are already `ok
 ## Idempotency matrix
 
 | ID | Component | Satisfied when | `--force` behavior |
-| ---- | ----------- | ---------------- | --------------------- |
+| --- | -------- | -------------- | ------------------- |
 | 0.1 | Node.js (NVM) | NVM node ≥ v20 active; `node --version` matches expected major | Re-check PATH hint in shell profile only |
 | 0.2 | Python 3.13+ | `python3.13 --version` succeeds | Re-check only |
 | 0.3 | Ollama + models | Ollama API up; `qwen3.5:9b-mlx` and `bge-m3` in `/api/tags` | Re-probe only; **does not** re-pull if component `ok` |
@@ -294,7 +294,7 @@ Full install and daisy-chain documentation: user-managed; defer to operator docs
 ## Heal / resume
 
 | Situation | Action |
-| ----------- | -------- |
+| --------- | ------ |
 | Fresh machine | `bash bin/orama-system/scripts/first-run-install.sh run` |
 | Check only | `bash bin/orama-system/scripts/first-run-install.sh status` |
 | After partial failure / interrupted pull | Re-run `run` — resumes per-model pulls from `first-run.json` |
