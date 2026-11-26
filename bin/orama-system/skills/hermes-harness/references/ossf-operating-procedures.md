@@ -358,8 +358,11 @@ Recheck the publisher and advisories before adopting any replacement pin.
 
 ```powershell
 $prefix = Join-Path $env:LOCALAPPDATA 'oramasys\cli-codex-0.172.0-gemini-0.71.1'
-if (Test-Path -LiteralPath $prefix) { throw 'Use a fresh toolchain prefix; do not overwrite an existing install.' }
+if (Test-Path -LiteralPath $prefix) {
+    throw "Prefix $prefix exists. To retry: Remove-Item -Recurse -LiteralPath '$prefix'"
+}
 New-Item -ItemType Directory -Path $prefix -ErrorAction Stop | Out-Null
+Set-Content -LiteralPath (Join-Path $prefix 'package.json') -Value '{"private":true}' -Encoding utf8
 Push-Location -LiteralPath $prefix
 try {
     npm install --package-lock-only --ignore-scripts --save-exact '@openai/codex@0.172.0' '@google/gemini-cli@0.71.1'
@@ -378,8 +381,17 @@ try {
 ```
 
 This does not modify global npm packages or the system PATH. Keep the
-audited lockfile with the prefix. Only advertise the new binary paths
-after both smoke checks pass; retain the prior install for rollback.
+audited lockfile with the prefix. After smoke checks pass, call the CLIs
+via their shim paths (e.g. `& (Join-Path $prefix 'node_modules\.bin\codex.cmd')`)
+or prepend `$prefix\node_modules\.bin` to the permanent **User PATH** (never
+system PATH) with:
+
+```powershell
+$userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+[Environment]::SetEnvironmentVariable('Path', "$prefix\node_modules\.bin;$userPath", 'User')
+```
+
+Retain the prior install for rollback.
 
 Install Antigravity CLI with the same fail-closed digest gate — save the
 bootstrap script, verify a pinned SHA-256, then execute (never pipe into

@@ -499,7 +499,7 @@ run_shell_hooks() {
 # explicit operator action, documented in references/first-run-install.md section 0.9).
 _openclaw_runtime_script() {
   local root
-  for root in "${PT_DIR:-}" "${OPENCLAW_ROOT:+$OPENCLAW_ROOT/perplexity-api/Perpetua-Tools}" "$ORAMA_REPO_ROOT/../perplexity-api/Perpetua-Tools"; do
+  for root in "${PT_DIR:-}" "${PERPETUA_TOOLS_ROOT:-}" "${OPENCLAW_ROOT:+$OPENCLAW_ROOT/perplexity-api/Perpetua-Tools}" "$ORAMA_REPO_ROOT/../perplexity-api/Perpetua-Tools"; do
     if [ -n "$root" ] && [ -f "$root/scripts/install-openclaw-runtime.sh" ]; then
       printf '%s\n' "$root/scripts/install-openclaw-runtime.sh"
       return 0

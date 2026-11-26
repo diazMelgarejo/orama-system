@@ -106,3 +106,23 @@ def test_an_unknown_pin_warns_and_leaves_no_checked_out_files(tmp_path: Path) ->
     done = _bootstrap(tmp_path, repo, "0" * 40)
     assert "WARN" in done.stderr
     assert not (tmp_path / "home/.agent-scripts/a.txt").exists(), "unpinned content must not be left behind"
+    assert not (tmp_path / "home/Projects/agent-scripts").exists(), "symlink must not be created on pin failure"
+
+
+def test_clone_materializes_files_when_pinned_commit_is_default_branch_tip(tmp_path: Path) -> None:
+    repo, _first, second = _upstream(tmp_path)
+    # Requested pin equals the default branch tip; clone --no-checkout must materialize files
+    done = _bootstrap(tmp_path, repo, second)
+    assert done.returncode == 0, done.stderr
+    clone = tmp_path / "home/.agent-scripts"
+    assert _git(clone, "rev-parse", "HEAD") == second
+    assert (clone / "a.txt").exists(), "files must be checked out even when pin matches HEAD"
+    assert (clone / "a.txt").read_text(encoding="utf-8") == "two"
+    assert (tmp_path / "home/Projects/agent-scripts").is_symlink()
+
+
+def test_pin_failure_skips_symlink(tmp_path: Path) -> None:
+    repo, _first, _second = _upstream(tmp_path)
+    done = _bootstrap(tmp_path, repo, "deadbeef" * 5)
+    assert "WARN" in done.stderr
+    assert not (tmp_path / "home/Projects/agent-scripts").exists()

@@ -213,25 +213,30 @@ agent_scripts_origin_ok() {
 }
 
 pin_agent_scripts() {
-  local dir="$1" current
+  local dir="$1" current first_file
   current="$(git -C "$dir" rev-parse HEAD 2>/dev/null || true)"
-  if [[ "$current" == "$STEIPETE_REF" ]]; then
+  first_file="$(git -C "$dir" ls-files 2>/dev/null | head -n 1 || true)"
+  if [[ "$current" == "$STEIPETE_REF" && -n "$first_file" && -e "$dir/$first_file" ]]; then
     ok "steipete/agent-scripts is at the pinned commit ${STEIPETE_REF:0:12}"
     return 0
   fi
   git -C "$dir" fetch --quiet origin 2>/dev/null || true
   if git -C "$dir" checkout --detach --quiet "$STEIPETE_REF" 2>/dev/null; then
-    ok "steipete/agent-scripts pinned at ${STEIPETE_REF:0:12}"
-  else
-    warn "pinned commit $STEIPETE_REF is not available in $dir — fix with: git -C $dir fetch origin && git -C $dir checkout --detach $STEIPETE_REF"
+    first_file="$(git -C "$dir" ls-files 2>/dev/null | head -n 1 || true)"
+    if [[ -z "$first_file" || -e "$dir/$first_file" ]]; then
+      ok "steipete/agent-scripts pinned at ${STEIPETE_REF:0:12}"
+      return 0
+    fi
   fi
+  warn "pinned commit $STEIPETE_REF is not available in $dir — fix with: git -C $dir fetch origin && git -C $dir checkout --detach $STEIPETE_REF"
+  return 1
 }
 
 refresh_agent_scripts() {
   local dir="$1"
   if ! agent_scripts_origin_ok "$dir"; then
     warn "$dir origin is not steipete/agent-scripts — skipping refresh"
-    return 0
+    return 1
   fi
   pin_agent_scripts "$dir"
 }
@@ -254,7 +259,9 @@ bootstrap_agent_scripts() {
 
   if [[ -d "$clone_dir/.git" || -f "$clone_dir/.git" ]]; then
     info "steipete/agent-scripts clone already present at $clone_dir"
-    refresh_agent_scripts "$clone_dir"
+    if ! refresh_agent_scripts "$clone_dir"; then
+      return 0
+    fi
   elif [[ -e "$clone_dir" ]]; then
     warn "$clone_dir exists and is not a git checkout — skipping"
     return 0
@@ -263,7 +270,9 @@ bootstrap_agent_scripts() {
     # --no-checkout: nothing from the upstream tip lands on disk unless the pinned commit checks out.
     if git clone --no-checkout "$STEIPETE_REPO" "$clone_dir"; then
       ok "steipete/agent-scripts cloned to $clone_dir"
-      pin_agent_scripts "$clone_dir"
+      if ! pin_agent_scripts "$clone_dir"; then
+        return 0
+      fi
     else
       warn "steipete/agent-scripts clone failed — run manually: git clone $STEIPETE_REPO $clone_dir"
       return 0

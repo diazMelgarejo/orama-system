@@ -55,25 +55,18 @@ fi
 /usr/bin/osascript -e 'display notification "The OpenClaw gateway service names a node version or the node link drifted. Run: openclaw gateway status" with title "OpenClaw runtime drift"' || true
 WRAPPER_EOF
   chmod +x "$WRAPPER"
-  cat > "$PLIST_DEST" <<PLIST_EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>${LABEL}</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>/bin/bash</string>
-        <string>${WRAPPER}</string>
-    </array>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>StartInterval</key>
-    <integer>${INTERVAL_SECONDS}</integer>
-</dict>
-</plist>
-PLIST_EOF
+  python3 - "$PLIST_DEST" "$LABEL" "$WRAPPER" "$INTERVAL_SECONDS" <<'EOF'
+import plistlib, sys
+dest, label, wrapper, interval = sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4])
+doc = {
+    "Label": label,
+    "ProgramArguments": ["/bin/bash", wrapper],
+    "RunAtLoad": True,
+    "StartInterval": interval,
+}
+with open(dest, "wb") as f:
+    plistlib.dump(doc, f)
+EOF
   launchctl unload "$PLIST_DEST" 2>/dev/null || true
   launchctl load "$PLIST_DEST"
   echo "installed $LABEL (checks every ${INTERVAL_SECONDS}s; alerts only)"

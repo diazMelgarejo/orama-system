@@ -108,3 +108,92 @@ def test_the_recovery_card_is_portable_and_linked_from_step_0_9() -> None:
     assert not re.search(r"\b\d{1,3}(\.\d{1,3}){3}\b", text), "no address literals in tracked files"
     assert all(len(line) <= 100 for line in text.splitlines()), "markdownlint line length"
     assert "openclaw-staged-restore-and-recovery.md" in _text(DOC), "step 0.9 must link the card"
+
+
+def test_watcher_plist_with_special_characters_in_home(tmp_path: Path) -> None:
+    import plistlib
+    home = tmp_path / "user & co <special>"
+    bin_dir = tmp_path / "bin"
+    home.mkdir()
+    bin_dir.mkdir()
+    _stub_launchctl(bin_dir)
+    env = {"HOME": str(home), "PATH": f"{bin_dir}:/usr/bin:/bin", "PERPETUA_TOOLS_ROOT": "/pt"}
+    done = subprocess.run(["bash", str(WATCH)], capture_output=True, text=True, env={**os.environ, **env})
+    assert done.returncode == 0, done.stderr
+    plist_path = home / "Library/LaunchAgents/com.orama.openclaw-runtime-watch.plist"
+    parsed = plistlib.loads(plist_path.read_bytes())
+    assert parsed["ProgramArguments"][1] == str(home / ".local/state/openclaw-runtime/watch-run.sh")
+
+
+def _extract_runtime_functions() -> str:
+    text = _text(FIRST_RUN)
+    start = text.index("_openclaw_runtime_script() {")
+    end = text.index("probe_omniroute() {")
+    return text[start:end]
+
+
+def test_first_run_discovers_runtime_via_perpetua_tools_root(tmp_path: Path) -> None:
+    fake_pt = tmp_path / "pt_root"
+    script = fake_pt / "scripts/install-openclaw-runtime.sh"
+    script.parent.mkdir(parents=True)
+    script.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    script.chmod(script.stat().st_mode | stat.S_IXUSR)
+
+    funcs = _extract_runtime_functions()
+    harness = f"""
+    PT_DIR=""
+    PERPETUA_TOOLS_ROOT="{fake_pt}"
+    OPENCLAW_ROOT=""
+    ORAMA_REPO_ROOT="/nonexistent"
+    {funcs}
+    _openclaw_runtime_script
+    """
+    done = subprocess.run(["bash", "-c", harness], capture_output=True, text=True)
+    assert done.returncode == 0
+    assert done.stdout.strip() == str(script)
+
+
+def test_first_run_behavioral_dry_run_and_skip(tmp_path: Path) -> None:
+    fake_pt = tmp_path / "pt_root"
+    script = fake_pt / "scripts/install-openclaw-runtime.sh"
+    script.parent.mkdir(parents=True)
+    script.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    script.chmod(script.stat().st_mode | stat.S_IXUSR)
+
+    funcs = _extract_runtime_functions()
+
+    # Test DRY_RUN=true
+    harness_dry = f"""
+    _ok(){{ echo "OK: $*"; }}
+    _warn(){{ echo "WARN: $*"; }}
+    _json_set_component(){{ :; }}
+    PT_DIR=""
+    PERPETUA_TOOLS_ROOT="{fake_pt}"
+    OPENCLAW_ROOT=""
+    ORAMA_REPO_ROOT="/nonexistent"
+    DRY_RUN=true
+    OPENCLAW_RUNTIME=""
+    {funcs}
+    run_openclaw_runtime
+    """
+    done_dry = subprocess.run(["bash", "-c", harness_dry], capture_output=True, text=True)
+    assert done_dry.returncode == 0
+    assert "dry-run" in done_dry.stdout
+
+    # Test OPENCLAW_RUNTIME=skip
+    harness_skip = f"""
+    _ok(){{ echo "OK: $*"; }}
+    _warn(){{ echo "WARN: $*"; }}
+    _json_set_component(){{ :; }}
+    PT_DIR=""
+    PERPETUA_TOOLS_ROOT="{fake_pt}"
+    OPENCLAW_ROOT=""
+    ORAMA_REPO_ROOT="/nonexistent"
+    DRY_RUN=false
+    OPENCLAW_RUNTIME=skip
+    {funcs}
+    run_openclaw_runtime
+    """
+    done_skip = subprocess.run(["bash", "-c", harness_skip], capture_output=True, text=True)
+    assert done_skip.returncode == 0
+    assert "skipped" in done_skip.stdout

@@ -88,8 +88,9 @@ load them through the upstream mirror when present.
 Manual, per machine, skip if missing:
 
 ```text
-git clone https://github.com/steipete/agent-scripts.git ~/.agent-scripts
-ln -s ~/.agent-scripts ~/Projects/agent-scripts
+git clone --no-checkout https://github.com/steipete/agent-scripts.git ~/.agent-scripts
+git -C ~/.agent-scripts checkout --detach deb19f5896fa652c2731186f5d03bcd0193c123c && \
+  mkdir -p ~/Projects && ln -s ~/.agent-scripts ~/Projects/agent-scripts
 ```
 
 `~/.agent-scripts` is the clone. `~/Projects/agent-scripts` is the symlink,

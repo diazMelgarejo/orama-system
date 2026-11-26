@@ -32,9 +32,9 @@ accounts, phone numbers or key values. Keep those in a private folder outside ev
 ## Staged restore order
 
 Every stage uses the same loop: copy the config to a stage-named backup, dry-run the change
-(`openclaw config patch --dry-run`), apply it, wait until the gateway reports connectivity ok (a
-restart takes minutes when many agents are configured), then run one tiny live turn per affected
-agent.
+(`openclaw config patch --dry-run`), apply it, and wait until the gateway reports connectivity ok
+(a restart takes minutes when many agents are configured). In stages 1–3, verify connectivity only;
+run a live turn per affected agent starting in stage 4, once providers and credentials are restored.
 
 | Stage | What | Notes |
 | --- | --- | --- |
@@ -87,16 +87,18 @@ Before the cutover:
 2. Keep the old state folder renamed aside, untouched, until the restore has been healthy a while.
 3. Keep one config copy per stage, named by stage, mode 600.
 
-Rolling back a stage: copy that stage's config backup over the live config, then restart and wait
-for connectivity ok.
+Rolling back a stage: copy that stage's file backups (including config and, for stage 3, the global
+env file) over the live files, then restart and wait for connectivity ok.
 
 Rolling back the whole cutover:
 
 ```bash
 launchctl bootout gui/$(id -u)/ai.openclaw.gateway       # stop the new gateway
-mv ~/.openclaw ~/.openclaw.fresh-failed                   # keep the failed state, do not delete
-mv ~/.openclaw.pre-clean ~/.openclaw                      # put the old state back
-# restore the saved service definition into ~/Library/LaunchAgents, then bootstrap it
+failed="$HOME/.openclaw.fresh-failed-$(date +%Y%m%d)"    # unique dated path
+[ -e "$failed" ] && mv "$failed" "$failed.old"           # avoid collision
+mv ~/.openclaw "$failed" && \
+  mv ~/.openclaw.pre-clean ~/.openclaw                   # put old state back
+# restore saved service definition into ~/Library/LaunchAgents, then bootstrap
 ```
 
 Caveat: if the old state crash-looped (conflicting plugin metadata), a rollback restores your data,
