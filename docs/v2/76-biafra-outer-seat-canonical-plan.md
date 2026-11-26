@@ -406,3 +406,14 @@ path dispatches Cline. Implementation is incomplete: the route remains a designa
 bounded-capable. The remaining gate is proof of client-level request-count and cumulative-output
 termination, before any spend-gate reservation, followed by client qualification and boundary lift.
 No live activation is authorized.
+
+**2026-11-27 Phase 1B BOUND_CONTRACT closure update.** Launcher-side boundary enforcement is
+implemented in `launch_cline_wandb.py` via `run_guarded_cline`: a stream byte/token accountant and
+request monitor supervise child process execution and terminate fail-closed if either
+`max_requests` or `max_total_output` is reached. Offline harness tests in
+`tests/test_launch_cline_wandb.py` verify that exceeding bounds triggers fail-closed termination.
+`BOUND_CONTRACT` is verified and flipped to `{"max_requests": True, "max_total_output": True}`,
+allowing `_launcher_boundary_problem()` to return `None` for valid positive bounds while continuing
+to refuse missing or non-positive bounds with `invalid-launcher-bounds`. The Biafra Cline route is
+now bounded-capable. The legacy path stays fail-closed (`legacy-live-path-disabled`), Wanda's soul
+card prohibition remains intact and scoped to her W&B route, and no live cycle is armed.

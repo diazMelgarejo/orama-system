@@ -374,3 +374,52 @@ def test_boundary_problem_accepts_only_two_verified_positive_bounds(
     assert launcher.launcher_boundary_problem(1, 4096) is None
     assert launcher.launcher_boundary_problem(None, 4096) == "invalid-launcher-bounds"
     assert launcher.launcher_boundary_problem(1, 0) == "invalid-launcher-bounds"
+
+
+def test_cumulative_output_limit_terminates_child_fail_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When child output exceeds max_total_output, the launcher terminates child fail-closed."""
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    script = bindir / "cline"
+    # Emit 500 words / ~2500 bytes of output
+    script.write_text(
+        "#!/bin/sh\n"
+        'for i in $(seq 1 500); do printf "word%d " "$i"; done\n'
+        "printf '\\n'\n"
+        "exit 0\n"
+    )
+    script.chmod(script.stat().st_mode | stat.S_IXUSR)
+    monkeypatch.setenv("PATH", f"{bindir}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv(launcher.KEYVAR, FAKE_KEY)
+    rc = launcher.main(["--max-requests", "1", "--max-total-output", "20", "--", "task"])
+    assert rc != 0, "child emitting output exceeding max_total_output must terminate with non-zero exit"
+
+
+def test_request_count_limit_terminates_child_fail_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When child request count exceeds max_requests, the launcher terminates child fail-closed."""
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    script = bindir / "cline"
+    # Emit multiple requests (api_req_started or [request N])
+    script.write_text(
+        "#!/bin/sh\n"
+        'printf "api_req_started\\n"\n'
+        'printf "api_req_started\\n"\n'
+        "exit 0\n"
+    )
+    script.chmod(script.stat().st_mode | stat.S_IXUSR)
+    monkeypatch.setenv("PATH", f"{bindir}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv(launcher.KEYVAR, FAKE_KEY)
+    rc = launcher.main(["--max-requests", "1", "--max-total-output", "4096", "--", "task"])
+    assert rc != 0, "child emitting multiple requests exceeding max_requests must terminate with non-zero exit"
+
+
+def test_native_bound_contract_is_verified() -> None:
+    """The launcher natively verifies both bounds without monkeypatching."""
+    assert launcher.BOUND_CONTRACT == {"max_requests": True, "max_total_output": True}
+    assert launcher.launcher_boundary_problem(1, 4096) is None
+

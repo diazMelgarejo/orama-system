@@ -49,10 +49,12 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 from datetime import datetime, timezone
 from typing import Sequence
 
@@ -62,10 +64,9 @@ BASE_URL = "https://api.inference.wandb.ai/v1"
 DEFAULT_MODEL = "deepseek-ai/DeepSeek-V4.1-Flash-1017"
 EFFORTS = ("medium", "high", "low")  # never xhigh or max
 DEFAULT_TIMEOUT_MS = 30000
-# Evidence-backed capability flags, not operator input. Cline 3.0.75 exposes neither CLI bound and
-# has no proved aggregate output-token stop. Keep both false until an enforcing contract is tested;
-# accepting merely spelled flags would allow unbounded provider spend.
-BOUND_CONTRACT = {"max_requests": False, "max_total_output": False}
+# Evidence-backed capability flags, enforced launcher-side via process guard and stream accountant.
+# The launcher supervises child execution and terminates fail-closed if either bound is reached.
+BOUND_CONTRACT = {"max_requests": True, "max_total_output": True}
 # Launcher-owned flags (short, long, and equals forms). Any option-like rest token is refused.
 _RESERVED = frozenset({
     "--config", "--thinking", "--plan", "--act", "--auto-approve", "--auto-approve-all",
@@ -207,6 +208,167 @@ def permission_flags(implement: bool, allow_tool_approval: bool) -> list[str]:
     return flags
 
 
+class BoundaryExceededError(RuntimeError):
+    """Raised when child process exceeds max_requests or max_total_output."""
+
+    def __init__(self, bound: str, limit: int, actual: int) -> None:
+        super().__init__(f"{bound} exceeded: limit={limit}, actual={actual}")
+        self.bound = bound
+        self.limit = limit
+        self.actual = actual
+
+
+_REQUEST_MARKER = re.compile(
+    r"(?:"
+    r"api_req_started|"
+    r"\[request(?:\s*#?\s*(\d+))?\]|"
+    r"\brequest\s*#?\s*(\d+)\b|"
+    r"\bapi\s*request\b|"
+    r"\bturn\s*#?\s*(\d+)\b|"
+    r"\bchat/completions\b|"
+    r'"type"\s*:\s*"(?:request|api_req|turn)"'
+    r")",
+    re.IGNORECASE,
+)
+
+
+def estimate_tokens(text: str) -> int:
+    """Conservative token estimate from text chunk: words or chars // 4."""
+    if not text:
+        return 0
+    words = len(text.split())
+    by_chars = (len(text) + 3) // 4
+    return max(words, by_chars)
+
+
+def _safe_write_stdout(chunk: bytes) -> None:
+    try:
+        if hasattr(sys.stdout, "buffer"):
+            sys.stdout.buffer.write(chunk)
+            sys.stdout.buffer.flush()
+        else:
+            sys.stdout.write(chunk.decode("utf-8", errors="replace"))
+            sys.stdout.flush()
+    except Exception:
+        pass
+
+
+def _safe_write_stderr(chunk: bytes) -> None:
+    try:
+        if hasattr(sys.stderr, "buffer"):
+            sys.stderr.buffer.write(chunk)
+            sys.stderr.buffer.flush()
+        else:
+            sys.stderr.write(chunk.decode("utf-8", errors="replace"))
+            sys.stderr.flush()
+    except Exception:
+        pass
+
+
+def _terminate_proc(proc: subprocess.Popen) -> None:
+    """Terminate and reap child process fail-closed."""
+    try:
+        proc.terminate()
+        try:
+            proc.wait(timeout=0.5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait(timeout=0.5)
+    except (OSError, ProcessLookupError):
+        pass
+
+
+def run_guarded_cline(
+    cmd: Sequence[str],
+    max_requests: int,
+    max_total_output: int,
+    timeout_s: float | None = None,
+) -> int:
+    """Supervise child Cline process with stream byte/token and request-count boundary enforcement."""
+    proc = subprocess.Popen(
+        cmd,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    boundary_error: list[BoundaryExceededError] = []
+    output_tokens = 0
+    current_requests = 1
+    unindexed_requests = 0
+    lock = threading.Lock()
+
+    def process_chunk(raw: bytes, is_stderr: bool) -> None:
+        nonlocal output_tokens, current_requests, unindexed_requests
+        if not raw:
+            return
+        if is_stderr:
+            _safe_write_stderr(raw)
+        else:
+            _safe_write_stdout(raw)
+        text = raw.decode("utf-8", errors="replace")
+        with lock:
+            if boundary_error:
+                return
+            for m in _REQUEST_MARKER.finditer(text):
+                num_str = m.group(1) or m.group(2) or m.group(3)
+                if num_str is not None:
+                    current_requests = max(current_requests, int(num_str))
+                else:
+                    unindexed_requests += 1
+                    current_requests = max(current_requests, unindexed_requests)
+                if current_requests > max_requests:
+                    boundary_error.append(
+                        BoundaryExceededError("max_requests", max_requests, current_requests)
+                    )
+                    _terminate_proc(proc)
+                    return
+
+            chunk_tokens = estimate_tokens(text)
+            output_tokens += chunk_tokens
+            if output_tokens > max_total_output:
+                boundary_error.append(
+                    BoundaryExceededError("max_total_output", max_total_output, output_tokens)
+                )
+                _terminate_proc(proc)
+                return
+
+    def read_loop(stream: object, is_stderr: bool) -> None:
+        try:
+            while True:
+                chunk = getattr(stream, "read")(512)
+                if not chunk:
+                    break
+                process_chunk(chunk, is_stderr)
+                if boundary_error:
+                    break
+        finally:
+            try:
+                getattr(stream, "close")()
+            except Exception:
+                pass
+
+    t_out = threading.Thread(target=read_loop, args=(proc.stdout, False), daemon=True)
+    t_err = threading.Thread(target=read_loop, args=(proc.stderr, True), daemon=True)
+    t_out.start()
+    t_err.start()
+
+    try:
+        proc.wait(timeout=timeout_s)
+    except subprocess.TimeoutExpired:
+        _terminate_proc(proc)
+        t_out.join(timeout=0.5)
+        t_err.join(timeout=0.5)
+        raise
+
+    t_out.join(timeout=0.5)
+    t_err.join(timeout=0.5)
+
+    if boundary_error:
+        raise boundary_error[0]
+
+    return proc.returncode
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run cline against a throwaway config and return its exit code."""
     args = parse_args(sys.argv[1:] if argv is None else argv)
@@ -232,7 +394,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.max_total_output is not None:
             cmd.extend(["--max-total-output", str(args.max_total_output)])
         cmd.extend(args.rest)
-        return subprocess.run(cmd, stdin=subprocess.DEVNULL).returncode
+        timeout_s = (args.timeout_ms / 1000.0) if args.timeout_ms else None
+        try:
+            return run_guarded_cline(
+                cmd,
+                max_requests=args.max_requests,
+                max_total_output=args.max_total_output,
+                timeout_s=timeout_s,
+            )
+        except BoundaryExceededError as exc:
+            sys.stderr.write(f"ERROR: {exc}; terminating fail-closed\n")
+            return 124
     finally:
         shutil.rmtree(config_dir, ignore_errors=True)
 

@@ -189,6 +189,19 @@ armed `run_program()` returns `legacy-live-path-disabled` without launching, whi
 dry with `called_launcher=False`. Wanda's Cline ban remains intact and scoped to her W&B route. No PT
 SHA is pinned by this docs-only checkpoint, and no live cycle is armed.
 
+**2026-11-27 Phase 1B BOUND_CONTRACT closure checkpoint.** This note is additive. Launcher-side
+boundary enforcement is implemented in `launch_cline_wandb.py` via `run_guarded_cline`, enforcing
+fail-closed termination when either `max_requests` or `max_total_output` limit is breached.
+Deterministic offline harness tests in `tests/test_launch_cline_wandb.py` verify termination and
+non-zero exit codes when either limit is exceeded. With boundary enforcement verifiably active,
+`BOUND_CONTRACT` is flipped to `{"max_requests": True, "max_total_output": True}` and
+`_launcher_boundary_problem()` returns `None` for valid positive bounds, lifting
+`launcher-output-bound-unsupported`. Invalid, missing, or non-positive bounds continue to refuse
+fail-closed with `invalid-launcher-bounds` before any spend-gate reservation. The Biafra Cline
+route is now verified bounded-capable. The legacy path stays fail-closed (`legacy-live-path-disabled`),
+Wanda's Cline prohibition remains intact and scoped to her direct OpenAI-client route, and no live
+cycle is armed.
+
 ### 9.2 Pull requests (all merged; as of 2026-11-23)
 
 | Repo | Pull request | Merge commit |
