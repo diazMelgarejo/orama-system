@@ -80,3 +80,31 @@ def test_the_watcher_uninstall_removes_only_its_own_agent(tmp_path: Path) -> Non
     subprocess.run(["bash", str(WATCH), "--uninstall"], capture_output=True, text=True, env=env, check=True)
     assert not (home / "Library/LaunchAgents/com.orama.openclaw-runtime-watch.plist").exists()
     assert other.read_text(encoding="utf-8") == "keep"
+
+
+CARD = ROOT / "bin/orama-system/references/openclaw-staged-restore-and-recovery.md"
+
+
+def test_the_recovery_card_exists_and_covers_install_restore_and_rollback() -> None:
+    text = _text(CARD)
+    for heading in (
+        "## Preconditions",
+        "## Fresh install procedure",
+        "## Staged restore order",
+        "## Credential handling",
+        "## Backup and recovery",
+        "## Verification after each stage",
+    ):
+        assert heading in text, heading
+    for must in ("bootout", "Trash", "dry-run", "shell import", "length and hash"):
+        assert must in text, must
+
+
+def test_the_recovery_card_is_portable_and_linked_from_step_0_9() -> None:
+    import re
+
+    text = _text(CARD)
+    assert "/Users/" not in text, "no workstation paths in tracked files"
+    assert not re.search(r"\b\d{1,3}(\.\d{1,3}){3}\b", text), "no address literals in tracked files"
+    assert all(len(line) <= 100 for line in text.splitlines()), "markdownlint line length"
+    assert "openclaw-staged-restore-and-recovery.md" in _text(DOC), "step 0.9 must link the card"

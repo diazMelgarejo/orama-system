@@ -243,6 +243,10 @@ clean gateway state needs `--fresh-gateway --accept-risk`, which renames `~/.ope
 onboards fresh on loopback.
 Restore state afterwards in baby steps with a gateway check after each stage.
 
+The full fresh-install procedure, the staged restore order, the dated provider and seat rulings,
+credential handling and the backup and recovery process live in
+[`openclaw-staged-restore-and-recovery.md`](openclaw-staged-restore-and-recovery.md).
+
 An optional drift watcher alerts (and never fixes) every 30 minutes:
 `bash scripts/install_openclaw_runtime_watch.sh` (`--status`, `--uninstall`).
 
