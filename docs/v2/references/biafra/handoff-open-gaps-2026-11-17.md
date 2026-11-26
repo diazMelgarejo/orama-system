@@ -172,6 +172,23 @@ test docstrings; PR-carried memory vs `lesson_94a6ff5363ae`.
 | 60-day leaf lifetime | Confirmed by the operator as current policy (renewal agreement v2). The Perpetua-Tools `DECISIONS.md` entry records it; reverting would be one constant, `LEAF_VALIDITY_DAYS`, and the tests derive from it. |
 | Live activation | Not armed. Still a separate operator act (section 9.3). |
 
+**2026-11-26 Lane 1B docs-lockstep checkpoint.** This note is additive; the table above keeps its
+2026-11-23 cutoff. Implementation is incomplete. The bounded contract requires finite, positive
+limits for both total output and request count, fail-closed refusal of missing or invalid bounds
+before dispatch and before any spend-gate reservation, and termination when either cap would be
+exceeded. `live_cycle()` must validate and pass both limits, and may lift
+`launcher-output-bound-unsupported` only after both are verified active. A possibly sent request
+must settle as unknown spend, never silently release.
+
+The launcher requires positive integers, forwards both flags, and `live_cycle()` passes them, but
+installed-client aggregate output enforcement remains unverified (`BOUND_CONTRACT` remains false).
+Implementation is incomplete: `_launcher_boundary_problem()` still returns
+`launcher-output-bound-unsupported` before any spend-gate reservation. The remaining gate is client
+termination proof and verification before any live activation. The legacy path remains fail-closed:
+armed `run_program()` returns `legacy-live-path-disabled` without launching, while unarmed use stays
+dry with `called_launcher=False`. Wanda's Cline ban remains intact and scoped to her W&B route. No PT
+SHA is pinned by this docs-only checkpoint, and no live cycle is armed.
+
 ### 9.2 Pull requests (all merged; as of 2026-11-23)
 
 | Repo | Pull request | Merge commit |

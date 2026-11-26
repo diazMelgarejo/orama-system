@@ -55,7 +55,7 @@ def _arm(monkeypatch, cycle) -> None:
     monkeypatch.setenv(cycle.GATE_ENV, "approved")
     monkeypatch.setenv(cycle.ARM_ENV, "1")
     # Historical lifecycle tests exercise an explicitly simulated supported launcher.
-    monkeypatch.setattr(cycle, "_launcher_boundary_problem", lambda: None)
+    monkeypatch.setattr(cycle, "_launcher_boundary_problem", lambda *args, **kwargs: None)
 
 
 class _Guard:
@@ -64,12 +64,14 @@ class _Guard:
     def __init__(self) -> None:
         """Start with no preflights and empty settled and released lists."""
         self.preflights = 0
+        self.max_tokens = None
         self.settled: list = []
         self.released: list = []
 
-    def preflight(self, n, hold_seconds):
-        """Count the preflight and approve it with a reservation id of the form r<N>."""
+    def preflight(self, n, hold_seconds, max_tokens=None):
+        """Count the bounded preflight and approve it with a reservation id of the form r<N>."""
         self.preflights += 1
+        self.max_tokens = max_tokens
         return {"ok": True, "reservation": f"r{self.preflights}", "projected_usd": 0.0}
 
     def settle(self, reservation, *a, **k):
@@ -129,6 +131,65 @@ def test_launcher_argv_carries_the_task_prompt_and_an_explicit_effort(cycle) -> 
     assert argv[argv.index("--") + 1] == "Do the thing"
     assert argv[argv.index("--effort") + 1] == "high"
     assert "--effort" not in cycle.launcher_argv("inner", prompt="Do the thing")
+
+
+def test_launcher_argv_always_names_both_positive_bounds(cycle) -> None:
+    argv = cycle.launcher_argv("inner", prompt="bounded", max_requests=1, max_total_output=4096)
+    assert argv[argv.index("--max-requests") + 1] == "1"
+    assert argv[argv.index("--max-total-output") + 1] == "4096"
+    assert argv.index("--max-requests") < argv.index("--")
+    assert argv.index("--max-total-output") < argv.index("--")
+
+
+@pytest.mark.parametrize("field", ["max_requests", "max_total_output"])
+@pytest.mark.parametrize("bound", [None, 0, -1, True, 1.5, float("nan"), float("inf"), "1"])
+def test_invalid_live_bounds_refuse_before_reservation_or_launch(
+    cycle, tmp_path, monkeypatch, field, bound,
+) -> None:
+    monkeypatch.setenv(cycle.GATE_ENV, "approved")
+    monkeypatch.setenv(cycle.ARM_ENV, "1")
+    guard = _Guard()
+
+    def forbidden(*args: object, **kwargs: object) -> None:
+        pytest.fail("invalid bounds must not reserve or launch")
+
+    monkeypatch.setattr(guard, "preflight", forbidden)
+    monkeypatch.setattr(cycle.subprocess, "Popen", forbidden)
+    result = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard, **{field: bound}))
+    assert result["reason"] == "invalid-launcher-bounds"
+    assert guard.preflights == 0 and not list(tmp_path.glob("*.once"))
+
+
+def test_unloadable_launcher_contract_is_not_verified(cycle, monkeypatch) -> None:
+    def unavailable() -> None:
+        raise OSError("launcher contract unavailable")
+
+    monkeypatch.setattr(cycle, "_launcher_contract", unavailable)
+    assert cycle._launcher_boundary_problem(1, 4096) == "launcher-boundary-unverified"
+
+
+@pytest.mark.parametrize(
+    ("problem", "expected"),
+    [
+        (None, "launcher-boundary-unverified"),
+        ("launcher-output-bound-unsupported", "launcher-output-bound-unsupported"),
+        (False, "launcher-boundary-unverified"),
+    ],
+)
+def test_launcher_boolean_claim_is_not_enforcement_evidence(
+    cycle, monkeypatch, problem, expected,
+) -> None:
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(
+        cycle, "_launcher_contract",
+        lambda: SimpleNamespace(
+            is_positive_bound=lambda value: type(value) is int and value > 0,
+            BOUND_CONTRACT=True,
+            launcher_boundary_problem=lambda *args: problem,
+        ),
+    )
+    assert cycle._launcher_boundary_problem(1, 4096) == expected
 
 
 @pytest.mark.parametrize("effort", ["xhigh", "max", "ultra", ""])
@@ -419,8 +480,8 @@ def test_malformed_trace_fields_are_refused_before_anything_is_spent(cycle, tmp_
         """Fake spend guard that counts preflights and always approves."""
         preflights = 0
 
-        def preflight(self, n, hold_seconds):
-            """Approve every request and count the preflights."""
+        def preflight(self, n, hold_seconds, max_tokens=None):
+            """Approve every bounded request and count the preflights."""
             Guard.preflights += 1
             return {"ok": True, "reservation": "r", "projected_usd": 0.0}
 

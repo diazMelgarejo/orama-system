@@ -376,3 +376,33 @@ correction of the same date.
 
 Nothing here arms a live cycle, enables serving, approves a paid model or authorizes a merge. G1
 and G2 stay dependency-blocked, and arming one bounded live cycle remains a separate operator act.
+
+### 15.1 Bounded-launcher contract checkpoint (2026-11-26)
+
+This is an additive Lane 1B status note. The 2026-11-23 ruling and the historical sections stand;
+**implementation is incomplete**, and "bounded-capable" remains an acceptance gate rather than a
+claim about the route today.
+
+The governed Biafra Cline contract requires all of the following:
+
+- A finite, positive `--max-requests` and a finite, positive `--max-total-output` must both be
+  supplied. Missing, malformed, non-finite or non-positive bounds must refuse before dispatch and
+  before any spend-gate reservation.
+- Request-count and cumulative-output accounting must enforce both caps and terminate or refuse
+  fail-closed when either cap would be exceeded. Once a request may have been sent, its reservation
+  must settle as unknown spend; it must never be silently released.
+- `live_cycle()` must validate and pass both bounds before reservation, and
+  `_launcher_boundary_problem()` may return `None` only when both bounds are verified active.
+- The legacy path stays fail-closed: armed `run_program()` returns
+  `legacy-live-path-disabled` without launching; unarmed `run_program()` remains a dry cycle with
+  `called_launcher=False`.
+- Wanda's Cline CLI prohibition remains intact and scoped to her W&B route. It does not grant
+  Wanda a bounded-launcher exception.
+
+The launcher requires positive integer values and forwards both flags, and `live_cycle()` passes them,
+but installed-client aggregate output enforcement remains unverified (`BOUND_CONTRACT` remains false).
+`_launcher_boundary_problem()` still returns `launcher-output-bound-unsupported`, so neither live
+path dispatches Cline. Implementation is incomplete: the route remains a designation, not
+bounded-capable. The remaining gate is proof of client-level request-count and cumulative-output
+termination, before any spend-gate reservation, followed by client qualification and boundary lift.
+No live activation is authorized.

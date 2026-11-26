@@ -3,7 +3,8 @@
 
 Usage:
   launch_cline_wandb.py [--model ID] [--effort LEVEL] [--timeout-ms N]
-                        [--implement] [--allow-tool-approval] -- <task text...>
+                        [--implement] [--allow-tool-approval]
+                        --max-requests N --max-total-output N -- <task text...>
 
 Defaults (live-verified 2026-11-12, see docs/stale-reference-ledger-2026-11-12.md):
   model   deepseek-ai/DeepSeek-V4.1-Flash-1017
@@ -19,6 +20,12 @@ Launcher flags (explicit, mutually independent except plan vs implement):
   --implement            omit `--plan` (act/implementation mode). Default is review/plan mode.
   --allow-tool-approval  pass `--auto-approve true`. Default keeps `--auto-approve false`.
                          Never implied by `--implement`.
+  --max-requests N       required positive request bound.
+  --max-total-output N   required positive cumulative output-token bound.
+
+Both bounds are mandatory. The verified client contract currently enforces neither bound, so this
+launcher refuses before reading credentials, creating configuration, or starting Cline. The flags
+must not be treated as active until cumulative output enforcement is implemented and tested.
 
 Passthrough after `--` is positional task text only. Tokens that start with `-`
 (including a token that is exactly `-`) are refused before subprocess; reserved
@@ -55,6 +62,10 @@ BASE_URL = "https://api.inference.wandb.ai/v1"
 DEFAULT_MODEL = "deepseek-ai/DeepSeek-V4.1-Flash-1017"
 EFFORTS = ("medium", "high", "low")  # never xhigh or max
 DEFAULT_TIMEOUT_MS = 30000
+# Evidence-backed capability flags, not operator input. Cline 3.0.75 exposes neither CLI bound and
+# has no proved aggregate output-token stop. Keep both false until an enforcing contract is tested;
+# accepting merely spelled flags would allow unbounded provider spend.
+BOUND_CONTRACT = {"max_requests": False, "max_total_output": False}
 # Launcher-owned flags (short, long, and equals forms). Any option-like rest token is refused.
 _RESERVED = frozenset({
     "--config", "--thinking", "--plan", "--act", "--auto-approve", "--auto-approve-all",
@@ -132,6 +143,20 @@ def task_tokens(rest: Sequence[str]) -> list[str]:
     return tokens
 
 
+def is_positive_bound(value: object) -> bool:
+    """True only for a positive integer; bools, floats, NaN and infinity are not bounds."""
+    return type(value) is int and value > 0
+
+
+def launcher_boundary_problem(max_requests: object, max_total_output: object) -> str | None:
+    """Return a refusal until two valid bounds and both client capabilities are verified."""
+    if not (is_positive_bound(max_requests) and is_positive_bound(max_total_output)):
+        return "invalid-launcher-bounds"
+    if not (BOUND_CONTRACT.get("max_requests") is True and BOUND_CONTRACT.get("max_total_output") is True):
+        return "launcher-output-bound-unsupported"
+    return None
+
+
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     """Parse launcher options; everything after -- (or the first positional) is task text."""
     parser = argparse.ArgumentParser(description="Run Cline on W&B Inference with the 2026-11-12 defaults.")
@@ -148,8 +173,24 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
         action="store_true",
         help="pass --auto-approve true (default false; independent of --implement)",
     )
+    parser.add_argument(
+        "--max-requests",
+        type=int,
+        required=True,
+        help="required maximum request count; must be a positive integer",
+    )
+    parser.add_argument(
+        "--max-total-output",
+        type=int,
+        required=True,
+        help="required maximum cumulative output tokens; must be a positive integer",
+    )
     parser.add_argument("rest", nargs=argparse.REMAINDER, help="after --: positional task text only")
     args = parser.parse_args(list(argv))
+    if args.max_requests is not None and args.max_requests <= 0:
+        parser.error("--max-requests must be a positive integer")
+    if args.max_total_output is not None and args.max_total_output <= 0:
+        parser.error("--max-total-output must be a positive integer")
     args.rest = args.rest[1:] if args.rest[:1] == ["--"] else args.rest
     if not args.rest:
         parser.error("give a prompt or cline arguments after --")
@@ -169,6 +210,9 @@ def permission_flags(implement: bool, allow_tool_approval: bool) -> list[str]:
 def main(argv: Sequence[str] | None = None) -> int:
     """Run cline against a throwaway config and return its exit code."""
     args = parse_args(sys.argv[1:] if argv is None else argv)
+    boundary_problem = launcher_boundary_problem(args.max_requests, args.max_total_output)
+    if boundary_problem is not None:
+        raise SystemExit(f"ERROR: {boundary_problem}; refusing to start Cline")
     key = read_key()
     config_dir = tempfile.mkdtemp(prefix="clinecfg-")
     os.chmod(config_dir, 0o700)
@@ -178,11 +222,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         fd = os.open(os.path.join(settings_dir, "providers.json"), os.O_WRONLY | os.O_CREAT, 0o600)
         with os.fdopen(fd, "w") as handle:
             json.dump(build_config(key, args.model, args.effort, args.timeout_ms), handle)
+        cline_bin = shutil.which("cline") or "cline"
         cmd = [
-            "cline", "--config", config_dir, "-P", "openai-compatible", "-m", args.model,
+            cline_bin, "--config", config_dir, "-P", "openai-compatible", "-m", args.model,
             "--thinking", args.effort, *permission_flags(args.implement, args.allow_tool_approval),
-            *args.rest,
         ]
+        if args.max_requests is not None:
+            cmd.extend(["--max-requests", str(args.max_requests)])
+        if args.max_total_output is not None:
+            cmd.extend(["--max-total-output", str(args.max_total_output)])
+        cmd.extend(args.rest)
         return subprocess.run(cmd, stdin=subprocess.DEVNULL).returncode
     finally:
         shutil.rmtree(config_dir, ignore_errors=True)

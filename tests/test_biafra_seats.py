@@ -78,7 +78,8 @@ def test_programs_name_the_launcher_and_stay_closed(tmp_path: Path, monkeypatch:
     assert outer["called_launcher"] is False
     assert Path(inner["argv"][1]).name == "launch_cline_wandb.py"
     assert "--program" not in inner["argv"]
-    assert inner["argv"][2] == "--"
+    assert inner["argv"][inner["argv"].index("--max-requests") + 1] == "1"
+    assert inner["argv"][inner["argv"].index("--max-total-output") + 1] == "4096"
     _launcher().parse_args(inner["argv"][2:])
     _launcher().parse_args(outer["argv"][2:])
 

@@ -27,6 +27,7 @@ sys.modules["launch_cline_wandb"] = launcher
 _spec.loader.exec_module(launcher)
 
 FAKE_KEY = "wandb-test-key-0123456789"
+BOUNDED = ["--max-requests", "1", "--max-total-output", "4096"]
 FILE_SECRET = "quoted-file-secret-must-not-leak"
 _TS = re.compile(r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$")
 
@@ -58,7 +59,7 @@ def test_efforts_are_medium_high_low_only() -> None:
 @pytest.mark.parametrize("bad", ["max", "xhigh", "none"])
 def test_forbidden_effort_is_refused(bad: str) -> None:
     with pytest.raises(SystemExit):
-        launcher.parse_args(["--effort", bad, "--", "task"])
+        launcher.parse_args([*BOUNDED, "--effort", bad, "--", "task"])
 
 
 def test_prompt_is_required() -> None:
@@ -67,7 +68,7 @@ def test_prompt_is_required() -> None:
 
 
 def test_default_effort_is_high_because_medium_is_rejected_on_v4_1() -> None:
-    assert launcher.parse_args(["--", "task"]).effort == "high"
+    assert launcher.parse_args([*BOUNDED, "--", "task"]).effort == "high"
 
 
 def test_key_comes_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -118,6 +119,28 @@ def test_missing_key_exits_without_echoing_anything_secret(monkeypatch: pytest.M
     assert launcher.KEYVAR in str(exc.value)
 
 
+STUB_RECORD_ENV = "FAKE_CLINE_RECORD"
+
+
+def _windows_stub_python() -> str:
+    """Return the Python source the Windows cline.cmd stub runs.
+
+    The record directory comes from the STUB_RECORD_ENV variable and never from this text, so a
+    directory name containing an apostrophe or a quote cannot break the source.
+    """
+    return (
+        "import sys, os, shutil, json, pathlib; "
+        f"rec = pathlib.Path(os.environ['{STUB_RECORD_ENV}']); "
+        "(rec / 'argv.txt').write_text('\\n'.join(sys.argv[1:])); "
+        "cfg = sys.argv[sys.argv.index('--config')+1] if '--config' in sys.argv else None; "
+        "shutil.copy(os.path.join(cfg, 'data', 'settings', 'providers.json'), rec / 'providers.json') if cfg else None; "
+        "(rec / 'cfgdir.txt').write_text(cfg) if cfg else None; "
+        "(rec / 'dirmode.txt').write_text('700'); "
+        "(rec / 'filemode.txt').write_text('600'); "
+        "sys.exit(0)"
+    )
+
+
 @pytest.fixture
 def stub_cline(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Path]:
     """Put a fake `cline` first on PATH; it records argv and a copy of the config it was given."""
@@ -128,23 +151,61 @@ def stub_cline(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Pat
     script = bindir / "cline"
     script.write_text(
         "#!/bin/sh\n"
-        f'printf "%s\\n" "$@" > "{record}/argv.txt"\n'
+        'printf "%s\\n" "$@" > "$FAKE_CLINE_RECORD/argv.txt"\n'
         'while [ $# -gt 0 ]; do if [ "$1" = "--config" ]; then CFG="$2"; fi; shift; done\n'
-        f'cp "$CFG/data/settings/providers.json" "{record}/providers.json"\n'
-        f'echo "$CFG" > "{record}/cfgdir.txt"\n'
-        f'stat -f "%Lp" "$CFG" > "{record}/dirmode.txt" 2>/dev/null || stat -c "%a" "$CFG" > "{record}/dirmode.txt"\n'
-        f'stat -f "%Lp" "$CFG/data/settings/providers.json" > "{record}/filemode.txt" 2>/dev/null '
-        f'|| stat -c "%a" "$CFG/data/settings/providers.json" > "{record}/filemode.txt"\n'
+        'cp "$CFG/data/settings/providers.json" "$FAKE_CLINE_RECORD/providers.json"\n'
+        'echo "$CFG" > "$FAKE_CLINE_RECORD/cfgdir.txt"\n'
+        'stat -f "%Lp" "$CFG" > "$FAKE_CLINE_RECORD/dirmode.txt" 2>/dev/null || stat -c "%a" "$CFG" > "$FAKE_CLINE_RECORD/dirmode.txt"\n'
+        'stat -f "%Lp" "$CFG/data/settings/providers.json" > "$FAKE_CLINE_RECORD/filemode.txt" 2>/dev/null '
+        '|| stat -c "%a" "$CFG/data/settings/providers.json" > "$FAKE_CLINE_RECORD/filemode.txt"\n'
         "exit 0\n"
     )
     script.chmod(script.stat().st_mode | stat.S_IXUSR)
+    if sys.platform == "win32":
+        cmd_script = bindir / "cline.cmd"
+        cmd_script.write_text(f'@echo off\r\n"{sys.executable}" -c "{_windows_stub_python()}" %*\r\n')
     monkeypatch.setenv("PATH", f"{bindir}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setenv(launcher.KEYVAR, FAKE_KEY)
+    monkeypatch.setenv(STUB_RECORD_ENV, str(record))
+    # Execution tests simulate a future client whose two enforcing bounds are verified.
+    monkeypatch.setattr(launcher, "BOUND_CONTRACT", {"max_requests": True, "max_total_output": True})
     return {"record": record}
 
 
+@pytest.mark.parametrize(
+    "dirname",
+    [
+        pytest.param("O'Neil temp", id="apostrophe"),
+        pytest.param(
+            'say "hi" temp', id="double-quote",
+            marks=pytest.mark.skipif(sys.platform == "win32", reason="Windows forbids double quotes in file names"),
+        ),
+    ],
+)
+def test_windows_stub_source_never_embeds_the_record_path(tmp_path: Path, dirname: str) -> None:
+    """The stub source holds no path text, so a record directory with an apostrophe (every platform) or
+    double quotes (not Windows, which forbids them in names) still runs."""
+    import subprocess
+
+    record = tmp_path / dirname
+    record.mkdir()
+    cfg = tmp_path / "cfg"
+    (cfg / "data" / "settings").mkdir(parents=True)
+    (cfg / "data" / "settings" / "providers.json").write_text("{}", encoding="utf-8")
+    source = _windows_stub_python()
+    assert str(record) not in source and dirname not in source
+    done = subprocess.run(
+        [sys.executable, "-c", source, "--config", str(cfg), "--probe"],
+        env={**os.environ, STUB_RECORD_ENV: str(record)}, capture_output=True, text=True, check=False,
+    )
+    assert done.returncode == 0, done.stderr
+    assert (record / "argv.txt").read_text(encoding="utf-8").split("\n") == ["--config", str(cfg), "--probe"]
+    assert (record / "providers.json").read_text(encoding="utf-8") == "{}"
+    assert (record / "cfgdir.txt").read_text(encoding="utf-8") == str(cfg)
+
+
 def test_run_passes_explicit_route_and_keeps_key_out_of_argv(stub_cline: dict[str, Path]) -> None:
-    rc = launcher.main(["--effort", "medium", "--model", "deepseek-ai/DeepSeek-V4-Flash-0731", "--", "do the task"])
+    rc = launcher.main([*BOUNDED, "--effort", "medium", "--model", "deepseek-ai/DeepSeek-V4-Flash-0731", "--", "do the task"])
     record = stub_cline["record"]
     argv = _argv_lines(record)
     assert rc == 0
@@ -157,7 +218,7 @@ def test_run_passes_explicit_route_and_keeps_key_out_of_argv(stub_cline: dict[st
 
 
 def test_default_main_is_plan_mode_without_act(stub_cline: dict[str, Path]) -> None:
-    launcher.main(["--", "task"])
+    launcher.main([*BOUNDED, "--", "task"])
     argv = _argv_lines(stub_cline["record"])
     assert "--plan" in argv
     assert argv[argv.index("--auto-approve") + 1] == "false"
@@ -165,7 +226,7 @@ def test_default_main_is_plan_mode_without_act(stub_cline: dict[str, Path]) -> N
 
 
 def test_implement_omits_plan_and_keeps_auto_approve_false(stub_cline: dict[str, Path]) -> None:
-    launcher.main(["--implement", "--", "task"])
+    launcher.main([*BOUNDED, "--implement", "--", "task"])
     argv = _argv_lines(stub_cline["record"])
     assert "--plan" not in argv
     assert argv[argv.index("--auto-approve") + 1] == "false"
@@ -173,14 +234,14 @@ def test_implement_omits_plan_and_keeps_auto_approve_false(stub_cline: dict[str,
 
 
 def test_implement_with_allow_tool_approval_omits_plan(stub_cline: dict[str, Path]) -> None:
-    launcher.main(["--implement", "--allow-tool-approval", "--", "task"])
+    launcher.main([*BOUNDED, "--implement", "--allow-tool-approval", "--", "task"])
     argv = _argv_lines(stub_cline["record"])
     assert "--plan" not in argv
     assert argv[argv.index("--auto-approve") + 1] == "true"
 
 
 def test_allow_tool_approval_alone_stays_in_plan_mode(stub_cline: dict[str, Path]) -> None:
-    launcher.main(["--allow-tool-approval", "--", "task"])
+    launcher.main([*BOUNDED, "--allow-tool-approval", "--", "task"])
     argv = _argv_lines(stub_cline["record"])
     assert "--plan" in argv
     assert argv[argv.index("--auto-approve") + 1] == "true"
@@ -189,19 +250,19 @@ def test_allow_tool_approval_alone_stays_in_plan_mode(stub_cline: dict[str, Path
 def test_passthrough_cannot_override_thinking_or_config(stub_cline: dict[str, Path]) -> None:
     record = stub_cline["record"]
     with pytest.raises(SystemExit):
-        launcher.main(["--", "--thinking", "xhigh", "--config", "/another/config", "task"])
+        launcher.main([*BOUNDED, "--", "--thinking", "xhigh", "--config", "/another/config", "task"])
     assert not (record / "argv.txt").exists()
 
 
 def test_passthrough_equals_form_is_rejected(stub_cline: dict[str, Path]) -> None:
     record = stub_cline["record"]
     with pytest.raises(SystemExit):
-        launcher.main(["--", "--thinking=low", "task"])
+        launcher.main([*BOUNDED, "--", "--thinking=low", "task"])
     assert not (record / "argv.txt").exists()
 
 
 def test_positional_prompt_still_works(stub_cline: dict[str, Path]) -> None:
-    rc = launcher.main(["--", "review the launcher gates"])
+    rc = launcher.main([*BOUNDED, "--", "review the launcher gates"])
     argv = _argv_lines(stub_cline["record"])
     assert rc == 0
     assert argv[-1] == "review the launcher gates"
@@ -209,7 +270,7 @@ def test_positional_prompt_still_works(stub_cline: dict[str, Path]) -> None:
 
 
 def test_config_is_private_and_removed_afterwards(stub_cline: dict[str, Path]) -> None:
-    launcher.main(["--", "task"])
+    launcher.main([*BOUNDED, "--", "task"])
     record = stub_cline["record"]
     assert (record / "dirmode.txt").read_text().strip() == "700"
     assert (record / "filemode.txt").read_text().strip() == "600"
@@ -223,5 +284,93 @@ def test_never_touches_the_operators_real_cline_directory(stub_cline: dict[str, 
     home = tmp_path / "home"
     (home / ".cline").mkdir(parents=True)
     monkeypatch.setenv("HOME", str(home))
-    launcher.main(["--", "task"])
+    launcher.main([*BOUNDED, "--", "task"])
     assert list((home / ".cline").iterdir()) == []
+
+
+def test_max_requests_and_max_total_output_flags_passed(stub_cline: dict[str, Path]) -> None:
+    rc = launcher.main(["--max-requests", "15", "--max-total-output", "8192", "--", "bounded task"])
+    assert rc == 0
+    argv = _argv_lines(stub_cline["record"])
+    assert "--max-requests" in argv
+    assert argv[argv.index("--max-requests") + 1] == "15"
+    assert "--max-total-output" in argv
+    assert argv[argv.index("--max-total-output") + 1] == "8192"
+    assert argv[-1] == "bounded task"
+
+
+@pytest.mark.parametrize("bad_val", ["0", "-1", "-10"])
+def test_non_positive_max_requests_refused(bad_val: str) -> None:
+    with pytest.raises(SystemExit):
+        launcher.parse_args(["--max-requests", bad_val, "--max-total-output", "4096", "--", "task"])
+
+
+@pytest.mark.parametrize("bad_val", ["0", "-1", "-10"])
+def test_non_positive_max_total_output_refused(bad_val: str) -> None:
+    with pytest.raises(SystemExit):
+        launcher.parse_args(["--max-total-output", bad_val, "--max-requests", "1", "--", "task"])
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["--", "task"],
+        ["--max-requests", "1", "--", "task"],
+        ["--max-total-output", "4096", "--", "task"],
+    ],
+)
+def test_both_positive_bounds_are_required(argv: list[str]) -> None:
+    with pytest.raises(SystemExit):
+        launcher.parse_args(argv)
+
+
+@pytest.mark.parametrize("flag", ["--max-requests", "--max-total-output"])
+@pytest.mark.parametrize("bad_val", ["nan", "inf", "-inf", "1.5"])
+def test_non_integer_or_non_finite_bounds_are_refused(flag: str, bad_val: str) -> None:
+    other = "--max-total-output" if flag == "--max-requests" else "--max-requests"
+    with pytest.raises(SystemExit):
+        launcher.parse_args([flag, bad_val, other, "1", "--", "task"])
+
+
+def test_unverified_client_bounds_refuse_before_key_config_or_process(
+    stub_cline: dict[str, Path], monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        launcher, "BOUND_CONTRACT", {"max_requests": False, "max_total_output": False}, raising=False,
+    )
+    monkeypatch.delenv(launcher.KEYVAR, raising=False)
+
+    def forbidden(*args: object, **kwargs: object) -> None:
+        pytest.fail("an unverified boundary must not touch credentials, config, or Cline")
+
+    monkeypatch.setattr(launcher.tempfile, "mkdtemp", forbidden)
+    monkeypatch.setattr(launcher.subprocess, "run", forbidden)
+    with pytest.raises(SystemExit, match="launcher-output-bound-unsupported"):
+        launcher.main(["--max-requests", "1", "--max-total-output", "4096", "--", "task"])
+    assert not (stub_cline["record"] / "argv.txt").exists()
+
+
+@pytest.mark.parametrize(
+    "contract",
+    [
+        {"max_requests": False, "max_total_output": False},
+        {"max_requests": True, "max_total_output": False},
+        {"max_requests": False, "max_total_output": True},
+    ],
+)
+def test_boundary_problem_refuses_unless_both_bounds_are_verified(
+    monkeypatch: pytest.MonkeyPatch, contract: dict[str, bool],
+) -> None:
+    monkeypatch.setattr(launcher, "BOUND_CONTRACT", contract, raising=False)
+    assert launcher.launcher_boundary_problem(1, 4096) == "launcher-output-bound-unsupported"
+
+
+def test_boundary_problem_accepts_only_two_verified_positive_bounds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        launcher, "BOUND_CONTRACT", {"max_requests": True, "max_total_output": True}, raising=False,
+    )
+    assert launcher.launcher_boundary_problem(1, 4096) is None
+    assert launcher.launcher_boundary_problem(None, 4096) == "invalid-launcher-bounds"
+    assert launcher.launcher_boundary_problem(1, 0) == "invalid-launcher-bounds"
