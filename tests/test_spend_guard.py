@@ -188,10 +188,11 @@ class FakeGuard:
         self.unknown = []
         self._classify = classify
 
-    def preflight(self, prompt_chars: int, hold_seconds: float) -> dict[str, Any]:
+    def preflight(self, prompt_chars: int, hold_seconds: float, max_tokens: int | None = None) -> dict[str, Any]:
         """Record the arguments and return the canned preflight result."""
         self.prompt_chars = prompt_chars
         self.hold_seconds = hold_seconds
+        self.max_tokens = max_tokens
         return self.pre
 
     def settle(
@@ -233,7 +234,7 @@ def _arm(monkeypatch, cycle) -> None:
     monkeypatch.setenv(cycle.GATE_ENV, "approved")
     monkeypatch.setenv(cycle.ARM_ENV, "1")
     # Historical lifecycle tests exercise an explicitly simulated supported launcher.
-    monkeypatch.setattr(cycle, "_launcher_boundary_problem", lambda: None)
+    monkeypatch.setattr(cycle, "_launcher_boundary_problem", lambda *args, **kwargs: None)
 
 
 def _kwargs(tmp_path: Path, **over):
@@ -646,7 +647,7 @@ def test_invalid_utf8_output_is_settled_decoded_with_replacement_and_counts_as_a
     _arm(monkeypatch, cycle)
     monkeypatch.setattr(
         cycle, "launcher_argv",
-        lambda seat, prompt=None, effort=None, model=None: _child("import sys; sys.stdout.buffer.write(b'AB\\xffCD')"),
+        lambda seat, prompt=None, effort=None, model=None, **kwargs: _child("import sys; sys.stdout.buffer.write(b'AB\\xffCD')"),
     )
     guard = FakeGuard()
     r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard))
@@ -659,7 +660,7 @@ def test_a_launcher_that_cannot_start_still_releases_the_reservation(cycle, tmp_
     """Check that a launcher that cannot start still releases the reservation."""
     _arm(monkeypatch, cycle)
     monkeypatch.setattr(
-        cycle, "launcher_argv", lambda seat, prompt=None, effort=None, model=None: [str(tmp_path / "no-such-launcher")]
+        cycle, "launcher_argv", lambda seat, prompt=None, effort=None, model=None, **kwargs: [str(tmp_path / "no-such-launcher")]
     )
     guard = FakeGuard()
     r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard))
@@ -691,7 +692,7 @@ def test_a_timeout_commits_the_full_reservation_on_the_real_gate(sg, cycle, tmp_
     _arm(monkeypatch, cycle)
     guard = sg.SpendGuard(pt_root=os.environ.get("ORAMA_TEST_PT_ROOT"), state_dir=tmp_path / "spend")
     monkeypatch.setattr(
-        cycle, "launcher_argv", lambda seat, prompt=None, effort=None, model=None: _child("import time; time.sleep(30)")
+        cycle, "launcher_argv", lambda seat, prompt=None, effort=None, model=None, **kwargs: _child("import time; time.sleep(30)")
     )
     r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard, timeout_s=1, prompt="x" * 10_000))
     assert r["reason"] == "launcher-timeout" and r["called_launcher"] is True
@@ -706,7 +707,7 @@ def test_a_timeout_commits_the_full_reservation_on_the_real_gate(sg, cycle, tmp_
 def test_an_oserror_while_waiting_settles_as_unknown_and_counts_as_a_launch(cycle, tmp_path, monkeypatch) -> None:
     """Check that an oserror raised while waiting settles unknown, kills the child and reports a launch."""
     _arm(monkeypatch, cycle)
-    monkeypatch.setattr(cycle, "launcher_argv", lambda seat, prompt=None, effort=None, model=None: _child("pass"))
+    monkeypatch.setattr(cycle, "launcher_argv", lambda seat, prompt=None, effort=None, model=None, **kwargs: _child("pass"))
     procs: list = []
 
     def broken_pipe(argv, **kwargs):
@@ -726,7 +727,7 @@ def test_an_oserror_while_waiting_settles_as_unknown_and_counts_as_a_launch(cycl
 def test_a_timeout_kills_and_reaps_the_child_before_settling(cycle, tmp_path, monkeypatch) -> None:
     """Check that a timeout kills and reaps the process and then settles unknown."""
     _arm(monkeypatch, cycle)
-    monkeypatch.setattr(cycle, "launcher_argv", lambda seat, prompt=None, effort=None, model=None: _child("pass"))
+    monkeypatch.setattr(cycle, "launcher_argv", lambda seat, prompt=None, effort=None, model=None, **kwargs: _child("pass"))
     procs: list = []
 
     def slow(argv, **kwargs):
@@ -744,7 +745,7 @@ def test_a_timeout_kills_and_reaps_the_child_before_settling(cycle, tmp_path, mo
 def test_an_interrupt_kills_and_reaps_the_child_and_still_reraises(cycle, tmp_path, monkeypatch) -> None:
     """Check that an interrupt kills and reaps the process, settles unknown and is re-raised."""
     _arm(monkeypatch, cycle)
-    monkeypatch.setattr(cycle, "launcher_argv", lambda seat, prompt=None, effort=None, model=None: _child("pass"))
+    monkeypatch.setattr(cycle, "launcher_argv", lambda seat, prompt=None, effort=None, model=None, **kwargs: _child("pass"))
     procs: list = []
 
     def interrupted(argv, **kwargs):
@@ -762,7 +763,7 @@ def test_an_interrupt_kills_and_reaps_the_child_and_still_reraises(cycle, tmp_pa
 def test_a_failure_to_start_the_process_releases_and_reports_no_launch(cycle, tmp_path, monkeypatch) -> None:
     """Check that an exception raised by Popen itself releases the reservation."""
     _arm(monkeypatch, cycle)
-    monkeypatch.setattr(cycle, "launcher_argv", lambda seat, prompt=None, effort=None, model=None: _child("pass"))
+    monkeypatch.setattr(cycle, "launcher_argv", lambda seat, prompt=None, effort=None, model=None, **kwargs: _child("pass"))
 
     def no_start(argv, **kwargs):
         """Fail to start."""
@@ -785,7 +786,7 @@ def test_a_grandchild_holding_the_pipes_cannot_hang_the_cycle_past_the_timeout(c
     _arm(monkeypatch, cycle)
     # A harmless real shell child: it backgrounds a sleeping grandchild that inherits the pipes.
     monkeypatch.setattr(
-        cycle, "launcher_argv", lambda seat, prompt=None, effort=None, model=None: ["sh", "-c", "sleep 8 & sleep 8"]
+        cycle, "launcher_argv", lambda seat, prompt=None, effort=None, model=None, **kwargs: ["sh", "-c", "sleep 8 & sleep 8"]
     )
     guard = FakeGuard()
     started = time.monotonic()
@@ -919,8 +920,28 @@ def test_adapter_forwards_declared_output_limit(sg: ModuleType) -> None:
     assert adapter.preflight(10, 60) == {"args": (10, 60), "kwargs": {}}
 
 
-def test_unbounded_cline_refuses_before_reservation_or_marker(cycle, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """A fully eligible governed attempt cannot launch unbounded Cline or consume a reservation."""
+def test_bounded_cycle_forwards_output_limit_and_keeps_parent_settlement(
+    cycle, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The parent reserves the declared output bound and still settles the sent request itself."""
+    _arm(monkeypatch, cycle)
+    calls: list = []
+    monkeypatch.setattr(cycle.subprocess, "Popen", _fake_run(calls=calls))
+    guard = FakeGuard()
+    result = cycle.live_cycle(**_kwargs(
+        tmp_path, spend_guard=guard, max_requests=1, max_total_output=7777,
+    ))
+    assert result["ok"] is True
+    assert guard.max_tokens == 7777
+    argv = calls[0]
+    assert argv[argv.index("--max-requests") + 1] == "1"
+    assert argv[argv.index("--max-total-output") + 1] == "7777"
+    assert guard.settled == [("r1", len("Improve X."), len("ANSWER"), "ok", "inner", "inner")]
+    assert guard.released == [] and guard.unknown == []
+
+
+def test_unverified_cline_refuses_before_reservation_or_marker(cycle, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A fully eligible governed attempt cannot launch Cline without a verified boundary."""
     monkeypatch.setenv(cycle.GATE_ENV, "approved")
     monkeypatch.setenv(cycle.ARM_ENV, "1")
     guard = FakeGuard()
@@ -982,9 +1003,9 @@ def test_live_cycle_retains_uncertain_liability_through_expiry_and_reconciliatio
     admitted: list[dict[str, Any]] = []
     producer_preflight = guard.preflight
 
-    def preflight(prompt_chars: int, hold_seconds: float) -> dict[str, Any]:
-        """Observe the real admission contract without replacing its producer."""
-        result = producer_preflight(prompt_chars, hold_seconds)
+    def preflight(prompt_chars: int, hold_seconds: float, max_tokens: int | None = None) -> dict[str, Any]:
+        """Observe the real bounded admission contract without replacing its producer."""
+        result = producer_preflight(prompt_chars, hold_seconds, max_tokens=max_tokens)
         admitted.append(result)
         return result
 

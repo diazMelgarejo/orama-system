@@ -41,6 +41,19 @@ def _contracts():
     return module
 
 
+def _launcher_contract():
+    """Load the launcher's evidence-backed boundary contract without invoking it."""
+    path = (
+        Path(__file__).resolve().parents[1]
+        / "orama-system" / "skills" / "cline-wandb" / "scripts" / "launch_cline_wandb.py"
+    )
+    spec = importlib.util.spec_from_file_location("biafra_launcher_contract", path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
 def _forbidden(path: str) -> bool:
     """True for a verifier path (under tests/ or named test_*) that the seats may not edit."""
     parts = Path(path).parts
@@ -164,6 +177,9 @@ def launch_allowed() -> bool:
 
 
 EFFORTS = ("medium", "high", "low")  # never xhigh or max; mirrors launch_cline_wandb.py
+# Per-attempt safety envelope, not permission to arm or a substitute for the operator's cycle budget.
+LIVE_MAX_REQUESTS = 1
+LIVE_MAX_TOTAL_OUTPUT = 4096
 _DIM_SPAN = re.compile(r"\x1b\[2m.*?\x1b\[0m", re.S)
 _ANSI = re.compile(r"\x1b\[[0-9;]*m")
 LIVE_TIMEOUT_S = 900
@@ -190,10 +206,15 @@ def extract_answer(raw: str) -> str:
     return _ANSI.sub("", _DIM_SPAN.sub("", raw))
 
 
-def launcher_argv(seat: str, prompt: str | None = None, effort: str | None = None, model: str | None = None) -> list[str]:
-    """Name the W&B summon. Naming it is not a call. `effort` is explicit or left to the launcher."""
+def launcher_argv(
+    seat: str, prompt: str | None = None, effort: str | None = None, model: str | None = None,
+    max_requests: int = LIVE_MAX_REQUESTS, max_total_output: int = LIVE_MAX_TOTAL_OUTPUT,
+) -> list[str]:
+    """Name the bounded W&B summon. Naming it is not a call; both bounds are always explicit."""
     if effort is not None and effort not in EFFORTS:
         raise ValueError(f"effort must be one of {EFFORTS}, got {effort!r}")
+    if not (type(max_requests) is int and max_requests > 0 and type(max_total_output) is int and max_total_output > 0):
+        raise ValueError("max_requests and max_total_output must be positive integers")
     script = (
         Path(__file__).resolve().parents[1]
         / "orama-system"
@@ -212,6 +233,7 @@ def launcher_argv(seat: str, prompt: str | None = None, effort: str | None = Non
         argv += ["--model", model]
     if effort is not None:
         argv += ["--effort", effort]
+    argv += ["--max-requests", str(max_requests), "--max-total-output", str(max_total_output)]
     return [*argv, "--", prompt if prompt is not None else default]
 
 
@@ -429,9 +451,27 @@ def live_preflight(pin_path: Path | None, evaluator_digest: str, probe_record: o
     return {"model": selected_model, "effort": selected_effort}
 
 
-def _launcher_boundary_problem() -> str | None:
-    """Refuse Cline until total output and request count are demonstrably enforced."""
-    return "launcher-output-bound-unsupported"
+def _launcher_boundary_problem(
+    max_requests: object = LIVE_MAX_REQUESTS, max_total_output: object = LIVE_MAX_TOTAL_OUTPUT,
+) -> str | None:
+    """Return None only for two valid bounds that the launcher verifies as actively enforced."""
+    try:
+        module = _launcher_contract()
+        if not (module.is_positive_bound(max_requests) and module.is_positive_bound(max_total_output)):
+            return "invalid-launcher-bounds"
+        # A boolean is a verification claim, not enforcement evidence. Only the launcher's
+        # evidence-backed contract may verify the two capabilities, and only when no problem
+        # is reported; anything else from an unloadable or changed contract fails closed.
+        problem = module.launcher_boundary_problem(max_requests, max_total_output)
+        if problem in ("invalid-launcher-bounds", "launcher-output-bound-unsupported"):
+            return problem
+        contract = module.BOUND_CONTRACT
+        if contract.get("max_requests") is not True or contract.get("max_total_output") is not True:
+            return "launcher-boundary-unverified"
+        return None if problem is None else "launcher-boundary-unverified"
+    except Exception:
+        # A missing, unloadable or changed launcher contract is not evidence of enforcement.
+        return "launcher-boundary-unverified"
 
 
 def live_cycle(
@@ -454,6 +494,8 @@ def live_cycle(
     pin_path: Path | None = None,
     probe_record: object = None,
     model: str | None = None,
+    max_requests: int = LIVE_MAX_REQUESTS,
+    max_total_output: int = LIVE_MAX_TOTAL_OUTPUT,
 ) -> dict:
     """One live attempt: launch the seat's model once, evaluate its answer, record the trace.
 
@@ -484,14 +526,17 @@ def live_cycle(
     )
     if problem is not None:
         return refuse(problem["reason"], **{k: v for k, v in problem.items() if k != "reason"})
+    boundary_problem = _launcher_boundary_problem(max_requests, max_total_output)
+    if boundary_problem is not None:
+        return refuse(boundary_problem, stop=True)
     preflight = live_preflight(pin_path, evaluator_digest, probe_record, model, effort)
     if "reason" in preflight:
         return refuse(preflight["reason"])
-    boundary_problem = _launcher_boundary_problem()
-    if boundary_problem is not None:
-        return refuse(boundary_problem, stop=True)
-    argv = launcher_argv(seat, prompt=prompt, effort=preflight["effort"], model=preflight["model"])
-    pre = spend_guard.preflight(len(prompt), timeout_s + SETTLE_MARGIN_S)
+    argv = launcher_argv(
+        seat, prompt=prompt, effort=preflight["effort"], model=preflight["model"],
+        max_requests=max_requests, max_total_output=max_total_output,
+    )
+    pre = spend_guard.preflight(len(prompt), timeout_s + SETTLE_MARGIN_S, max_tokens=max_total_output)
     if not pre.get("ok"):
         extra = {k: v for k, v in pre.items() if k not in ("ok", "reason", "stop")}
         return refuse(pre.get("reason", "spend-guard-refused"), stop=True, **extra)
