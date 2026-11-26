@@ -389,21 +389,16 @@ Calling the CLIs via their shim paths (e.g.
 but repository tools (portal status, agent probes, `_dispatch_gemini`) resolve
 CLIs only through `PATH`. To allow these tools to discover the local
 installation without global npm installs, prepend `$prefix\node_modules\.bin`
-to the permanent **User PATH** (never system PATH) and update the current
-PowerShell session:
+to the permanent **User PATH** (never system PATH):
 
 ```powershell
 $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
 [Environment]::SetEnvironmentVariable('Path', "$prefix\node_modules\.bin;$userPath", 'User')
-$env:Path = "$prefix\node_modules\.bin;$env:Path"
 ```
 
-An already-running portal does not inherit the updated PATH; restart the portal
-from a process that already has the shim directory first so its `shutil.which`
-lookup can find Gemini.
-
-On a fresh Windows host, system PATH entries precede User PATH. After updating
-User PATH, confirm resolution:
+On a fresh Windows host, system PATH entries precede User PATH. Open a **new**
+PowerShell session (so it inherits the updated User PATH with no session-only
+prepend) and confirm resolution before any `$env:Path` override:
 
 ```powershell
 Get-Command codex, gemini | Format-Table Name, Source
@@ -415,6 +410,10 @@ with the shim directory first for that session (do not edit system PATH):
 ```powershell
 $env:Path = "$prefix\node_modules\.bin;$env:Path"
 ```
+
+An already-running portal does not inherit the updated PATH; restart the portal
+from a process that already has the shim directory first so its `shutil.which`
+lookup can find Gemini.
 
 Retain the prior install for rollback.
 
