@@ -1060,6 +1060,16 @@ elif [ "$_OS_NAME" != "Darwin" ]; then
   _info "svc" "Non-macOS host (${_OS_NAME}) — skipping scripts/setup_macos.py"
 fi
 
+# ── OpenClaw defaults: report which source is in use (read-only, non-fatal) ───
+# Live Perpetua-Tools file first, then the stamped vendored copy, then fail closed. A stale, old or hand-edited vendored
+# copy is reported here as WARN. This step only REPORTS: syncing the copy needs a human at a terminal to confirm.
+if [ -f "$SCRIPT_DIR/scripts/lib/openclaw_defaults_resolver.py" ] && command -v python3 >/dev/null 2>&1; then
+  _OCD_ARGS=(--status)
+  [ -n "${PT_DIR:-}" ] && _OCD_ARGS+=(--pt-root "$PT_DIR")
+  python3 -I "$SCRIPT_DIR/scripts/lib/openclaw_defaults_resolver.py" "${_OCD_ARGS[@]}" 2>&1 | sed 's/^/  /' || true
+  unset _OCD_ARGS
+fi
+
 # ── Layer-3 macOS pf egress floor verification (non-blocking) ────────────────
 if [ "$_OS_NAME" = "Darwin" ]; then
   _PF_VERIFY_SCRIPT=""
