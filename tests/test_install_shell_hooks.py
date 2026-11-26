@@ -5,12 +5,15 @@ from __future__ import annotations
 import json
 import os
 import shlex
+import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
+BASH = shutil.which("bash") or "/bin/bash"
 HOOKS = ROOT / "bin/orama-system/skills/shell-hygiene/hooks"
 GOTCHAS = HOOKS / "shell-gotchas.py"
 INSTALL = ROOT / "bin/orama-system/scripts/install-shell-hooks.sh"
@@ -93,8 +96,9 @@ def test_invalid_settings_json_is_left_untouched(tmp_path: Path) -> None:
     assert not (tmp_path / "hooks").exists()
 
 
+@pytest.mark.skipif(sys.platform != "darwin", reason="requires native macOS /bin/bash 3.2")
 def test_installer_is_bash_3_2_clean() -> None:
-    """The installer and the first-run script must parse under the macOS system bash."""
+    """On macOS, both scripts must parse under the system bash; other hosts need their own receipt."""
     for script in (INSTALL, ROOT / "bin/orama-system/scripts/first-run-install.sh"):
         assert subprocess.run(["/bin/bash", "-n", str(script)], capture_output=True).returncode == 0, script
 
@@ -128,14 +132,19 @@ def test_check_reports_drift_when_the_registered_mode_differs_from_the_requested
 
 
 def test_apply_writes_through_symlinks_and_keeps_the_links(tmp_path: Path) -> None:
-    """A dotfiles-managed settings.json or hook file stays a symlink and its target receives the update."""
+    """Dotfiles symlinks stay intact; hosts without symlink privilege skip this capability receipt."""
     home, dotfiles = tmp_path / "home", tmp_path / "dotfiles"
     (home / "hooks").mkdir(parents=True)
     dotfiles.mkdir()
     (dotfiles / "settings.json").write_text(json.dumps({"model": "keep-me"}), encoding="utf-8")
     (dotfiles / "shell-gotchas.py").write_text("# stale\n", encoding="utf-8")
-    (home / "settings.json").symlink_to(dotfiles / "settings.json")
-    (home / "hooks" / "shell-gotchas.py").symlink_to(dotfiles / "shell-gotchas.py")
+    try:
+        (home / "settings.json").symlink_to(dotfiles / "settings.json")
+        (home / "hooks" / "shell-gotchas.py").symlink_to(dotfiles / "shell-gotchas.py")
+    except OSError as exc:
+        if getattr(exc, "winerror", None) != 1314:
+            raise
+        pytest.skip(f"symlink creation unavailable without Windows symlink privilege: {exc}")
     done = _install(home, "--apply")
     assert done.returncode == 0, done.stderr
     assert (home / "settings.json").is_symlink() and (home / "hooks" / "shell-gotchas.py").is_symlink()
@@ -151,7 +160,7 @@ def test_relative_custom_home_is_absolute_and_shell_quoted(tmp_path: Path) -> No
     assert done.returncode == 0, done.stderr
     command = _gotchas_command(home)
     assert shlex.split(command)[-1] == str(home / "hooks/shell-gotchas.py")
-    result = subprocess.run(command, shell=True, cwd="/", input='{}', capture_output=True, text=True)
+    result = subprocess.run([BASH, "-c", command], cwd="/", input='{}', capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     assert _install(Path(relative), "--check").returncode == 0
 
