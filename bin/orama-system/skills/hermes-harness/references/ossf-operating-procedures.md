@@ -398,6 +398,24 @@ $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
 $env:Path = "$prefix\node_modules\.bin;$env:Path"
 ```
 
+An already-running portal does not inherit the updated PATH; restart the portal
+from a process that already has the shim directory first so its `shutil.which`
+lookup can find Gemini.
+
+On a fresh Windows host, system PATH entries precede User PATH. After updating
+User PATH, confirm resolution:
+
+```powershell
+Get-Command codex, gemini | Format-Table Name, Source
+```
+
+If an older CLI appears earlier than `$prefix\node_modules\.bin`, launch tools
+with the shim directory first for that session (do not edit system PATH):
+
+```powershell
+$env:Path = "$prefix\node_modules\.bin;$env:Path"
+```
+
 Retain the prior install for rollback.
 
 Install Antigravity CLI with the same fail-closed digest gate — save the

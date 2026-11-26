@@ -31,24 +31,31 @@ accounts, phone numbers or key values. Keep those in a private folder outside ev
 
 ## Staged restore order
 
-Every stage uses the same loop: copy all files modified by the stage to stage-named backups
-(including config and, for stage 3, the global env file), dry-run the change with
-`openclaw config patch --file <stage-patch>.json5 --dry-run`, apply it with
-`openclaw config patch --file <stage-patch>.json5`, and wait until the gateway reports connectivity
-ok (a restart takes minutes when many agents are configured). In stages 1–3, verify connectivity
-only; run a live turn per affected agent starting in stage 4, once providers and credentials are
+Every stage uses the same loop: list the files the stage will touch; record which of those were
+absent before the stage; copy any that already exist to stage-named backups (including config and,
+for stage 3, the global env file); dry-run and apply config changes with
+`openclaw config patch --file <stage-patch>.json5 --dry-run` then
+`openclaw config patch --file <stage-patch>.json5`; wait until the gateway reports connectivity ok
+(a restart takes minutes when many agents are configured). In stages 1–3, verify connectivity only;
+run a live turn per affected agent starting in stage 4, once providers and credentials are
 restored.
 
 | Stage | What | Notes |
 | --- | --- | --- |
 | 1 | Core settings (session scope, update policy) | Stable channel, check only; no auto-update |
 | 2 | Agent definitions, then delegation rules | Name, thinking, tools, workspace; no models yet |
-| 3 | Environment mechanism | Shell import plus the global env file (see Credential handling) |
+| 3 | Environment mechanism | Config patch for shell import; env file written separately (below) |
 | 4 | Providers, default model chain, seats | Dated rulings below |
 | 5 | Codex plugin and OpenAI runtime policy | Enable the plugin explicitly; set the codex runtime |
 | 6 | Web search wiring, then plugins one at a time | Brave, Exa, Firecrawl; then the rest |
 | 7 | Skills, MCP servers, cron jobs, exec approvals | Review each old item; restore by choice |
 | 8 | Channels last | Owner allow-list only after the operator confirms |
+
+Stage 3 detail: `openclaw config patch` edits the gateway config only (shell-import wiring). It
+does not write the global env file under the state folder. Restore or create that file in a
+separate step (copy from the stage backup, or write the approved keys by hand), set mode 600, then
+restart the gateway so a custom key (for example W&B) is loaded. Connectivity checks alone will not
+catch a missing custom key.
 
 Dated rulings (2026-11-26):
 
@@ -89,10 +96,12 @@ Before the cutover:
    and exclude it from machine backups if the operator wants the secrets gone for good.
 2. Keep the old state folder renamed aside, untouched, until the restore has been healthy a while.
 3. Keep backups of all files modified by each stage, named by stage, mode 600 (including config
-   and, for stage 3, the global env file).
+   and, for stage 3, the global env file). Also keep the per-stage absent-file list from the loop
+   above so rollback can remove files the stage created.
 
-Rolling back a stage: copy that stage's file backups (including config and, for stage 3, the global
-env file) over the live files, then restart and wait for connectivity ok.
+Rolling back a stage: remove only the files that stage created (from the absent-file list,
+including a newly created stage 3 global env file), then copy that stage's file backups over the
+live files that existed before the stage, then restart and wait for connectivity ok.
 
 Rolling back the whole cutover:
 
