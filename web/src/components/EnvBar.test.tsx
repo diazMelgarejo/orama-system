@@ -50,4 +50,11 @@ describe("EnvBar provenance", () => {
     expect(header.className).toMatch(/order-2/);
     expect(header.className).toMatch(/md:order-1/);
   });
+
+  it("hides its own brand on narrow screens, where the compact bar already shows it", () => {
+    const { container } = render(<EnvBar state={mockState} provenance={{ kind: "live" }} />);
+    const brand = container.querySelector("[data-env-brand]") as HTMLElement;
+    expect(brand.className).toMatch(/hidden/);
+    expect(brand.className).toMatch(/md:flex/);
+  });
 });
