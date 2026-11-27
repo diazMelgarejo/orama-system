@@ -278,3 +278,37 @@ def test_an_unknown_mode_is_refused_rather_than_guessed():
 
     with pytest.raises(SessionSecretsError):
         key_provider_from_environment({"ORAMA_SESSION_KEY_MODE": "per-user"}, lambda: "token-one")
+
+
+# ---------------------------------------------------------------- fail closed on what counts as an empty .env (security review)
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "WANDB_API_KEY = real-secret\n",
+        "WANDB_API_KEY =real-secret\n",
+        "WANDB_API_KEY: real-secret\n",
+        "export WANDB_API_KEY = 'real-secret'\n",
+        '"WANDB_API_KEY"=real-secret\n',
+        "WANDB_API_KEY\n",
+        "some unparsed line the consumers might read\n",
+    ],
+)
+def test_an_env_with_any_non_blank_non_comment_content_is_never_replaced(tmp_path, content):
+    env = tmp_path / ".env"
+    env.write_text(content, encoding="utf-8")
+    store = _store(tmp_path, "sess1234abcd")
+    store.set("WANDB_API_KEY", SECRET)
+    path, kind = store.save(env, None)
+    assert kind == "session-env" and path != env
+    assert env.read_text(encoding="utf-8") == content
+
+
+@pytest.mark.parametrize("content", ["", "\n\n", "# only a comment\n", "WANDB_API_KEY=\nOTHER=''\nTHIRD=\"\"\n", "export A=\n"])
+def test_an_env_that_is_strictly_empty_may_be_filled(tmp_path, content):
+    env = tmp_path / ".env"
+    env.write_text(content, encoding="utf-8")
+    store = _store(tmp_path)
+    store.set("WANDB_API_KEY", SECRET)
+    assert store.save(env, None) == (env, "env")

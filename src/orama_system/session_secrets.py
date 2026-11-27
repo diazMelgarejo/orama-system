@@ -147,10 +147,20 @@ def _write_private(path: Path, data: bytes, *, exclusive: bool) -> None:
     os.replace(tmp, path)
 
 
+_EMPTY_ASSIGNMENT = re.compile(r"(?:export\s+)?[A-Za-z_][A-Za-z0-9_]*=(?:''|\"\")?")
+
+
 def _has_filled_value(text: str) -> bool:
+    """Fail closed: a file is "empty" only if every line is blank, a comment, or a strict ``NAME=`` with no value.
+
+    Any other line (spaces around ``=``, ``NAME: value``, a quoted name, a bare word) might be read by a consumer
+    as content, so the file counts as populated and is never replaced.
+    """
     for line in text.splitlines():
-        match = _ASSIGNMENT.match(line)
-        if match and not line.lstrip().startswith("#") and _unquote(match.group(2)):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if _EMPTY_ASSIGNMENT.fullmatch(stripped) is None:
             return True
     return False
 
