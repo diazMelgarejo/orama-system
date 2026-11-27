@@ -151,6 +151,7 @@ def start_server(tmp_path: Path, leaf=None, tls: bool = True) -> PeerServer:
         key, cert = leaf
         pem = write_pem(tmp_path / f"srv-{id(srv)}.pem", cert, key)
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        ctx.minimum_version = ssl.TLSVersion.TLSv1_2
         ctx.load_cert_chain(str(pem))
         httpd.socket = ctx.wrap_socket(httpd.socket, server_side=True)
     srv.httpd = httpd

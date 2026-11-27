@@ -410,7 +410,8 @@ V0731 = "deepseek-ai/DeepSeek-V4-Flash-0731"
 
 def test_wandb_model_order_matches_the_launcher(sc) -> None:
     """The W&B model order matches the launcher default and effort wording."""
-    source = (ROOT / "bin/orama-system/skills/cline-wandb/scripts/launch_cline_wandb.py").read_text()
+    scripts = ROOT / "bin/orama-system/skills/cline-wandb/scripts"
+    source = (scripts / "cline_wandb_launcher" / "defaults.py").read_text()
     assert f'DEFAULT_MODEL = "{sc.WANDB_MODEL_ORDER[0]}"' in source
     assert sc.WANDB_MODEL_ORDER == (V1017, V41, V0731)
     assert "never xhigh or max" in source

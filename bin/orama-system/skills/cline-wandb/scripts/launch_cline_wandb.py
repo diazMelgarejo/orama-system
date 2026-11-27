@@ -9,7 +9,7 @@ Usage:
 Defaults (live-verified 2026-11-12, see docs/stale-reference-ledger-2026-11-12.md):
   model   deepseek-ai/DeepSeek-V4.1-Flash-1017
   effort  high   (W&B rejects `medium` on the V4.1 models with HTTP 400; V4-Flash-0731 accepts it)
-  timeout 30000 ms
+  timeout 30000 ms (per-request upstream socket timeout, not a limit on a request's total duration)
   review  plan mode (`--plan`) with automatic tool approval off (`--auto-approve false`)
 Rule (operator): effort is medium, else high, else low; never xhigh or max. Anything else is refused.
 Model fallback order if one is rejected or missing: V4.1-Flash-1017 -> V4.1-Flash -> V4-Flash-0731
@@ -23,9 +23,36 @@ Launcher flags (explicit, mutually independent except plan vs implement):
   --max-requests N       required positive request bound.
   --max-total-output N   required positive cumulative output-token bound.
 
-Both bounds are mandatory. The verified client contract currently enforces neither bound, so this
-launcher refuses before reading credentials, creating configuration, or starting Cline. The flags
-must not be treated as active until cumulative output enforcement is implemented and tested.
+Both bounds are mandatory. The launcher runs a stdlib loopback accounting proxy between Cline and
+the provider. Cline authenticates to the proxy with a random per-launch session token; the provider
+key stays in launcher memory and is never written to disk. Contract, one rule per line:
+  - Only `POST` requests whose URL path (query string ignored) ends in `/chat/completions` are
+    forwarded and counted; every other `POST` is refused with HTTP 403.
+  - Before forwarding, `max_tokens` (and `max_completion_tokens` when present) is clamped to the
+    remaining output budget, and `stream_options.include_usage` is forced on for streaming calls.
+  - Every upstream request carries `Accept-Encoding: identity` in place of the client's value, because
+    the proxy does not decode replies.
+  - Every forwarded chat request ends in exactly one outcome: ACCOUNTED (a 2xx response with
+    verified `usage.completion_tokens`) or UNACCOUNTED. UNACCOUNTED covers a 2xx response without
+    valid usage, a 2xx response encoded despite that request (never parsed), every non-2xx status
+    (the launcher cannot prove a provider or gateway status means no billable work), and any
+    transport or read failure. It is debited in full against the output budget.
+  - Cline's process group is terminated and the launcher exits 124 when `request_count` exceeds
+    `max_requests`, when the next chat request finds no output budget left, when cumulative output exceeds
+    `max_total_output`, when a dispatch is UNACCOUNTED, or when admitted handlers do not drain in time.
+  - Exit 124 means spend is breached or not fully accounted: callers settle it as unknown spend.
+  - Transport errors on non-chat routes return HTTP 502/504 and do not change the exit code.
+  - Every upstream dispatch, chat or not, first claims a dispatch slot under the server lock. Once
+    the drain deadline sets CLOSED, no claim succeeds. A request claimed before that may still be
+    sent after it; its handler had not drained, so the launcher exits 124.
+
+Child process (POSIX): Cline starts with stdin closed, in its own session and process group. The
+bounds are not passed to it. A fail-closed stop ends the group and the processes below it, including
+tool commands that Cline runs in sessions of their own. INT, TERM and HUP sent to the launcher are
+relayed to the group (a second one kills the group and those processes) and the launcher then exits
+128 plus the signal number. Not covered: Cline's shared hub daemon, which is left running; a process
+already reparented away from Cline when the stop begins; and the launcher itself being SIGKILLed.
+On Windows only the direct child is signalled.
 
 Passthrough after `--` is positional task text only. Tokens that start with `-`
 (including a token that is exactly `-`) are refused before subprocess; reserved
@@ -34,113 +61,71 @@ launcher-owned settings cannot be overridden (`--config`, `--thinking`, `--plan`
 and equals forms).
 
 How it works: builds a throwaway 0600 config directory (0700) holding only the openai-compatible
-entry, runs `cline --config <dir> -P openai-compatible -m <model> --thinking <effort>` then
-permission flags then positional task tokens, and deletes the directory afterwards. The key
-must already be exported as DEEPSEEK_V4_FLASH_WANDB; this launcher does not parse the env
-file. The key is never printed or put in argv; the operator's real Cline directory is never
-touched.
+entry pointing at the local loopback accounting proxy, runs `cline --config <dir> -P openai-compatible
+-m <model> --thinking <effort>` then permission flags then positional task tokens, and deletes
+the directory afterwards. The key must already be exported as DEEPSEEK_V4_FLASH_WANDB; this launcher
+does not parse the env file. The key is never printed, put in argv or written to disk; the operator's
+real Cline directory is never touched.
 
 Cline 3.0.74 is strict about the entry: tokenSource must be "manual" (or its own "oauth" or
 "migration") and updatedAt must look like 2026-11-12T02:48:17.562Z (milliseconds, Z). Anything
 else fails every request with the misleading `error: invalid model ID`.
+
+This file holds the bound contract and the run sequence. The rest is in the sibling package
+`cline_wandb_launcher/`, one responsibility per module; copy or link the two together.
 """
 from __future__ import annotations
 
-import argparse
-import json
+import importlib.util
 import os
+import secrets
 import shutil
-import subprocess
 import sys
-import tempfile
-from datetime import datetime, timezone
 from typing import Sequence
 
-KEYVAR = "DEEPSEEK_V4_FLASH_WANDB"
-DEFAULT_ENV_FILE = "~/.openclaw/.env.wandb-deepseek"
-BASE_URL = "https://api.inference.wandb.ai/v1"
-DEFAULT_MODEL = "deepseek-ai/DeepSeek-V4.1-Flash-1017"
-EFFORTS = ("medium", "high", "low")  # never xhigh or max
-DEFAULT_TIMEOUT_MS = 30000
-# Evidence-backed capability flags, not operator input. Cline 3.0.75 exposes neither CLI bound and
-# has no proved aggregate output-token stop. Keep both false until an enforcing contract is tested;
-# accepting merely spelled flags would allow unbounded provider spend.
-BOUND_CONTRACT = {"max_requests": False, "max_total_output": False}
-# Launcher-owned flags (short, long, and equals forms). Any option-like rest token is refused.
-_RESERVED = frozenset({
-    "--config", "--thinking", "--plan", "--act", "--auto-approve", "--auto-approve-all",
-    "-P", "-m", "--model", "--provider",
-})
-_RESERVED_EQUALS = ("--config=", "--thinking=", "--auto-approve=", "-m=", "-P=")
+_PARTS = "cline_wandb_launcher"
 
 
-def cline_timestamp() -> str:
-    """Return the current time the way Cline writes it: UTC, milliseconds, trailing Z."""
-    now = datetime.now(timezone.utc)
-    return now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z"
+def _bind_parts() -> None:
+    """Bind the package beside this file's real path, whatever loaded the file or what sys.path holds.
+
+    Callers load this file by path and the skill directory may be a symlink, so sys.path is neither
+    read nor changed. A same-named module from any other place is replaced, never imported from.
+    """
+    root = os.path.join(os.path.dirname(os.path.realpath(__file__)), _PARTS)
+    loaded = sys.modules.get(_PARTS)
+    if loaded is not None:
+        if list(getattr(loaded, "__path__", [])) == [root]:
+            return
+        for name in [n for n in sys.modules if n == _PARTS or n.startswith(f"{_PARTS}.")]:
+            sys.modules.pop(name, None)
+    spec = importlib.util.spec_from_file_location(
+        _PARTS, os.path.join(root, "__init__.py"), submodule_search_locations=[root])
+    module = importlib.util.module_from_spec(spec)
+    if sys.modules.setdefault(_PARTS, module) is module:
+        spec.loader.exec_module(module)
 
 
-def read_key() -> str:
-    """Return KEYVAR from the already-exported environment; never read or parse the env file."""
-    key = os.environ.get(KEYVAR, "").strip()
-    if not key:
-        sys.exit(
-            f"ERROR: {KEYVAR} is missing or empty. Shell-source the trusted env through the "
-            f"approved wrapper ({DEFAULT_ENV_FILE}); this launcher does not parse the file."
-        )
-    return key
+_bind_parts()
 
+# Names that callers and tests read from this file stay importable from it.
+from cline_wandb_launcher.accounting import BoundaryExceededError, extract_sse_completion_tokens  # noqa: E402,F401
+from cline_wandb_launcher.cli import parse_args  # noqa: E402
+from cline_wandb_launcher.cline_config import (build_config, cline_timestamp, create_config_dir,  # noqa: E402,F401
+                                               write_config)
+from cline_wandb_launcher.cline_process import ClineChild, cline_command  # noqa: E402
+from cline_wandb_launcher.credentials import read_key  # noqa: E402
+from cline_wandb_launcher.defaults import (BASE_URL, DEFAULT_ENV_FILE, DEFAULT_MODEL, EFFORTS,  # noqa: E402,F401
+                                           KEYVAR, LOOPBACK_HOST)
+from cline_wandb_launcher.exit_status import exit_code  # noqa: E402
+from cline_wandb_launcher.proxy_handler import AccountingProxyHandler  # noqa: E402
+from cline_wandb_launcher.proxy_server import (PHASE_CLOSED, AccountingProxyServer, close_proxy,  # noqa: E402,F401
+                                               serve_in_background)
+from cline_wandb_launcher.upstream import hop_by_hop_names  # noqa: E402,F401
 
-def build_config(key: str, model: str, effort: str, timeout_ms: int) -> dict:
-    """Return a providers.json document holding only the Cline-compatible openai-compatible entry."""
-    return {
-        "version": 1,
-        "lastUsedProvider": "openai-compatible",
-        "modes": {},
-        "providers": {
-            "openai-compatible": {
-                "settings": {
-                    "provider": "openai-compatible",
-                    "apiKey": key,
-                    "model": model,
-                    "baseUrl": BASE_URL,
-                    "headers": {},
-                    "timeout": timeout_ms,
-                    "reasoning": {"enabled": True, "effort": effort},
-                },
-                "updatedAt": cline_timestamp(),
-                "tokenSource": "manual",
-            }
-        },
-    }
-
-
-def _refuse_passthrough_token(token: str) -> None:
-    """Raise SystemExit for a rest token that could override launcher-owned settings."""
-    raise SystemExit(
-        "ERROR: passthrough may only include positional task text; launcher-owned "
-        f"settings cannot be overridden (refused {token!r})"
-    )
-
-
-def _overrides_launcher_setting(token: str) -> bool:
-    """True for reserved flags (short/equals) and any option-like rest token, including '-'."""
-    return (
-        token in _RESERVED
-        or token.startswith(_RESERVED_EQUALS)
-        or token == "-"
-        or token.startswith("-")
-    )
-
-
-def task_tokens(rest: Sequence[str]) -> list[str]:
-    """Return non-option positional task text; refuse reserved flags and any dash token."""
-    tokens: list[str] = []
-    for token in rest:
-        if _overrides_launcher_setting(token):
-            _refuse_passthrough_token(token)
-        tokens.append(token)
-    return tokens
+# Evidence-backed capability flags, enforced launcher-side via loopback HTTP accounting proxy.
+# The launcher terminates fail-closed once a bound is exceeded or a dispatch cannot be accounted for.
+BOUND_CONTRACT = {"max_requests": True, "max_total_output": True}
 
 
 def is_positive_bound(value: object) -> bool:
@@ -157,83 +142,32 @@ def launcher_boundary_problem(max_requests: object, max_total_output: object) ->
     return None
 
 
-def parse_args(argv: Sequence[str]) -> argparse.Namespace:
-    """Parse launcher options; everything after -- (or the first positional) is task text."""
-    parser = argparse.ArgumentParser(description="Run Cline on W&B Inference with the 2026-11-12 defaults.")
-    parser.add_argument("--model", default=DEFAULT_MODEL)
-    parser.add_argument("--effort", default="high", choices=EFFORTS)
-    parser.add_argument("--timeout-ms", type=int, default=DEFAULT_TIMEOUT_MS)
-    parser.add_argument(
-        "--implement",
-        action="store_true",
-        help="implementation/act mode: omit --plan (default is review/plan mode)",
-    )
-    parser.add_argument(
-        "--allow-tool-approval",
-        action="store_true",
-        help="pass --auto-approve true (default false; independent of --implement)",
-    )
-    parser.add_argument(
-        "--max-requests",
-        type=int,
-        required=True,
-        help="required maximum request count; must be a positive integer",
-    )
-    parser.add_argument(
-        "--max-total-output",
-        type=int,
-        required=True,
-        help="required maximum cumulative output tokens; must be a positive integer",
-    )
-    parser.add_argument("rest", nargs=argparse.REMAINDER, help="after --: positional task text only")
-    args = parser.parse_args(list(argv))
-    if args.max_requests is not None and args.max_requests <= 0:
-        parser.error("--max-requests must be a positive integer")
-    if args.max_total_output is not None and args.max_total_output <= 0:
-        parser.error("--max-total-output must be a positive integer")
-    args.rest = args.rest[1:] if args.rest[:1] == ["--"] else args.rest
-    if not args.rest:
-        parser.error("give a prompt or cline arguments after --")
-    args.rest = task_tokens(args.rest)
-    return args
-
-
-def permission_flags(implement: bool, allow_tool_approval: bool) -> list[str]:
-    """Return Cline permission flags: plan unless --implement; auto-approve only if requested."""
-    flags: list[str] = []
-    if not implement:
-        flags.append("--plan")
-    flags.extend(["--auto-approve", "true" if allow_tool_approval else "false"])
-    return flags
-
-
 def main(argv: Sequence[str] | None = None) -> int:
     """Run cline against a throwaway config and return its exit code."""
     args = parse_args(sys.argv[1:] if argv is None else argv)
     boundary_problem = launcher_boundary_problem(args.max_requests, args.max_total_output)
     if boundary_problem is not None:
         raise SystemExit(f"ERROR: {boundary_problem}; refusing to start Cline")
-    key = read_key()
-    config_dir = tempfile.mkdtemp(prefix="clinecfg-")
-    os.chmod(config_dir, 0o700)
+    provider_key = read_key()
+    session_token = secrets.token_urlsafe(32)
+    config_dir = create_config_dir()
+    proxy = AccountingProxyServer(
+        (LOOPBACK_HOST, 0), AccountingProxyHandler,
+        max_requests=args.max_requests, max_total_output=args.max_total_output,
+        upstream_base_url=BASE_URL, timeout_ms=args.timeout_ms,
+        session_token=session_token, upstream_key=provider_key,
+    )
+    proxy_base_url = serve_in_background(proxy)
+    child = ClineChild()
     try:
-        settings_dir = os.path.join(config_dir, "data", "settings")
-        os.makedirs(settings_dir)
-        fd = os.open(os.path.join(settings_dir, "providers.json"), os.O_WRONLY | os.O_CREAT, 0o600)
-        with os.fdopen(fd, "w") as handle:
-            json.dump(build_config(key, args.model, args.effort, args.timeout_ms), handle)
-        cline_bin = shutil.which("cline") or "cline"
-        cmd = [
-            cline_bin, "--config", config_dir, "-P", "openai-compatible", "-m", args.model,
-            "--thinking", args.effort, *permission_flags(args.implement, args.allow_tool_approval),
-        ]
-        if args.max_requests is not None:
-            cmd.extend(["--max-requests", str(args.max_requests)])
-        if args.max_total_output is not None:
-            cmd.extend(["--max-total-output", str(args.max_total_output)])
-        cmd.extend(args.rest)
-        return subprocess.run(cmd, stdin=subprocess.DEVNULL).returncode
+        write_config(config_dir, build_config(
+            session_token, args.model, args.effort, args.timeout_ms, base_url=proxy_base_url))
+        child.start(cline_command(config_dir, args), proxy)
+        child_rc = child.proc.wait()
+        return exit_code(proxy, child, child_rc)
     finally:
+        child.release(proxy)
+        close_proxy(proxy)
         shutil.rmtree(config_dir, ignore_errors=True)
 
 

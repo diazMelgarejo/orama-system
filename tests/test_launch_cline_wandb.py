@@ -7,7 +7,6 @@ Default invocations are review/plan mode with auto-approve off; passthrough is p
 """
 from __future__ import annotations
 
-import importlib.util
 import json
 import os
 import re
@@ -17,14 +16,9 @@ from pathlib import Path
 
 import pytest
 
-pytestmark = pytest.mark.unit
+from cline_wandb_fixtures import launcher, part
 
-_MODULE = (Path(__file__).resolve().parent.parent / "bin" / "orama-system" / "skills"
-           / "cline-wandb" / "scripts" / "launch_cline_wandb.py")
-_spec = importlib.util.spec_from_file_location("launch_cline_wandb", _MODULE)
-launcher = importlib.util.module_from_spec(_spec)
-sys.modules["launch_cline_wandb"] = launcher
-_spec.loader.exec_module(launcher)
+pytestmark = pytest.mark.unit
 
 FAKE_KEY = "wandb-test-key-0123456789"
 BOUNDED = ["--max-requests", "1", "--max-total-output", "4096"]
@@ -288,14 +282,13 @@ def test_never_touches_the_operators_real_cline_directory(stub_cline: dict[str, 
     assert list((home / ".cline").iterdir()) == []
 
 
-def test_max_requests_and_max_total_output_flags_passed(stub_cline: dict[str, Path]) -> None:
+def test_bound_flags_stay_in_the_launcher_and_never_reach_cline(stub_cline: dict[str, Path]) -> None:
+    """Cline has no such options and exits with `unknown option`; the loopback proxy enforces both bounds."""
     rc = launcher.main(["--max-requests", "15", "--max-total-output", "8192", "--", "bounded task"])
     assert rc == 0
     argv = _argv_lines(stub_cline["record"])
-    assert "--max-requests" in argv
-    assert argv[argv.index("--max-requests") + 1] == "15"
-    assert "--max-total-output" in argv
-    assert argv[argv.index("--max-total-output") + 1] == "8192"
+    assert not [token for token in argv if token.startswith(("--max-requests", "--max-total-output"))]
+    assert "15" not in argv and "8192" not in argv
     assert argv[-1] == "bounded task"
 
 
@@ -343,8 +336,9 @@ def test_unverified_client_bounds_refuse_before_key_config_or_process(
     def forbidden(*args: object, **kwargs: object) -> None:
         pytest.fail("an unverified boundary must not touch credentials, config, or Cline")
 
-    monkeypatch.setattr(launcher.tempfile, "mkdtemp", forbidden)
-    monkeypatch.setattr(launcher.subprocess, "run", forbidden)
+    monkeypatch.setattr(part("cline_config").tempfile, "mkdtemp", forbidden)
+    monkeypatch.setattr(part("cline_process").subprocess, "run", forbidden)
+    monkeypatch.setattr(part("cline_process").subprocess, "Popen", forbidden)
     with pytest.raises(SystemExit, match="launcher-output-bound-unsupported"):
         launcher.main(["--max-requests", "1", "--max-total-output", "4096", "--", "task"])
     assert not (stub_cline["record"] / "argv.txt").exists()
@@ -374,3 +368,9 @@ def test_boundary_problem_accepts_only_two_verified_positive_bounds(
     assert launcher.launcher_boundary_problem(1, 4096) is None
     assert launcher.launcher_boundary_problem(None, 4096) == "invalid-launcher-bounds"
     assert launcher.launcher_boundary_problem(1, 0) == "invalid-launcher-bounds"
+
+
+def test_native_bound_contract_is_verified() -> None:
+    """The launcher natively verifies both bounds without monkeypatching."""
+    assert launcher.BOUND_CONTRACT == {"max_requests": True, "max_total_output": True}
+    assert launcher.launcher_boundary_problem(1, 4096) is None

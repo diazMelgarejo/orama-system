@@ -54,17 +54,17 @@ def _g11_handoff_row(text: str) -> str:
 
 
 def test_section_15_matches_the_launcher_boundary() -> None:
-    """Section 15 names the refusal, both bounds and the fail-closed legacy contract."""
+    """Section 15 records both bounds, launcher-side boundary lift, and the fail-closed legacy contract."""
     reason = _boundary_reason()
-    assert reason is not None, "the launcher boundary was lifted: rewrite doc 76 section 15, then update this test"
+    assert reason is None, "the launcher boundary is lifted with launcher-side boundary enforcement"
     text = PLAN.read_text(encoding="utf-8")
     section = _flat(text.split("## 15.", 1)[1].split("\n## ", 1)[0])
-    assert reason in section
     assert "designated" in section
     assert BOTH_BOUNDS in section, "section 15 must name both launcher bounds"
     assert "fail-closed" in section
     assert LEGACY_REFUSAL in section
     assert CHECKPOINT_DATE in section
+    assert "bounded-capable" in section
     for claim in PRESENT_TENSE_CLAIMS:
         assert claim not in section, claim
 
@@ -100,6 +100,17 @@ def test_handoff_has_a_dated_lane_1b_gate_note() -> None:
     assert "implementation is incomplete" in flat
     assert "launcher-output-bound-unsupported" in flat
     assert "before any spend-gate reservation" in flat
+    assert LEGACY_REFUSAL in flat
+
+
+def test_handoff_has_a_dated_lane_2_bound_contract_closure_note() -> None:
+    """Section 9.1 records the Phase 1B BOUND_CONTRACT closure update."""
+    text = HANDOFF.read_text(encoding="utf-8")
+    section = text.split("### 9.1 ", 1)[1].split("### 9.2 ", 1)[0]
+    flat = _flat(section).lower()
+    assert "2026-11-27" in flat
+    assert "bound_contract closure" in flat
+    assert "bounded-capable" in flat
     assert LEGACY_REFUSAL in flat
 
 

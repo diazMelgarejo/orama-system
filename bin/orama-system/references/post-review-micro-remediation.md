@@ -412,39 +412,13 @@ only ones touching files with a sibling copy elsewhere.
 
 ---
 
-## Two rules from the 2026-11-17 pair remediation turn
-
-- **Reproduce every finding before fixing it, and expect the reason to differ.** Rolling back a
-  committed reservation raised `UnknownReservationError`, which is what made one double-release finding
-  real; a NUL byte in an argv failed only after the one-attempt marker was claimed. A fix written from the
-  comment alone would have missed the actual defect.
-- **Saved harness drivers and run copies are evidence, not code to keep current.** Do not rewrite them to
-  satisfy a review. Document the known limit in a README beside them (for example "predates the mandatory
-  spend guard") and answer the comment with an evidence-backed decline that points at that note.
-
----
-
-## Enforcement — reference this doc, don't duplicate it
-
-Each consuming skill imports only the phases it needs, per the modular
-Skillify pattern:
-
-| Skill | Phases it needs |
-| --- | --- |
-| [`agent-methodology`](../skills/agent-methodology/SKILL.md) | All 7 — this is the doctrine's home methodology |
-| [`code-review`](../skills/code-review/SKILL.md) | Load this protocol before beginning remediation, including from a standalone post-review summary; apply Phase 1 (root-cause clustering), Phase 4 (verification), and Phase 5 (individual inline-thread replies). |
-| [`git-history-surgery`](../skills/git-history-surgery/SKILL.md) | Phase 3 (integration — safety refs, reset-vs-rebase decision), Phase 6 (cross-repo sync — same discipline as this skill's own cross-host sync card, applied to review remediation specifically) |
-| [`gstack`](../gstack/SKILL.md) | Phase 0 (freeze), Phase 5 (closure) — AutoPlan review gating |
-| [`cursor-pr-body`](../skills/cursor-pr-body/SKILL.md) | Phase 2 (PR body append-only workflow) |
-| [`skillify`](../skills/skillify/SKILL.md) | Phase 2 (branch discipline) — matches the modular-skill-authoring pattern this doc itself follows |
-| [`ecc-sync`](../skills/ecc-sync/SKILL.md) | Phase 5 (closure) — post-merge instinct import |
-| [`hermes-harness`](../skills/hermes-harness/SKILL.md) | Phase 0 (freeze), Phase 2 (branch discipline), Phase 6 (cross-repo sync — this is where PT ↔ orama harness integration actually lives; `pt-orama-harness-integration` is a redirect stub to this skill) — multi-agent dispatch must not write to `main` mid-review |
-| [`mcp-orchestration`](../skills/mcp-orchestration/SKILL.md) | Phase 1 (root-cause clustering) — routing bugs across providers cluster the same way as coordination-dispatch bugs did |
-
----
-
 ## Related
 
+- [`remediation-batch-dependency-and-review-rules.md`](remediation-batch-dependency-and-review-rules.md) —
+  empirical rules from prior pair remediation cycles, enforcer naming, neutralizing fixtures, and
+  linear batch dependency ordering
+- [`remediation-exemplar-cross-system-bounds-and-fencing.md`](remediation-exemplar-cross-system-bounds-and-fencing.md) —
+  advanced code-review exemplar: loopback proxy spend bounds and distributed task fencing
 - [`multi-agent-collaboration-protocol.md`](multi-agent-collaboration-protocol.md) —
   the nested-branch merge protocol this pattern complements (that doc covers merging
   concurrent branches; this one covers remediating a single branch after review)
@@ -459,41 +433,3 @@ Skillify pattern:
   tool use, git discipline, and elegance heuristics for multi-repo sessions
 - PT `.agent/AGENTS.md` § Multi-agent merge conflict protocol — portable-brain
   summary of the sister pattern for concurrent branches
-
-## Three more rules from the review of the review (2026-11-17)
-
-- **A claim must name its enforcer.** For every sentence that says "refuses", "forces", "only X writes"
-  or "never", find the line that enforces it and say which entry point does. If the check lives in the
-  command and not the guard, or in the live path and not the dry path, say so. Five threads in one
-  round were this one defect, and a bot keeps a thread open until the sentence matches the mechanism.
-- **A new default location needs a neutralizing fixture.** When a resolver gains a fallback (a CI
-  checkout), every test that asserts "nothing found" must neutralize it in the shared fixture, and one
-  test must prove the fallback is used. CI has the location and a laptop does not, so the failure shows
-  only in CI: create the location locally and run the suite before pushing.
-- **Account for every path, then check the claims.** Release a reservation only when the process
-  never launched. After launch, settle it; if settlement fails, retain the reservation as liability
-  until reconciliation. Process-group cleanup and operations that can fail between acquisition and
-  completion (claiming a marker, writing a ledger) belong inside the cleanup block. The attempt marker is the opposite kind of
-  thing: once an attempt is spent it stays, so the attempt cannot repeat. A status field such as
-  `recorded` is derived from what was written, never assumed. A table cell with a `|` inside code needs `\|`;
-  the lint config excludes SKILL.md, so check those tables by eye.
-
-## Dependency order of a remediation batch (2026-11-25)
-
-Build the task list from what each step needs, not from the order the requests arrived in. A batch
-that touches research, docs, memory, commits and a push has one workable order:
-
-- **Independent reads first, in parallel.** Research (a model's release date, an upstream document)
-  and diagnosis (why a pull request shows a merge conflict, what a failing check actually says) need
-  nothing from each other, so run them together before any edit.
-- **Research feeds the docs and the code.** Record a fact only after its source is read, with the
-  source and the date it was checked. When the best source carries no date, say so and name the one
-  that does.
-- **Docs and memory feed the commits.** A commit message cites the doc and the lesson, so write and
-  verify them first, then commit in logical batches. Tests come before the docs they prove.
-- **One push per repository comes last,** with every ref in a single command. Review replies and
-  pull-request-body follow-ups cite pushed SHAs, so they follow the push; the body follow-up also
-  needs the operator's grant.
-- **Restack in order before that push.** The base pull request first, then each stacked branch on
-  the previous tip, so the chain is linear. A pushed stacked branch that must move goes out in the
-  same push, with a lease.

@@ -843,6 +843,28 @@ def test_explicit_later_model_cannot_skip_available_first(cycle, tmp_path, monke
     assert not list(tmp_path.glob("*.once"))
 
 
+def test_launcher_boundary_failure_exit_124_settles_unknown(cycle, tmp_path, monkeypatch) -> None:
+    """A returncode 124 from launcher settles as unknown spend with reason launcher-boundary."""
+    _arm(monkeypatch, cycle)
+    guard = _Guard()
+    settle_unknown_calls = []
+    orig_settle_unknown = cycle._settle_unknown
+
+    def _tracking_settle_unknown(spend_guard, reservation, input_chars, outcome, seat, mode):
+        settle_unknown_calls.append((outcome, seat, mode))
+        return orig_settle_unknown(spend_guard, reservation, input_chars, outcome, seat, mode)
+
+    monkeypatch.setattr(cycle, "_settle_unknown", _tracking_settle_unknown)
+    monkeypatch.setattr(
+        cycle.subprocess, "Popen", _fake_run(stdout="exceeded boundary", returncode=124),
+    )
+    r = cycle.live_cycle(**_kwargs(tmp_path, spend_guard=guard))
+    assert r["ok"] is False
+    assert len(settle_unknown_calls) == 1
+    assert settle_unknown_calls[0][0] == "launcher-boundary"
+    assert "r1" in guard.settled
+
+
 def test_probe_cannot_expand_canonical_effort_support(cycle, tmp_path, monkeypatch) -> None:
     """A new provider capability requires a canonical policy update before use."""
     _arm(monkeypatch, cycle)
