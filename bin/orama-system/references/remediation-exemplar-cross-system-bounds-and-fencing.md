@@ -34,7 +34,7 @@ When remediating process-supervision, spend-boundary, or distributed-state pull 
    - Call `self.shutdown()` to break the socket accept loop.
    - Await `_inflight_cond` drain with a bounded timeout (e.g. 5.0s).
    - If the drain times out, transition to `PHASE_CLOSED` under lock (fencing any queued worker from upstream dispatch) and have the launcher exit `124` to settle as unknown spend (the child process has already terminated).
-3. **Single Fail-Closed Funnel (`_fail_closed` + `_fetch_upstream`):**
+3. **Single Fail-Closed Funnel (`_fail_closed` + `upstream.fetch`):**
    Never fragment error handling across parallel catch blocks. All transport errors, socket
    timeouts, non-definitive upstream status codes, and body reading failures must funnel into
    `classify_chat_outcome()` and `_fail_closed()` / `_reject_unaccounted()`, debiting the full clamped

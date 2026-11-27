@@ -20,7 +20,7 @@ from typing import Any, Callable, Iterator
 
 import pytest
 
-from cline_wandb_fixtures import WAIT_S, Upstream
+from cline_wandb_fixtures import WAIT_S, Upstream, part
 from cline_wandb_fixtures import launcher as L
 
 TOKEN = "session-token-for-tests"
@@ -157,7 +157,7 @@ def test_no_4xx_status_is_trusted_as_a_zero_spend_rejection(rig: RigFactory, sta
 
 @pytest.mark.parametrize("mode", ["truncated-500", "huge"])
 def test_unreadable_or_oversize_upstream_bodies_fail_closed(rig: RigFactory, monkeypatch: pytest.MonkeyPatch, mode: str) -> None:
-    monkeypatch.setattr(L, "MAX_RESPONSE_BYTES", 1000)
+    monkeypatch.setattr(part("upstream"), "MAX_RESPONSE_BYTES", 1000)
     r = rig()
     r.up.mode = mode
     r.post()

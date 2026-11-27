@@ -409,7 +409,8 @@ termination, before any spend-gate reservation, followed by client qualification
 No live activation is authorized.
 
 **2026-11-27 Phase 1B BOUND_CONTRACT closure update.** Launcher-side boundary enforcement is
-implemented in `launch_cline_wandb.py` via a stdlib loopback HTTP accounting proxy:
+implemented by `launch_cline_wandb.py` and its `cline_wandb_launcher/` package through a stdlib
+loopback HTTP accounting proxy:
 
 - `POST` requests whose parsed URL path (ignoring query strings) ends in `/chat/completions` are
   authenticated via a per-launch random session token, serialized, and counted; all other `POST` routes

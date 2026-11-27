@@ -8,6 +8,7 @@ import json
 import sys
 import threading
 from pathlib import Path
+from types import ModuleType
 
 SCRIPT = (Path(__file__).resolve().parents[1] / "bin" / "orama-system" / "skills"
           / "cline-wandb" / "scripts" / "launch_cline_wandb.py")
@@ -17,6 +18,11 @@ sys.modules[_spec.name] = launcher
 _spec.loader.exec_module(launcher)
 
 WAIT_S = 5.0
+
+
+def part(name: str) -> ModuleType:
+    """The sibling module the loaded launcher really uses. Patch a moved name there, where it is looked up."""
+    return sys.modules[f"cline_wandb_launcher.{name}"]
 
 
 class _UpstreamHandler(http.server.BaseHTTPRequestHandler):

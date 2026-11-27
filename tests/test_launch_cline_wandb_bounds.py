@@ -11,7 +11,7 @@ from typing import Callable, Iterator
 
 import pytest
 
-from cline_wandb_fixtures import Upstream, launcher
+from cline_wandb_fixtures import Upstream, launcher, part
 
 pytestmark = pytest.mark.unit
 
@@ -592,8 +592,11 @@ sys.exit(0)
         def close(self) -> None:
             pass
 
+    opened: list[str] = []
+
     class MockOpener:
         def open(self, req: urllib.request.Request, timeout: float | None = None) -> object:
+            opened.append(req.full_url)
             # Any non-2xx is unaccounted; if the body read were skipped the 400 would be relayed
             # (exit 0). Only the failing body read can turn it into an unaccounted dispatch (exit 124).
             raise urllib.error.HTTPError(
@@ -604,9 +607,12 @@ sys.exit(0)
                 fp=MockErrorFile(),  # type: ignore[arg-type]
             )
 
-    monkeypatch.setattr(launcher, "_UPSTREAM_OPENER", MockOpener())
+    monkeypatch.setattr(part("upstream"), "_UPSTREAM_OPENER", MockOpener())
+    # `.invalid` never resolves: were the opener patch lost, no request could reach a provider.
+    monkeypatch.setattr(launcher, "BASE_URL", "https://upstream.invalid/v1")
 
     rc = launcher.main(["--max-requests", "5", "--max-total-output", "4096", "--", "task"])
+    assert opened == ["https://upstream.invalid/v1/chat/completions"], "the opener patch did not apply"
     assert rc == 124
     out, err = capsys.readouterr()
     assert "unaccounted_dispatch" in err
