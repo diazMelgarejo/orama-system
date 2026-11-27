@@ -30,11 +30,13 @@ key stays in launcher memory and is never written to disk. Contract, one rule pe
     forwarded and counted; every other `POST` is refused with HTTP 403.
   - Before forwarding, `max_tokens` (and `max_completion_tokens` when present) is clamped to the
     remaining output budget, and `stream_options.include_usage` is forced on for streaming calls.
+  - Every upstream request carries `Accept-Encoding: identity` in place of the client's value, because
+    the proxy does not decode replies.
   - Every forwarded chat request ends in exactly one outcome: ACCOUNTED (a 2xx response with
     verified `usage.completion_tokens`) or UNACCOUNTED. UNACCOUNTED covers a 2xx response without
-    valid usage, every non-2xx status (the launcher cannot prove a provider or gateway status means
-    no billable work), and any transport or read failure. It is debited in full against the output
-    budget.
+    valid usage, a 2xx response encoded despite that request (never parsed), every non-2xx status
+    (the launcher cannot prove a provider or gateway status means no billable work), and any
+    transport or read failure. It is debited in full against the output budget.
   - Cline's process group is terminated and the launcher exits 124 when `request_count` exceeds
     `max_requests`, when the next chat request finds no output budget left, when cumulative output exceeds
     `max_total_output`, when a dispatch is UNACCOUNTED, or when admitted handlers do not drain in time.
@@ -430,6 +432,12 @@ def extract_sse_completion_tokens(body: bytes) -> int | None:
         return None
 
 
+def is_identity_encoded(headers: Any) -> bool:
+    """True when no Content-Encoding value names a coding other than identity."""
+    values = headers.get_all("Content-Encoding") or []
+    return all(token.strip().lower() in ("", "identity") for value in values for token in str(value).split(","))
+
+
 def classify_chat_outcome(status: int, tokens: int | None) -> str:
     """Return the single outcome of one forwarded chat request."""
     return ACCOUNTED if 200 <= status < 300 and tokens is not None else UNACCOUNTED
@@ -604,9 +612,10 @@ class AccountingProxyHandler(http.server.BaseHTTPRequestHandler):
         self._forward(payload, chat_budget=remaining, is_streaming=is_streaming)
 
     def _build_upstream_request(self, body_bytes: bytes) -> urllib.request.Request:
-        drop = hop_by_hop_names(self.headers, "host", "content-length", "authorization")
+        drop = hop_by_hop_names(self.headers, "host", "content-length", "authorization", "accept-encoding")
         headers = {k: v for k, v in self.headers.items() if k.lower() not in drop}
         headers["Connection"] = "close"
+        headers["Accept-Encoding"] = "identity"  # the usage parsers read plain bodies only
         if self.server.upstream_key:
             headers["Authorization"] = f"Bearer {self.server.upstream_key}"
         if body_bytes:
@@ -638,10 +647,11 @@ class AccountingProxyHandler(http.server.BaseHTTPRequestHandler):
             finally:
                 exc.close()
 
-    def _settle_chat(self, status: int, body: bytes, is_streaming: bool, budget: int) -> bool:
+    def _settle_chat(self, status: int, headers: Any, body: bytes, is_streaming: bool, budget: int) -> bool:
         """Apply the two-outcome rule to a chat response. False when the request was rejected here."""
         tokens = None
-        if 200 <= status < 300:
+        # A reply encoded despite `identity` is never parsed: any usage visible in its bytes is unverified.
+        if 200 <= status < 300 and is_identity_encoded(headers):
             tokens = extract_sse_completion_tokens(body) if is_streaming else extract_json_completion_tokens(body)
         if classify_chat_outcome(status, tokens) == UNACCOUNTED:
             return self._reject_unaccounted(status if status >= 400 else 502, budget)
@@ -690,7 +700,7 @@ class AccountingProxyHandler(http.server.BaseHTTPRequestHandler):
         if chat_budget is None and 300 <= status < 400:
             self._reject(502, b'{"error": {"message": "upstream redirect refused"}}')
             return
-        if chat_budget is not None and not self._settle_chat(status, body, is_streaming, chat_budget):
+        if chat_budget is not None and not self._settle_chat(status, headers, body, is_streaming, chat_budget):
             return
         self._relay(status, headers, body)
 

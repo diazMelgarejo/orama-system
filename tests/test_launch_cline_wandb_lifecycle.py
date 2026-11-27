@@ -5,6 +5,7 @@ come from the launcher's LOOPBACK_HOST so the private-literal hygiene hook stays
 """
 from __future__ import annotations
 
+import gzip
 import http.client
 import http.server
 import importlib.util
@@ -46,6 +47,24 @@ class _UpstreamHandler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _send_reply(self, body: bytes) -> None:
+        """Send a 2xx chat reply, gzip-encoded or labelled with an encoding when the mode calls for it."""
+        mode = self.server.mode
+        permitted = "gzip" in self.headers.get("Accept-Encoding", "")
+        encoding = None
+        if mode == "gzip-anyway" or (mode == "gzip-if-permitted" and permitted):
+            # Level 0 stores the plaintext inside the gzip stream, where a parser that ignored the
+            # encoding could still read the usage report.
+            body, encoding = gzip.compress(body, compresslevel=self.server.gzip_level), "gzip"
+        elif mode == "labelled-identity":
+            encoding = "identity"
+        self.send_response(200)
+        if encoding:
+            self.send_header("Content-Encoding", encoding)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_GET(self) -> None:
         srv = self.server
         srv.hits.append({"path": self.path, "body": None, "auth": self.headers.get("Authorization"),
@@ -69,7 +88,8 @@ class _UpstreamHandler(http.server.BaseHTTPRequestHandler):
         body = json.loads(self.rfile.read(size) or b"{}")
         srv = self.server
         srv.hits.append({"path": self.path, "body": body, "auth": self.headers.get("Authorization"),
-                         "headers": {k.lower(): v for k, v in self.headers.items()}})
+                         "headers": {k.lower(): v for k, v in self.headers.items()},
+                         "accept_encoding": self.headers.get_all("Accept-Encoding")})
         srv.arrived.set()
         if srv.arrival_file is not None:
             srv.arrival_file.write_text("arrived")
@@ -97,10 +117,10 @@ class _UpstreamHandler(http.server.BaseHTTPRequestHandler):
             chunks = b'data: {"choices":[{"delta":{"content":"hi"}}]}\n\n'
             if body.get("stream_options", {}).get("include_usage"):
                 chunks += b'data: {"usage":{"completion_tokens": %d}}\n\n' % srv.tokens
-            self._send(200, chunks + b"data: [DONE]\n\n")
+            self._send_reply(chunks + b"data: [DONE]\n\n")
         else:
             payload = {"choices": []} if srv.mode == "nousage" else {"choices": [], "usage": {"completion_tokens": srv.tokens}}
-            self._send(200, json.dumps(payload).encode())
+            self._send_reply(json.dumps(payload).encode())
             srv.responded.append(srv.mode)
 
 
@@ -115,6 +135,7 @@ class Upstream(http.server.ThreadingHTTPServer):
         self.arrival_file: Path | None = None
         self.redirect_to = ""
         self.responded: list[str] = []
+        self.gzip_level = 9
         self.release.set()
         threading.Thread(target=self.serve_forever, daemon=True).start()
 
@@ -137,9 +158,10 @@ class Rig:
         if self.child:
             self.proxy.set_child_proc(self.child)
 
-    def post(self, path: str = "/v1/chat/completions", body: dict | None = None, token: str | None = TOKEN) -> tuple[int, bytes]:
+    def post(self, path: str = "/v1/chat/completions", body: dict | None = None, token: str | None = TOKEN,
+             extra: dict[str, str] | None = None) -> tuple[int, bytes]:
         conn = http.client.HTTPConnection(L.LOOPBACK_HOST, self.proxy.server_address[1], timeout=10)
-        headers = {"Content-Type": "application/json"}
+        headers = {"Content-Type": "application/json", **(extra or {})}
         if token:
             headers["Authorization"] = f"Bearer {token}"
         conn.request("POST", path, json.dumps(body if body is not None else {"model": "m", "messages": []}), headers)
@@ -554,3 +576,32 @@ def test_close_and_dispatch_claim_are_ordered_by_one_lock(rig: RigFactory) -> No
         _PauseAfterClaimHandler.proceed.set()
         worker.join(WAIT_S)
     assert result == {"s": 200} and len(r.up.hits) == 1
+
+
+@pytest.mark.parametrize("stream", [False, True], ids=["json", "sse"])
+def test_upstream_is_asked_for_identity_so_a_compressing_provider_is_still_accounted(rig: RigFactory, stream: bool) -> None:
+    """The proxy can not decode a reply, so the client's Accept-Encoding never reaches the provider."""
+    r = rig(child=False)
+    r.up.mode = "gzip-if-permitted"
+    status, _ = r.post(body={"model": "m", "messages": [], "stream": stream},
+                       extra={"accept-encoding": "gzip, deflate, br"})
+    assert r.up.hits[0]["accept_encoding"] == ["identity"]
+    assert status == 200 and r.proxy.cumulative_output_tokens == 5 and not r.proxy.boundary_error
+
+
+@pytest.mark.parametrize("level", [0, 9], ids=["stored", "deflated"])
+@pytest.mark.parametrize("stream", [False, True], ids=["json", "sse"])
+def test_a_reply_encoded_against_the_request_is_never_parsed_and_fails_closed(
+    rig: RigFactory, stream: bool, level: int,
+) -> None:
+    r = rig(max_out=50)
+    r.up.mode, r.up.gzip_level = "gzip-anyway", level
+    status, _ = r.post(body={"model": "m", "messages": [], "stream": stream})
+    assert status == 502 and r.breach_names() == ["unaccounted_dispatch"]
+    assert r.proxy.cumulative_output_tokens == 50 and r.child_exited()
+
+
+def test_a_reply_labelled_identity_is_accounted_as_usual(rig: RigFactory) -> None:
+    r = rig(child=False)
+    r.up.mode = "labelled-identity"
+    assert r.post()[0] == 200 and r.proxy.cumulative_output_tokens == 5 and not r.proxy.boundary_error

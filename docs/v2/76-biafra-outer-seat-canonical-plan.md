@@ -417,6 +417,9 @@ implemented in `launch_cline_wandb.py` via a stdlib loopback HTTP accounting pro
 - Before forwarding each `/chat/completions` request, the proxy clamps `max_tokens` (and
   `max_completion_tokens`, if present) to the remaining output budget and injects
   `stream_options: {"include_usage": true}` for streaming calls.
+- Every upstream request carries `Accept-Encoding: identity` in place of the client's value, because
+  the proxy does not decode replies. A 2xx chat reply that arrives with any other `Content-Encoding`
+  is never parsed and is `UNACCOUNTED`.
 - Every forwarded chat request ends in exactly one classified outcome: `ACCOUNTED` (a 2xx response
   with verified `usage.completion_tokens`) or `UNACCOUNTED`. Every non-2xx chat response is
   `UNACCOUNTED`: neither the provider nor a gateway in front of it guarantees that a 4xx means no
