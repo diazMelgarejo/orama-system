@@ -304,8 +304,20 @@ def extract_json_completion_tokens(body: bytes) -> int | None:
     return None
 
 
+def _valid_completion_tokens(usage: object) -> int | None:
+    if isinstance(usage, dict):
+        ct = usage.get("completion_tokens")
+        if isinstance(ct, int) and not isinstance(ct, bool) and ct >= 0:
+            return ct
+    return None
+
+
 def extract_sse_completion_tokens(body: bytes) -> int | None:
-    """Extract completion_tokens from SSE payload (from final usage chunk)."""
+    """Extract completion_tokens from the SSE usage reports; None (unaccounted) when any is malformed.
+
+    Events whose `usage` is absent or null are skipped (intermediate chunks). A `usage` value that is
+    present but malformed is never treated as absent, so it can not fall back to an earlier report.
+    """
     try:
         text = body.decode("utf-8", errors="replace")
         last_ct: int | None = None
@@ -318,14 +330,16 @@ def extract_sse_completion_tokens(body: bytes) -> int | None:
                 continue
             try:
                 chunk = json.loads(payload)
-                if isinstance(chunk, dict):
-                    usage = chunk.get("usage")
-                    if isinstance(usage, dict):
-                        ct = usage.get("completion_tokens")
-                        if isinstance(ct, int) and not isinstance(ct, bool) and ct >= 0:
-                            last_ct = ct
-            except Exception:
+            except ValueError:
+                if "usage" in payload:
+                    return None
                 continue
+            if not isinstance(chunk, dict) or chunk.get("usage") is None:
+                continue
+            ct = _valid_completion_tokens(chunk["usage"])
+            if ct is None:
+                return None
+            last_ct = ct
         return last_ct
     except Exception:
         return None
@@ -349,6 +363,34 @@ def clamp_output_caps(req_json: dict, remaining_tokens: int) -> dict:
 
 class OversizeResponseError(RuntimeError):
     """The upstream response exceeded MAX_RESPONSE_BYTES."""
+
+
+class TruncatedResponseError(RuntimeError):
+    """The upstream response ended before its declared Content-Length."""
+
+
+class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Never follow a redirect: the provider key must not travel to another origin."""
+
+    def redirect_request(self, *args: Any, **kwargs: Any) -> None:
+        return None
+
+
+_UPSTREAM_OPENER = urllib.request.build_opener(_NoRedirectHandler)
+
+HOP_BY_HOP = frozenset({
+    "connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
+    "proxy-connection", "te", "trailer", "transfer-encoding", "upgrade",
+})
+
+
+def hop_by_hop_names(headers: Any, *extra: str) -> frozenset[str]:
+    """Lower-cased names to drop: fixed hop-by-hop fields, every field nominated by any Connection
+    value, and any `extra` names the caller replaces itself."""
+    names = set(HOP_BY_HOP) | {name.lower() for name in extra}
+    for value in headers.get_all("Connection") or []:
+        names.update(token.strip().lower() for token in str(value).split(",") if token.strip())
+    return frozenset(names)
 
 
 class AccountingProxyHandler(http.server.BaseHTTPRequestHandler):
@@ -479,8 +521,8 @@ class AccountingProxyHandler(http.server.BaseHTTPRequestHandler):
         self._forward(payload, chat_budget=remaining, is_streaming=is_streaming)
 
     def _build_upstream_request(self, body_bytes: bytes) -> urllib.request.Request:
-        headers = {k: v for k, v in self.headers.items()
-                   if k.lower() not in ("host", "content-length", "connection", "authorization")}
+        drop = hop_by_hop_names(self.headers, "host", "content-length", "authorization")
+        headers = {k: v for k, v in self.headers.items() if k.lower() not in drop}
         headers["Connection"] = "close"
         if self.server.upstream_key:
             headers["Authorization"] = f"Bearer {self.server.upstream_key}"
@@ -496,13 +538,16 @@ class AccountingProxyHandler(http.server.BaseHTTPRequestHandler):
         data = stream.read(MAX_RESPONSE_BYTES + 1)
         if len(data) > MAX_RESPONSE_BYTES:
             raise OversizeResponseError(f"upstream response exceeds {MAX_RESPONSE_BYTES} bytes")
+        declared = stream.headers.get("Content-Length")
+        if declared is not None and declared.strip().isdigit() and len(data) < int(declared.strip()):
+            raise TruncatedResponseError(f"upstream response ended at {len(data)} of {declared.strip()} bytes")
         return data
 
     def _fetch_upstream(self, req: urllib.request.Request) -> tuple[int, Any, bytes]:
         """One upstream round trip; a failure while reading ANY body (2xx or HTTPError) raises."""
         timeout_s = (self.server.timeout_ms / 1000.0) if self.server.timeout_ms else None
         try:
-            with urllib.request.urlopen(req, timeout=timeout_s) as resp:
+            with _UPSTREAM_OPENER.open(req, timeout=timeout_s) as resp:
                 return resp.status, resp.headers, self._read_bounded(resp)
         except urllib.error.HTTPError as exc:
             try:
@@ -543,12 +588,19 @@ class AccountingProxyHandler(http.server.BaseHTTPRequestHandler):
         return False
 
     def _relay(self, status: int, headers: Any, body: bytes) -> None:
-        kept = [(k, v) for k, v in headers.items()
-                if k.lower() not in ("transfer-encoding", "content-length", "connection")]
+        drop = hop_by_hop_names(headers, "content-length")
+        kept = [(k, v) for k, v in headers.items() if k.lower() not in drop]
         self._send(status, kept, body)
 
     def _forward(self, body_bytes: bytes, *, chat_budget: int | None, is_streaming: bool) -> None:
         """Forward one request. chat_budget is the clamp for a chat request, None for any other route."""
+        if chat_budget is None:
+            # Chat requests were fenced in _admit_chat_request; every other route needs the same fence.
+            with self.server.lock:
+                closed = self.server.phase == PHASE_CLOSED
+            if closed:
+                self._reject(503, b'{"error": {"message": "proxy closed; dispatch refused"}}')
+                return
         try:
             status, headers, body = self._fetch_upstream(self._build_upstream_request(body_bytes))
         except Exception as exc:
@@ -557,6 +609,9 @@ class AccountingProxyHandler(http.server.BaseHTTPRequestHandler):
                 self._reject_unaccounted(status, chat_budget)
             else:
                 self._reject(status, b'{"error": {"message": "upstream communication error"}}')
+            return
+        if chat_budget is None and 300 <= status < 400:
+            self._reject(502, b'{"error": {"message": "upstream redirect refused"}}')
             return
         if chat_budget is not None and not self._settle_chat(status, body, is_streaming, chat_budget):
             return
@@ -710,7 +765,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             cmd.extend(["--max-total-output", str(args.max_total_output)])
         cmd.extend(args.rest)
 
-        proc = subprocess.Popen(cmd)
+        child_env = {k: v for k, v in os.environ.items() if k != KEYVAR}
+        proc = subprocess.Popen(cmd, env=child_env)
         proxy.set_child_proc(proc)
         rc = proc.wait()
         drained = proxy.stop_and_drain(timeout_s=5.0)

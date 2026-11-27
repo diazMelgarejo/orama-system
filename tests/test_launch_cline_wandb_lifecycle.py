@@ -17,6 +17,7 @@ import textwrap
 import threading
 import time
 from pathlib import Path
+from typing import Any, Callable, Iterator
 
 import pytest
 
@@ -44,17 +45,49 @@ class _UpstreamHandler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def do_GET(self) -> None:
+        srv = self.server
+        srv.hits.append({"path": self.path, "body": None, "auth": self.headers.get("Authorization"),
+                         "headers": {k.lower(): v for k, v in self.headers.items()}})
+        if srv.mode == "redirect":
+            self.send_response(302)
+            self.send_header("Location", f"{srv.redirect_to}{self.path}")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        self.send_response(200)
+        self.send_header("Connection", "X-Resp-Hop")
+        self.send_header("X-Resp-Hop", "leak")
+        self.send_header("X-Kept", "yes")
+        self.send_header("Content-Length", "2")
+        self.end_headers()
+        self.wfile.write(b"{}")
+
     def do_POST(self) -> None:
         size = int(self.headers.get("Content-Length", 0))
         body = json.loads(self.rfile.read(size) or b"{}")
         srv = self.server
-        srv.hits.append({"path": self.path, "body": body, "auth": self.headers.get("Authorization")})
+        srv.hits.append({"path": self.path, "body": body, "auth": self.headers.get("Authorization"),
+                         "headers": {k.lower(): v for k, v in self.headers.items()}})
         srv.arrived.set()
         if srv.arrival_file is not None:
             srv.arrival_file.write_text("arrived")
         srv.release.wait(WAIT_S * 2)
-        if srv.mode == "truncated-500":
+        if srv.mode == "redirect":
+            self.send_response(302)
+            self.send_header("Location", f"{srv.redirect_to}{self.path}")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+        elif srv.mode == "truncated-500":
             self._send(500, b"short", declared=500)
+        elif srv.mode == "truncated-400":
+            self._send(400, b"short", declared=500)
+        elif srv.mode == "truncated-200":
+            ok = json.dumps({"choices": [], "usage": {"completion_tokens": 1}}).encode()
+            self._send(200, ok, declared=len(ok) + 100)
+        elif srv.mode == "sse-malformed-usage" and body.get("stream"):
+            self._send(200, b'data: {"usage": {"completion_tokens": 0}}\n\n'
+                            b'data: {"usage": {"completion_tokens": "bad"}}\n\ndata: [DONE]\n\n')
         elif srv.mode == "huge":
             self._send(200, b"x" * 5000)
         elif srv.status != 200:
@@ -78,6 +111,7 @@ class Upstream(http.server.ThreadingHTTPServer):
         self.mode, self.tokens, self.status = "ok", 5, 200
         self.release, self.arrived = threading.Event(), threading.Event()
         self.arrival_file: Path | None = None
+        self.redirect_to = ""
         self.release.set()
         threading.Thread(target=self.serve_forever, daemon=True).start()
 
@@ -87,13 +121,15 @@ class Upstream(http.server.ThreadingHTTPServer):
 
 
 class Rig:
-    def __init__(self, *, max_requests: int = 5, max_out: int = 50, child: bool = True) -> None:
+    def __init__(self, *, max_requests: int = 5, max_out: int = 50, child: bool = True,
+                 handler: type[L.AccountingProxyHandler] = L.AccountingProxyHandler) -> None:
         self.up = Upstream()
         self.proxy = L.AccountingProxyServer(
-            (L.LOOPBACK_HOST, 0), L.AccountingProxyHandler, max_requests, max_out,
+            (L.LOOPBACK_HOST, 0), handler, max_requests, max_out,
             upstream_base_url=self.up.base_url, timeout_ms=3000, session_token=TOKEN, upstream_key=PROVIDER_KEY,
         )
-        threading.Thread(target=self.proxy.serve_forever, daemon=True).start()
+        self.serving = threading.Thread(target=self.proxy.serve_forever, daemon=True)
+        self.serving.start()
         self.child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"]) if child else None
         if self.child:
             self.proxy.set_child_proc(self.child)
@@ -108,6 +144,15 @@ class Rig:
         data = resp.read()
         conn.close()
         return resp.status, data
+
+    def get(self, path: str = "/v1/models", headers: dict[str, str] | None = None) -> tuple[int, dict[str, str], bytes]:
+        conn = http.client.HTTPConnection(L.LOOPBACK_HOST, self.proxy.server_address[1], timeout=10)
+        conn.request("GET", path, headers={"Authorization": f"Bearer {TOKEN}", **(headers or {})})
+        resp = conn.getresponse()
+        data = resp.read()
+        got = {k.lower(): v for k, v in resp.getheaders()}
+        conn.close()
+        return resp.status, got, data
 
     def child_exited(self) -> bool:
         try:
@@ -125,14 +170,20 @@ class Rig:
         self.up.release.set()
         self.up.shutdown()
         self.up.server_close()
+        if self.serving.is_alive():
+            self.proxy.shutdown()
+        self.serving.join(WAIT_S)
         self.proxy.server_close()
 
 
+RigFactory = Callable[..., Rig]
+
+
 @pytest.fixture
-def rig():
+def rig() -> Iterator[RigFactory]:
     made: list[Rig] = []
 
-    def make(**kw: object) -> Rig:
+    def make(**kw: Any) -> Rig:
         made.append(Rig(**kw))
         return made[-1]
 
@@ -141,13 +192,13 @@ def rig():
         item.close()
 
 
-def test_unauthenticated_chat_is_refused_before_any_counter_changes(rig):
+def test_unauthenticated_chat_is_refused_before_any_counter_changes(rig: RigFactory) -> None:
     r = rig()
     assert r.post(token=None)[0] == 401 and r.post(token="wrong")[0] == 401
     assert r.proxy.request_count == 0 and not r.up.hits and r.child.poll() is None
 
 
-def test_chat_is_clamped_counted_and_uses_the_provider_key_upstream(rig):
+def test_chat_is_clamped_counted_and_uses_the_provider_key_upstream(rig: RigFactory) -> None:
     r = rig(max_out=50)
     status, _ = r.post(path="/v1/chat/completions?api-version=1", body={"model": "m", "messages": [], "max_tokens": 999})
     assert status == 200 and r.proxy.request_count == 1
@@ -155,19 +206,19 @@ def test_chat_is_clamped_counted_and_uses_the_provider_key_upstream(rig):
     assert r.up.hits[0]["auth"] == f"Bearer {PROVIDER_KEY}" and r.proxy.cumulative_output_tokens == 5
 
 
-def test_other_post_routes_are_refused_and_never_forwarded(rig):
+def test_other_post_routes_are_refused_and_never_forwarded(rig: RigFactory) -> None:
     r = rig()
     assert r.post(path="/v1/responses")[0] == 403 and not r.up.hits
 
 
-def test_streaming_gets_include_usage_and_sse_usage_is_accounted(rig):
+def test_streaming_gets_include_usage_and_sse_usage_is_accounted(rig: RigFactory) -> None:
     r = rig()
     assert r.post(body={"model": "m", "messages": [], "stream": True})[0] == 200
     assert r.up.hits[0]["body"]["stream_options"] == {"include_usage": True}
     assert r.proxy.cumulative_output_tokens == 5
 
 
-def test_over_budget_response_breaches_terminates_child_and_blocks_retries(rig):
+def test_over_budget_response_breaches_terminates_child_and_blocks_retries(rig: RigFactory) -> None:
     r = rig(max_out=10)
     r.up.tokens = 100
     assert r.post()[0] == 429 and r.breach_names() == ["max_total_output"] and r.child_exited()
@@ -175,20 +226,20 @@ def test_over_budget_response_breaches_terminates_child_and_blocks_retries(rig):
     assert r.post()[0] == 429 and len(r.up.hits) == forwarded
 
 
-def test_a_recorded_breach_alone_blocks_forwarding_even_with_budget_left(rig):
+def test_a_recorded_breach_alone_blocks_forwarding_even_with_budget_left(rig: RigFactory) -> None:
     r = rig(child=False)
     r.proxy.boundary_error.append(L.BoundaryExceededError("max_requests", 5, 6))
     assert r.post()[0] == 429 and not r.up.hits and r.proxy.request_count == 0
 
 
-def test_possibly_billed_statuses_are_debited_in_full_and_fail_closed(rig):
+def test_possibly_billed_statuses_are_debited_in_full_and_fail_closed(rig: RigFactory) -> None:
     r = rig(max_out=50)
     r.up.status = 500
     assert r.post()[0] == 500
     assert r.breach_names() == ["unaccounted_dispatch"] and r.proxy.cumulative_output_tokens == 50 and r.child_exited()
 
 
-def test_definitive_rejection_is_relayed_without_breach_or_debit(rig):
+def test_definitive_rejection_is_relayed_without_breach_or_debit(rig: RigFactory) -> None:
     r = rig(max_out=50)
     r.up.status = 400
     assert r.post()[0] == 400
@@ -196,7 +247,7 @@ def test_definitive_rejection_is_relayed_without_breach_or_debit(rig):
 
 
 @pytest.mark.parametrize("mode", ["truncated-500", "huge"])
-def test_unreadable_or_oversize_upstream_bodies_fail_closed(rig, monkeypatch, mode):
+def test_unreadable_or_oversize_upstream_bodies_fail_closed(rig: RigFactory, monkeypatch: pytest.MonkeyPatch, mode: str) -> None:
     monkeypatch.setattr(L, "MAX_RESPONSE_BYTES", 1000)
     r = rig()
     r.up.mode = mode
@@ -204,7 +255,7 @@ def test_unreadable_or_oversize_upstream_bodies_fail_closed(rig, monkeypatch, mo
     assert r.breach_names() == ["unaccounted_dispatch"]
 
 
-def test_worker_queued_behind_the_gate_cannot_dispatch_after_the_drain_deadline(rig):
+def test_worker_queued_behind_the_gate_cannot_dispatch_after_the_drain_deadline(rig: RigFactory) -> None:
     r = rig(max_requests=9, max_out=500, child=False)
     r.up.release.clear()
     results: dict[str, int] = {}
@@ -224,7 +275,7 @@ def test_worker_queued_behind_the_gate_cannot_dispatch_after_the_drain_deadline(
     assert results == {"A": 200, "B": 503} and len(r.up.hits) == 1
 
 
-def test_drain_blocks_on_admitted_work_then_reports_the_unaccounted_response(rig):
+def test_drain_blocks_on_admitted_work_then_reports_the_unaccounted_response(rig: RigFactory) -> None:
     r = rig(child=False)
     r.up.release.clear()
     r.up.mode = "nousage"
@@ -234,7 +285,7 @@ def test_drain_blocks_on_admitted_work_then_reports_the_unaccounted_response(rig
     assert r.up.arrived.wait(WAIT_S)
     at_wait, real_wait_for = threading.Event(), r.proxy._inflight_cond.wait_for
 
-    def signalling_wait_for(predicate, timeout=None):
+    def signalling_wait_for(predicate: Callable[[], bool], timeout: float | None = None) -> bool:
         at_wait.set()
         return real_wait_for(predicate, timeout)
 
@@ -249,7 +300,7 @@ def test_drain_blocks_on_admitted_work_then_reports_the_unaccounted_response(rig
     assert outcome["drained"] is True and status["s"] == 502 and r.breach_names() == ["unaccounted_dispatch"]
 
 
-def _install_fake_cline(tmp_path: Path, monkeypatch) -> Path:
+def _install_fake_cline(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     marker = tmp_path / "seen.json"
     script = tmp_path / "cline"
     script.write_text(textwrap.dedent(f"""\
@@ -263,7 +314,9 @@ def _install_fake_cline(tmp_path: Path, monkeypatch) -> Path:
         conn.request("POST", url.path + "/chat/completions", json.dumps({{"model": "m", "messages": []}}),
                      {{"Authorization": "Bearer " + settings["apiKey"], "Content-Type": "application/json"}})
         resp = conn.getresponse(); resp.read()
-        open({str(marker)!r}, "w").write(json.dumps({{"apiKey": settings["apiKey"], "status": resp.status, "cfg": cfg}}))
+        open({str(marker)!r}, "w").write(json.dumps({{"apiKey": settings["apiKey"], "status": resp.status, "cfg": cfg,
+                                                      "key_in_env": {L.KEYVAR!r} in os.environ,
+                                                      "key_in_env_values": {PROVIDER_KEY!r} in os.environ.values()}}))
         """))
     script.chmod(script.stat().st_mode | stat.S_IEXEC)
     monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
@@ -271,7 +324,7 @@ def _install_fake_cline(tmp_path: Path, monkeypatch) -> Path:
     return marker
 
 
-def test_main_hands_cline_the_session_token_never_the_provider_key(tmp_path, monkeypatch):
+def test_main_hands_cline_the_session_token_never_the_provider_key(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     marker = _install_fake_cline(tmp_path, monkeypatch)
     up = Upstream()
     monkeypatch.setattr(L, "BASE_URL", up.base_url)
@@ -282,10 +335,11 @@ def test_main_hands_cline_the_session_token_never_the_provider_key(tmp_path, mon
         up.server_close()
     seen = json.loads(marker.read_text())
     assert rc == 0 and seen["status"] == 200 and seen["apiKey"] != PROVIDER_KEY
+    assert seen["key_in_env"] is False and seen["key_in_env_values"] is False
     assert up.hits[0]["auth"] == f"Bearer {PROVIDER_KEY}" and not os.path.exists(seen["cfg"])
 
 
-def test_main_exits_124_when_the_child_succeeds_but_a_response_had_no_usage(tmp_path, monkeypatch):
+def test_main_exits_124_when_a_response_has_no_usage(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _install_fake_cline(tmp_path, monkeypatch)
     up = Upstream()
     up.mode = "nousage"
@@ -297,7 +351,9 @@ def test_main_exits_124_when_the_child_succeeds_but_a_response_had_no_usage(tmp_
         up.server_close()
 
 
-def test_main_waits_for_an_inflight_request_after_the_child_has_exited(tmp_path, monkeypatch):
+def test_main_waits_for_an_inflight_request_after_the_child_has_exited(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+) -> None:
     """The child exits 0 while its request is still held upstream; only the drain can catch the breach."""
     arrival = tmp_path / "arrived"
     cline = tmp_path / "cline"
@@ -332,7 +388,7 @@ def test_main_waits_for_an_inflight_request_after_the_child_has_exited(tmp_path,
     def observed_stop_and_drain(self, timeout_s: float = 5.0) -> bool:
         real_wait_for = self._inflight_cond.wait_for
 
-        def signalling_wait_for(predicate, timeout=None):
+        def signalling_wait_for(predicate: Callable[[], bool], timeout: float | None = None) -> bool:
             at_wait.set()
             return real_wait_for(predicate, timeout)
 
@@ -340,7 +396,15 @@ def test_main_waits_for_an_inflight_request_after_the_child_has_exited(tmp_path,
         return real_stop_and_drain(self, timeout_s)
 
     monkeypatch.setattr(L.AccountingProxyServer, "stop_and_drain", observed_stop_and_drain)
-    releaser = threading.Thread(target=lambda: (at_wait.wait(WAIT_S), up.release.set()))
+    drain_reached: list[bool] = []
+
+    def release_after_drain_wait() -> None:
+        try:
+            drain_reached.append(at_wait.wait(WAIT_S))
+        finally:
+            up.release.set()
+
+    releaser = threading.Thread(target=release_after_drain_wait)
     releaser.start()
     try:
         rc = L.main(["--max-requests", "2", "--max-total-output", "50", "--", "task"])
@@ -349,4 +413,97 @@ def test_main_waits_for_an_inflight_request_after_the_child_has_exited(tmp_path,
         releaser.join(WAIT_S)
         up.shutdown()
         up.server_close()
+    assert drain_reached == [True], "the drain never reached its condition wait before the upstream was released"
+    assert arrival.exists() and len(up.hits) == 1
     assert rc == 124
+    assert "unaccounted_dispatch" in capsys.readouterr().err
+
+
+def test_chat_redirect_is_not_followed_and_the_provider_key_never_reaches_another_origin(rig: RigFactory) -> None:
+    r = rig(max_out=50)
+    other = Upstream()
+    try:
+        r.up.mode, r.up.redirect_to = "redirect", other.base_url.removesuffix("/v1")
+        status, _ = r.post()
+        assert status == 502 and not other.hits
+        assert r.breach_names() == ["unaccounted_dispatch"] and r.proxy.cumulative_output_tokens == 50
+        assert r.child_exited()
+    finally:
+        other.shutdown()
+        other.server_close()
+
+
+def test_non_chat_redirect_is_not_followed_or_relayed(rig: RigFactory) -> None:
+    r = rig(child=False)
+    other = Upstream()
+    try:
+        r.up.mode, r.up.redirect_to = "redirect", other.base_url.removesuffix("/v1")
+        status, headers, _ = r.get()
+        assert status == 502 and "location" not in headers and not other.hits
+        assert len(r.up.hits) == 1 and not r.proxy.boundary_error
+    finally:
+        other.shutdown()
+        other.server_close()
+
+
+@pytest.mark.parametrize("mode", ["truncated-400", "truncated-200"])
+def test_response_shorter_than_its_declared_length_fails_closed_with_spend_recorded(rig: RigFactory, mode: str) -> None:
+    r = rig(max_out=50)
+    r.up.mode = mode
+    status, _ = r.post()
+    assert status == 502, "a truncated body must not be relayed as a definitive rejection or an accounted success"
+    assert r.breach_names() == ["unaccounted_dispatch"]
+    assert r.proxy.cumulative_output_tokens == 50 and r.child_exited()
+
+
+def test_complete_definitive_rejection_is_still_relayed_without_a_debit(rig: RigFactory) -> None:
+    r = rig(max_out=50)
+    r.up.status = 400
+    assert r.post()[0] == 400 and r.proxy.cumulative_output_tokens == 0 and not r.proxy.boundary_error
+
+
+def test_malformed_streamed_usage_fails_closed_and_debits_the_whole_reservation(rig: RigFactory) -> None:
+    r = rig(max_out=50)
+    r.up.mode = "sse-malformed-usage"
+    status, _ = r.post(body={"model": "m", "messages": [], "stream": True})
+    assert status == 502
+    assert r.breach_names() == ["unaccounted_dispatch"]
+    assert r.proxy.cumulative_output_tokens == 50 and r.child_exited()
+
+
+def test_hop_by_hop_fields_are_stripped_on_both_legs(rig: RigFactory) -> None:
+    r = rig(child=False)
+    status, headers, _ = r.get(headers={"Connection": "X-Hop-Only", "X-Hop-Only": "1", "Keep-Alive": "timeout=5",
+                                        "X-End-To-End": "kept"})
+    sent = r.up.hits[0]["headers"]
+    assert status == 200
+    assert "x-hop-only" not in sent and "keep-alive" not in sent and sent["x-end-to-end"] == "kept"
+    assert sent["authorization"] == f"Bearer {PROVIDER_KEY}"
+    assert "x-resp-hop" not in headers and headers["x-kept"] == "yes"
+
+
+class _PausingGetHandler(L.AccountingProxyHandler):
+    entered = threading.Event()
+    proceed = threading.Event()
+
+    def _forward(self, body_bytes: bytes, *, chat_budget: int | None, is_streaming: bool) -> None:
+        type(self).entered.set()
+        type(self).proceed.wait(WAIT_S)
+        super()._forward(body_bytes, chat_budget=chat_budget, is_streaming=is_streaming)
+
+
+def test_admitted_non_chat_worker_cannot_dispatch_after_the_proxy_is_closed(rig: RigFactory) -> None:
+    _PausingGetHandler.entered.clear()
+    _PausingGetHandler.proceed.clear()
+    r = rig(child=False, handler=_PausingGetHandler)
+    result: dict[str, int] = {}
+    worker = threading.Thread(target=lambda: result.setdefault("s", r.get()[0]))
+    worker.start()
+    try:
+        assert _PausingGetHandler.entered.wait(WAIT_S)
+        with r.proxy.lock:
+            r.proxy._phase = L.PHASE_CLOSED
+    finally:
+        _PausingGetHandler.proceed.set()
+        worker.join(WAIT_S)
+    assert result == {"s": 503} and not r.up.hits

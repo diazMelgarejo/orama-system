@@ -43,12 +43,19 @@ When remediating process-supervision, spend-boundary, or distributed-state pull 
    Do not rely solely on post-generation token counting. Intercept outgoing `/chat/completions`
    payloads and clamp `max_tokens` / `max_completion_tokens` to `min(requested, remaining)`. Force
    the upstream provider to truncate generation at the exact remaining budget boundary.
-5. **High-Water-Mark Distributed Fencing Tokens (`claimed_at`):**
-   Never degrade mutual-exclusion claim operations to plain `bool` or `None`. Always return the
-   claim timestamp (`claimed_at: float`), strictly increasing per task via a persistent high-water-mark
-   table (`task_claim_hwm`) raised by `math.nextafter()`, and require `--expected-claimed-at` (or explicit
-   `--unverified-legacy` opt-out) on completion so downstream completion calls always fence against
-   stale same-agent or interleaved reclaims.
+5. **High-Water-Mark Distributed Fencing Tokens (`claimed_at`) - PROPOSED, not delivered at the pin:**
+   The target design is that a mutual-exclusion claim never degrades to a plain `bool` or `None`:
+   it returns the claim timestamp (`claimed_at: float`), made strictly increasing per task by a
+   persistent high-water-mark table (`task_claim_hwm`) raised with `math.nextafter()`, and completion
+   requires `--expected-claimed-at` (or an explicit `--unverified-legacy` opt-out) so a completion
+   fences against stale same-agent or interleaved reclaims.
+   **Status at the pinned Perpetua-Tools revision `8e3bf99a` (`.github/pt-dispatch-test-ref`):** none
+   of the HWM table, the `nextafter` raise, the returned token, or the CLI flags exist.
+   `queue_claim` still returns `bool | None`, the claim path stores `time.time()` in `task_claims`,
+   and `expected_claimed_at` is only an *optional* keyword of `queue_complete` /
+   `release_claim_with_event` (the L-1r same-agent-reclaim guard). No delivering commit is named
+   here because none is pinned; do not describe the fencing above as enforced until the pin is
+   moved to a commit that provides it and that commit is named in this card.
 
 ---
 
@@ -60,7 +67,7 @@ When remediating process-supervision, spend-boundary, or distributed-state pull 
 | **Over-Budget Prevention** | Reactive: kill process after buffer parses over-budget tokens. | Reactive: terminate child once accounting thread catches up. | Pre-forward clamping, but allowed 503 premature rejection during drain. | Proactive clamping to remaining budget (`max_tokens = min(existing, remaining)`); drains in-flight requests cleanly. |
 | **Transport & Error Bodies (`HTTPError.read`)** | Unhandled; leaked raw exceptions or exited cleanly. | Flagged duplicate handlers; missed `HTTPError.read()` timeout escape. | Captured in notes, but split across multiple handler paths. | Unified `_read_upstream_response()` wrapping both 2xx and error streams into `_fail_closed("upstream_transport", ...)`. |
 | **Accept-to-Dispatch Lifecycle** | Unchecked; prone to SIGPIPE and orphan processes. | Suggested bounded thread drain, but left dispatch window open. | Checked `_accepting` in `_admit_chat_request`, causing premature 503 drops. | Synchronous admission in `process_request()` + two-phase `stop_and_drain()`. |
-| **Task Queue Claim Return** | Inconsistent / returned None without fencing semantics. | Flagged signature discrepancy, proposed boolean / None returns. | Reverted to None to pass characterization tests. | Strictly increasing `claimed_at: float` fencing token via persistent `task_claim_hwm`; worker CLI enforces `--expected-claimed-at` or `--unverified-legacy`. |
+| **Task Queue Claim Return** | Inconsistent / returned None without fencing semantics. | Flagged signature discrepancy, proposed boolean / None returns. | Reverted to None to pass characterization tests. | **Proposed, not at the pin (`8e3bf99a`):** strictly increasing `claimed_at: float` token via a persistent `task_claim_hwm` table and required `--expected-claimed-at`. As pinned: `queue_claim` returns `bool \| None` and `expected_claimed_at` is an optional L-1r guard on completion. |
 | **Memory Record Hygiene** | Stale process-guard claims persisted in `LESSONS.md`. | Flagged outdated text in `LESSONS.md` files. | Proposed manual diffs or partial replacements. | Tooling-driven graduation using `graduate.py --supersedes`; preserves all invariants append-only. |
 
 ---
@@ -83,8 +90,9 @@ When remediating process-supervision, spend-boundary, or distributed-state pull 
    outer try block; our unified reader wraps both normal and error streams into exit `124`.
 4. **Preserving Distributed Claim Fencing vs. Shallow Test Placating:** When tests failed after
    changing `queue_claim` return type, reverting to `return None` satisfied the legacy
-   characterization test but destroyed distributed fencing safety. We upheld the distributed systems
-   invariant: `queue_claim` must return a monotonic fencing timestamp (`claim_ts: float`).
+   characterization test but destroyed distributed fencing safety. We argued for the distributed-systems
+   invariant that `queue_claim` should return a monotonic fencing timestamp (`claim_ts: float`);
+   that remains proposed at the pinned revision (see invariant 5).
 
 ### B. Differences from Perplexity Design
 
@@ -107,10 +115,11 @@ When remediating process-supervision, spend-boundary, or distributed-state pull 
    a high-performance loopback HTTP proxy intercepting `/v1/chat/completions`, stripping query
    parameters, rejecting non-allowlisted routes with 403, rejecting post-breach retries with 429,
    clamping upstream max tokens, and closing all shutdown and transport races with fail-closed exit 124.
-2. **Perpetua-Tools PR #525:** Atomically records agent heartbeats upon task claim, returns
-   `claimed_at: float` for fencing against stale completions (strictly increasing via persistent
-   `task_claim_hwm` table), requires `--expected-claimed-at` on worker CLI, and supersedes obsolete
-   process-guard lessons with verified proxy contracts.
+2. **Perpetua-Tools PR #525:** At the pinned revision `8e3bf99a` it atomically records agent
+   heartbeats upon task claim, adds the optional `expected_claimed_at` L-1r guard to completion and
+   release, and supersedes obsolete process-guard lessons with verified proxy contracts. The returned
+   `claimed_at` token, the `task_claim_hwm` table and the required `--expected-claimed-at` flag are
+   proposed follow-ups, not part of that revision.
 
 ---
 

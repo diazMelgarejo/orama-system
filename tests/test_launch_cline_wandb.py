@@ -18,6 +18,7 @@ import threading
 import time
 import urllib.request
 from pathlib import Path
+from typing import Callable
 
 import pytest
 
@@ -607,7 +608,8 @@ sys.exit(0)
     rc = launcher.main(["--max-requests", "5", "--max-total-output", "50", "--", "task"])
     assert rc == 124, "missing usage must terminate fail-closed with exit code 124"
     out, err = capsys.readouterr()
-    assert ("max_total_output exceeded" in err or "unaccounted_dispatch" in err)
+    assert "unaccounted_dispatch" in err
+    assert "max_total_output exceeded" not in err
 
 
 def test_request_count_limit_terminates_child_fail_closed(
@@ -990,19 +992,8 @@ def test_accept_to_dispatch_race_closed_by_stop_and_drain(fake_upstream: tuple[o
             super().process_request_thread(request, client_address)
 
     drain_waiting = threading.Event()
-    class HookedProxyServer(PausingProxyServer):
-        def stop_and_drain(self, timeout_s: float = 5.0) -> bool:
-            with self.lock:
-                self._phase = launcher.PHASE_DRAINING
-            self.shutdown()
-            with self.lock:
-                drain_waiting.set()
-                drained = self._inflight_cond.wait_for(lambda: self._inflight_requests == 0, timeout=timeout_s)
-                if not drained:
-                    self._phase = launcher.PHASE_CLOSED
-                return drained
 
-    proxy = HookedProxyServer(
+    proxy = PausingProxyServer(
         (launcher.LOOPBACK_HOST, 0),
         launcher.AccountingProxyHandler,
         max_requests=5,
@@ -1011,6 +1002,14 @@ def test_accept_to_dispatch_race_closed_by_stop_and_drain(fake_upstream: tuple[o
         session_token="test-session-token",
         upstream_key="test-key",
     )
+    # Exercise the production stop_and_drain(): only observe the condition wait it performs, then delegate.
+    real_wait_for = proxy._inflight_cond.wait_for
+
+    def signalling_wait_for(predicate: Callable[[], bool], timeout: float | None = None) -> bool:
+        drain_waiting.set()
+        return real_wait_for(predicate, timeout)
+
+    proxy._inflight_cond.wait_for = signalling_wait_for  # type: ignore[method-assign]
     t = threading.Thread(target=proxy.serve_forever, daemon=True)
     t.start()
     port = proxy.server_address[1]
@@ -1046,6 +1045,7 @@ def test_accept_to_dispatch_race_closed_by_stop_and_drain(fake_upstream: tuple[o
 
         # Only after the drain reaches its condition wait, release the worker so it finishes processing and accounting
         assert drain_waiting.wait(timeout=2.0)
+        assert drain_thread.is_alive() and drain_result == [], "drain returned before the admitted worker finished"
         release_worker.set()
         drain_thread.join(timeout=3.0)
 
@@ -1101,19 +1101,51 @@ sys.exit(0)
         def close(self) -> None:
             pass
 
-    def mock_urlopen(req: urllib.request.Request, timeout: float | None = None) -> object:
-        raise urllib.error.HTTPError(
-            url=req.full_url,
-            code=500,
-            msg="Internal Server Error",
-            hdrs=email.message.Message(),
-            fp=MockErrorFile(),  # type: ignore[arg-type]
-        )
+    class MockOpener:
+        def open(self, req: urllib.request.Request, timeout: float | None = None) -> object:
+            # 400 is a definitive rejection: if the body read were skipped the 400 would be relayed
+            # (exit 0). Only the failing body read can turn it into an unaccounted dispatch (exit 124).
+            raise urllib.error.HTTPError(
+                url=req.full_url,
+                code=400,
+                msg="Bad Request",
+                hdrs=email.message.Message(),
+                fp=MockErrorFile(),  # type: ignore[arg-type]
+            )
 
-    monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen)
+    monkeypatch.setattr(launcher, "_UPSTREAM_OPENER", MockOpener())
 
     rc = launcher.main(["--max-requests", "5", "--max-total-output", "4096", "--", "task"])
     assert rc == 124
     out, err = capsys.readouterr()
-    assert ("upstream_transport exceeded" in err or "unaccounted_dispatch" in err)
+    assert "unaccounted_dispatch" in err
 
+
+
+def test_sse_null_usage_before_a_valid_terminal_report_is_accepted() -> None:
+    body = (b'data: {"usage": null}\n\ndata: {"choices": []}\n\n'
+            b'data: {"usage": {"completion_tokens": 7}}\n\ndata: [DONE]\n\n')
+    assert launcher.extract_sse_completion_tokens(body) == 7
+
+
+@pytest.mark.parametrize("terminal", [
+    '{"usage": {"completion_tokens": "bad"}}',
+    '{"usage": {"completion_tokens": -1}}',
+    '{"usage": {"completion_tokens": true}}',
+    '{"usage": {}}',
+    '{"usage": "garbage"}',
+    '{"usage": {"completion_tokens": 3',
+])
+def test_sse_malformed_terminal_usage_never_falls_back_to_an_earlier_zero(terminal: str) -> None:
+    body = f'data: {{"usage": {{"completion_tokens": 0}}}}\n\ndata: {terminal}\n\ndata: [DONE]\n\n'.encode()
+    assert launcher.extract_sse_completion_tokens(body) is None
+
+
+def test_hop_by_hop_names_include_connection_nominated_fields() -> None:
+    import email.message
+
+    headers = email.message.Message()
+    headers["Connection"] = "X-Hop-Only, keep-alive"
+    headers["Connection"] = "X-Second"
+    names = launcher.hop_by_hop_names(headers, "host")
+    assert {"x-hop-only", "x-second", "keep-alive", "transfer-encoding", "upgrade", "host"} <= names

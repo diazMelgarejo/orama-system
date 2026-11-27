@@ -429,9 +429,11 @@ implemented in `launch_cline_wandb.py` via a stdlib loopback HTTP accounting pro
   transport/read errors on chat completions), or admitted in-flight handlers fail to drain within the
   bounded shutdown window (transport/read errors on non-chat routes return HTTP 502/504 without recording
   a boundary error or triggering exit 124).
-- On shutdown, `stop_and_drain()` transitions the proxy lifecycle (`RUNNING -> DRAINING -> CLOSED`);
-  if the drain deadline passes, the proxy enters `CLOSED` under lock to fence any worker waiting on
-  `chat_gate` from dispatching a new upstream request.
+- On shutdown, `stop_and_drain()` moves the proxy lifecycle `RUNNING -> DRAINING` and waits for admitted
+  handlers. It has two distinct outcomes: if every admitted handler finishes before the deadline it
+  returns `True` and the phase stays `DRAINING` (the normal completion state); only if the deadline
+  passes does the phase become `CLOSED` under lock (timeout-only) and the launcher exits `124`. `CLOSED`
+  fences every upstream dispatch, chat and non-chat, so a late worker cannot start a new request.
 - Offline harness tests in `tests/test_launch_cline_wandb.py` and `tests/test_launch_cline_wandb_lifecycle.py`
   verify that exceeding bounds triggers fail-closed termination.
 
