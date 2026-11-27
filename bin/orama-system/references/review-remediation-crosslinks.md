@@ -6,6 +6,7 @@ Canonical cards:
 
 - [`branch-local-pattern-remediation.md`](branch-local-pattern-remediation.md)
 - [`remediation-exemplar-cross-system-bounds-and-fencing.md`](remediation-exemplar-cross-system-bounds-and-fencing.md)
+- [`remediation-batch-dependency-and-review-rules.md`](remediation-batch-dependency-and-review-rules.md)
 
 ## Recommended skill cross-reference targets
 

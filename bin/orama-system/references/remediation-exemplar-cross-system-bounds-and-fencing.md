@@ -49,14 +49,64 @@ When remediating process-supervision, spend-boundary, or distributed-state pull 
 
 ---
 
-## 3. Comparative Evolution Matrix
+## 3. In What Ways Did We Differ? (Comparative Matrix)
 
-| Stage | Mechanism | Failure Mode Closed |
-| :--- | :--- | :--- |
-| **Original PR** | Subprocess pipe sniffing & stdout regex. | Pipe buffer deadlocks, chunk truncation, signal drops. |
-| **CodeRabbit Iteration** | Bounded reader joins with timeout. | Missed accept-to-dispatch race, reactive rather than proactive. |
-| **Perplexity Design** | Loopback proxy with gate checks. | Premature 503 rejection of already-admitted draining requests. |
-| **Enduring Solution** | Socket-level admission + proactive clamping. | Zero-race admission, verified fail-closed exit 124 funnel. |
+| Dimension | Original PR (Before Remediation) | CodeRabbit Suggestions | Perplexity Design | Our Enduring Final Solution |
+| :--- | :--- | :--- | :--- | :--- |
+| **Supervision & Accounting** | Legacy pipe/stdout scraping with process-guard regexes. | Reader thread join timeouts with fallback exit error. | Loopback HTTP proxy with condition variable drain. | Loopback HTTP proxy with synchronous socket admission & pre-forward provider clamping. |
+| **Over-Budget Prevention** | Reactive: kill process after buffer parses over-budget tokens. | Reactive: terminate child once accounting thread catches up. | Pre-forward clamping, but allowed 503 premature rejection during drain. | Proactive clamping to remaining budget (`max_tokens = min(existing, remaining)`); drains in-flight requests cleanly. |
+| **Transport & Error Bodies (`HTTPError.read`)** | Unhandled; leaked raw exceptions or exited cleanly. | Flagged duplicate handlers; missed `HTTPError.read()` timeout escape. | Captured in notes, but split across multiple handler paths. | Unified `_read_upstream_response()` wrapping both 2xx and error streams into `_fail_closed("upstream_transport", ...)`. |
+| **Accept-to-Dispatch Lifecycle** | Unchecked; prone to SIGPIPE and orphan processes. | Suggested bounded thread drain, but left dispatch window open. | Checked `_accepting` in `_admit_chat_request`, causing premature 503 drops. | Synchronous admission in `process_request()` + two-phase `stop_and_drain()`. |
+| **Task Queue Claim Return** | Inconsistent / returned None without fencing semantics. | Flagged signature discrepancy, proposed boolean / None returns. | Reverted to None to pass characterization tests. | Monotonic `claim_ts: float` fencing token preserved; tests updated to `isinstance(claimed_at, float)`. |
+| **Memory Record Hygiene** | Stale process-guard claims persisted in `LESSONS.md`. | Flagged outdated text in `LESSONS.md` files. | Proposed manual diffs or partial replacements. | Tooling-driven graduation using `graduate.py --supersedes`; preserves all invariants append-only. |
+
+---
+
+## 4. Detailed Narrative Breakdown
+
+### A. Differences from CodeRabbit Suggestions
+
+1. **Proactive Budget Clamping vs. Passive Counting:** CodeRabbit suggested waiting for reader
+   threads to drain and account for output chunks. We implemented proactive pre-forward token
+   clamping (`max_tokens = min(existing, remaining)`), forcing the upstream provider to truncate
+   generation at the exact remaining budget boundary.
+2. **Architectural Shift vs. Reader Thread Patches:** CodeRabbit suggested tweaking `join()`
+   timeouts on stdout reader threads. We rejected patching subprocess pipes (which suffer from OS
+   buffer deadlocks and truncation) and re-architected the supervision boundary into a standard-library
+   loopback HTTP reverse proxy.
+3. **Unified Transport Funnel vs. Handler Duplication:** CodeRabbit noted code duplication between
+   proxy handlers. We extracted `_fail_closed()` and `_read_upstream_response()`. Crucially,
+   CodeRabbit missed that `exc.read()` on `HTTPError` could raise a socket timeout and escape the
+   outer try block; our unified reader wraps both normal and error streams into exit `124`.
+4. **Preserving Distributed Claim Fencing vs. Shallow Test Placating:** When tests failed after
+   changing `queue_claim` return type, reverting to `return None` satisfied the legacy
+   characterization test but destroyed distributed fencing safety. We upheld the distributed systems
+   invariant: `queue_claim` must return a monotonic fencing timestamp (`claim_ts: float`).
+
+### B. Differences from Perplexity Design
+
+1. **Admission vs. Drain Race Resolution:** The Perplexity design draft suggested checking
+   `if not self.server.is_accepting(): self._reject(503)` inside `_admit_chat_request()`. Live testing
+   proved this prematurely aborted valid in-flight requests that were accepted right before
+   `stop_and_drain()` was called. We enforced admission exclusively at the socket level in
+   `AccountingProxyServer.process_request()`.
+2. **Preservation of Historical Domain Invariants:** Perplexity's suggested lesson update for
+   `lesson_8100266e8176` dropped critical operational requirements (such as Cline 3.0.74
+   `tokenSource: "manual"` and millisecond UTC `updatedAt` ending in `Z`). We enforced that
+   superseding lessons must carry forward all historical domain constraints.
+3. **Private Topology Linter Compliance:** The Perplexity diff draft included literal loopback IP
+   strings in tests, failing the pre-commit hygiene hook (`prohibited private-range literal`). We
+   referenced `launcher.LOOPBACK_HOST`.
+
+### C. Differences from the Original PR (Before Any Remediation)
+
+1. **Orama PR #533:** Replaced unverified subprocess pipes, stdout scraping, and regex parsing with
+   a high-performance loopback HTTP proxy intercepting `/v1/chat/completions`, stripping query
+   parameters, rejecting non-allowlisted routes with 403, rejecting post-breach retries with 429,
+   clamping upstream max tokens, and closing all shutdown and transport races with fail-closed exit 124.
+2. **Perpetua-Tools PR #525:** Atomically records agent heartbeats upon task claim, returns
+   `claim_ts: float` for fencing against stale completions, and supersedes obsolete process-guard
+   lessons with verified proxy contracts.
 
 ---
 
