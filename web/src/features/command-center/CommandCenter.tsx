@@ -54,11 +54,14 @@ export function CommandCenter() {
       hasData: appStateQuery.data !== undefined,
       isError: appStateQuery.isError,
       isPending: appStateQuery.isPending,
+      isPaused: appStateQuery.fetchStatus === "paused",
       dataUpdatedAt: appStateQuery.dataUpdatedAt,
     },
     demo,
   );
   const offReason = effectsOffReason(provenance);
+  // A preview or approval from before live data was lost is not shown as current.
+  const shownPreview = provenance.kind === "live" || provenance.kind === "demo" ? preview : undefined;
   const state = resolveDisplayState(demo ? undefined : appStateQuery.data, demo ? mockState : UNAVAILABLE_STATE);
   const jobs = resolveJobs(state, demo ? mockJobs : []);
   const latestJobId = resolveLatestJobId(jobs);
@@ -66,7 +69,7 @@ export function CommandCenter() {
   const artifactsQuery = useQuery({
     queryKey: ["jobArtifacts", latestJobId],
     queryFn: ({ signal }) => listJobArtifacts(String(latestJobId ?? ""), signal),
-    enabled: Boolean(latestJobId),
+    enabled: Boolean(latestJobId) && !demo,
     refetchInterval: 10_000,
   });
 
@@ -91,14 +94,14 @@ export function CommandCenter() {
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
             <div className="lg:col-span-3">
               <SwarmComposer
-                previewData={preview}
+                previewData={shownPreview}
                 effectsOffReason={offReason}
                 onPreview={(p) => setPreview(p)}
                 onLaunch={() => { /* jobs poll picks up within 5s */ }}
               />
             </div>
             <div className="lg:col-span-2">
-              <WorkerAssignments preview={preview} />
+              <WorkerAssignments preview={shownPreview} />
             </div>
           </div>
         );
@@ -114,14 +117,14 @@ export function CommandCenter() {
             <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-5">
               <div className="lg:col-span-3">
                 <SwarmComposer
-                  previewData={preview}
+                  previewData={shownPreview}
                 effectsOffReason={offReason}
                   onPreview={(p) => setPreview(p)}
                   onLaunch={() => { /* jobs poll picks up within 5s */ }}
                 />
               </div>
               <div className="lg:col-span-2">
-                <WorkerAssignments preview={preview} />
+                <WorkerAssignments preview={shownPreview} />
               </div>
             </div>
 
@@ -147,13 +150,13 @@ export function CommandCenter() {
 
       {provenance.kind === "demo" && (
         <div role="status" className="mt-2 rounded border border-status-warn/40 bg-status-warn/5 px-3 py-2 text-xs text-status-warn">
-          Demo data: these are fixtures, not your system. Every control is off.
+          Demo data: these are fixtures, not your system. Preview and launch are off.
         </div>
       )}
       {(provenance.kind === "unavailable" || provenance.kind === "stale") && (
         <div role="alert" className="mt-2 rounded border border-status-err/40 bg-status-err/5 px-3 py-2 text-xs text-status-err">
           /api/app/state unreachable — live data unavailable; nothing shown here is current
-          {provenance.kind === "stale" ? ` (last good answer ${new Date(provenance.lastGoodAt).toLocaleTimeString()})` : ""}
+          {provenance.kind === "stale" && provenance.lastGoodAt > 0 ? ` (last good answer ${new Date(provenance.lastGoodAt).toLocaleTimeString()})` : ""}
           . Check that portal_server.py is running on port 8002.
         </div>
       )}

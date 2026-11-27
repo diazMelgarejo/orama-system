@@ -22,6 +22,13 @@ describe("provenanceOf: where the numbers on screen came from", () => {
     });
   });
 
+  it("is stale, not live, when the fetch is paused because the browser is offline", () => {
+    expect(provenanceOf({ hasData: true, isError: false, isPending: false, isPaused: true, dataUpdatedAt: 5 }, false)).toEqual({
+      kind: "stale",
+      lastGoodAt: 5,
+    });
+  });
+
   it("is demo only when demo mode is switched on explicitly, whatever the API did", () => {
     expect(provenanceOf({ hasData: false, isError: true, isPending: false }, true)).toEqual({ kind: "demo" });
     expect(provenanceOf({ hasData: true, isError: false, isPending: false }, true)).toEqual({ kind: "demo" });

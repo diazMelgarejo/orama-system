@@ -255,11 +255,10 @@ export function SwarmComposer({ onPreview, onLaunch, previewData, effectsOffReas
           >
             Launch Swarm
           </button>
-          {effectsOff && (
-            <p id="effects-off-reason" role="status" className="ml-auto text-xs text-ink-muted">
-              {effectsOffReason}
-            </p>
-          )}
+          {/* Always mounted so a screen reader announces the reason when it appears. */}
+          <p id="effects-off-reason" role="status" className="ml-auto text-xs text-ink-muted">
+            {effectsOffReason ?? ""}
+          </p>
           {!effectsOff && needsPreview && !actionError && (
             <p className="ml-auto text-2xs text-ink-muted">
               {hasApproval

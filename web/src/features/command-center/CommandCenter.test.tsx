@@ -130,3 +130,24 @@ describe("CommandCenter demo mode", () => {
     expect(screen.getByRole("button", { name: /preview plan/i })).toBeDisabled();
   });
 });
+
+describe("CommandCenter live data", () => {
+  it("shows live environment and an enabled composer only when the API answered", async () => {
+    const { fetchAppState } = await import("@/api/appState");
+    const { mockState } = await import("@/data/mockState");
+    vi.mocked(fetchAppState).mockResolvedValueOnce(mockState);
+    renderCommandCenter();
+    await waitFor(() => {
+      expect(screen.getByText("PRODUCTION")).toBeInTheDocument();
+    });
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("does not show a preview from before live data was lost", async () => {
+    renderCommandCenter();
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent(/live data unavailable/i);
+    });
+    expect(screen.queryByText(/preview-/i)).not.toBeInTheDocument();
+  });
+});

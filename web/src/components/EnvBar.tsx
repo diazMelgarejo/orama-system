@@ -34,12 +34,12 @@ export function EnvBar({ state, provenance, isFetching = false, onNavigate }: En
     | undefined;
 
   const portalStatus = state?.portal?.available ? "online" : "offline";
-  const isLive = provenance === undefined || provenance.kind === "live";
+  const isLive = provenance?.kind === "live";
   const env = portalData?.env ?? "dev";
   const envLabel = isLive ? env.toUpperCase() : "UNKNOWN";
   const region = isLive ? (portalData?.region ?? "lan") : "—";
   const apiHealthy = isLive && (state?.runtime?.available ?? false);
-  const apiLabel = apiHealthy ? "Healthy" : isLive ? "Offline" : "Unavailable";
+  const apiLabel = apiHealthy ? "Healthy" : isLive ? "Offline" : provenance?.kind === "loading" ? "Loading" : "Unavailable";
   const provenanceLabel =
     provenance?.kind === "demo" ? "DEMO DATA" : provenance?.kind === "stale" ? "STALE" : null;
 

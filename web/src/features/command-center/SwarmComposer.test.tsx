@@ -160,4 +160,9 @@ describe("SwarmComposer effect controls", () => {
     expect(screen.getByRole("status")).toHaveTextContent(/controls are off until live data returns/i);
     expect(screen.getByRole("button", { name: "Launch Swarm" })).toHaveAttribute("aria-describedby", "effects-off-reason");
   });
+
+  it("keeps the reason region mounted but empty when effects are on, so it is announced when it appears", () => {
+    renderComposer(approvedPreview);
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+  });
 });

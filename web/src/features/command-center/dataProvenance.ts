@@ -12,6 +12,8 @@ interface QueryFacts {
   hasData: boolean;
   isError: boolean;
   isPending: boolean;
+  /** A paused fetch (browser offline) cannot refresh, so the data must not be presented as current. */
+  isPaused?: boolean;
   dataUpdatedAt?: number;
 }
 
@@ -23,7 +25,7 @@ export function isDemoMode(): boolean {
 export function provenanceOf(query: QueryFacts, demo: boolean): Provenance {
   if (demo) return { kind: "demo" };
   if (query.hasData) {
-    return query.isError ? { kind: "stale", lastGoodAt: query.dataUpdatedAt ?? 0 } : { kind: "live" };
+    return query.isError || query.isPaused ? { kind: "stale", lastGoodAt: query.dataUpdatedAt ?? 0 } : { kind: "live" };
   }
   return query.isError ? { kind: "unavailable" } : { kind: "loading" };
 }
