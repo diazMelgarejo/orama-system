@@ -321,8 +321,8 @@ Extract `choices[0].message.content`, not `reasoning_content`, in any HTTP clien
 
 ### Optional xAI fallback provider
 
-- If `XAI_API_KEY` is set, `openclaw_bootstrap.py` injects an `xai` provider into
-  `~/.openclaw/openclaw.json` with `grok-4.1-fast` and `grok-code-fast`.
+- If `XAI_API_KEY` is set, `openclaw_bootstrap.py` adds an `xai` provider (key by reference) with
+  `grok-4.1-fast` and `grok-code-fast` to the config it proposes; `--write` is needed to change the file.
 - Intended scope: finance / market / M&A / factcheck fallback when primary
   providers are unavailable.
 
