@@ -494,6 +494,6 @@ intercepting wire requests, counting requests 1:1, and parsing `usage.completion
 `stream_options: {"include_usage": true}` on SSE). Exceeding bounds or missing usage terminates child
 fail-closed with exit code 124. `--timeout-ms` sets per-request socket timeout (default 30000 ms), not
 a whole-process kill. Prefer it over `switch-cline-provider.sh` when two routes run side by side.
-Tests: `tests/test_launch_cline_wandb.py`. Live evidence:
+Tests: `tests/test_launch_cline_wandb*.py` (real binary: `ORAMA_REAL_CLINE_SMOKE=1`). Live evidence:
 [the evidence report](../../../../docs/reference/2026-11-12-wandb-cline-live-review-evidence-report.md).
 

@@ -35,13 +35,21 @@ key stays in launcher memory and is never written to disk. Contract, one rule pe
     valid usage, every non-2xx status (the launcher cannot prove a provider or gateway status means
     no billable work), and any transport or read failure. It is debited in full against the output
     budget.
-  - The child is terminated and the launcher exits 124 when `request_count` exceeds `max_requests`,
-    when the next chat request finds no output budget left, when cumulative output exceeds
+  - Cline's process group is terminated and the launcher exits 124 when `request_count` exceeds
+    `max_requests`, when the next chat request finds no output budget left, when cumulative output exceeds
     `max_total_output`, when a dispatch is UNACCOUNTED, or when admitted handlers do not drain in time.
   - Exit 124 means spend is breached or not fully accounted: callers settle it as unknown spend.
   - Transport errors on non-chat routes return HTTP 502/504 and do not change the exit code.
   - Every upstream dispatch, chat or not, first claims a dispatch slot under the server lock. Once
     the drain deadline sets CLOSED, no claim succeeds, so no dispatch can start after CLOSED.
+
+Child process (POSIX): Cline starts with stdin closed, in its own session and process group. The
+bounds are not passed to it. A fail-closed stop ends the group and the processes below it, including
+tool commands that Cline runs in sessions of their own. INT, TERM and HUP sent to the launcher are
+relayed to the group (a second one kills the group and those processes) and the launcher then exits
+128 plus the signal number. Not covered: Cline's shared hub daemon, which is left running; a process
+already reparented away from Cline when the stop begins; and the launcher itself being SIGKILLed.
+On Windows only the direct child is signalled.
 
 Passthrough after `--` is positional task text only. Tokens that start with `-`
 (including a token that is exactly `-`) are refused before subprocess; reserved
@@ -69,11 +77,13 @@ import json
 import os
 import secrets
 import shutil
+import signal
 import socket
 import subprocess
 import sys
 import tempfile
 import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -88,6 +98,7 @@ EFFORTS = ("medium", "high", "low")  # never xhigh or max
 DEFAULT_TIMEOUT_MS = 30000
 LOOPBACK_HOST = "127.0" + ".0.1"
 MAX_RESPONSE_BYTES = 16 * 1024 * 1024
+TERMINATE_GRACE_S = 2.0
 # No non-2xx status is trusted to mean "nothing billed": neither the provider nor a gateway in
 # front of it documents that guarantee, so every non-2xx chat response is UNACCOUNTED.
 ACCOUNTED, UNACCOUNTED = "accounted", "unaccounted"
@@ -262,14 +273,86 @@ class BoundaryExceededError(RuntimeError):
         self.actual = actual
 
 
-def _terminate_proc(proc: subprocess.Popen) -> None:
-    """Terminate child process fail-closed, escalating to kill after a short grace period."""
+def _signal_group(group: int, signum: int) -> bool:
+    """Send `signum` to a process group; False once no member is left to receive it."""
+    try:
+        os.killpg(group, signum)
+    except OSError:
+        return False
+    return True
+
+
+def _descendants(root: int) -> set[int]:
+    """Processes below `root` right now, except Cline's shared hub daemon and what it started.
+
+    Cline runs each tool command in a new session, outside the child's group, and once the parent dies the
+    command can no longer be traced to it. So take this list before signalling. Empty if `ps` fails.
+    """
+    try:
+        listing = subprocess.run(["ps", "-Ao", "pid=,ppid=,command="], capture_output=True, text=True,
+                                 errors="replace", timeout=5, check=True).stdout
+    except (OSError, subprocess.SubprocessError):
+        return set()
+    children: dict[int, list[int]] = {}
+    for line in listing.splitlines():
+        fields = line.split(None, 2)
+        if len(fields) >= 2 and "--cline-hub-daemon" not in (fields[2] if len(fields) > 2 else ""):
+            children.setdefault(int(fields[1]), []).append(int(fields[0]))
+    found: set[int] = set()
+    queue = [root]
+    while queue:
+        for pid in children.get(queue.pop(), []):
+            if pid not in found:
+                found.add(pid)
+                queue.append(pid)
+    return found
+
+
+def _signal_pid(pid: int, signum: int) -> bool:
+    """Send `signum` to one process; False once it is gone."""
+    try:
+        os.kill(pid, signum)
+    except OSError:
+        return False
+    return True
+
+
+def _terminate_group(proc: subprocess.Popen, group: int, tools: set[int] | None = None) -> None:
+    """Terminate the child's group and the tool processes below it, escalating to SIGKILL.
+
+    `cline` is a wrapper that starts the real program as its own child, so signalling only `proc`
+    would leave the program that does the work running. `tools` adds processes already seen below it.
+    """
+    below = _descendants(group) | (tools or set())
+    signalled = _signal_group(group, signal.SIGTERM)
+    if not signalled and not below:
+        return
+    deadline = time.monotonic() + TERMINATE_GRACE_S
+    while time.monotonic() < deadline:
+        proc.poll()  # reap the leader, otherwise its zombie keeps the group alive
+        if not _signal_group(group, 0) and not any(_signal_pid(pid, 0) for pid in below):
+            return
+        time.sleep(0.05)
+    _signal_group(group, signal.SIGKILL)
+    for pid in below:
+        _signal_pid(pid, signal.SIGKILL)
+    proc.poll()
+
+
+def _terminate_proc(proc: subprocess.Popen, group: int | None = None) -> None:
+    """Terminate child process fail-closed, escalating to kill after a short grace period.
+
+    With `group` (the child leads its own process group) the whole group is terminated.
+    """
+    if group is not None:
+        _terminate_group(proc, group)
+        return
     try:
         proc.terminate()
     except (OSError, ProcessLookupError):
         return
     try:
-        proc.wait(timeout=2.0)
+        proc.wait(timeout=TERMINATE_GRACE_S)
     except subprocess.TimeoutExpired:
         try:
             proc.kill()
@@ -652,6 +735,7 @@ class AccountingProxyServer(http.server.ThreadingHTTPServer):
         self.cumulative_output_tokens = 0
         self.boundary_error: list[BoundaryExceededError] = []
         self.child_proc: subprocess.Popen | None = None
+        self.child_group: int | None = None
 
     @property
     def phase(self) -> str:
@@ -715,9 +799,10 @@ class AccountingProxyServer(http.server.ThreadingHTTPServer):
                 self.dispatches_claimed_at_close = self.dispatches_claimed
             return drained
 
-    def set_child_proc(self, proc: subprocess.Popen) -> None:
+    def set_child_proc(self, proc: subprocess.Popen, process_group: int | None = None) -> None:
         with self.lock:
             self.child_proc = proc
+            self.child_group = process_group
             if self.boundary_error:
                 self._terminate_child_locked()
 
@@ -727,7 +812,31 @@ class AccountingProxyServer(http.server.ThreadingHTTPServer):
 
     def _terminate_child_locked(self) -> None:
         if self.child_proc is not None:
-            _terminate_proc(self.child_proc)
+            _terminate_proc(self.child_proc, self.child_group)
+
+
+def _forward_signals(group: int, received: list[int], tools: set[int]) -> dict:
+    """Relay the launcher's INT, TERM and HUP to the child's group; return the replaced handlers.
+
+    The child runs in its own session, so a terminal Ctrl-C or a supervisor's TERM reaches only the
+    launcher. A second signal means the child did not stop, so the group is killed.
+    """
+
+    def relay(signum: int, frame: object) -> None:
+        tools.update(_descendants(group))  # while their parent is still alive
+        if received:
+            _signal_group(group, signal.SIGKILL)
+            for pid in tools:
+                _signal_pid(pid, signal.SIGKILL)
+        else:
+            _signal_group(group, signum)
+        received.append(signum)
+
+    previous: dict = {}
+    if threading.current_thread() is threading.main_thread():
+        for signum in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+            previous[signum] = signal.signal(signum, relay)
+    return previous
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -755,6 +864,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     proxy_port = proxy.server_address[1]
     proxy_base_url = f"http://{LOOPBACK_HOST}:{proxy_port}/v1"
 
+    proc: subprocess.Popen | None = None
+    received: list[int] = []
+    seen_tools: set[int] = set()
+    previous_handlers: dict = {}
     try:
         settings_dir = os.path.join(config_dir, "data", "settings")
         os.makedirs(settings_dir)
@@ -769,26 +882,37 @@ def main(argv: Sequence[str] | None = None) -> int:
             cline_bin, "--config", config_dir, "-P", "openai-compatible", "-m", args.model,
             "--thinking", args.effort, *permission_flags(args.implement, args.allow_tool_approval),
         ]
-        if args.max_requests is not None:
-            cmd.extend(["--max-requests", str(args.max_requests)])
-        if args.max_total_output is not None:
-            cmd.extend(["--max-total-output", str(args.max_total_output)])
-        cmd.extend(args.rest)
+        cmd.extend(args.rest)  # the bounds stay here: Cline has no such options, the proxy enforces them
 
         child_env = {k: v for k, v in os.environ.items() if k != KEYVAR}
-        proc = subprocess.Popen(cmd, env=child_env)
-        proxy.set_child_proc(proc)
+        own_group = hasattr(os, "killpg")  # POSIX; elsewhere only the direct child can be signalled
+        proc = subprocess.Popen(cmd, env=child_env, stdin=subprocess.DEVNULL, start_new_session=own_group)
+        group = proc.pid if own_group else None
+        if group is not None:
+            previous_handlers = _forward_signals(group, received, seen_tools)
+        proxy.set_child_proc(proc, group)
         rc = proc.wait()
         drained = proxy.stop_and_drain(timeout_s=5.0)
         if not drained:
             sys.stderr.write("ERROR: proxy accounting did not drain within 5.0s; exiting 124 (spend not fully accounted)\n")
+            proxy.terminate_child()
             return 124
         if proxy.boundary_error:
             exc = proxy.boundary_error[0]
             sys.stderr.write(f"ERROR: {exc}; terminating fail-closed\n")
+            # The handler thread that started the termination dies with this process, so finish it here.
+            proxy.terminate_child()
             return 124
+        if received:
+            if group is not None:
+                _terminate_group(proc, group, seen_tools)
+            return 128 + received[0]
         return rc
     finally:
+        if proc is not None and proc.poll() is None:
+            proxy.terminate_child()  # an unexpected error must not leave Cline running
+        for signum, handler in previous_handlers.items():
+            signal.signal(signum, handler)
         try:
             proxy.shutdown()
             proxy.server_close()

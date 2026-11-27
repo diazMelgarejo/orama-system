@@ -293,14 +293,13 @@ def test_never_touches_the_operators_real_cline_directory(stub_cline: dict[str, 
     assert list((home / ".cline").iterdir()) == []
 
 
-def test_max_requests_and_max_total_output_flags_passed(stub_cline: dict[str, Path]) -> None:
+def test_bound_flags_stay_in_the_launcher_and_never_reach_cline(stub_cline: dict[str, Path]) -> None:
+    """Cline has no such options and exits with `unknown option`; the loopback proxy enforces both bounds."""
     rc = launcher.main(["--max-requests", "15", "--max-total-output", "8192", "--", "bounded task"])
     assert rc == 0
     argv = _argv_lines(stub_cline["record"])
-    assert "--max-requests" in argv
-    assert argv[argv.index("--max-requests") + 1] == "15"
-    assert "--max-total-output" in argv
-    assert argv[argv.index("--max-total-output") + 1] == "8192"
+    assert not [token for token in argv if token.startswith(("--max-requests", "--max-total-output"))]
+    assert "15" not in argv and "8192" not in argv
     assert argv[-1] == "bounded task"
 
 
