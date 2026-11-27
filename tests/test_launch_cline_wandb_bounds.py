@@ -1,10 +1,12 @@
 """Bound enforcement of the W&B Cline launcher: the accounting proxy driven by stub `cline` clients."""
 from __future__ import annotations
 
+import email.message
 import json
 import os
 import stat
 import threading
+import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Callable, Iterator
@@ -550,13 +552,32 @@ def test_accept_to_dispatch_race_closed_by_stop_and_drain(fake_upstream: tuple[o
         proxy.server_close()
 
 
+class _TimingOutErrorOpener:
+    """An upstream opener whose reply is an HTTP 400 with a body that times out when read."""
+
+    def __init__(self) -> None:
+        self.opened: list[str] = []
+
+    def open(self, req: urllib.request.Request, timeout: float | None = None) -> object:
+        self.opened.append(req.full_url)
+        # Any non-2xx is unaccounted; if the body read were skipped the 400 would be relayed
+        # (exit 0). Only the failing body read can turn it into an unaccounted dispatch (exit 124).
+        raise urllib.error.HTTPError(
+            url=req.full_url, code=400, msg="Bad Request", hdrs=email.message.Message(),
+            fp=self,  # type: ignore[arg-type]
+        )
+
+    def read(self, *args: object, **kwargs: object) -> bytes:
+        raise TimeoutError("simulated HTTPError.read timeout")
+
+    def close(self) -> None:
+        pass
+
+
 def test_upstream_httperror_read_timeout_fails_closed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
 ) -> None:
     """When upstream returns HTTPError and reading the error body times out, proxy fails closed with 124."""
-    import email.message
-    import urllib.error
-
     bindir = tmp_path / "bin"
     _make_stub_cline(
         bindir,
@@ -585,38 +606,16 @@ sys.exit(0)
     monkeypatch.setenv("PATH", f"{bindir}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setenv(launcher.KEYVAR, FAKE_KEY)
 
-    class MockErrorFile:
-        def read(self, *args: object, **kwargs: object) -> bytes:
-            raise TimeoutError("simulated HTTPError.read timeout")
-
-        def close(self) -> None:
-            pass
-
-    opened: list[str] = []
-
-    class MockOpener:
-        def open(self, req: urllib.request.Request, timeout: float | None = None) -> object:
-            opened.append(req.full_url)
-            # Any non-2xx is unaccounted; if the body read were skipped the 400 would be relayed
-            # (exit 0). Only the failing body read can turn it into an unaccounted dispatch (exit 124).
-            raise urllib.error.HTTPError(
-                url=req.full_url,
-                code=400,
-                msg="Bad Request",
-                hdrs=email.message.Message(),
-                fp=MockErrorFile(),  # type: ignore[arg-type]
-            )
-
-    monkeypatch.setattr(part("upstream"), "_UPSTREAM_OPENER", MockOpener())
+    opener = _TimingOutErrorOpener()
+    monkeypatch.setattr(part("upstream"), "_UPSTREAM_OPENER", opener)
     # `.invalid` never resolves: were the opener patch lost, no request could reach a provider.
     monkeypatch.setattr(launcher, "BASE_URL", "https://upstream.invalid/v1")
 
     rc = launcher.main(["--max-requests", "5", "--max-total-output", "4096", "--", "task"])
-    assert opened == ["https://upstream.invalid/v1/chat/completions"], "the opener patch did not apply"
+    assert opener.opened == ["https://upstream.invalid/v1/chat/completions"], "the opener patch did not apply"
     assert rc == 124
     out, err = capsys.readouterr()
     assert "unaccounted_dispatch" in err
-
 
 
 def test_sse_null_usage_before_a_valid_terminal_report_is_accepted() -> None:

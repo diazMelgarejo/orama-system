@@ -260,21 +260,8 @@ def test_main_exits_124_when_a_response_has_no_usage(tmp_path: Path, monkeypatch
         up.server_close()
 
 
-@pytest.mark.parametrize(
-    ("mode", "tokens", "max_out", "expected"),
-    [
-        # A 2xx without usage is reported as 502; an upstream timeout would be reported as 504.
-        ("nousage", 5, 50, ("unaccounted_dispatch", "status=502")),
-        ("ok", 50, 40, ("max_total_output exceeded",)),
-    ],
-    ids=["no-usage", "over-budget"],
-)
-def test_main_waits_for_an_inflight_request_after_the_child_has_exited(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capfd: pytest.CaptureFixture[str],
-    mode: str, tokens: int, max_out: int, expected: tuple[str, ...],
-) -> None:
-    """The child exits 0 while its request is still held upstream; only the drain can catch the breach."""
-    arrival = tmp_path / "arrived"
+def _install_early_exit_cline(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, arrival: Path) -> None:
+    """A fake `cline` that sends one request and exits 0 once the upstream reports its arrival."""
     cline = tmp_path / "cline"
     cline.write_text(textwrap.dedent(f"""\
         #!{sys.executable}
@@ -300,10 +287,10 @@ def test_main_waits_for_an_inflight_request_after_the_child_has_exited(
     cline.chmod(cline.stat().st_mode | stat.S_IEXEC)
     monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setenv(L.KEYVAR, PROVIDER_KEY)
-    up = Upstream()
-    up.mode, up.tokens, up.arrival_file = mode, tokens, arrival
-    up.release.clear()
-    monkeypatch.setattr(L, "BASE_URL", up.base_url)
+
+
+def _observe_drain_wait(monkeypatch: pytest.MonkeyPatch) -> tuple[threading.Event, list[int]]:
+    """Signal when the production drain starts its condition wait, recording the in-flight count it sees."""
     at_wait = threading.Event()
     inflight_at_wait: list[int] = []
     real_stop_and_drain = L.AccountingProxyServer.stop_and_drain
@@ -321,6 +308,30 @@ def test_main_waits_for_an_inflight_request_after_the_child_has_exited(
         return real_stop_and_drain(self, timeout_s)
 
     monkeypatch.setattr(L.AccountingProxyServer, "stop_and_drain", observed_stop_and_drain)
+    return at_wait, inflight_at_wait
+
+
+@pytest.mark.parametrize(
+    ("mode", "tokens", "max_out", "expected"),
+    [
+        # A 2xx without usage is reported as 502; an upstream timeout would be reported as 504.
+        ("nousage", 5, 50, ("unaccounted_dispatch", "status=502")),
+        ("ok", 50, 40, ("max_total_output exceeded",)),
+    ],
+    ids=["no-usage", "over-budget"],
+)
+def test_main_waits_for_an_inflight_request_after_the_child_has_exited(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capfd: pytest.CaptureFixture[str],
+    mode: str, tokens: int, max_out: int, expected: tuple[str, ...],
+) -> None:
+    """The child exits 0 while its request is still held upstream; only the drain can catch the breach."""
+    arrival = tmp_path / "arrived"
+    _install_early_exit_cline(tmp_path, monkeypatch, arrival)
+    up = Upstream()
+    up.mode, up.tokens, up.arrival_file = mode, tokens, arrival
+    up.release.clear()
+    monkeypatch.setattr(L, "BASE_URL", up.base_url)
+    at_wait, inflight_at_wait = _observe_drain_wait(monkeypatch)
     drain_reached: list[bool] = []
 
     def release_after_drain_wait() -> None:
