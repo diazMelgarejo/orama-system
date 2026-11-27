@@ -410,15 +410,21 @@ No live activation is authorized.
 
 **2026-11-27 Phase 1B BOUND_CONTRACT closure update.** Launcher-side boundary enforcement is
 implemented in `launch_cline_wandb.py` via a stdlib loopback HTTP accounting proxy:
-request counts for POST calls to /chat/completions (path parsed without query string;
-non-allowlisted POST routes refused with HTTP 403), serialized pre-forward upstream
-max_tokens / max_completion_tokens clamping against remaining budget, and model
-usage.completion_tokens accounting (terminating fail-closed with exit code 124 and unknown-spend
-settlement on bound breach, missing usage, or upstream 504/502 transport failure) (with
-`stream_options: {"include_usage": true}` injected for SSE streams) supervise execution and
-terminate fail-closed with exit code 124 if either `max_requests` or `max_total_output` is reached
-or if usage accounting is missing. Offline harness tests in `tests/test_launch_cline_wandb.py`
-verify that exceeding bounds triggers fail-closed termination.
+
+- `POST` requests whose parsed URL path (ignoring query strings) ends in `/chat/completions` are
+  serialized and counted; all other `POST` routes are refused with HTTP `403`.
+- Before forwarding each `/chat/completions` request, the proxy clamps `max_tokens` (and
+  `max_completion_tokens`, if present) to the remaining output budget and injects
+  `stream_options: {"include_usage": true}` for streaming calls.
+- The launcher terminates fail-closed with exit code `124` (and `live_cycle()` settles via
+  `_settle_unknown`) whenever `request_count > max_requests`, `remaining_tokens <= 0` when the
+  next chat completion arrives, cumulative `usage.completion_tokens > max_total_output`, a `2xx`
+  response lacks valid integer `usage.completion_tokens`, an upstream transport/read error occurs
+  (including `HTTPError` body read failure), or admitted in-flight handlers fail to drain within the
+  bounded shutdown window.
+- Offline harness tests in `tests/test_launch_cline_wandb.py` verify that exceeding bounds triggers
+  fail-closed termination.
+
 `BOUND_CONTRACT` is verified and flipped to `{"max_requests": True, "max_total_output": True}`,
 allowing `_launcher_boundary_problem()` to return `None` for valid positive bounds while continuing
 to refuse missing or non-positive bounds with `invalid-launcher-bounds`. The Biafra Cline route is

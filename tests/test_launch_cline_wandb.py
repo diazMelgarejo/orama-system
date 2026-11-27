@@ -761,56 +761,37 @@ sys.exit(0)
 
 
 def test_post_breach_retry_rejected_with_429_without_forwarding(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], fake_upstream: tuple[object, str],
+    fake_upstream: tuple[object, str],
 ) -> None:
     """When a bound is already breached, subsequent /chat/completions calls receive 429 without being forwarded."""
     server, upstream_url = fake_upstream
-    server.tokens = 50
-    bindir = tmp_path / "bin"
-    _make_stub_cline(
-        bindir,
-        """
-import urllib.error
-config_dir = sys.argv[sys.argv.index("--config") + 1]
-with open(f"{config_dir}/data/settings/providers.json") as f:
-    cfg = json.load(f)
-base_url = cfg["providers"]["openai-compatible"]["settings"]["baseUrl"]
-
-# First request breaches max_total_output (tokens=50 vs limit=40)
-req1 = urllib.request.Request(
-    f"{base_url}/chat/completions",
-    data=json.dumps({"model": "test", "messages": []}).encode("utf-8"),
-    headers={"Content-Type": "application/json"},
-    method="POST",
-)
-try:
-    urllib.request.urlopen(req1)
-except Exception:
-    pass
-
-# Second request should be rejected immediately with 429
-req2 = urllib.request.Request(
-    f"{base_url}/chat/completions",
-    data=json.dumps({"model": "test", "messages": []}).encode("utf-8"),
-    headers={"Content-Type": "application/json"},
-    method="POST",
-)
-try:
-    urllib.request.urlopen(req2)
-    sys.exit(1)
-except urllib.error.HTTPError as exc:
-    if exc.code != 429:
-        sys.exit(2)
-sys.exit(0)
-""",
+    proxy = launcher.AccountingProxyServer(
+        (launcher.LOOPBACK_HOST, 0),
+        launcher.AccountingProxyHandler,
+        max_requests=5,
+        max_total_output=40,
+        upstream_base_url=upstream_url,
     )
-    monkeypatch.setenv("PATH", f"{bindir}{os.pathsep}{os.environ['PATH']}")
-    monkeypatch.setenv(launcher.KEYVAR, FAKE_KEY)
-    monkeypatch.setattr(launcher, "BASE_URL", upstream_url)
-
-    rc = launcher.main(["--max-requests", "5", "--max-total-output", "40", "--", "task"])
-    assert rc == 124
-    assert len(getattr(server, "requests_received", [])) == 1
+    t = threading.Thread(target=proxy.serve_forever, daemon=True)
+    t.start()
+    port = proxy.server_address[1]
+    base_url = f"http://{launcher.LOOPBACK_HOST}:{port}/v1"
+    try:
+        with proxy.lock:
+            proxy.boundary_error.append(launcher.BoundaryExceededError("max_total_output", 40, 50))
+        req = urllib.request.Request(
+            f"{base_url}/chat/completions",
+            data=json.dumps({"model": "test", "messages": []}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with pytest.raises(urllib.error.HTTPError) as exc_info:
+            urllib.request.urlopen(req)
+        assert exc_info.value.code == 429
+        assert not getattr(server, "requests_received", [])
+    finally:
+        proxy.shutdown()
+        proxy.server_close()
 
 
 def test_pre_forward_max_tokens_and_completion_tokens_clamped(
@@ -911,7 +892,9 @@ def test_delayed_upstream_waits_for_inflight_drain(
     _make_stub_cline(
         bindir,
         """
+import os
 import threading
+import time
 config_dir = sys.argv[sys.argv.index("--config") + 1]
 with open(f"{config_dir}/data/settings/providers.json") as f:
     cfg = json.load(f)
@@ -929,11 +912,10 @@ def send():
     except Exception:
         pass
 
-t = threading.Thread(target=send)
+t = threading.Thread(target=send, daemon=True)
 t.start()
-import time
 time.sleep(0.05)
-sys.exit(0)
+os._exit(0)
 """,
     )
     monkeypatch.setenv("PATH", f"{bindir}{os.pathsep}{os.environ['PATH']}")
@@ -944,4 +926,129 @@ sys.exit(0)
     assert rc == 124
     out, err = capsys.readouterr()
     assert "max_total_output exceeded" in err
+
+
+def test_accept_to_dispatch_race_closed_by_stop_and_drain(fake_upstream: tuple[object, str]) -> None:
+    """stop_and_drain waits for request admitted in process_request even if worker thread was delayed."""
+    server, upstream_url = fake_upstream
+    server.tokens = 50
+
+    worker_started = threading.Event()
+    release_worker = threading.Event()
+
+    class PausingProxyServer(launcher.AccountingProxyServer):
+        def process_request_thread(self, request, client_address) -> None:
+            worker_started.set()
+            release_worker.wait(timeout=2.0)
+            super().process_request_thread(request, client_address)
+
+    proxy = PausingProxyServer(
+        (launcher.LOOPBACK_HOST, 0),
+        launcher.AccountingProxyHandler,
+        max_requests=5,
+        max_total_output=40,
+        upstream_base_url=upstream_url,
+    )
+    t = threading.Thread(target=proxy.serve_forever, daemon=True)
+    t.start()
+    port = proxy.server_address[1]
+    base_url = f"http://{launcher.LOOPBACK_HOST}:{port}/v1"
+
+    try:
+        def client_req() -> None:
+            req = urllib.request.Request(
+                f"{base_url}/chat/completions",
+                data=json.dumps({"model": "test", "messages": []}).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            try:
+                urllib.request.urlopen(req)
+            except Exception:
+                pass
+
+        client_thread = threading.Thread(target=client_req, daemon=True)
+        client_thread.start()
+
+        # Wait until worker has reached process_request_thread (so request was admitted in process_request)
+        assert worker_started.wait(timeout=2.0)
+
+        # In child process simulation: child exited, launcher calls stop_and_drain in a thread
+        drain_result: list[bool] = []
+
+        def do_drain() -> None:
+            drain_result.append(proxy.stop_and_drain(timeout_s=3.0))
+
+        drain_thread = threading.Thread(target=do_drain, daemon=True)
+        drain_thread.start()
+
+        # While stop_and_drain is waiting, release the worker so it finishes processing and accounting
+        time.sleep(0.05)
+        release_worker.set()
+        drain_thread.join(timeout=3.0)
+
+        assert drain_result == [True]
+        with proxy.lock:
+            assert len(proxy.boundary_error) == 1
+            assert proxy.boundary_error[0].bound == "max_total_output"
+    finally:
+        release_worker.set()
+        proxy.shutdown()
+        proxy.server_close()
+
+
+def test_upstream_httperror_read_timeout_fails_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+) -> None:
+    """When upstream returns HTTPError and reading the error body times out, proxy fails closed with 124."""
+    import email.message
+    import urllib.error
+
+    bindir = tmp_path / "bin"
+    _make_stub_cline(
+        bindir,
+        """
+config_dir = sys.argv[sys.argv.index("--config") + 1]
+with open(f"{config_dir}/data/settings/providers.json") as f:
+    cfg = json.load(f)
+base_url = cfg["providers"]["openai-compatible"]["settings"]["baseUrl"]
+
+req = urllib.request.Request(
+    f"{base_url}/chat/completions",
+    data=json.dumps({"model": "test"}).encode("utf-8"),
+    headers={"Content-Type": "application/json"},
+    method="POST",
+)
+try:
+    urllib.request.urlopen(req)
+except Exception:
+    pass
+sys.exit(0)
+""",
+    )
+    monkeypatch.setenv("PATH", f"{bindir}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv(launcher.KEYVAR, FAKE_KEY)
+
+    class MockErrorFile:
+        def read(self, *args: object, **kwargs: object) -> bytes:
+            raise TimeoutError("simulated HTTPError.read timeout")
+
+        def close(self) -> None:
+            pass
+
+    def mock_urlopen(req: urllib.request.Request, timeout: float | None = None) -> object:
+        raise urllib.error.HTTPError(
+            url=req.full_url,
+            code=500,
+            msg="Internal Server Error",
+            hdrs=email.message.Message(),
+            fp=MockErrorFile(),  # type: ignore[arg-type]
+        )
+
+    monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen)
+
+    rc = launcher.main(["--max-requests", "5", "--max-total-output", "4096", "--", "task"])
+    assert rc == 124
+    out, err = capsys.readouterr()
+    assert "upstream_transport exceeded" in err
 
