@@ -5,6 +5,7 @@ a primary, a fallback or an agent's provider does not.
 """
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 from pathlib import Path
@@ -13,10 +14,9 @@ ROOT = Path(__file__).resolve().parents[1]
 ASSIGNS_ROUTE = re.compile(
     r"""["']?(?:primary|fallbacks|provider|default_provider|default_model)["']?\s*(?<![=!<>])[:=](?!=)\s*[\[(]?[^\n#]{0,160}?["']lmstudio-mac(?:/|["'])"""
 )
-# Both are older snapshots that still route to Mac LM Studio and wait for an operator decision:
-# generating the orchestrator snapshot from the defaults would drop the approved Google provider names that
-# tests/test_gemini_catalog_policy.py pins, and the registry feeds the agent communication server.
-PENDING_DECISION = {"config/mac-orchestrator.json", "bin/orama-system/config/agent_registry.json"}
+# An older snapshot that still routes to Mac LM Studio and waits for an operator decision: generating it from
+# the defaults would drop the approved Google provider names that tests/test_gemini_catalog_policy.py pins.
+PENDING_DECISION = {"config/mac-orchestrator.json"}
 NOT_ROUTING = ("tests/", "scripts/tests/", "docs/", "config/vendored/", "web/")
 
 
@@ -49,6 +49,15 @@ def test_the_pattern_catches_each_way_of_assigning_the_route() -> None:
 
 def test_no_new_file_makes_mac_lm_studio_a_default_route() -> None:
     assert _offenders() - PENDING_DECISION == set()
+
+
+def test_the_mac_researcher_seat_runs_on_a_local_model_from_the_default_chain() -> None:
+    registry = json.loads((ROOT / "bin/orama-system/config/agent_registry.json").read_text(encoding="utf-8"))
+    defaults = json.loads((ROOT / "config/vendored/openclaw-defaults/openclaw-defaults.json").read_text(
+        encoding="utf-8"))
+    seat = registry["openclaw_agents"]["mac-researcher"]
+    assert seat["provider"] == "ollama"
+    assert f"{seat['provider']}/{seat['model']}" in defaults["chain"]["default"]
 
 
 def test_the_pending_list_holds_only_files_that_still_need_the_decision() -> None:

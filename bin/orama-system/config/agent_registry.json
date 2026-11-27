@@ -20,8 +20,8 @@
     "mac-researcher": {
       "frugality_tier": 1,
       "soul": "bin/agents/mac-researcher/SOUL.md",
-      "provider": "lmstudio-mac",
-      "model": "Qwen3.5-9B-MLX-4bit",
+      "provider": "ollama",
+      "model": "qwen3.5:9b-mlx",
       "affinity": "mac",
       "gateway": "http://127.0.0.1:18789"
     },
