@@ -1,43 +1,48 @@
 import type { Config } from "tailwindcss";
 
-// Dark operator console design tokens.
-// Sourced from src/styles/tokens.css — these are the Tailwind aliases.
+// Operator console design tokens.
+// Every colour is a CSS variable declared in src/styles/tokens.css, wrapped so
+// opacity modifiers (bg-status-err/5, border-status-err/40, ...) keep working
+// and so the light theme needs no Tailwind or component change. The names are
+// unchanged on purpose: no component had to be edited for the theme work.
+const channel = (name: string) => `rgb(var(--${name}) / <alpha-value>)`;
+
 const config: Config = {
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
       colors: {
-        // Backgrounds (dense dark console)
+        // Backgrounds: page, panels, cards, wells
         canvas: {
-          DEFAULT: "rgb(8, 10, 14)",   // outermost page
-          surface: "rgb(14, 17, 23)",  // panels
-          raised: "rgb(20, 24, 33)",   // cards, rows
-          inset: "rgb(5, 7, 11)",      // wells, code
+          DEFAULT: channel("canvas"),
+          surface: channel("canvas-surface"),
+          raised: channel("canvas-raised"),
+          inset: channel("canvas-inset"),
         },
         // Borders + dividers
         line: {
-          DEFAULT: "rgb(34, 40, 51)",
-          strong: "rgb(56, 64, 80)",
+          DEFAULT: channel("line"),
+          strong: channel("line-strong"),
         },
         // Foreground
         ink: {
-          DEFAULT: "rgb(231, 235, 244)",
-          muted: "rgb(146, 156, 175)",
-          subtle: "rgb(99, 107, 124)",
+          DEFAULT: channel("ink"),
+          muted: channel("ink-muted"),
+          subtle: channel("ink-subtle"),
         },
         // Status
         status: {
-          ok: "rgb(94, 200, 138)",
-          warn: "rgb(234, 179, 8)",
-          err: "rgb(239, 78, 100)",
-          info: "rgb(120, 162, 247)",
-          gpu: "rgb(186, 134, 255)",
+          ok: channel("status-ok"),
+          warn: channel("status-warn"),
+          err: channel("status-err"),
+          info: channel("status-info"),
+          gpu: channel("status-gpu"),
         },
         // Accent (action / primary)
         accent: {
-          DEFAULT: "rgb(120, 162, 247)",
-          hover: "rgb(149, 184, 255)",
-          mute: "rgb(60, 80, 130)",
+          DEFAULT: channel("accent"),
+          hover: channel("accent-hover"),
+          mute: channel("accent-mute"),
         },
       },
       fontFamily: {
