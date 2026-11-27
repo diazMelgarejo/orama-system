@@ -481,7 +481,7 @@ Rule (operator, 2026-11-12): ask for `medium`, else `high`, else `low`; never `x
 
 ## Launcher (isolated, no shared-slot switching)
 
-`scripts/launch_cline_wandb.py` runs Cline 3.0.74 on this route without touching `~/.cline`:
+`scripts/launch_cline_wandb.py` (with `scripts/cline_wandb_launcher/`) runs Cline 3.0.74 on this route without touching `~/.cline`:
 it builds a throwaway config directory with only the W&B entry (`tokenSource: manual`,
 valid millisecond-Z `updatedAt`), calls `cline --config <dir> -P openai-compatible -m <model>
 --thinking <effort> --plan --auto-approve false ...` and deletes the directory afterwards.

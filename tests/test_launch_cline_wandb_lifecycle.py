@@ -6,8 +6,6 @@ come from the launcher's LOOPBACK_HOST so the private-literal hygiene hook stays
 from __future__ import annotations
 
 import http.client
-import http.server
-import importlib.util
 import json
 import os
 import stat
@@ -22,105 +20,11 @@ from typing import Any, Callable, Iterator
 
 import pytest
 
-SCRIPT = (Path(__file__).resolve().parents[1] / "bin" / "orama-system" / "skills"
-          / "cline-wandb" / "scripts" / "launch_cline_wandb.py")
-_spec = importlib.util.spec_from_file_location("launch_cline_wandb_lifecycle", SCRIPT)
-L = importlib.util.module_from_spec(_spec)
-sys.modules[_spec.name] = L
-_spec.loader.exec_module(L)
+from cline_wandb_fixtures import WAIT_S, Upstream, part
+from cline_wandb_fixtures import launcher as L
 
 TOKEN = "session-token-for-tests"
 PROVIDER_KEY = "provider-key-for-tests"
-WAIT_S = 5.0
-
-
-class _UpstreamHandler(http.server.BaseHTTPRequestHandler):
-    protocol_version = "HTTP/1.0"
-
-    def log_message(self, *args: object) -> None:
-        pass
-
-    def _send(self, status: int, body: bytes, declared: int | None = None) -> None:
-        self.send_response(status)
-        self.send_header("Content-Length", str(len(body) if declared is None else declared))
-        self.end_headers()
-        self.wfile.write(body)
-
-    def do_GET(self) -> None:
-        srv = self.server
-        srv.hits.append({"path": self.path, "body": None, "auth": self.headers.get("Authorization"),
-                         "headers": {k.lower(): v for k, v in self.headers.items()}})
-        if srv.mode == "redirect":
-            self.send_response(302)
-            self.send_header("Location", f"{srv.redirect_to}/v1/redirected")  # fixed path, never request data
-            self.send_header("Content-Length", "0")
-            self.end_headers()
-            return
-        self.send_response(200)
-        self.send_header("Connection", "X-Resp-Hop")
-        self.send_header("X-Resp-Hop", "leak")
-        self.send_header("X-Kept", "yes")
-        self.send_header("Content-Length", "2")
-        self.end_headers()
-        self.wfile.write(b"{}")
-
-    def do_POST(self) -> None:
-        size = int(self.headers.get("Content-Length", 0))
-        body = json.loads(self.rfile.read(size) or b"{}")
-        srv = self.server
-        srv.hits.append({"path": self.path, "body": body, "auth": self.headers.get("Authorization"),
-                         "headers": {k.lower(): v for k, v in self.headers.items()}})
-        srv.arrived.set()
-        if srv.arrival_file is not None:
-            srv.arrival_file.write_text("arrived")
-        srv.release.wait(WAIT_S * 2)
-        if srv.mode == "redirect":
-            self.send_response(302)
-            self.send_header("Location", f"{srv.redirect_to}/v1/redirected")  # fixed path, never request data
-            self.send_header("Content-Length", "0")
-            self.end_headers()
-        elif srv.mode == "truncated-500":
-            self._send(500, b"short", declared=500)
-        elif srv.mode == "truncated-400":
-            self._send(400, b"short", declared=500)
-        elif srv.mode == "truncated-200":
-            ok = json.dumps({"choices": [], "usage": {"completion_tokens": 1}}).encode()
-            self._send(200, ok, declared=len(ok) + 100)
-        elif srv.mode == "sse-malformed-usage" and body.get("stream"):
-            self._send(200, b'data: {"usage": {"completion_tokens": 0}}\n\n'
-                            b'data: {"usage": {"completion_tokens": "bad"}}\n\ndata: [DONE]\n\n')
-        elif srv.mode == "huge":
-            self._send(200, b"x" * 5000)
-        elif srv.status != 200:
-            self._send(srv.status, b'{"error":"upstream"}')
-        elif body.get("stream"):
-            chunks = b'data: {"choices":[{"delta":{"content":"hi"}}]}\n\n'
-            if body.get("stream_options", {}).get("include_usage"):
-                chunks += b'data: {"usage":{"completion_tokens": %d}}\n\n' % srv.tokens
-            self._send(200, chunks + b"data: [DONE]\n\n")
-        else:
-            payload = {"choices": []} if srv.mode == "nousage" else {"choices": [], "usage": {"completion_tokens": srv.tokens}}
-            self._send(200, json.dumps(payload).encode())
-            srv.responded.append(srv.mode)
-
-
-class Upstream(http.server.ThreadingHTTPServer):
-    daemon_threads = True
-
-    def __init__(self) -> None:
-        super().__init__((L.LOOPBACK_HOST, 0), _UpstreamHandler)
-        self.hits: list[dict] = []
-        self.mode, self.tokens, self.status = "ok", 5, 200
-        self.release, self.arrived = threading.Event(), threading.Event()
-        self.arrival_file: Path | None = None
-        self.redirect_to = ""
-        self.responded: list[str] = []
-        self.release.set()
-        threading.Thread(target=self.serve_forever, daemon=True).start()
-
-    @property
-    def base_url(self) -> str:
-        return f"http://{L.LOOPBACK_HOST}:{self.server_address[1]}/v1"
 
 
 class Rig:
@@ -137,9 +41,10 @@ class Rig:
         if self.child:
             self.proxy.set_child_proc(self.child)
 
-    def post(self, path: str = "/v1/chat/completions", body: dict | None = None, token: str | None = TOKEN) -> tuple[int, bytes]:
+    def post(self, path: str = "/v1/chat/completions", body: dict | None = None, token: str | None = TOKEN,
+             extra: dict[str, str] | None = None) -> tuple[int, bytes]:
         conn = http.client.HTTPConnection(L.LOOPBACK_HOST, self.proxy.server_address[1], timeout=10)
-        headers = {"Content-Type": "application/json"}
+        headers = {"Content-Type": "application/json", **(extra or {})}
         if token:
             headers["Authorization"] = f"Bearer {token}"
         conn.request("POST", path, json.dumps(body if body is not None else {"model": "m", "messages": []}), headers)
@@ -252,7 +157,7 @@ def test_no_4xx_status_is_trusted_as_a_zero_spend_rejection(rig: RigFactory, sta
 
 @pytest.mark.parametrize("mode", ["truncated-500", "huge"])
 def test_unreadable_or_oversize_upstream_bodies_fail_closed(rig: RigFactory, monkeypatch: pytest.MonkeyPatch, mode: str) -> None:
-    monkeypatch.setattr(L, "MAX_RESPONSE_BYTES", 1000)
+    monkeypatch.setattr(part("upstream"), "MAX_RESPONSE_BYTES", 1000)
     r = rig()
     r.up.mode = mode
     r.post()
@@ -355,11 +260,8 @@ def test_main_exits_124_when_a_response_has_no_usage(tmp_path: Path, monkeypatch
         up.server_close()
 
 
-def test_main_waits_for_an_inflight_request_after_the_child_has_exited(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
-) -> None:
-    """The child exits 0 while its request is still held upstream; only the drain can catch the breach."""
-    arrival = tmp_path / "arrived"
+def _install_early_exit_cline(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, arrival: Path) -> None:
+    """A fake `cline` that sends one request and exits 0 once the upstream reports its arrival."""
     cline = tmp_path / "cline"
     cline.write_text(textwrap.dedent(f"""\
         #!{sys.executable}
@@ -377,15 +279,18 @@ def test_main_waits_for_an_inflight_request_after_the_child_has_exited(
         deadline = time.monotonic() + 10
         while not os.path.exists({str(arrival)!r}) and time.monotonic() < deadline:
             time.sleep(0.005)
+        if not os.path.exists({str(arrival)!r}):
+            print("STUB: upstream arrival timed out", file=sys.stderr, flush=True)
+            os._exit(3)
         os._exit(0)
         """))
     cline.chmod(cline.stat().st_mode | stat.S_IEXEC)
     monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setenv(L.KEYVAR, PROVIDER_KEY)
-    up = Upstream()
-    up.mode, up.arrival_file = "nousage", arrival
-    up.release.clear()
-    monkeypatch.setattr(L, "BASE_URL", up.base_url)
+
+
+def _observe_drain_wait(monkeypatch: pytest.MonkeyPatch) -> tuple[threading.Event, list[int]]:
+    """Signal when the production drain starts its condition wait, recording the in-flight count it sees."""
     at_wait = threading.Event()
     inflight_at_wait: list[int] = []
     real_stop_and_drain = L.AccountingProxyServer.stop_and_drain
@@ -403,6 +308,44 @@ def test_main_waits_for_an_inflight_request_after_the_child_has_exited(
         return real_stop_and_drain(self, timeout_s)
 
     monkeypatch.setattr(L.AccountingProxyServer, "stop_and_drain", observed_stop_and_drain)
+    return at_wait, inflight_at_wait
+
+
+def _observe_settled_replies(monkeypatch: pytest.MonkeyPatch) -> list[int]:
+    """Record the status of every upstream reply the production handler goes on to account for."""
+    settled: list[int] = []
+    real_settle_chat = L.AccountingProxyHandler._settle_chat
+
+    def observed_settle_chat(self, status: int, *args: object) -> bool:
+        settled.append(status)
+        return real_settle_chat(self, status, *args)
+
+    monkeypatch.setattr(L.AccountingProxyHandler, "_settle_chat", observed_settle_chat)
+    return settled
+
+
+@pytest.mark.parametrize(
+    ("mode", "tokens", "max_out", "expected"),
+    [
+        # A 2xx without usage is reported as 502; an upstream timeout would be reported as 504.
+        ("nousage", 5, 50, ("unaccounted_dispatch", "status=502")),
+        ("ok", 50, 40, ("max_total_output exceeded",)),
+    ],
+    ids=["no-usage", "over-budget"],
+)
+def test_main_waits_for_an_inflight_request_after_the_child_has_exited(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capfd: pytest.CaptureFixture[str],
+    mode: str, tokens: int, max_out: int, expected: tuple[str, ...],
+) -> None:
+    """The child exits 0 while its request is still held upstream; only the drain can catch the breach."""
+    arrival = tmp_path / "arrived"
+    _install_early_exit_cline(tmp_path, monkeypatch, arrival)
+    up = Upstream()
+    up.mode, up.tokens, up.arrival_file = mode, tokens, arrival
+    up.release.clear()
+    monkeypatch.setattr(L, "BASE_URL", up.base_url)
+    at_wait, inflight_at_wait = _observe_drain_wait(monkeypatch)
+    settled = _observe_settled_replies(monkeypatch)
     drain_reached: list[bool] = []
 
     def release_after_drain_wait() -> None:
@@ -414,20 +357,22 @@ def test_main_waits_for_an_inflight_request_after_the_child_has_exited(
     releaser = threading.Thread(target=release_after_drain_wait)
     releaser.start()
     try:
-        rc = L.main(["--max-requests", "2", "--max-total-output", "50", "--", "task"])
+        rc = L.main(["--max-requests", "2", "--max-total-output", str(max_out), "--", "task"])
     finally:
         up.release.set()
         releaser.join(WAIT_S)
         up.shutdown()
         up.server_close()
+    err = capfd.readouterr().err  # file descriptor capture: the stub child writes its own stderr
+    assert "STUB: upstream arrival timed out" not in err, "the request never reached the upstream"
     assert drain_reached == [True], "the drain never reached its condition wait before the upstream was released"
     assert inflight_at_wait == [1], "the drain must start waiting while the request is still in flight"
     assert arrival.exists() and len(up.hits) == 1
-    assert up.responded == ["nousage"], "the handler must have processed the missing-usage response"
+    assert up.responded == [mode], "the upstream must have sent the held response"
+    # status=502 is also what a transport error reports, so prove the 2xx reply reached accounting.
+    assert settled == [200], "the handler must have processed the held response"
     assert rc == 124
-    err = capsys.readouterr().err
-    # A 2xx without usage is reported as 502; an upstream timeout would be reported as 504.
-    assert "unaccounted_dispatch" in err and "status=502" in err and "status=504" not in err
+    assert all(needle in err for needle in expected) and "status=504" not in err, err
 
 
 def test_chat_redirect_is_not_followed_and_the_provider_key_never_reaches_another_origin(rig: RigFactory) -> None:
@@ -554,3 +499,66 @@ def test_close_and_dispatch_claim_are_ordered_by_one_lock(rig: RigFactory) -> No
         _PauseAfterClaimHandler.proceed.set()
         worker.join(WAIT_S)
     assert result == {"s": 200} and len(r.up.hits) == 1
+
+
+@pytest.mark.parametrize("stream", [False, True], ids=["json", "sse"])
+def test_upstream_is_asked_for_identity_so_a_compressing_provider_is_still_accounted(rig: RigFactory, stream: bool) -> None:
+    """The proxy can not decode a reply, so the client's Accept-Encoding never reaches the provider."""
+    r = rig(child=False)
+    r.up.mode = "gzip-if-permitted"
+    status, _ = r.post(body={"model": "m", "messages": [], "stream": stream},
+                       extra={"accept-encoding": "gzip, deflate, br"})
+    assert r.up.hits[0]["accept_encoding"] == ["identity"]
+    assert status == 200 and r.proxy.cumulative_output_tokens == 5 and not r.proxy.boundary_error
+
+
+@pytest.mark.parametrize("level", [0, 9], ids=["stored", "deflated"])
+@pytest.mark.parametrize("stream", [False, True], ids=["json", "sse"])
+def test_a_reply_encoded_against_the_request_is_never_parsed_and_fails_closed(
+    rig: RigFactory, stream: bool, level: int,
+) -> None:
+    r = rig(max_out=50)
+    r.up.mode, r.up.gzip_level = "gzip-anyway", level
+    status, _ = r.post(body={"model": "m", "messages": [], "stream": stream})
+    assert status == 502 and r.breach_names() == ["unaccounted_dispatch"]
+    assert r.proxy.cumulative_output_tokens == 50 and r.child_exited()
+
+
+def test_a_reply_labelled_identity_is_accounted_as_usual(rig: RigFactory) -> None:
+    r = rig(child=False)
+    r.up.mode = "labelled-identity"
+    assert r.post()[0] == 200 and r.proxy.cumulative_output_tokens == 5 and not r.proxy.boundary_error
+
+
+def test_main_returns_cline_own_exit_code_when_nothing_else_decides(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    cline = tmp_path / "cline"
+    cline.write_text(f"#!{sys.executable}\nraise SystemExit(7)\n")
+    cline.chmod(cline.stat().st_mode | stat.S_IEXEC)
+    monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv(L.KEYVAR, PROVIDER_KEY)
+    assert L.main(["--max-requests", "2", "--max-total-output", "50", "--", "task"]) == 7
+
+
+def test_main_exits_124_with_its_diagnostic_when_the_drain_times_out(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+) -> None:
+    _install_fake_cline(tmp_path, monkeypatch)
+    up = Upstream()
+    monkeypatch.setattr(L, "BASE_URL", up.base_url)
+    real_stop_and_drain = L.AccountingProxyServer.stop_and_drain
+    deadlines: list[float] = []
+
+    def timed_out(self, timeout_s: float = 5.0) -> bool:
+        deadlines.append(timeout_s)
+        real_stop_and_drain(self, timeout_s)
+        return False
+
+    monkeypatch.setattr(L.AccountingProxyServer, "stop_and_drain", timed_out)
+    try:
+        rc = L.main(["--max-requests", "2", "--max-total-output", "50", "--", "task"])
+    finally:
+        up.shutdown()
+        up.server_close()
+    assert rc == 124 and deadlines == [5.0]
+    assert capsys.readouterr().err == (
+        "ERROR: proxy accounting did not drain within 5.0s; exiting 124 (spend not fully accounted)\n")

@@ -409,7 +409,8 @@ termination, before any spend-gate reservation, followed by client qualification
 No live activation is authorized.
 
 **2026-11-27 Phase 1B BOUND_CONTRACT closure update.** Launcher-side boundary enforcement is
-implemented in `launch_cline_wandb.py` via a stdlib loopback HTTP accounting proxy:
+implemented by `launch_cline_wandb.py` and its `cline_wandb_launcher/` package through a stdlib
+loopback HTTP accounting proxy:
 
 - `POST` requests whose parsed URL path (ignoring query strings) ends in `/chat/completions` are
   authenticated via a per-launch random session token, serialized, and counted; all other `POST` routes
@@ -417,6 +418,9 @@ implemented in `launch_cline_wandb.py` via a stdlib loopback HTTP accounting pro
 - Before forwarding each `/chat/completions` request, the proxy clamps `max_tokens` (and
   `max_completion_tokens`, if present) to the remaining output budget and injects
   `stream_options: {"include_usage": true}` for streaming calls.
+- Every upstream request carries `Accept-Encoding: identity` in place of the client's value, because
+  the proxy does not decode replies. A 2xx chat reply that arrives with any other `Content-Encoding`
+  is never parsed and is `UNACCOUNTED`.
 - Every forwarded chat request ends in exactly one classified outcome: `ACCOUNTED` (a 2xx response
   with verified `usage.completion_tokens`) or `UNACCOUNTED`. Every non-2xx chat response is
   `UNACCOUNTED`: neither the provider nor a gateway in front of it guarantees that a 4xx means no
@@ -436,9 +440,11 @@ implemented in `launch_cline_wandb.py` via a stdlib loopback HTTP accounting pro
   passes does the phase become `CLOSED` under lock (timeout-only) and the launcher exits `124`. `CLOSED`
   fences every upstream dispatch, chat and non-chat: each dispatch first claims a slot under the same
   lock (`claim_dispatch()`), so it is ordered strictly before or after the close and no claim succeeds
-  after it, without the drain deadline waiting on upstream I/O.
-- Offline harness tests in `tests/test_launch_cline_wandb.py` and `tests/test_launch_cline_wandb_lifecycle.py`
-  verify that exceeding bounds triggers fail-closed termination.
+  after it, without the drain deadline waiting on upstream I/O. A request claimed before the close may
+  still be sent after it; its handler had not drained, so the run already exits `124`.
+- Offline harness tests in `tests/test_launch_cline_wandb_bounds.py` and
+  `tests/test_launch_cline_wandb_lifecycle.py` verify that exceeding bounds triggers fail-closed
+  termination.
 
 `BOUND_CONTRACT` is verified and flipped to `{"max_requests": True, "max_total_output": True}`,
 allowing `_launcher_boundary_problem()` to return `None` for valid positive bounds while continuing
