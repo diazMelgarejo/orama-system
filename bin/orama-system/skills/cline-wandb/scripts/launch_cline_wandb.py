@@ -59,6 +59,7 @@ import sys
 import tempfile
 import threading
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from typing import Sequence
@@ -236,10 +237,19 @@ class BoundaryExceededError(RuntimeError):
 
 
 def _terminate_proc(proc: subprocess.Popen) -> None:
-    """Terminate child process fail-closed."""
+    """Terminate child process fail-closed, escalating to kill after a short grace period."""
     try:
         proc.terminate()
     except (OSError, ProcessLookupError):
+        return
+    try:
+        proc.wait(timeout=2.0)
+    except subprocess.TimeoutExpired:
+        try:
+            proc.kill()
+        except (OSError, ProcessLookupError):
+            pass
+    except (OSError, ValueError):
         pass
 
 
@@ -307,6 +317,17 @@ class AccountingProxyHandler(http.server.BaseHTTPRequestHandler):
         # Silence access logs to prevent API keys/prompts leaking to console
         pass
 
+    def _reject(self, status: int, err_bytes: bytes) -> None:
+        """Send a compact JSON error response and close the connection."""
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(err_bytes)))
+        self.send_header("Connection", "close")
+        self.end_headers()
+        self.wfile.write(err_bytes)
+        self.wfile.flush()
+        self.close_connection = True
+
     def do_GET(self) -> None:
         self._proxy_request()
 
@@ -320,38 +341,64 @@ class AccountingProxyHandler(http.server.BaseHTTPRequestHandler):
         self._proxy_request()
 
     def _proxy_request(self) -> None:
-        path = self.path
-        is_chat_completions = self.command == "POST" and (
-            path.rstrip("/").endswith("/chat/completions")
-        )
+        self.server.begin_request()
+        try:
+            self._proxy_request_inner()
+        finally:
+            self.server.end_request()
 
-        if is_chat_completions:
-            with self.server.lock:
-                self.server.request_count += 1
-                if self.server.request_count > self.server.max_requests:
-                    self.server.boundary_error.append(
-                        BoundaryExceededError(
-                            "max_requests",
-                            self.server.max_requests,
-                            self.server.request_count,
-                        )
-                    )
-                    self.server.terminate_child()
-                    err_bytes = b'{"error": {"message": "max_requests exceeded", "type": "requests_exceeded"}}'
-                    self.send_response(429)
-                    self.send_header("Content-Type", "application/json")
-                    self.send_header("Content-Length", str(len(err_bytes)))
-                    self.send_header("Connection", "close")
-                    self.end_headers()
-                    self.wfile.write(err_bytes)
-                    self.wfile.flush()
-                    self.close_connection = True
-                    return
+    def _proxy_request_inner(self) -> None:
+        path = self.path
+        route = urllib.parse.urlsplit(path).path.rstrip("/")
+        is_chat_completions = self.command == "POST" and route.endswith("/chat/completions")
+
+        if self.command == "POST" and not is_chat_completions:
+            self._reject(403, b'{"error": {"message": "unsupported POST route refused fail-closed"}}')
+            return
 
         content_len = int(self.headers.get("Content-Length", 0))
         body_bytes = self.rfile.read(content_len) if content_len > 0 else b""
+
+        if is_chat_completions:
+            # Serialize /chat/completions so concurrent requests cannot race remaining token budget.
+            with self.server.chat_gate:
+                self._handle_chat_completions(path, body_bytes)
+            return
+
+        self._forward_request(path, body_bytes, is_chat_completions=False, is_streaming=False)
+
+    def _handle_chat_completions(self, path: str, body_bytes: bytes) -> None:
+        with self.server.lock:
+            if self.server.boundary_error:
+                self._reject(429, b'{"error": {"message": "bound already exceeded"}}')
+                return
+            self.server.request_count += 1
+            if self.server.request_count > self.server.max_requests:
+                self.server.boundary_error.append(
+                    BoundaryExceededError(
+                        "max_requests",
+                        self.server.max_requests,
+                        self.server.request_count,
+                    )
+                )
+                self.server.terminate_child()
+                self._reject(429, b'{"error": {"message": "max_requests exceeded", "type": "requests_exceeded"}}')
+                return
+            remaining_tokens = self.server.max_total_output - self.server.cumulative_output_tokens
+            if remaining_tokens <= 0:
+                self.server.boundary_error.append(
+                    BoundaryExceededError(
+                        "max_total_output",
+                        self.server.max_total_output,
+                        self.server.cumulative_output_tokens,
+                    )
+                )
+                self.server.terminate_child()
+                self._reject(429, b'{"error": {"message": "max_total_output exhausted", "type": "tokens_exceeded"}}')
+                return
+
         req_json: dict | None = None
-        if is_chat_completions and body_bytes:
+        if body_bytes:
             try:
                 parsed = json.loads(body_bytes.decode("utf-8"))
                 if isinstance(parsed, dict):
@@ -359,14 +406,47 @@ class AccountingProxyHandler(http.server.BaseHTTPRequestHandler):
             except Exception:
                 req_json = None
 
-            if isinstance(req_json, dict) and req_json.get("stream") is True:
-                stream_opts = req_json.get("stream_options")
-                if not isinstance(stream_opts, dict):
-                    req_json["stream_options"] = {"include_usage": True}
-                else:
-                    req_json["stream_options"]["include_usage"] = True
-                body_bytes = json.dumps(req_json).encode("utf-8")
+        if not isinstance(req_json, dict):
+            with self.server.lock:
+                self.server.boundary_error.append(
+                    BoundaryExceededError("max_total_output", self.server.max_total_output, "invalid-request-json")
+                )
+            self.server.terminate_child()
+            self._reject(400, b'{"error": {"message": "invalid JSON request body; refused fail-closed"}}')
+            return
 
+        # Enforce provider-side generation cap against remaining output budget before forwarding.
+        existing_max = req_json.get("max_tokens")
+        if isinstance(existing_max, int) and not isinstance(existing_max, bool) and existing_max > 0:
+            req_json["max_tokens"] = min(existing_max, remaining_tokens)
+        else:
+            req_json["max_tokens"] = remaining_tokens
+        if "max_completion_tokens" in req_json:
+            existing_mct = req_json.get("max_completion_tokens")
+            if isinstance(existing_mct, int) and not isinstance(existing_mct, bool) and existing_mct > 0:
+                req_json["max_completion_tokens"] = min(existing_mct, remaining_tokens)
+            else:
+                req_json["max_completion_tokens"] = remaining_tokens
+
+        is_streaming = req_json.get("stream") is True
+        if is_streaming:
+            stream_opts = req_json.get("stream_options")
+            if not isinstance(stream_opts, dict):
+                req_json["stream_options"] = {"include_usage": True}
+            else:
+                req_json["stream_options"]["include_usage"] = True
+        body_bytes = json.dumps(req_json).encode("utf-8")
+
+        self._forward_request(path, body_bytes, is_chat_completions=True, is_streaming=is_streaming)
+
+    def _forward_request(
+        self,
+        path: str,
+        body_bytes: bytes,
+        *,
+        is_chat_completions: bool,
+        is_streaming: bool,
+    ) -> None:
         headers = {}
         for k, v in self.headers.items():
             if k.lower() in ("host", "content-length", "connection"):
@@ -398,19 +478,17 @@ class AccountingProxyHandler(http.server.BaseHTTPRequestHandler):
             exc.close()
         except Exception as exc:
             status_code = 504 if isinstance(exc, (TimeoutError, socket.timeout)) else 502
-            err_bytes = b'{"error": {"message": "upstream communication error"}}'
-            self.send_response(status_code)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(err_bytes)))
-            self.send_header("Connection", "close")
-            self.end_headers()
-            self.wfile.write(err_bytes)
-            self.wfile.flush()
-            self.close_connection = True
+            if is_chat_completions:
+                # Request may have been billed upstream; fail closed with exit 124 so caller settles unknown.
+                with self.server.lock:
+                    self.server.boundary_error.append(
+                        BoundaryExceededError("upstream_transport", self.server.max_total_output, status_code)
+                    )
+                self.server.terminate_child()
+            self._reject(status_code, b'{"error": {"message": "upstream communication error"}}')
             return
 
         if is_chat_completions and 200 <= status_code < 300:
-            is_streaming = isinstance(req_json, dict) and req_json.get("stream") is True
             if is_streaming:
                 tokens = extract_sse_completion_tokens(resp_body)
             else:
@@ -422,15 +500,7 @@ class AccountingProxyHandler(http.server.BaseHTTPRequestHandler):
                         BoundaryExceededError("max_total_output", self.server.max_total_output, "missing")
                     )
                 self.server.terminate_child()
-                err_bytes = b'{"error": {"message": "missing or invalid usage.completion_tokens"}}'
-                self.send_response(502)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Content-Length", str(len(err_bytes)))
-                self.send_header("Connection", "close")
-                self.end_headers()
-                self.wfile.write(err_bytes)
-                self.wfile.flush()
-                self.close_connection = True
+                self._reject(502, b'{"error": {"message": "missing or invalid usage.completion_tokens"}}')
                 return
 
             with self.server.lock:
@@ -444,15 +514,7 @@ class AccountingProxyHandler(http.server.BaseHTTPRequestHandler):
                         )
                     )
                     self.server.terminate_child()
-                    err_bytes = b'{"error": {"message": "max_total_output exceeded", "type": "tokens_exceeded"}}'
-                    self.send_response(429)
-                    self.send_header("Content-Type", "application/json")
-                    self.send_header("Content-Length", str(len(err_bytes)))
-                    self.send_header("Connection", "close")
-                    self.end_headers()
-                    self.wfile.write(err_bytes)
-                    self.wfile.flush()
-                    self.close_connection = True
+                    self._reject(429, b'{"error": {"message": "max_total_output exceeded", "type": "tokens_exceeded"}}')
                     return
 
         self.send_response(status_code)
@@ -485,6 +547,9 @@ class AccountingProxyServer(http.server.ThreadingHTTPServer):
     ) -> None:
         super().__init__(server_address, RequestHandlerClass)
         self.lock = threading.RLock()
+        self.chat_gate = threading.Lock()
+        self._inflight_cond = threading.Condition(self.lock)
+        self._inflight_requests = 0
         self.max_requests = max_requests
         self.max_total_output = max_total_output
         self.upstream_base_url = upstream_base_url
@@ -493,6 +558,21 @@ class AccountingProxyServer(http.server.ThreadingHTTPServer):
         self.cumulative_output_tokens = 0
         self.boundary_error: list[BoundaryExceededError] = []
         self.child_proc: subprocess.Popen | None = None
+
+    def begin_request(self) -> None:
+        with self.lock:
+            self._inflight_requests += 1
+
+    def end_request(self) -> None:
+        with self.lock:
+            self._inflight_requests = max(0, self._inflight_requests - 1)
+            if self._inflight_requests == 0:
+                self._inflight_cond.notify_all()
+
+    def wait_for_inflight(self, timeout_s: float = 5.0) -> bool:
+        """Wait up to timeout_s for in-flight handlers to finish accounting. Returns True if drained."""
+        with self.lock:
+            return self._inflight_cond.wait_for(lambda: self._inflight_requests == 0, timeout=timeout_s)
 
     def set_child_proc(self, proc: subprocess.Popen) -> None:
         with self.lock:
@@ -554,6 +634,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         proc = subprocess.Popen(cmd)
         proxy.set_child_proc(proc)
         rc = proc.wait()
+        drained = proxy.wait_for_inflight(timeout_s=5.0)
+        if not drained:
+            sys.stderr.write("ERROR: proxy accounting did not drain within 5.0s; terminating fail-closed\n")
+            return 124
         if proxy.boundary_error:
             exc = proxy.boundary_error[0]
             sys.stderr.write(f"ERROR: {exc}; terminating fail-closed\n")

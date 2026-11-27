@@ -360,24 +360,25 @@ The operator ruled on both gaps on 2026-11-23. These are later decisions: sectio
 Neither earlier record is invalid. The soul card's prohibition binds Wanda, and the lesson
 describes the Biafra route. Wanda's soul card states that scope.
 
-**What runs today.** `live_cycle()` refuses with `launcher-output-bound-unsupported`. The legacy
-`run_program` path refuses with `legacy-live-path-disabled` **only when armed** (`launch_allowed()`
-returns true); when the gate and arm variables are unset, `run_program()` calls `dry_cycle()` and
-sets `called_launcher=False` instead. Neither path launches Cline. The launcher has
-no spend gate of its own, so any Cline caller must go through `bin/agents/spend_guard.py`, as the
-live cycle is designed to. Wanda's W&B calls are made directly with the OpenAI client by
+**What runs today (historical — 2026-11-23, superseded by 2026-11-27 closure below).**
+`live_cycle()` refuses with `launcher-output-bound-unsupported`. The legacy `run_program` path
+refuses with `legacy-live-path-disabled` **only when armed** (`launch_allowed()` returns true);
+when the gate and arm variables are unset, `run_program()` calls `dry_cycle()` and sets
+`called_launcher=False` instead. Neither path launches Cline. The launcher has no spend gate
+of its own, so any Cline caller must go through `bin/agents/spend_guard.py`, as the live cycle
+is designed to. Wanda's W&B calls are made directly with the OpenAI client by
 `bin/orama-system/skills/wanda-wandb/scripts/wanda_chat.py`. That client stays outside the
-spend gate in this change and is not an authorized unattended or paid path. The
-"generic OpenAI route refuses W&B" rule in section 14 belongs to
-Perpetua-Tools' `.agent/harness/llm.py`, a different consumer, so it does not
-conflict with Wanda's path. `tests/test_biafra_designation_docs.py` keeps this wording tied to the
-launcher's refusal. The Perpetua-Tools record is its `DECISIONS.md` entries of 2026-11-23, with a
-correction of the same date.
+spend gate in this change and is not an authorized unattended or paid path. The "generic OpenAI
+route refuses W&B" rule in section 14 belongs to Perpetua-Tools' `.agent/harness/llm.py`, a
+different consumer, so it does not conflict with Wanda's path.
+`tests/test_biafra_designation_docs.py` keeps this wording tied to the launcher's refusal.
+The Perpetua-Tools record is its `DECISIONS.md` entries of 2026-11-23, with a correction of the
+same date.
 
 Nothing here arms a live cycle, enables serving, approves a paid model or authorizes a merge. G1
 and G2 stay dependency-blocked, and arming one bounded live cycle remains a separate operator act.
 
-### 15.1 Bounded-launcher contract checkpoint (2026-11-26)
+### 15.1 Bounded-launcher contract checkpoint (2026-11-26, superseded by 2026-11-27 closure below)
 
 This is an additive Lane 1B status note. The 2026-11-23 ruling and the historical sections stand;
 **implementation is incomplete**, and "bounded-capable" remains an acceptance gate rather than a
@@ -409,7 +410,11 @@ No live activation is authorized.
 
 **2026-11-27 Phase 1B BOUND_CONTRACT closure update.** Launcher-side boundary enforcement is
 implemented in `launch_cline_wandb.py` via a stdlib loopback HTTP accounting proxy:
-wire-level request counts and model `usage.completion_tokens` (with
+request counts for POST calls to /chat/completions (path parsed without query string;
+non-allowlisted POST routes refused with HTTP 403), serialized pre-forward upstream
+max_tokens / max_completion_tokens clamping against remaining budget, and model
+usage.completion_tokens accounting (terminating fail-closed with exit code 124 and unknown-spend
+settlement on bound breach, missing usage, or upstream 504/502 transport failure) (with
 `stream_options: {"include_usage": true}` injected for SSE streams) supervise execution and
 terminate fail-closed with exit code 124 if either `max_requests` or `max_total_output` is reached
 or if usage accounting is missing. Offline harness tests in `tests/test_launch_cline_wandb.py`

@@ -15,6 +15,7 @@ import re
 import stat
 import sys
 import threading
+import time
 import urllib.request
 from pathlib import Path
 
@@ -394,7 +395,19 @@ class FakeUpstreamHandler(http.server.BaseHTTPRequestHandler):
         except Exception:
             pass
 
+        with getattr(self.server, "lock", threading.Lock()):
+            if not hasattr(self.server, "requests_received"):
+                self.server.requests_received = []
+            self.server.requests_received.append({"path": self.path, "json": req_json})
+
+        delay = getattr(self.server, "delay_s", 0.0)
+        if delay > 0:
+            time.sleep(delay)
+
         mode = getattr(self.server, "mode", "ok")
+        if mode == "drop_connection":
+            self.close_connection = True
+            return
         if mode == "streaming":
             tokens = getattr(self.server, "tokens", 100)
             chunk1 = b'data: {"choices": [{"delta": {"content": "hi"}}]}\n\n'
@@ -443,6 +456,9 @@ def fake_upstream():
     server = http.server.ThreadingHTTPServer((LOOPBACK_HOST, 0), FakeUpstreamHandler)
     server.mode = "ok"
     server.tokens = 10
+    server.delay_s = 0.0
+    server.lock = threading.Lock()
+    server.requests_received = []
     t = threading.Thread(target=server.serve_forever, daemon=True)
     t.start()
     port = server.server_address[1]
@@ -663,4 +679,269 @@ def test_native_bound_contract_is_verified() -> None:
     """The launcher natively verifies both bounds without monkeypatching."""
     assert launcher.BOUND_CONTRACT == {"max_requests": True, "max_total_output": True}
     assert launcher.launcher_boundary_problem(1, 4096) is None
+
+
+def test_query_string_cannot_bypass_accounting(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], fake_upstream: tuple[object, str],
+) -> None:
+    """A query string on /chat/completions (e.g. ?api-version=1) does not bypass accounting."""
+    server, upstream_url = fake_upstream
+    server.tokens = 10
+    bindir = tmp_path / "bin"
+    _make_stub_cline(
+        bindir,
+        """
+config_dir = sys.argv[sys.argv.index("--config") + 1]
+with open(f"{config_dir}/data/settings/providers.json") as f:
+    cfg = json.load(f)
+base_url = cfg["providers"]["openai-compatible"]["settings"]["baseUrl"]
+
+for _ in range(2):
+    req = urllib.request.Request(
+        f"{base_url}/chat/completions?api-version=2024-02-01",
+        data=json.dumps({"model": "test", "messages": []}).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        urllib.request.urlopen(req)
+    except Exception:
+        pass
+sys.exit(0)
+""",
+    )
+    monkeypatch.setenv("PATH", f"{bindir}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv(launcher.KEYVAR, FAKE_KEY)
+    monkeypatch.setattr(launcher, "BASE_URL", upstream_url)
+
+    rc = launcher.main(["--max-requests", "1", "--max-total-output", "4096", "--", "task"])
+    assert rc == 124
+    out, err = capsys.readouterr()
+    assert "max_requests exceeded" in err
+
+
+def test_unsupported_post_route_refused_with_403(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fake_upstream: tuple[object, str],
+) -> None:
+    """Non-allowlisted POST routes (e.g. /responses, /completions) are refused fail-closed with 403."""
+    server, upstream_url = fake_upstream
+    bindir = tmp_path / "bin"
+    _make_stub_cline(
+        bindir,
+        """
+import urllib.error
+config_dir = sys.argv[sys.argv.index("--config") + 1]
+with open(f"{config_dir}/data/settings/providers.json") as f:
+    cfg = json.load(f)
+base_url = cfg["providers"]["openai-compatible"]["settings"]["baseUrl"]
+
+for path in ("/responses", "/completions"):
+    req = urllib.request.Request(
+        f"{base_url}{path}",
+        data=b'{"test": 1}',
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        urllib.request.urlopen(req)
+        sys.exit(1)
+    except urllib.error.HTTPError as exc:
+        if exc.code != 403:
+            sys.exit(2)
+sys.exit(0)
+""",
+    )
+    monkeypatch.setenv("PATH", f"{bindir}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv(launcher.KEYVAR, FAKE_KEY)
+    monkeypatch.setattr(launcher, "BASE_URL", upstream_url)
+
+    rc = launcher.main(["--max-requests", "5", "--max-total-output", "4096", "--", "task"])
+    assert rc == 0
+    assert not getattr(server, "requests_received", [])
+
+
+def test_post_breach_retry_rejected_with_429_without_forwarding(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], fake_upstream: tuple[object, str],
+) -> None:
+    """When a bound is already breached, subsequent /chat/completions calls receive 429 without being forwarded."""
+    server, upstream_url = fake_upstream
+    server.tokens = 50
+    bindir = tmp_path / "bin"
+    _make_stub_cline(
+        bindir,
+        """
+import urllib.error
+config_dir = sys.argv[sys.argv.index("--config") + 1]
+with open(f"{config_dir}/data/settings/providers.json") as f:
+    cfg = json.load(f)
+base_url = cfg["providers"]["openai-compatible"]["settings"]["baseUrl"]
+
+# First request breaches max_total_output (tokens=50 vs limit=40)
+req1 = urllib.request.Request(
+    f"{base_url}/chat/completions",
+    data=json.dumps({"model": "test", "messages": []}).encode("utf-8"),
+    headers={"Content-Type": "application/json"},
+    method="POST",
+)
+try:
+    urllib.request.urlopen(req1)
+except Exception:
+    pass
+
+# Second request should be rejected immediately with 429
+req2 = urllib.request.Request(
+    f"{base_url}/chat/completions",
+    data=json.dumps({"model": "test", "messages": []}).encode("utf-8"),
+    headers={"Content-Type": "application/json"},
+    method="POST",
+)
+try:
+    urllib.request.urlopen(req2)
+    sys.exit(1)
+except urllib.error.HTTPError as exc:
+    if exc.code != 429:
+        sys.exit(2)
+sys.exit(0)
+""",
+    )
+    monkeypatch.setenv("PATH", f"{bindir}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv(launcher.KEYVAR, FAKE_KEY)
+    monkeypatch.setattr(launcher, "BASE_URL", upstream_url)
+
+    rc = launcher.main(["--max-requests", "5", "--max-total-output", "40", "--", "task"])
+    assert rc == 124
+    assert len(getattr(server, "requests_received", [])) == 1
+
+
+def test_pre_forward_max_tokens_and_completion_tokens_clamped(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fake_upstream: tuple[object, str],
+) -> None:
+    """Proxy clamps forwarded max_tokens and max_completion_tokens to remaining budget."""
+    server, upstream_url = fake_upstream
+    server.tokens = 15
+    bindir = tmp_path / "bin"
+    _make_stub_cline(
+        bindir,
+        """
+config_dir = sys.argv[sys.argv.index("--config") + 1]
+with open(f"{config_dir}/data/settings/providers.json") as f:
+    cfg = json.load(f)
+base_url = cfg["providers"]["openai-compatible"]["settings"]["baseUrl"]
+
+# First request asks for 100 max_tokens when total budget is 40. Upstream should see clamped to 40.
+req1 = urllib.request.Request(
+    f"{base_url}/chat/completions",
+    data=json.dumps({"model": "test", "max_tokens": 100, "max_completion_tokens": 90}).encode("utf-8"),
+    headers={"Content-Type": "application/json"},
+    method="POST",
+)
+urllib.request.urlopen(req1)
+
+# Second request asks for 100 when remaining is 40 - 15 = 25. Upstream should see clamped to 25.
+req2 = urllib.request.Request(
+    f"{base_url}/chat/completions",
+    data=json.dumps({"model": "test", "max_tokens": 100, "max_completion_tokens": 80}).encode("utf-8"),
+    headers={"Content-Type": "application/json"},
+    method="POST",
+)
+urllib.request.urlopen(req2)
+sys.exit(0)
+""",
+    )
+    monkeypatch.setenv("PATH", f"{bindir}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv(launcher.KEYVAR, FAKE_KEY)
+    monkeypatch.setattr(launcher, "BASE_URL", upstream_url)
+
+    rc = launcher.main(["--max-requests", "5", "--max-total-output", "40", "--", "task"])
+    assert rc == 0
+    reqs = getattr(server, "requests_received", [])
+    assert len(reqs) == 2
+    assert reqs[0]["json"]["max_tokens"] == 40
+    assert reqs[0]["json"]["max_completion_tokens"] == 40
+    assert reqs[1]["json"]["max_tokens"] == 25
+    assert reqs[1]["json"]["max_completion_tokens"] == 25
+
+
+def test_upstream_transport_error_terminates_child_fail_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], fake_upstream: tuple[object, str],
+) -> None:
+    """Upstream 504/502 transport error marks boundary exceeded and terminates fail-closed with 124."""
+    server, upstream_url = fake_upstream
+    server.mode = "drop_connection"
+    bindir = tmp_path / "bin"
+    _make_stub_cline(
+        bindir,
+        """
+config_dir = sys.argv[sys.argv.index("--config") + 1]
+with open(f"{config_dir}/data/settings/providers.json") as f:
+    cfg = json.load(f)
+base_url = cfg["providers"]["openai-compatible"]["settings"]["baseUrl"]
+
+req = urllib.request.Request(
+    f"{base_url}/chat/completions",
+    data=json.dumps({"model": "test"}).encode("utf-8"),
+    headers={"Content-Type": "application/json"},
+    method="POST",
+)
+try:
+    urllib.request.urlopen(req)
+except Exception:
+    pass
+sys.exit(0)
+""",
+    )
+    monkeypatch.setenv("PATH", f"{bindir}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv(launcher.KEYVAR, FAKE_KEY)
+    monkeypatch.setattr(launcher, "BASE_URL", upstream_url)
+
+    rc = launcher.main(["--max-requests", "5", "--max-total-output", "4096", "--", "task"])
+    assert rc == 124
+    out, err = capsys.readouterr()
+    assert "upstream_transport exceeded" in err
+
+
+def test_delayed_upstream_waits_for_inflight_drain(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], fake_upstream: tuple[object, str],
+) -> None:
+    """Delayed upstream where child exits 0 early waits for in-flight handler and exits 124 if bound breached."""
+    server, upstream_url = fake_upstream
+    server.tokens = 50
+    server.delay_s = 0.2
+    bindir = tmp_path / "bin"
+    _make_stub_cline(
+        bindir,
+        """
+import threading
+config_dir = sys.argv[sys.argv.index("--config") + 1]
+with open(f"{config_dir}/data/settings/providers.json") as f:
+    cfg = json.load(f)
+base_url = cfg["providers"]["openai-compatible"]["settings"]["baseUrl"]
+
+def send():
+    req = urllib.request.Request(
+        f"{base_url}/chat/completions",
+        data=json.dumps({"model": "test"}).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        urllib.request.urlopen(req)
+    except Exception:
+        pass
+
+t = threading.Thread(target=send)
+t.start()
+import time
+time.sleep(0.05)
+sys.exit(0)
+""",
+    )
+    monkeypatch.setenv("PATH", f"{bindir}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv(launcher.KEYVAR, FAKE_KEY)
+    monkeypatch.setattr(launcher, "BASE_URL", upstream_url)
+
+    rc = launcher.main(["--max-requests", "5", "--max-total-output", "40", "--", "task"])
+    assert rc == 124
+    out, err = capsys.readouterr()
+    assert "max_total_output exceeded" in err
 
