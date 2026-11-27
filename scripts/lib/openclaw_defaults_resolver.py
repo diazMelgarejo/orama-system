@@ -188,8 +188,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.render_patch:
         print(json.dumps(r.module.render_patch(r.data, shape=args.shape), indent=2))
         return 0
-    with open(args.check, encoding="utf-8") as fh:
-        found = r.module.drift(r.data, json.load(fh))
+    try:
+        with open(args.check, encoding="utf-8") as fh:
+            config = json.load(fh)
+    except (OSError, ValueError) as exc:
+        print("%s cannot read the config to check: %s" % (PREFIX, type(exc).__name__))
+        return 2
+    found = r.module.drift(r.data, config)
     for item in found:
         print("drift %s: expected %s, actual %s" % (item["path"], json.dumps(item["expected"]), json.dumps(item["actual"])))
     print("no drift" if not found else "%d drift item(s)" % len(found))
