@@ -30,22 +30,25 @@ When remediating process-supervision, spend-boundary, or distributed-state pull 
    and count requests synchronously before thread spawning.
 2. **Two-Phase Graceful Shutdown (`stop_and_drain`):**
    Stopping accept loops requires a strict sequence:
-   - Set `_accepting = False` under lock.
+   - Set `_phase = PHASE_DRAINING` under lock.
    - Call `self.shutdown()` to break the socket accept loop.
    - Await `_inflight_cond` drain with a bounded timeout (e.g. 5.0s).
-   - Terminate child fail-closed with exit code `124` if the drain times out.
-3. **Single Fail-Closed Funnel (`_fail_closed` + `_read_upstream_response`):**
+   - If the drain times out, transition to `PHASE_CLOSED` under lock (fencing any queued worker from upstream dispatch) and have the launcher exit `124` to settle as unknown spend (the child process has already terminated).
+3. **Single Fail-Closed Funnel (`_fail_closed` + `_fetch_upstream`):**
    Never fragment error handling across parallel catch blocks. All transport errors, socket
-   timeouts, and `urllib.error.HTTPError.read()` body reading failures must funnel into a single
-   `_fail_closed()` method that records the boundary violation and halts the child process.
+   timeouts, non-definitive upstream status codes, and body reading failures must funnel into
+   `classify_chat_outcome()` and `_fail_closed()` / `_reject_unaccounted()`, debiting the full clamped
+   reservation and halting the child process.
 4. **Proactive Provider Budget Clamping Over Reactive Pipe Sniffing:**
    Do not rely solely on post-generation token counting. Intercept outgoing `/chat/completions`
    payloads and clamp `max_tokens` / `max_completion_tokens` to `min(requested, remaining)`. Force
    the upstream provider to truncate generation at the exact remaining budget boundary.
-5. **Monotonic Distributed Fencing Tokens:**
+5. **High-Water-Mark Distributed Fencing Tokens (`claimed_at`):**
    Never degrade mutual-exclusion claim operations to plain `bool` or `None`. Always return the
-   monotonic claim timestamp (`claim_ts: float`) so downstream completion calls can fence against
-   stale or interleaved reclaims.
+   claim timestamp (`claimed_at: float`), strictly increasing per task via a persistent high-water-mark
+   table (`task_claim_hwm`) raised by `math.nextafter()`, and require `--expected-claimed-at` (or explicit
+   `--unverified-legacy` opt-out) on completion so downstream completion calls always fence against
+   stale same-agent or interleaved reclaims.
 
 ---
 
@@ -57,7 +60,7 @@ When remediating process-supervision, spend-boundary, or distributed-state pull 
 | **Over-Budget Prevention** | Reactive: kill process after buffer parses over-budget tokens. | Reactive: terminate child once accounting thread catches up. | Pre-forward clamping, but allowed 503 premature rejection during drain. | Proactive clamping to remaining budget (`max_tokens = min(existing, remaining)`); drains in-flight requests cleanly. |
 | **Transport & Error Bodies (`HTTPError.read`)** | Unhandled; leaked raw exceptions or exited cleanly. | Flagged duplicate handlers; missed `HTTPError.read()` timeout escape. | Captured in notes, but split across multiple handler paths. | Unified `_read_upstream_response()` wrapping both 2xx and error streams into `_fail_closed("upstream_transport", ...)`. |
 | **Accept-to-Dispatch Lifecycle** | Unchecked; prone to SIGPIPE and orphan processes. | Suggested bounded thread drain, but left dispatch window open. | Checked `_accepting` in `_admit_chat_request`, causing premature 503 drops. | Synchronous admission in `process_request()` + two-phase `stop_and_drain()`. |
-| **Task Queue Claim Return** | Inconsistent / returned None without fencing semantics. | Flagged signature discrepancy, proposed boolean / None returns. | Reverted to None to pass characterization tests. | Monotonic `claim_ts: float` fencing token preserved; tests updated to `isinstance(claimed_at, float)`. |
+| **Task Queue Claim Return** | Inconsistent / returned None without fencing semantics. | Flagged signature discrepancy, proposed boolean / None returns. | Reverted to None to pass characterization tests. | Strictly increasing `claimed_at: float` fencing token via persistent `task_claim_hwm`; worker CLI enforces `--expected-claimed-at` or `--unverified-legacy`. |
 | **Memory Record Hygiene** | Stale process-guard claims persisted in `LESSONS.md`. | Flagged outdated text in `LESSONS.md` files. | Proposed manual diffs or partial replacements. | Tooling-driven graduation using `graduate.py --supersedes`; preserves all invariants append-only. |
 
 ---
@@ -105,8 +108,9 @@ When remediating process-supervision, spend-boundary, or distributed-state pull 
    parameters, rejecting non-allowlisted routes with 403, rejecting post-breach retries with 429,
    clamping upstream max tokens, and closing all shutdown and transport races with fail-closed exit 124.
 2. **Perpetua-Tools PR #525:** Atomically records agent heartbeats upon task claim, returns
-   `claim_ts: float` for fencing against stale completions, and supersedes obsolete process-guard
-   lessons with verified proxy contracts.
+   `claimed_at: float` for fencing against stale completions (strictly increasing via persistent
+   `task_claim_hwm` table), requires `--expected-claimed-at` on worker CLI, and supersedes obsolete
+   process-guard lessons with verified proxy contracts.
 
 ---
 

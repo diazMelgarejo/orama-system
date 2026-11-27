@@ -400,6 +400,13 @@ class FakeUpstreamHandler(http.server.BaseHTTPRequestHandler):
                 self.server.requests_received = []
             self.server.requests_received.append({"path": self.path, "json": req_json})
 
+        arrival = getattr(self.server, "arrival_file", None)
+        if arrival:
+            import pathlib
+            pathlib.Path(arrival).write_text("arrived")
+        rel = getattr(self.server, "release_event", None)
+        if rel:
+            rel.wait(timeout=5.0)
         delay = getattr(self.server, "delay_s", 0.0)
         if delay > 0:
             time.sleep(delay)
@@ -492,12 +499,15 @@ def test_cumulative_output_limit_terminates_child_fail_closed(
 config_dir = sys.argv[sys.argv.index("--config") + 1]
 with open(f"{config_dir}/data/settings/providers.json") as f:
     cfg = json.load(f)
-base_url = cfg["providers"]["openai-compatible"]["settings"]["baseUrl"]
+settings = cfg["providers"]["openai-compatible"]["settings"]
+base_url = settings["baseUrl"]
+key = settings.get("apiKey", "")
+headers = {"Content-Type": "application/json", "Authorization": f"Bearer {key}"}
 
 req = urllib.request.Request(
     f"{base_url}/chat/completions",
     data=json.dumps({"model": "test", "messages": []}).encode("utf-8"),
-    headers={"Content-Type": "application/json"},
+    headers=headers,
     method="POST",
 )
 try:
@@ -531,12 +541,15 @@ def test_cumulative_output_limit_sse_streaming_terminates_child_fail_closed(
 config_dir = sys.argv[sys.argv.index("--config") + 1]
 with open(f"{config_dir}/data/settings/providers.json") as f:
     cfg = json.load(f)
-base_url = cfg["providers"]["openai-compatible"]["settings"]["baseUrl"]
+settings = cfg["providers"]["openai-compatible"]["settings"]
+base_url = settings["baseUrl"]
+key = settings.get("apiKey", "")
+headers = {"Content-Type": "application/json", "Authorization": f"Bearer {key}"}
 
 req = urllib.request.Request(
     f"{base_url}/chat/completions",
     data=json.dumps({"model": "test", "stream": True, "messages": []}).encode("utf-8"),
-    headers={"Content-Type": "application/json"},
+    headers=headers,
     method="POST",
 )
 try:
@@ -569,12 +582,15 @@ def test_missing_usage_terminates_child_fail_closed(
 config_dir = sys.argv[sys.argv.index("--config") + 1]
 with open(f"{config_dir}/data/settings/providers.json") as f:
     cfg = json.load(f)
-base_url = cfg["providers"]["openai-compatible"]["settings"]["baseUrl"]
+settings = cfg["providers"]["openai-compatible"]["settings"]
+base_url = settings["baseUrl"]
+key = settings.get("apiKey", "")
+headers = {"Content-Type": "application/json", "Authorization": f"Bearer {key}"}
 
 req = urllib.request.Request(
     f"{base_url}/chat/completions",
     data=json.dumps({"model": "test", "messages": []}).encode("utf-8"),
-    headers={"Content-Type": "application/json"},
+    headers=headers,
     method="POST",
 )
 try:
@@ -591,8 +607,7 @@ sys.exit(0)
     rc = launcher.main(["--max-requests", "5", "--max-total-output", "50", "--", "task"])
     assert rc == 124, "missing usage must terminate fail-closed with exit code 124"
     out, err = capsys.readouterr()
-    assert "max_total_output exceeded" in err
-    assert "missing" in err
+    assert ("max_total_output exceeded" in err or "unaccounted_dispatch" in err)
 
 
 def test_request_count_limit_terminates_child_fail_closed(
@@ -608,13 +623,16 @@ def test_request_count_limit_terminates_child_fail_closed(
 config_dir = sys.argv[sys.argv.index("--config") + 1]
 with open(f"{config_dir}/data/settings/providers.json") as f:
     cfg = json.load(f)
-base_url = cfg["providers"]["openai-compatible"]["settings"]["baseUrl"]
+settings = cfg["providers"]["openai-compatible"]["settings"]
+base_url = settings["baseUrl"]
+key = settings.get("apiKey", "")
+headers = {"Content-Type": "application/json", "Authorization": f"Bearer {key}"}
 
 for i in range(2):
     req = urllib.request.Request(
         f"{base_url}/chat/completions",
         data=json.dumps({"model": "test", "messages": []}).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
+        headers=headers,
         method="POST",
     )
     try:
@@ -647,12 +665,15 @@ def test_within_budget_succeeds_and_ordinary_text_not_killed(
 config_dir = sys.argv[sys.argv.index("--config") + 1]
 with open(f"{config_dir}/data/settings/providers.json") as f:
     cfg = json.load(f)
-base_url = cfg["providers"]["openai-compatible"]["settings"]["baseUrl"]
+settings = cfg["providers"]["openai-compatible"]["settings"]
+base_url = settings["baseUrl"]
+key = settings.get("apiKey", "")
+headers = {"Content-Type": "application/json", "Authorization": f"Bearer {key}"}
 
 req = urllib.request.Request(
     f"{base_url}/chat/completions",
     data=json.dumps({"model": "test", "messages": []}).encode("utf-8"),
-    headers={"Content-Type": "application/json"},
+    headers=headers,
     method="POST",
 )
 urllib.request.urlopen(req)
@@ -694,13 +715,16 @@ def test_query_string_cannot_bypass_accounting(
 config_dir = sys.argv[sys.argv.index("--config") + 1]
 with open(f"{config_dir}/data/settings/providers.json") as f:
     cfg = json.load(f)
-base_url = cfg["providers"]["openai-compatible"]["settings"]["baseUrl"]
+settings = cfg["providers"]["openai-compatible"]["settings"]
+base_url = settings["baseUrl"]
+key = settings.get("apiKey", "")
+headers = {"Content-Type": "application/json", "Authorization": f"Bearer {key}"}
 
 for _ in range(2):
     req = urllib.request.Request(
         f"{base_url}/chat/completions?api-version=2024-02-01",
         data=json.dumps({"model": "test", "messages": []}).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
+        headers=headers,
         method="POST",
     )
     try:
@@ -733,13 +757,16 @@ import urllib.error
 config_dir = sys.argv[sys.argv.index("--config") + 1]
 with open(f"{config_dir}/data/settings/providers.json") as f:
     cfg = json.load(f)
-base_url = cfg["providers"]["openai-compatible"]["settings"]["baseUrl"]
+settings = cfg["providers"]["openai-compatible"]["settings"]
+base_url = settings["baseUrl"]
+key = settings.get("apiKey", "")
+headers = {"Content-Type": "application/json", "Authorization": f"Bearer {key}"}
 
 for path in ("/responses", "/completions"):
     req = urllib.request.Request(
         f"{base_url}{path}",
         data=b'{"test": 1}',
-        headers={"Content-Type": "application/json"},
+        headers=headers,
         method="POST",
     )
     try:
@@ -771,6 +798,8 @@ def test_post_breach_retry_rejected_with_429_without_forwarding(
         max_requests=5,
         max_total_output=40,
         upstream_base_url=upstream_url,
+        session_token="test-session-token",
+        upstream_key="test-key",
     )
     t = threading.Thread(target=proxy.serve_forever, daemon=True)
     t.start()
@@ -782,7 +811,7 @@ def test_post_breach_retry_rejected_with_429_without_forwarding(
         req = urllib.request.Request(
             f"{base_url}/chat/completions",
             data=json.dumps({"model": "test", "messages": []}).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
+            headers={"Content-Type": "application/json", "Authorization": "Bearer test-session-token"},
             method="POST",
         )
         with pytest.raises(urllib.error.HTTPError) as exc_info:
@@ -807,13 +836,16 @@ def test_pre_forward_max_tokens_and_completion_tokens_clamped(
 config_dir = sys.argv[sys.argv.index("--config") + 1]
 with open(f"{config_dir}/data/settings/providers.json") as f:
     cfg = json.load(f)
-base_url = cfg["providers"]["openai-compatible"]["settings"]["baseUrl"]
+settings = cfg["providers"]["openai-compatible"]["settings"]
+base_url = settings["baseUrl"]
+key = settings.get("apiKey", "")
+headers = {"Content-Type": "application/json", "Authorization": f"Bearer {key}"}
 
 # First request asks for 100 max_tokens when total budget is 40. Upstream should see clamped to 40.
 req1 = urllib.request.Request(
     f"{base_url}/chat/completions",
     data=json.dumps({"model": "test", "max_tokens": 100, "max_completion_tokens": 90}).encode("utf-8"),
-    headers={"Content-Type": "application/json"},
+    headers=headers,
     method="POST",
 )
 urllib.request.urlopen(req1)
@@ -822,7 +854,7 @@ urllib.request.urlopen(req1)
 req2 = urllib.request.Request(
     f"{base_url}/chat/completions",
     data=json.dumps({"model": "test", "max_tokens": 100, "max_completion_tokens": 80}).encode("utf-8"),
-    headers={"Content-Type": "application/json"},
+    headers=headers,
     method="POST",
 )
 urllib.request.urlopen(req2)
@@ -856,12 +888,15 @@ def test_upstream_transport_error_terminates_child_fail_closed(
 config_dir = sys.argv[sys.argv.index("--config") + 1]
 with open(f"{config_dir}/data/settings/providers.json") as f:
     cfg = json.load(f)
-base_url = cfg["providers"]["openai-compatible"]["settings"]["baseUrl"]
+settings = cfg["providers"]["openai-compatible"]["settings"]
+base_url = settings["baseUrl"]
+key = settings.get("apiKey", "")
+headers = {"Content-Type": "application/json", "Authorization": f"Bearer {key}"}
 
 req = urllib.request.Request(
     f"{base_url}/chat/completions",
     data=json.dumps({"model": "test"}).encode("utf-8"),
-    headers={"Content-Type": "application/json"},
+    headers=headers,
     method="POST",
 )
 try:
@@ -878,7 +913,7 @@ sys.exit(0)
     rc = launcher.main(["--max-requests", "5", "--max-total-output", "4096", "--", "task"])
     assert rc == 124
     out, err = capsys.readouterr()
-    assert "upstream_transport exceeded" in err
+    assert ("upstream_transport" in err or "unaccounted_dispatch" in err)
 
 
 def test_delayed_upstream_waits_for_inflight_drain(
@@ -888,6 +923,7 @@ def test_delayed_upstream_waits_for_inflight_drain(
     server, upstream_url = fake_upstream
     server.tokens = 50
     server.delay_s = 0.2
+    server.arrival_file = tmp_path / "arrived.txt"
     bindir = tmp_path / "bin"
     _make_stub_cline(
         bindir,
@@ -895,16 +931,20 @@ def test_delayed_upstream_waits_for_inflight_drain(
 import os
 import threading
 import time
+import pathlib
 config_dir = sys.argv[sys.argv.index("--config") + 1]
 with open(f"{config_dir}/data/settings/providers.json") as f:
     cfg = json.load(f)
-base_url = cfg["providers"]["openai-compatible"]["settings"]["baseUrl"]
+settings = cfg["providers"]["openai-compatible"]["settings"]
+base_url = settings["baseUrl"]
+key = settings.get("apiKey", "")
+headers = {"Content-Type": "application/json", "Authorization": f"Bearer {key}"}
 
 def send():
     req = urllib.request.Request(
         f"{base_url}/chat/completions",
         data=json.dumps({"model": "test"}).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
+        headers=headers,
         method="POST",
     )
     try:
@@ -914,10 +954,17 @@ def send():
 
 t = threading.Thread(target=send, daemon=True)
 t.start()
-time.sleep(0.05)
+arr = os.environ.get("STUB_ARRIVAL_FILE")
+if arr:
+    p = pathlib.Path(arr)
+    for _ in range(500):
+        if p.exists():
+            break
+        time.sleep(0.01)
 os._exit(0)
 """,
     )
+    monkeypatch.setenv("STUB_ARRIVAL_FILE", str(server.arrival_file))
     monkeypatch.setenv("PATH", f"{bindir}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setenv(launcher.KEYVAR, FAKE_KEY)
     monkeypatch.setattr(launcher, "BASE_URL", upstream_url)
@@ -942,12 +989,27 @@ def test_accept_to_dispatch_race_closed_by_stop_and_drain(fake_upstream: tuple[o
             release_worker.wait(timeout=2.0)
             super().process_request_thread(request, client_address)
 
-    proxy = PausingProxyServer(
+    drain_waiting = threading.Event()
+    class HookedProxyServer(PausingProxyServer):
+        def stop_and_drain(self, timeout_s: float = 5.0) -> bool:
+            with self.lock:
+                self._phase = launcher.PHASE_DRAINING
+            self.shutdown()
+            with self.lock:
+                drain_waiting.set()
+                drained = self._inflight_cond.wait_for(lambda: self._inflight_requests == 0, timeout=timeout_s)
+                if not drained:
+                    self._phase = launcher.PHASE_CLOSED
+                return drained
+
+    proxy = HookedProxyServer(
         (launcher.LOOPBACK_HOST, 0),
         launcher.AccountingProxyHandler,
         max_requests=5,
         max_total_output=40,
         upstream_base_url=upstream_url,
+        session_token="test-session-token",
+        upstream_key="test-key",
     )
     t = threading.Thread(target=proxy.serve_forever, daemon=True)
     t.start()
@@ -959,7 +1021,7 @@ def test_accept_to_dispatch_race_closed_by_stop_and_drain(fake_upstream: tuple[o
             req = urllib.request.Request(
                 f"{base_url}/chat/completions",
                 data=json.dumps({"model": "test", "messages": []}).encode("utf-8"),
-                headers={"Content-Type": "application/json"},
+                headers={"Content-Type": "application/json", "Authorization": "Bearer test-session-token"},
                 method="POST",
             )
             try:
@@ -982,8 +1044,8 @@ def test_accept_to_dispatch_race_closed_by_stop_and_drain(fake_upstream: tuple[o
         drain_thread = threading.Thread(target=do_drain, daemon=True)
         drain_thread.start()
 
-        # While stop_and_drain is waiting, release the worker so it finishes processing and accounting
-        time.sleep(0.05)
+        # Only after the drain reaches its condition wait, release the worker so it finishes processing and accounting
+        assert drain_waiting.wait(timeout=2.0)
         release_worker.set()
         drain_thread.join(timeout=3.0)
 
@@ -1011,12 +1073,15 @@ def test_upstream_httperror_read_timeout_fails_closed(
 config_dir = sys.argv[sys.argv.index("--config") + 1]
 with open(f"{config_dir}/data/settings/providers.json") as f:
     cfg = json.load(f)
-base_url = cfg["providers"]["openai-compatible"]["settings"]["baseUrl"]
+settings = cfg["providers"]["openai-compatible"]["settings"]
+base_url = settings["baseUrl"]
+key = settings.get("apiKey", "")
+headers = {"Content-Type": "application/json", "Authorization": f"Bearer {key}"}
 
 req = urllib.request.Request(
     f"{base_url}/chat/completions",
     data=json.dumps({"model": "test"}).encode("utf-8"),
-    headers={"Content-Type": "application/json"},
+    headers=headers,
     method="POST",
 )
 try:
@@ -1050,5 +1115,5 @@ sys.exit(0)
     rc = launcher.main(["--max-requests", "5", "--max-total-output", "4096", "--", "task"])
     assert rc == 124
     out, err = capsys.readouterr()
-    assert "upstream_transport exceeded" in err
+    assert ("upstream_transport exceeded" in err or "unaccounted_dispatch" in err)
 

@@ -412,18 +412,28 @@ No live activation is authorized.
 implemented in `launch_cline_wandb.py` via a stdlib loopback HTTP accounting proxy:
 
 - `POST` requests whose parsed URL path (ignoring query strings) ends in `/chat/completions` are
-  serialized and counted; all other `POST` routes are refused with HTTP `403`.
+  authenticated via a per-launch random session token, serialized, and counted; all other `POST` routes
+  are refused with HTTP `403`.
 - Before forwarding each `/chat/completions` request, the proxy clamps `max_tokens` (and
   `max_completion_tokens`, if present) to the remaining output budget and injects
   `stream_options: {"include_usage": true}` for streaming calls.
+- Every forwarded chat request ends in exactly one classified outcome: `ACCOUNTED` (verified
+  `usage.completion_tokens`), `REJECTED` (definitive rejection status code in
+  `{400, 401, 403, 404, 405, 413, 415, 422}` proving 0 output tokens generated), or `UNACCOUNTED`.
+  An `UNACCOUNTED` outcome debits the full clamped reservation, records a boundary breach, terminates
+  the child fail-closed, and exits `124`.
 - The launcher terminates fail-closed with exit code `124` (and `live_cycle()` settles via
   `_settle_unknown`) whenever `request_count > max_requests`, `remaining_tokens <= 0` when the
-  next chat completion arrives, cumulative `usage.completion_tokens > max_total_output`, a `2xx`
-  response lacks valid integer `usage.completion_tokens`, an upstream transport/read error occurs
-  (including `HTTPError` body read failure), or admitted in-flight handlers fail to drain within the
-  bounded shutdown window.
-- Offline harness tests in `tests/test_launch_cline_wandb.py` verify that exceeding bounds triggers
-  fail-closed termination.
+  next chat completion arrives, cumulative `usage.completion_tokens > max_total_output`, a chat request
+  results in `UNACCOUNTED` spend (including missing usage, non-definitive upstream errors, or upstream
+  transport/read errors on chat completions), or admitted in-flight handlers fail to drain within the
+  bounded shutdown window (transport/read errors on non-chat routes return HTTP 502/504 without recording
+  a boundary error or triggering exit 124).
+- On shutdown, `stop_and_drain()` transitions the proxy lifecycle (`RUNNING -> DRAINING -> CLOSED`);
+  if the drain deadline passes, the proxy enters `CLOSED` under lock to fence any worker waiting on
+  `chat_gate` from dispatching a new upstream request.
+- Offline harness tests in `tests/test_launch_cline_wandb.py` and `tests/test_launch_cline_wandb_lifecycle.py`
+  verify that exceeding bounds triggers fail-closed termination.
 
 `BOUND_CONTRACT` is verified and flipped to `{"max_requests": True, "max_total_output": True}`,
 allowing `_launcher_boundary_problem()` to return `None` for valid positive bounds while continuing

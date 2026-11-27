@@ -23,11 +23,22 @@ Launcher flags (explicit, mutually independent except plan vs implement):
   --max-requests N       required positive request bound.
   --max-total-output N   required positive cumulative output-token bound.
 
-Both bounds are mandatory. The launcher runs a stdlib loopback accounting proxy
-intercepting Cline's OpenAI-compatible requests to enforce exact wire-level request counts
-and cumulative usage.completion_tokens (injecting stream_options: {"include_usage": true} on
-SSE streams). If either bound is exceeded or usage is missing, the child is terminated fail-closed
-with exit code 124.
+Both bounds are mandatory. The launcher runs a stdlib loopback accounting proxy between Cline and
+the provider. Cline authenticates to the proxy with a random per-launch session token; the provider
+key stays in launcher memory and is never written to disk. Contract, one rule per line:
+  - Only `POST` requests whose URL path (query string ignored) ends in `/chat/completions` are
+    forwarded and counted; every other `POST` is refused with HTTP 403.
+  - Before forwarding, `max_tokens` (and `max_completion_tokens` when present) is clamped to the
+    remaining output budget, and `stream_options.include_usage` is forced on for streaming calls.
+  - Every forwarded chat request ends in exactly one outcome: ACCOUNTED (verified
+    `usage.completion_tokens`), REJECTED (a status in DEFINITIVE_REJECTIONS, so no output was
+    generated) or UNACCOUNTED. UNACCOUNTED covers a 2xx response without usage, any other status,
+    and any transport or read failure. It is debited in full against the output budget.
+  - The child is terminated and the launcher exits 124 when `request_count` exceeds `max_requests`,
+    when the next chat request finds no output budget left, when cumulative output exceeds
+    `max_total_output`, when a dispatch is UNACCOUNTED, or when admitted handlers do not drain in time.
+  - Exit 124 means spend is breached or not fully accounted: callers settle it as unknown spend.
+  - Transport errors on non-chat routes return HTTP 502/504 and do not change the exit code.
 
 Passthrough after `--` is positional task text only. Tokens that start with `-`
 (including a token that is exactly `-`) are refused before subprocess; reserved
@@ -39,8 +50,8 @@ How it works: builds a throwaway 0600 config directory (0700) holding only the o
 entry pointing at the local loopback accounting proxy, runs `cline --config <dir> -P openai-compatible
 -m <model> --thinking <effort>` then permission flags then positional task tokens, and deletes
 the directory afterwards. The key must already be exported as DEEPSEEK_V4_FLASH_WANDB; this launcher
-does not parse the env file. The key is never printed or put in argv; the operator's real Cline
-directory is never touched.
+does not parse the env file. The key is never printed, put in argv or written to disk; the operator's
+real Cline directory is never touched.
 
 Cline 3.0.74 is strict about the entry: tokenSource must be "manual" (or its own "oauth" or
 "migration") and updatedAt must look like 2026-11-12T02:48:17.562Z (milliseconds, Z). Anything
@@ -49,9 +60,11 @@ else fails every request with the misleading `error: invalid model ID`.
 from __future__ import annotations
 
 import argparse
+import hmac
 import http.server
 import json
 import os
+import secrets
 import shutil
 import socket
 import subprocess
@@ -62,7 +75,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
-from typing import Sequence
+from typing import Any, Sequence
 
 KEYVAR = "DEEPSEEK_V4_FLASH_WANDB"
 DEFAULT_ENV_FILE = "~/.openclaw/.env.wandb-deepseek"
@@ -71,8 +84,14 @@ DEFAULT_MODEL = "deepseek-ai/DeepSeek-V4.1-Flash-1017"
 EFFORTS = ("medium", "high", "low")  # never xhigh or max
 DEFAULT_TIMEOUT_MS = 30000
 LOOPBACK_HOST = "127.0" + ".0.1"
+MAX_RESPONSE_BYTES = 16 * 1024 * 1024
+# Statuses that prove the provider refused the request before it generated any output.
+# Every other non-2xx status is treated as possibly billed (UNACCOUNTED).
+DEFINITIVE_REJECTIONS = frozenset({400, 401, 403, 404, 405, 413, 415, 422})
+ACCOUNTED, REJECTED, UNACCOUNTED = "accounted", "rejected", "unaccounted"
+PHASE_RUNNING, PHASE_DRAINING, PHASE_CLOSED = "running", "draining", "closed"
 # Evidence-backed capability flags, enforced launcher-side via loopback HTTP accounting proxy.
-# The launcher supervises child execution and terminates fail-closed if either bound is reached.
+# The launcher terminates fail-closed once a bound is exceeded or a dispatch cannot be accounted for.
 BOUND_CONTRACT = {"max_requests": True, "max_total_output": True}
 # Launcher-owned flags (short, long, and equals forms). Any option-like rest token is refused.
 _RESERVED = frozenset({
@@ -106,7 +125,11 @@ def build_config(
     timeout_ms: int,
     base_url: str = BASE_URL,
 ) -> dict:
-    """Return a providers.json document holding only the Cline-compatible openai-compatible entry."""
+    """Return a providers.json document with only the openai-compatible entry.
+
+    `key` is the credential Cline presents. The launcher passes its per-launch session token, never the
+    provider key, which stays in launcher memory.
+    """
     return {
         "version": 1,
         "lastUsedProvider": "openai-compatible",
@@ -227,10 +250,11 @@ def permission_flags(implement: bool, allow_tool_approval: bool) -> list[str]:
 
 
 class BoundaryExceededError(RuntimeError):
-    """Raised when child process exceeds max_requests or max_total_output."""
+    """A spend bound was exceeded, or a dispatch could not be accounted for (limit is None)."""
 
-    def __init__(self, bound: str, limit: int, actual: object) -> None:
-        super().__init__(f"{bound} exceeded: limit={limit}, actual={actual}")
+    def __init__(self, bound: str, limit: int | None, actual: object) -> None:
+        detail = f"exceeded: limit={limit}, actual={actual}" if limit is not None else f"actual={actual}"
+        super().__init__(f"{bound} {detail}")
         self.bound = bound
         self.limit = limit
         self.actual = actual
@@ -307,6 +331,26 @@ def extract_sse_completion_tokens(body: bytes) -> int | None:
         return None
 
 
+def classify_chat_outcome(status: int, tokens: int | None) -> str:
+    """Return the single outcome of one forwarded chat request."""
+    if 200 <= status < 300:
+        return ACCOUNTED if tokens is not None else UNACCOUNTED
+    return REJECTED if status in DEFINITIVE_REJECTIONS else UNACCOUNTED
+
+
+def clamp_output_caps(req_json: dict, remaining_tokens: int) -> dict:
+    """Clamp max_tokens (always) and max_completion_tokens (when present) to the remaining budget."""
+    for field in ("max_tokens", "max_completion_tokens"):
+        if field == "max_tokens" or field in req_json:
+            val = req_json.get(field)
+            req_json[field] = min(val, remaining_tokens) if (type(val) is int and val > 0) else remaining_tokens
+    return req_json
+
+
+class OversizeResponseError(RuntimeError):
+    """The upstream response exceeded MAX_RESPONSE_BYTES."""
+
+
 class AccountingProxyHandler(http.server.BaseHTTPRequestHandler):
     """HTTP proxy handler enforcing request count and completion token limits."""
 
@@ -317,27 +361,40 @@ class AccountingProxyHandler(http.server.BaseHTTPRequestHandler):
         # Silence access logs to prevent API keys/prompts leaking to console
         pass
 
+    def _send(self, status: int, header_items: list[tuple[str, str]], body: bytes) -> None:
+        """Write one response and close. A client that already went away (for example the child we
+        just terminated) is expected: the outcome was recorded before this write, so it is not an error."""
+        self.close_connection = True
+        try:
+            self.send_response(status)
+            for key, value in header_items:
+                self.send_header(key, value)
+            self.send_header("Connection", "close")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+
     def _reject(self, status: int, err_bytes: bytes) -> None:
         """Send a compact JSON error response and close the connection."""
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(err_bytes)))
-        self.send_header("Connection", "close")
-        self.end_headers()
-        self.wfile.write(err_bytes)
-        self.wfile.flush()
-        self.close_connection = True
+        self._send(status, [("Content-Type", "application/json")], err_bytes)
 
-    def _fail_closed(self, bound: str, actual: object, status: int, err_bytes: bytes) -> None:
-        """Record a boundary error, terminate the child fail-closed, and reject the HTTP request."""
-        limit = self.server.max_requests if bound == "max_requests" else self.server.max_total_output
+    def _fail_closed(self, cause: str, limit: int | None, actual: object, status: int, message: bytes) -> None:
+        """Record the breach, terminate the child fail-closed, and reject the request."""
         with self.server.lock:
-            self.server.boundary_error.append(BoundaryExceededError(bound, limit, actual))
+            self.server.boundary_error.append(BoundaryExceededError(cause, limit, actual))
         self.server.terminate_child()
-        self._reject(status, err_bytes)
+        self._reject(status, message)
 
-    def _is_chat_completions_route(self, path: str) -> bool:
-        route = urllib.parse.urlsplit(path).path.rstrip("/")
+    def _is_authorized(self) -> bool:
+        supplied = self.headers.get("Authorization", "").encode("utf-8")
+        expected = f"Bearer {self.server.session_token}".encode("utf-8")
+        return hmac.compare_digest(supplied, expected)
+
+    def _is_chat_completions_route(self) -> bool:
+        route = urllib.parse.urlsplit(self.path).path.rstrip("/")
         return self.command == "POST" and route.endswith("/chat/completions")
 
     def do_GET(self) -> None:
@@ -353,183 +410,165 @@ class AccountingProxyHandler(http.server.BaseHTTPRequestHandler):
         self._proxy_request()
 
     def _proxy_request(self) -> None:
-        path = self.path
-        is_chat_completions = self._is_chat_completions_route(path)
-
-        if self.command == "POST" and not is_chat_completions:
+        if not self._is_authorized():
+            self._reject(401, b'{"error": {"message": "missing or invalid launcher session credential"}}')
+            return
+        is_chat = self._is_chat_completions_route()
+        if self.command == "POST" and not is_chat:
             self._reject(403, b'{"error": {"message": "unsupported POST route refused fail-closed"}}')
             return
-
         content_len = int(self.headers.get("Content-Length", 0))
         body_bytes = self.rfile.read(content_len) if content_len > 0 else b""
-
-        if is_chat_completions:
-            # Serialize /chat/completions so concurrent requests cannot race remaining token budget.
-            with self.server.chat_gate:
-                self._handle_chat_completions(path, body_bytes)
+        if not is_chat:
+            self._forward(body_bytes, chat_budget=None, is_streaming=False)
             return
-
-        self._forward_request(path, body_bytes, is_chat_completions=False, is_streaming=False)
+        # Serialize chat completions so concurrent requests cannot race the remaining output budget.
+        with self.server.chat_gate:
+            self._handle_chat(body_bytes)
 
     def _admit_chat_request(self) -> int | None:
-        """Check breach/request/token gates under lock; return remaining tokens or None if rejected."""
+        """Gate one chat request; return the remaining output budget, or None after rejecting it."""
         with self.server.lock:
+            if self.server.phase == PHASE_CLOSED:
+                self._reject(503, b'{"error": {"message": "proxy closed; dispatch refused"}}')
+                return None
             if self.server.boundary_error:
                 self._reject(429, b'{"error": {"message": "bound already exceeded"}}')
                 return None
             self.server.request_count += 1
             if self.server.request_count > self.server.max_requests:
-                actual = self.server.request_count
+                breach = ("max_requests", self.server.max_requests, self.server.request_count,
+                          b'{"error": {"message": "max_requests exceeded", "type": "requests_exceeded"}}')
             else:
                 remaining = self.server.max_total_output - self.server.cumulative_output_tokens
                 if remaining > 0:
                     return remaining
-                actual = self.server.cumulative_output_tokens
-                self._fail_closed(
-                    "max_total_output",
-                    actual,
-                    429,
-                    b'{"error": {"message": "max_total_output exhausted", "type": "tokens_exceeded"}}',
-                )
-                return None
-        self._fail_closed(
-            "max_requests",
-            actual,
-            429,
-            b'{"error": {"message": "max_requests exceeded", "type": "requests_exceeded"}}',
-        )
+                breach = ("max_total_output", self.server.max_total_output, self.server.cumulative_output_tokens,
+                          b'{"error": {"message": "max_total_output exhausted", "type": "tokens_exceeded"}}')
+        cause, limit, actual, message = breach
+        self._fail_closed(cause, limit, actual, 429, message)
         return None
 
     def _prepare_chat_payload(self, body_bytes: bytes, remaining_tokens: int) -> tuple[bytes, bool] | None:
-        """Parse JSON body, clamp output token caps to remaining_tokens, and enforce SSE include_usage."""
+        """Parse the body, clamp output caps, and force include_usage on streams."""
         try:
             req_json = json.loads(body_bytes.decode("utf-8")) if body_bytes else None
-        except Exception:
+        except (UnicodeDecodeError, ValueError):
             req_json = None
         if not isinstance(req_json, dict):
             self._fail_closed(
-                "max_total_output",
-                "invalid-request-json",
-                400,
+                "invalid_request", None, "non-object JSON body", 400,
                 b'{"error": {"message": "invalid JSON request body; refused fail-closed"}}',
             )
             return None
-        for field in ("max_tokens", "max_completion_tokens"):
-            if field == "max_tokens" or field in req_json:
-                val = req_json.get(field)
-                req_json[field] = min(val, remaining_tokens) if (type(val) is int and val > 0) else remaining_tokens
+        clamp_output_caps(req_json, remaining_tokens)
         is_streaming = req_json.get("stream") is True
         if is_streaming:
-            stream_opts = req_json.get("stream_options")
-            req_json["stream_options"] = {**(stream_opts if isinstance(stream_opts, dict) else {}), "include_usage": True}
+            opts = req_json.get("stream_options")
+            req_json["stream_options"] = {**(opts if isinstance(opts, dict) else {}), "include_usage": True}
         return json.dumps(req_json).encode("utf-8"), is_streaming
 
-    def _handle_chat_completions(self, path: str, body_bytes: bytes) -> None:
-        remaining_tokens = self._admit_chat_request()
-        if remaining_tokens is None:
+    def _handle_chat(self, body_bytes: bytes) -> None:
+        remaining = self._admit_chat_request()
+        if remaining is None:
             return
-        prepared = self._prepare_chat_payload(body_bytes, remaining_tokens)
+        prepared = self._prepare_chat_payload(body_bytes, remaining)
         if prepared is None:
             return
-        clamped_body, is_streaming = prepared
-        self._forward_request(path, clamped_body, is_chat_completions=True, is_streaming=is_streaming)
+        payload, is_streaming = prepared
+        self._forward(payload, chat_budget=remaining, is_streaming=is_streaming)
 
-    def _read_upstream_response(self, req: urllib.request.Request, timeout_s: float | None) -> tuple[int, object, bytes]:
-        """Execute upstream request and read full body; any read timeout on 2xx or HTTPError raises."""
+    def _build_upstream_request(self, body_bytes: bytes) -> urllib.request.Request:
+        headers = {k: v for k, v in self.headers.items()
+                   if k.lower() not in ("host", "content-length", "connection", "authorization")}
+        headers["Connection"] = "close"
+        if self.server.upstream_key:
+            headers["Authorization"] = f"Bearer {self.server.upstream_key}"
+        if body_bytes:
+            headers["Content-Length"] = str(len(body_bytes))
+        return urllib.request.Request(
+            resolve_upstream_url(self.server.upstream_base_url, self.path),
+            data=body_bytes or None, headers=headers, method=self.command,
+        )
+
+    @staticmethod
+    def _read_bounded(stream: Any) -> bytes:
+        data = stream.read(MAX_RESPONSE_BYTES + 1)
+        if len(data) > MAX_RESPONSE_BYTES:
+            raise OversizeResponseError(f"upstream response exceeds {MAX_RESPONSE_BYTES} bytes")
+        return data
+
+    def _fetch_upstream(self, req: urllib.request.Request) -> tuple[int, Any, bytes]:
+        """One upstream round trip; a failure while reading ANY body (2xx or HTTPError) raises."""
+        timeout_s = (self.server.timeout_ms / 1000.0) if self.server.timeout_ms else None
         try:
             with urllib.request.urlopen(req, timeout=timeout_s) as resp:
-                return resp.status, resp.headers, resp.read()
+                return resp.status, resp.headers, self._read_bounded(resp)
         except urllib.error.HTTPError as exc:
             try:
-                return exc.code, exc.headers, exc.read()
+                return exc.code, exc.headers, self._read_bounded(exc)
             finally:
                 exc.close()
 
-    def _account_chat_usage(self, resp_body: bytes, is_streaming: bool) -> bool:
-        """Account completion_tokens for a 2xx chat response. Returns False if rejected fail-closed."""
-        tokens = extract_sse_completion_tokens(resp_body) if is_streaming else extract_json_completion_tokens(resp_body)
-        if tokens is None:
-            self._fail_closed(
-                "max_total_output",
-                "missing",
-                502,
-                b'{"error": {"message": "missing or invalid usage.completion_tokens"}}',
-            )
-            return False
+    def _settle_chat(self, status: int, body: bytes, is_streaming: bool, budget: int) -> bool:
+        """Apply the three-outcome rule to a chat response. False when the request was rejected here."""
+        tokens = None
+        if 200 <= status < 300:
+            tokens = extract_sse_completion_tokens(body) if is_streaming else extract_json_completion_tokens(body)
+        outcome = classify_chat_outcome(status, tokens)
+        if outcome == REJECTED:
+            return True
+        if outcome == UNACCOUNTED:
+            return self._reject_unaccounted(status if status >= 400 else 502, budget)
         with self.server.lock:
             self.server.cumulative_output_tokens += tokens
             total = self.server.cumulative_output_tokens
         if total > self.server.max_total_output:
             self._fail_closed(
-                "max_total_output",
-                total,
-                429,
+                "max_total_output", self.server.max_total_output, total, 429,
                 b'{"error": {"message": "max_total_output exceeded", "type": "tokens_exceeded"}}',
             )
             return False
         return True
 
-    def _forward_request(
-        self,
-        path: str,
-        body_bytes: bytes,
-        *,
-        is_chat_completions: bool,
-        is_streaming: bool,
-    ) -> None:
-        headers = {}
-        for k, v in self.headers.items():
-            if k.lower() in ("host", "content-length", "connection"):
-                continue
-            headers[k] = v
-        headers["Connection"] = "close"
-        if body_bytes:
-            headers["Content-Length"] = str(len(body_bytes))
-
-        upstream_url = resolve_upstream_url(self.server.upstream_base_url, path)
-        timeout_s = (self.server.timeout_ms / 1000.0) if self.server.timeout_ms else None
-        req = urllib.request.Request(
-            upstream_url,
-            data=body_bytes if body_bytes else None,
-            headers=headers,
-            method=self.command,
+    def _reject_unaccounted(self, status: int, budget: int) -> bool:
+        """Debit the whole clamp (worst case) so no later request reuses it, then fail closed."""
+        with self.server.lock:
+            self.server.cumulative_output_tokens += budget
+            total = self.server.cumulative_output_tokens
+        self._fail_closed(
+            "unaccounted_dispatch", None, f"status={status}, debited={budget}, total={total}", status,
+            b'{"error": {"message": "dispatch could not be accounted for; failing closed"}}',
         )
+        return False
 
+    def _relay(self, status: int, headers: Any, body: bytes) -> None:
+        kept = [(k, v) for k, v in headers.items()
+                if k.lower() not in ("transfer-encoding", "content-length", "connection")]
+        self._send(status, kept, body)
+
+    def _forward(self, body_bytes: bytes, *, chat_budget: int | None, is_streaming: bool) -> None:
+        """Forward one request. chat_budget is the clamp for a chat request, None for any other route."""
         try:
-            status_code, resp_headers, resp_body = self._read_upstream_response(req, timeout_s)
+            status, headers, body = self._fetch_upstream(self._build_upstream_request(body_bytes))
         except Exception as exc:
-            status_code = 504 if isinstance(exc, (TimeoutError, socket.timeout)) else 502
-            if is_chat_completions:
-                # Any upstream transport/read failure (including HTTPError.read timeout) fails closed.
-                self._fail_closed(
-                    "upstream_transport",
-                    status_code,
-                    status_code,
-                    b'{"error": {"message": "upstream communication error"}}',
-                )
+            status = 504 if isinstance(exc, (TimeoutError, socket.timeout)) else 502
+            if chat_budget is not None:
+                self._reject_unaccounted(status, chat_budget)
             else:
-                self._reject(status_code, b'{"error": {"message": "upstream communication error"}}')
+                self._reject(status, b'{"error": {"message": "upstream communication error"}}')
             return
-
-        if is_chat_completions and 200 <= status_code < 300:
-            if not self._account_chat_usage(resp_body, is_streaming):
-                return
-
-        self.send_response(status_code)
-        for k, v in resp_headers.items():
-            if k.lower() in ("transfer-encoding", "content-length", "connection"):
-                continue
-            self.send_header(k, v)
-        self.send_header("Connection", "close")
-        self.send_header("Content-Length", str(len(resp_body)))
-        self.end_headers()
-        self.wfile.write(resp_body)
-        self.wfile.flush()
-        self.close_connection = True
+        if chat_budget is not None and not self._settle_chat(status, body, is_streaming, chat_budget):
+            return
+        self._relay(status, headers, body)
 
 
 class AccountingProxyServer(http.server.ThreadingHTTPServer):
-    """Threading HTTP server tracking request counts and output tokens."""
+    """Threading HTTP server tracking request counts and output tokens.
+
+    Lifecycle: RUNNING -> DRAINING (no new connections; admitted work may finish) -> CLOSED (set only
+    when the drain deadline passes; no admitted worker may start a new upstream dispatch).
+    """
 
     daemon_threads = True
     allow_reuse_address = True
@@ -542,13 +581,18 @@ class AccountingProxyServer(http.server.ThreadingHTTPServer):
         max_total_output: int,
         upstream_base_url: str = BASE_URL,
         timeout_ms: int = DEFAULT_TIMEOUT_MS,
+        *,
+        session_token: str,
+        upstream_key: str | None = None,
     ) -> None:
         super().__init__(server_address, RequestHandlerClass)
         self.lock = threading.RLock()
         self.chat_gate = threading.Lock()
         self._inflight_cond = threading.Condition(self.lock)
         self._inflight_requests = 0
-        self._accepting = True
+        self._phase = PHASE_RUNNING
+        self.session_token = session_token
+        self.upstream_key = upstream_key
         self.max_requests = max_requests
         self.max_total_output = max_total_output
         self.upstream_base_url = upstream_base_url
@@ -558,14 +602,18 @@ class AccountingProxyServer(http.server.ThreadingHTTPServer):
         self.boundary_error: list[BoundaryExceededError] = []
         self.child_proc: subprocess.Popen | None = None
 
-    def is_accepting(self) -> bool:
+    @property
+    def phase(self) -> str:
         with self.lock:
-            return self._accepting
+            return self._phase
 
-    def process_request(self, request, client_address) -> None:
-        """Admit and count request synchronously BEFORE spawning its worker thread."""
+    def is_accepting(self) -> bool:
+        return self.phase == PHASE_RUNNING
+
+    def process_request(self, request: socket.socket, client_address: tuple[str, int]) -> None:
+        """Admit and count a connection synchronously BEFORE spawning its worker thread."""
         with self.lock:
-            if not self._accepting:
+            if self._phase != PHASE_RUNNING:
                 self.shutdown_request(request)
                 return
             self._inflight_requests += 1
@@ -575,7 +623,7 @@ class AccountingProxyServer(http.server.ThreadingHTTPServer):
             self._decrement_inflight()
             raise
 
-    def process_request_thread(self, request, client_address) -> None:
+    def process_request_thread(self, request: socket.socket, client_address: tuple[str, int]) -> None:
         try:
             super().process_request_thread(request, client_address)
         finally:
@@ -588,12 +636,19 @@ class AccountingProxyServer(http.server.ThreadingHTTPServer):
                 self._inflight_cond.notify_all()
 
     def stop_and_drain(self, timeout_s: float = 5.0) -> bool:
-        """Stop accepting new requests, shut down the accept loop, and drain admitted handlers."""
+        """Stop accepting, shut down the accept loop, and drain admitted handlers.
+
+        On timeout the phase becomes CLOSED under the lock, so a worker still queued behind
+        chat_gate is refused instead of starting a new upstream dispatch.
+        """
         with self.lock:
-            self._accepting = False
+            self._phase = PHASE_DRAINING
         self.shutdown()
         with self.lock:
-            return self._inflight_cond.wait_for(lambda: self._inflight_requests == 0, timeout=timeout_s)
+            drained = self._inflight_cond.wait_for(lambda: self._inflight_requests == 0, timeout=timeout_s)
+            if not drained:
+                self._phase = PHASE_CLOSED
+            return drained
 
     def set_child_proc(self, proc: subprocess.Popen) -> None:
         with self.lock:
@@ -616,7 +671,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     boundary_problem = launcher_boundary_problem(args.max_requests, args.max_total_output)
     if boundary_problem is not None:
         raise SystemExit(f"ERROR: {boundary_problem}; refusing to start Cline")
-    key = read_key()
+    provider_key = read_key()
+    session_token = secrets.token_urlsafe(32)
     config_dir = tempfile.mkdtemp(prefix="clinecfg-")
     os.chmod(config_dir, 0o700)
     proxy = AccountingProxyServer(
@@ -626,6 +682,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         max_total_output=args.max_total_output,
         upstream_base_url=BASE_URL,
         timeout_ms=args.timeout_ms,
+        session_token=session_token,
+        upstream_key=provider_key,
     )
     proxy_thread = threading.Thread(target=proxy.serve_forever, daemon=True)
     proxy_thread.start()
@@ -638,7 +696,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         fd = os.open(os.path.join(settings_dir, "providers.json"), os.O_WRONLY | os.O_CREAT, 0o600)
         with os.fdopen(fd, "w") as handle:
             json.dump(
-                build_config(key, args.model, args.effort, args.timeout_ms, base_url=proxy_base_url),
+                build_config(session_token, args.model, args.effort, args.timeout_ms, base_url=proxy_base_url),
                 handle,
             )
         cline_bin = shutil.which("cline") or "cline"
@@ -657,7 +715,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         rc = proc.wait()
         drained = proxy.stop_and_drain(timeout_s=5.0)
         if not drained:
-            sys.stderr.write("ERROR: proxy accounting did not drain within 5.0s; terminating fail-closed\n")
+            sys.stderr.write("ERROR: proxy accounting did not drain within 5.0s; exiting 124 (spend not fully accounted)\n")
             return 124
         if proxy.boundary_error:
             exc = proxy.boundary_error[0]
