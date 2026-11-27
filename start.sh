@@ -1563,7 +1563,7 @@ _ollama_ensure_ready() {
     }
   fi
 
-  # 3. Warm model into GPU memory with indefinite keep-alive (non-blocking)
+  # 3. Warm model into GPU memory (non-blocking); it unloads after five idle minutes
   local already_loaded
   already_loaded=$(curl -sf "${endpoint}/api/ps" 2>/dev/null | \
     MODEL_NAME="$model" python3 -c "
@@ -1578,10 +1578,10 @@ print('yes' if any(n == model or n.startswith(base + ':') for n in names) else '
   if [ "$already_loaded" = "yes" ]; then
     _info "ollama" "model ${model} already loaded in memory"
   else
-    _info "ollama" "warming ${model} into GPU memory (keep_alive=-1)..."
+    _info "ollama" "warming ${model} into GPU memory (keep_alive=5m)..."
     curl -sf -X POST "${endpoint}/api/generate" \
       -H "Content-Type: application/json" \
-      -d "{\"model\":\"${model}\",\"keep_alive\":-1}" \
+      -d "{\"model\":\"${model}\",\"keep_alive\":\"5m\"}" \
       >/dev/null 2>&1 &
     _info "ollama" "warm-up dispatched (non-blocking)"
   fi

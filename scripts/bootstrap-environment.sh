@@ -38,13 +38,13 @@ ensure_pt_root_env() {
   log "ensured PERPETUA_TOOLS_ROOT in ~/.zshrc"
 }
 
-# 3) Keep the Mac orchestrator model warm (no cold-start stalls)
+# 3) Warm the Mac orchestrator model; it unloads after five idle minutes
 ensure_ollama_warm() {
-  command -v launchctl >/dev/null 2>&1 && launchctl setenv OLLAMA_KEEP_ALIVE 30m 2>/dev/null || true
+  command -v launchctl >/dev/null 2>&1 && launchctl setenv OLLAMA_KEEP_ALIVE 5m 2>/dev/null || true
   if curl -s -o /dev/null --max-time 30 \
-       -d '{"model":"qwen3.5:9b-mlx","prompt":"","keep_alive":"30m","stream":false}' \
+       -d '{"model":"qwen3.5:9b-mlx","prompt":"","keep_alive":"5m","stream":false}' \
        http://localhost:11434/api/generate 2>/dev/null; then
-    log "ollama qwen3.5:9b-mlx warmed (keep_alive 30m)"
+    log "ollama qwen3.5:9b-mlx warmed (keep_alive 5m)"
   else log "ollama warm skipped (not reachable)"; fi
 }
 
