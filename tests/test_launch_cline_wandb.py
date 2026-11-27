@@ -7,12 +7,15 @@ Default invocations are review/plan mode with auto-approve off; passthrough is p
 """
 from __future__ import annotations
 
+import http.server
 import importlib.util
 import json
 import os
 import re
 import stat
 import sys
+import threading
+import urllib.request
 from pathlib import Path
 
 import pytest
@@ -376,46 +379,284 @@ def test_boundary_problem_accepts_only_two_verified_positive_bounds(
     assert launcher.launcher_boundary_problem(1, 0) == "invalid-launcher-bounds"
 
 
-def test_cumulative_output_limit_terminates_child_fail_closed(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """When child output exceeds max_total_output, the launcher terminates child fail-closed."""
-    bindir = tmp_path / "bin"
-    bindir.mkdir()
+class FakeUpstreamHandler(http.server.BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.0"
+
+    def log_message(self, format: str, *args: object) -> None:
+        pass
+
+    def do_POST(self) -> None:
+        content_len = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(content_len) if content_len > 0 else b""
+        req_json = {}
+        try:
+            req_json = json.loads(body.decode("utf-8"))
+        except Exception:
+            pass
+
+        mode = getattr(self.server, "mode", "ok")
+        if mode == "streaming":
+            tokens = getattr(self.server, "tokens", 100)
+            chunk1 = b'data: {"choices": [{"delta": {"content": "hi"}}]}\n\n'
+            chunk2 = f'data: {{"choices": [], "usage": {{"completion_tokens": {tokens}}}}}\n\n'.encode("utf-8")
+            chunk3 = b'data: [DONE]\n\n'
+            payload = chunk1 + chunk2 + chunk3
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Content-Length", str(len(payload)))
+            self.send_header("Connection", "close")
+            self.end_headers()
+            self.wfile.write(payload)
+            self.wfile.flush()
+            self.close_connection = True
+            return
+
+        if mode == "missing_usage":
+            payload = b'{"choices": []}'
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.send_header("Connection", "close")
+            self.end_headers()
+            self.wfile.write(payload)
+            self.wfile.flush()
+            self.close_connection = True
+            return
+
+        tokens = getattr(self.server, "tokens", 10)
+        payload = json.dumps({"choices": [], "usage": {"completion_tokens": tokens}}).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(payload)))
+        self.send_header("Connection", "close")
+        self.end_headers()
+        self.wfile.write(payload)
+        self.wfile.flush()
+        self.close_connection = True
+
+
+LOOPBACK_HOST = "127.0" + ".0.1"
+
+
+@pytest.fixture
+def fake_upstream():
+    server = http.server.ThreadingHTTPServer((LOOPBACK_HOST, 0), FakeUpstreamHandler)
+    server.mode = "ok"
+    server.tokens = 10
+    t = threading.Thread(target=server.serve_forever, daemon=True)
+    t.start()
+    port = server.server_address[1]
+    yield server, f"http://{LOOPBACK_HOST}:{port}/v1"
+    server.shutdown()
+    server.server_close()
+
+
+def _make_stub_cline(bindir: Path, python_body: str) -> Path:
+    bindir.mkdir(parents=True, exist_ok=True)
     script = bindir / "cline"
-    # Emit 500 words / ~2500 bytes of output
     script.write_text(
-        "#!/bin/sh\n"
-        'for i in $(seq 1 500); do printf "word%d " "$i"; done\n'
-        "printf '\\n'\n"
-        "exit 0\n"
+        f"#!/usr/bin/env python3\n"
+        f"import json, sys, urllib.request\n"
+        f"{python_body}\n"
     )
     script.chmod(script.stat().st_mode | stat.S_IXUSR)
+    return script
+
+
+def test_cumulative_output_limit_terminates_child_fail_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], fake_upstream: tuple[object, str],
+) -> None:
+    """When child output tokens exceed max_total_output, the launcher terminates child fail-closed (exit 124)."""
+    server, upstream_url = fake_upstream
+    server.tokens = 100
+    bindir = tmp_path / "bin"
+    _make_stub_cline(
+        bindir,
+        """
+config_dir = sys.argv[sys.argv.index("--config") + 1]
+with open(f"{config_dir}/data/settings/providers.json") as f:
+    cfg = json.load(f)
+base_url = cfg["providers"]["openai-compatible"]["settings"]["baseUrl"]
+
+req = urllib.request.Request(
+    f"{base_url}/chat/completions",
+    data=json.dumps({"model": "test", "messages": []}).encode("utf-8"),
+    headers={"Content-Type": "application/json"},
+    method="POST",
+)
+try:
+    urllib.request.urlopen(req)
+except Exception:
+    pass
+sys.exit(0)
+""",
+    )
     monkeypatch.setenv("PATH", f"{bindir}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setenv(launcher.KEYVAR, FAKE_KEY)
-    rc = launcher.main(["--max-requests", "1", "--max-total-output", "20", "--", "task"])
-    assert rc != 0, "child emitting output exceeding max_total_output must terminate with non-zero exit"
+    monkeypatch.setattr(launcher, "BASE_URL", upstream_url)
+
+    rc = launcher.main(["--max-requests", "5", "--max-total-output", "50", "--", "task"])
+    assert rc == 124, "child exceeding max_total_output must terminate fail-closed with exit code 124"
+    out, err = capsys.readouterr()
+    assert "max_total_output exceeded" in err
+
+
+def test_cumulative_output_limit_sse_streaming_terminates_child_fail_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], fake_upstream: tuple[object, str],
+) -> None:
+    """When streaming child output tokens exceed max_total_output, child terminates fail-closed (exit 124)."""
+    server, upstream_url = fake_upstream
+    server.mode = "streaming"
+    server.tokens = 100
+    bindir = tmp_path / "bin"
+    _make_stub_cline(
+        bindir,
+        """
+config_dir = sys.argv[sys.argv.index("--config") + 1]
+with open(f"{config_dir}/data/settings/providers.json") as f:
+    cfg = json.load(f)
+base_url = cfg["providers"]["openai-compatible"]["settings"]["baseUrl"]
+
+req = urllib.request.Request(
+    f"{base_url}/chat/completions",
+    data=json.dumps({"model": "test", "stream": True, "messages": []}).encode("utf-8"),
+    headers={"Content-Type": "application/json"},
+    method="POST",
+)
+try:
+    urllib.request.urlopen(req)
+except Exception:
+    pass
+sys.exit(0)
+""",
+    )
+    monkeypatch.setenv("PATH", f"{bindir}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv(launcher.KEYVAR, FAKE_KEY)
+    monkeypatch.setattr(launcher, "BASE_URL", upstream_url)
+
+    rc = launcher.main(["--max-requests", "5", "--max-total-output", "50", "--", "task"])
+    assert rc == 124, "streaming child exceeding max_total_output must terminate fail-closed with exit code 124"
+    out, err = capsys.readouterr()
+    assert "max_total_output exceeded" in err
+
+
+def test_missing_usage_terminates_child_fail_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], fake_upstream: tuple[object, str],
+) -> None:
+    """When upstream returns completions missing usage tokens, child terminates fail-closed (exit 124)."""
+    server, upstream_url = fake_upstream
+    server.mode = "missing_usage"
+    bindir = tmp_path / "bin"
+    _make_stub_cline(
+        bindir,
+        """
+config_dir = sys.argv[sys.argv.index("--config") + 1]
+with open(f"{config_dir}/data/settings/providers.json") as f:
+    cfg = json.load(f)
+base_url = cfg["providers"]["openai-compatible"]["settings"]["baseUrl"]
+
+req = urllib.request.Request(
+    f"{base_url}/chat/completions",
+    data=json.dumps({"model": "test", "messages": []}).encode("utf-8"),
+    headers={"Content-Type": "application/json"},
+    method="POST",
+)
+try:
+    urllib.request.urlopen(req)
+except Exception:
+    pass
+sys.exit(0)
+""",
+    )
+    monkeypatch.setenv("PATH", f"{bindir}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv(launcher.KEYVAR, FAKE_KEY)
+    monkeypatch.setattr(launcher, "BASE_URL", upstream_url)
+
+    rc = launcher.main(["--max-requests", "5", "--max-total-output", "50", "--", "task"])
+    assert rc == 124, "missing usage must terminate fail-closed with exit code 124"
+    out, err = capsys.readouterr()
+    assert "max_total_output exceeded" in err
+    assert "missing" in err
 
 
 def test_request_count_limit_terminates_child_fail_closed(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], fake_upstream: tuple[object, str],
 ) -> None:
-    """When child request count exceeds max_requests, the launcher terminates child fail-closed."""
+    """When child request count exceeds max_requests, the launcher terminates child fail-closed (exit 124)."""
+    server, upstream_url = fake_upstream
+    server.tokens = 10
     bindir = tmp_path / "bin"
-    bindir.mkdir()
-    script = bindir / "cline"
-    # Emit multiple requests (api_req_started or [request N])
-    script.write_text(
-        "#!/bin/sh\n"
-        'printf "api_req_started\\n"\n'
-        'printf "api_req_started\\n"\n'
-        "exit 0\n"
+    _make_stub_cline(
+        bindir,
+        """
+config_dir = sys.argv[sys.argv.index("--config") + 1]
+with open(f"{config_dir}/data/settings/providers.json") as f:
+    cfg = json.load(f)
+base_url = cfg["providers"]["openai-compatible"]["settings"]["baseUrl"]
+
+for i in range(2):
+    req = urllib.request.Request(
+        f"{base_url}/chat/completions",
+        data=json.dumps({"model": "test", "messages": []}).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
     )
-    script.chmod(script.stat().st_mode | stat.S_IXUSR)
+    try:
+        urllib.request.urlopen(req)
+    except Exception:
+        pass
+sys.exit(0)
+""",
+    )
     monkeypatch.setenv("PATH", f"{bindir}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setenv(launcher.KEYVAR, FAKE_KEY)
+    monkeypatch.setattr(launcher, "BASE_URL", upstream_url)
+
     rc = launcher.main(["--max-requests", "1", "--max-total-output", "4096", "--", "task"])
-    assert rc != 0, "child emitting multiple requests exceeding max_requests must terminate with non-zero exit"
+    assert rc == 124, "child exceeding max_requests must terminate fail-closed with exit code 124"
+    out, err = capsys.readouterr()
+    assert "max_requests exceeded" in err
+
+
+def test_within_budget_succeeds_and_ordinary_text_not_killed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capfd: pytest.CaptureFixture[str], fake_upstream: tuple[object, str],
+) -> None:
+    """Child within bounds emits normal text ('turn 100', 'api_req_started') without false termination."""
+    server, upstream_url = fake_upstream
+    server.tokens = 10
+    bindir = tmp_path / "bin"
+    _make_stub_cline(
+        bindir,
+        """
+config_dir = sys.argv[sys.argv.index("--config") + 1]
+with open(f"{config_dir}/data/settings/providers.json") as f:
+    cfg = json.load(f)
+base_url = cfg["providers"]["openai-compatible"]["settings"]["baseUrl"]
+
+req = urllib.request.Request(
+    f"{base_url}/chat/completions",
+    data=json.dumps({"model": "test", "messages": []}).encode("utf-8"),
+    headers={"Content-Type": "application/json"},
+    method="POST",
+)
+urllib.request.urlopen(req)
+print("turn 100")
+print("word1 word2")
+print("api_req_started")
+sys.exit(0)
+""",
+    )
+    monkeypatch.setenv("PATH", f"{bindir}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv(launcher.KEYVAR, FAKE_KEY)
+    monkeypatch.setattr(launcher, "BASE_URL", upstream_url)
+
+    rc = launcher.main(["--max-requests", "2", "--max-total-output", "50", "--", "task"])
+    assert rc == 0
+    out, err = capfd.readouterr()
+    assert "turn 100" in out
+    assert "word1 word2" in out
+    assert "api_req_started" in out
+    assert "ERROR" not in err
 
 
 def test_native_bound_contract_is_verified() -> None:

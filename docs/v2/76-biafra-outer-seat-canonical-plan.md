@@ -408,10 +408,12 @@ termination, before any spend-gate reservation, followed by client qualification
 No live activation is authorized.
 
 **2026-11-27 Phase 1B BOUND_CONTRACT closure update.** Launcher-side boundary enforcement is
-implemented in `launch_cline_wandb.py` via `run_guarded_cline`: a stream byte/token accountant and
-request monitor supervise child process execution and terminate fail-closed if either
-`max_requests` or `max_total_output` is reached. Offline harness tests in
-`tests/test_launch_cline_wandb.py` verify that exceeding bounds triggers fail-closed termination.
+implemented in `launch_cline_wandb.py` via a stdlib loopback HTTP accounting proxy:
+wire-level request counts and model `usage.completion_tokens` (with
+`stream_options: {"include_usage": true}` injected for SSE streams) supervise execution and
+terminate fail-closed with exit code 124 if either `max_requests` or `max_total_output` is reached
+or if usage accounting is missing. Offline harness tests in `tests/test_launch_cline_wandb.py`
+verify that exceeding bounds triggers fail-closed termination.
 `BOUND_CONTRACT` is verified and flipped to `{"max_requests": True, "max_total_output": True}`,
 allowing `_launcher_boundary_problem()` to return `None` for valid positive bounds while continuing
 to refuse missing or non-positive bounds with `invalid-launcher-bounds`. The Biafra Cline route is
