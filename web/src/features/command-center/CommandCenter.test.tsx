@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { CommandCenter } from "./CommandCenter";
@@ -93,5 +93,40 @@ describe("CommandCenter nav smokes", () => {
     await waitFor(() => {
       expect(screen.getByText(/portal_server\.py is running on port 8002/i)).toBeInTheDocument();
     });
+  });
+
+  it("never shows invented production data when the API is unreachable", async () => {
+    renderCommandCenter();
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent(/live data unavailable/i);
+    });
+    expect(screen.queryByText("PRODUCTION")).not.toBeInTheDocument();
+    expect(screen.queryByText("Healthy")).not.toBeInTheDocument();
+    expect(screen.queryByText(/run_01JY/)).not.toBeInTheDocument();
+    expect(screen.queryByText("us-east-1")).not.toBeInTheDocument();
+  });
+
+  it("suppresses the effect controls while live data is unavailable and says why", async () => {
+    renderCommandCenter();
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent(/live data unavailable/i);
+    });
+    expect(screen.getByRole("button", { name: "Launch Swarm" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /preview plan/i })).toBeDisabled();
+    expect(screen.getAllByText(/controls are off until live data returns/i).length).toBeGreaterThan(0);
+  });
+});
+
+describe("CommandCenter demo mode", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("labels the fixtures as a demo, and keeps every effect control inert", async () => {
+    vi.stubEnv("VITE_PORTAL_DEMO", "1");
+    renderCommandCenter();
+    await waitFor(() => {
+      expect(screen.getAllByText(/demo data/i).length).toBeGreaterThan(0);
+    });
+    expect(screen.getByRole("button", { name: "Launch Swarm" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /preview plan/i })).toBeDisabled();
   });
 });

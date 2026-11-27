@@ -146,3 +146,18 @@ describe("SwarmComposer launch gate", () => {
     expect(screen.queryByText(/run preview first/i)).not.toBeInTheDocument();
   });
 });
+
+describe("SwarmComposer effect controls", () => {
+  it("turns preview and launch off and shows the reason when effects are off", () => {
+    const client = new QueryClient({ defaultOptions: { mutations: { retry: false }, queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <SwarmComposer previewData={approvedPreview} effectsOffReason="Live data unavailable: controls are off until live data returns." />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByRole("button", { name: "Launch Swarm" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /preview plan/i })).toBeDisabled();
+    expect(screen.getByRole("status")).toHaveTextContent(/controls are off until live data returns/i);
+    expect(screen.getByRole("button", { name: "Launch Swarm" })).toHaveAttribute("aria-describedby", "effects-off-reason");
+  });
+});

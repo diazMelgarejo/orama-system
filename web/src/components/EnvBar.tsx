@@ -1,9 +1,11 @@
 import { StatusBadge } from "./StatusBadge";
 import { statusToTone } from "./statusTone";
 import type { AppState } from "@/api/appState";
+import type { Provenance } from "@/features/command-center/dataProvenance";
 
 interface EnvBarProps {
   state: AppState | undefined;
+  provenance?: Provenance;
   isFetching?: boolean;
   onNavigate?: (page: string) => void;
 }
@@ -26,16 +28,20 @@ function IconBell() {
   );
 }
 
-export function EnvBar({ state, isFetching = false, onNavigate }: EnvBarProps) {
+export function EnvBar({ state, provenance, isFetching = false, onNavigate }: EnvBarProps) {
   const portalData = state?.portal?.data as
     | { version?: string; env?: string; region?: string; stage?: string }
     | undefined;
 
   const portalStatus = state?.portal?.available ? "online" : "offline";
+  const isLive = provenance === undefined || provenance.kind === "live";
   const env = portalData?.env ?? "dev";
-  const envLabel = env.toUpperCase();
-  const region = portalData?.region ?? "lan";
-  const apiHealthy = state?.runtime?.available ?? false;
+  const envLabel = isLive ? env.toUpperCase() : "UNKNOWN";
+  const region = isLive ? (portalData?.region ?? "lan") : "—";
+  const apiHealthy = isLive && (state?.runtime?.available ?? false);
+  const apiLabel = apiHealthy ? "Healthy" : isLive ? "Offline" : "Unavailable";
+  const provenanceLabel =
+    provenance?.kind === "demo" ? "DEMO DATA" : provenance?.kind === "stale" ? "STALE" : null;
 
   return (
     <header className="flex items-center gap-4 border-b border-line bg-canvas-surface px-4 py-2 text-xs">
@@ -50,16 +56,17 @@ export function EnvBar({ state, isFetching = false, onNavigate }: EnvBarProps) {
 
       {/* Env pill */}
       <div className="flex items-center gap-3">
-        <StatusBadge tone={envLabel === "PRODUCTION" || envLabel === "PROD" ? "ok" : statusToTone(portalStatus)} dot>
+        <StatusBadge tone={!isLive ? "neutral" : envLabel === "PRODUCTION" || envLabel === "PROD" ? "ok" : statusToTone(portalStatus)} dot>
           {envLabel}
         </StatusBadge>
+        {provenanceLabel && <StatusBadge tone="warn">{provenanceLabel}</StatusBadge>}
         <span className="text-ink-subtle">
           Region <span className="font-mono text-ink">{region}</span>
         </span>
         <span className="text-ink-subtle">
           API{" "}
           <span className={apiHealthy ? "text-status-ok" : "text-status-err"}>
-            {apiHealthy ? "Healthy" : "Offline"}
+            {apiLabel}
           </span>
         </span>
         {isFetching && (

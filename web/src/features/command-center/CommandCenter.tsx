@@ -19,6 +19,7 @@ import {
   resolveLatestJobId,
 } from "./commandCenterState";
 import { usePortalNotifications } from "./usePortalNotifications";
+import { UNAVAILABLE_STATE, effectsOffReason, isDemoMode, provenanceOf } from "./dataProvenance";
 
 type Page = "command" | "composer" | "runs" | "routing" | "artifacts" | "settings" | "docs";
 
@@ -37,7 +38,8 @@ type Page = "command" | "composer" | "runs" | "routing" | "artifacts" | "setting
  */
 export function CommandCenter() {
   const [page, setPage] = useState<Page>("command");
-  const [preview, setPreview] = useState<SwarmPreview | undefined>(mockSwarmPreview);
+  const demo = isDemoMode();
+  const [preview, setPreview] = useState<SwarmPreview | undefined>(demo ? mockSwarmPreview : undefined);
   usePortalNotifications();
 
   const appStateQuery = useQuery({
@@ -47,8 +49,18 @@ export function CommandCenter() {
     refetchIntervalInBackground: false,
   });
 
-  const state = resolveDisplayState(appStateQuery.data, mockState);
-  const jobs = resolveJobs(state, mockJobs);
+  const provenance = provenanceOf(
+    {
+      hasData: appStateQuery.data !== undefined,
+      isError: appStateQuery.isError,
+      isPending: appStateQuery.isPending,
+      dataUpdatedAt: appStateQuery.dataUpdatedAt,
+    },
+    demo,
+  );
+  const offReason = effectsOffReason(provenance);
+  const state = resolveDisplayState(demo ? undefined : appStateQuery.data, demo ? mockState : UNAVAILABLE_STATE);
+  const jobs = resolveJobs(state, demo ? mockJobs : []);
   const latestJobId = resolveLatestJobId(jobs);
 
   const artifactsQuery = useQuery({
@@ -58,7 +70,7 @@ export function CommandCenter() {
     refetchInterval: 10_000,
   });
 
-  const artifacts: Artifact[] = artifactsQuery.data?.artifacts ?? mockArtifactList;
+  const artifacts: Artifact[] = artifactsQuery.data?.artifacts ?? (demo ? mockArtifactList : []);
 
   function renderPage() {
     switch (page) {
@@ -80,6 +92,7 @@ export function CommandCenter() {
             <div className="lg:col-span-3">
               <SwarmComposer
                 previewData={preview}
+                effectsOffReason={offReason}
                 onPreview={(p) => setPreview(p)}
                 onLaunch={() => { /* jobs poll picks up within 5s */ }}
               />
@@ -102,6 +115,7 @@ export function CommandCenter() {
               <div className="lg:col-span-3">
                 <SwarmComposer
                   previewData={preview}
+                effectsOffReason={offReason}
                   onPreview={(p) => setPreview(p)}
                   onLaunch={() => { /* jobs poll picks up within 5s */ }}
                 />
@@ -124,15 +138,23 @@ export function CommandCenter() {
   return (
     <Shell
       state={state}
+      provenance={provenance}
       isFetching={appStateQuery.isFetching}
       activePage={page}
       onNavigate={(p) => setPage(p as Page)}
     >
       {renderPage()}
 
-      {appStateQuery.isError && (
-        <div className="mt-2 rounded border border-status-err/40 bg-status-err/5 px-3 py-2 text-2xs text-status-err">
-          /api/app/state unreachable — showing mock state. Check that portal_server.py is running on port 8002.
+      {provenance.kind === "demo" && (
+        <div role="status" className="mt-2 rounded border border-status-warn/40 bg-status-warn/5 px-3 py-2 text-xs text-status-warn">
+          Demo data: these are fixtures, not your system. Every control is off.
+        </div>
+      )}
+      {(provenance.kind === "unavailable" || provenance.kind === "stale") && (
+        <div role="alert" className="mt-2 rounded border border-status-err/40 bg-status-err/5 px-3 py-2 text-xs text-status-err">
+          /api/app/state unreachable — live data unavailable; nothing shown here is current
+          {provenance.kind === "stale" ? ` (last good answer ${new Date(provenance.lastGoodAt).toLocaleTimeString()})` : ""}
+          . Check that portal_server.py is running on port 8002.
         </div>
       )}
     </Shell>
