@@ -108,6 +108,11 @@
       "enabled": true
     }
   },
+  "commands": {
+    "ownerAllowFrom": [
+      "${env:OPENCLAW_OWNER_ID}"
+    ]
+  },
   "diagnostics": {
     "enabled": true,
     "otel": {
