@@ -30,15 +30,18 @@ key stays in launcher memory and is never written to disk. Contract, one rule pe
     forwarded and counted; every other `POST` is refused with HTTP 403.
   - Before forwarding, `max_tokens` (and `max_completion_tokens` when present) is clamped to the
     remaining output budget, and `stream_options.include_usage` is forced on for streaming calls.
-  - Every forwarded chat request ends in exactly one outcome: ACCOUNTED (verified
-    `usage.completion_tokens`), REJECTED (a status in DEFINITIVE_REJECTIONS, so no output was
-    generated) or UNACCOUNTED. UNACCOUNTED covers a 2xx response without usage, any other status,
-    and any transport or read failure. It is debited in full against the output budget.
+  - Every forwarded chat request ends in exactly one outcome: ACCOUNTED (a 2xx response with
+    verified `usage.completion_tokens`) or UNACCOUNTED. UNACCOUNTED covers a 2xx response without
+    valid usage, every non-2xx status (the launcher cannot prove a provider or gateway status means
+    no billable work), and any transport or read failure. It is debited in full against the output
+    budget.
   - The child is terminated and the launcher exits 124 when `request_count` exceeds `max_requests`,
     when the next chat request finds no output budget left, when cumulative output exceeds
     `max_total_output`, when a dispatch is UNACCOUNTED, or when admitted handlers do not drain in time.
   - Exit 124 means spend is breached or not fully accounted: callers settle it as unknown spend.
   - Transport errors on non-chat routes return HTTP 502/504 and do not change the exit code.
+  - Every upstream dispatch, chat or not, first claims a dispatch slot under the server lock. Once
+    the drain deadline sets CLOSED, no claim succeeds, so no dispatch can start after CLOSED.
 
 Passthrough after `--` is positional task text only. Tokens that start with `-`
 (including a token that is exactly `-`) are refused before subprocess; reserved
@@ -85,10 +88,9 @@ EFFORTS = ("medium", "high", "low")  # never xhigh or max
 DEFAULT_TIMEOUT_MS = 30000
 LOOPBACK_HOST = "127.0" + ".0.1"
 MAX_RESPONSE_BYTES = 16 * 1024 * 1024
-# Statuses that prove the provider refused the request before it generated any output.
-# Every other non-2xx status is treated as possibly billed (UNACCOUNTED).
-DEFINITIVE_REJECTIONS = frozenset({400, 401, 403, 404, 405, 413, 415, 422})
-ACCOUNTED, REJECTED, UNACCOUNTED = "accounted", "rejected", "unaccounted"
+# No non-2xx status is trusted to mean "nothing billed": neither the provider nor a gateway in
+# front of it documents that guarantee, so every non-2xx chat response is UNACCOUNTED.
+ACCOUNTED, UNACCOUNTED = "accounted", "unaccounted"
 PHASE_RUNNING, PHASE_DRAINING, PHASE_CLOSED = "running", "draining", "closed"
 # Evidence-backed capability flags, enforced launcher-side via loopback HTTP accounting proxy.
 # The launcher terminates fail-closed once a bound is exceeded or a dispatch cannot be accounted for.
@@ -347,9 +349,7 @@ def extract_sse_completion_tokens(body: bytes) -> int | None:
 
 def classify_chat_outcome(status: int, tokens: int | None) -> str:
     """Return the single outcome of one forwarded chat request."""
-    if 200 <= status < 300:
-        return ACCOUNTED if tokens is not None else UNACCOUNTED
-    return REJECTED if status in DEFINITIVE_REJECTIONS else UNACCOUNTED
+    return ACCOUNTED if 200 <= status < 300 and tokens is not None else UNACCOUNTED
 
 
 def clamp_output_caps(req_json: dict, remaining_tokens: int) -> dict:
@@ -556,14 +556,11 @@ class AccountingProxyHandler(http.server.BaseHTTPRequestHandler):
                 exc.close()
 
     def _settle_chat(self, status: int, body: bytes, is_streaming: bool, budget: int) -> bool:
-        """Apply the three-outcome rule to a chat response. False when the request was rejected here."""
+        """Apply the two-outcome rule to a chat response. False when the request was rejected here."""
         tokens = None
         if 200 <= status < 300:
             tokens = extract_sse_completion_tokens(body) if is_streaming else extract_json_completion_tokens(body)
-        outcome = classify_chat_outcome(status, tokens)
-        if outcome == REJECTED:
-            return True
-        if outcome == UNACCOUNTED:
+        if classify_chat_outcome(status, tokens) == UNACCOUNTED:
             return self._reject_unaccounted(status if status >= 400 else 502, budget)
         with self.server.lock:
             self.server.cumulative_output_tokens += tokens
@@ -594,13 +591,10 @@ class AccountingProxyHandler(http.server.BaseHTTPRequestHandler):
 
     def _forward(self, body_bytes: bytes, *, chat_budget: int | None, is_streaming: bool) -> None:
         """Forward one request. chat_budget is the clamp for a chat request, None for any other route."""
-        if chat_budget is None:
-            # Chat requests were fenced in _admit_chat_request; every other route needs the same fence.
-            with self.server.lock:
-                closed = self.server.phase == PHASE_CLOSED
-            if closed:
-                self._reject(503, b'{"error": {"message": "proxy closed; dispatch refused"}}')
-                return
+        if not self.server.claim_dispatch():
+            # CLOSED was set before this worker claimed a slot: nothing was sent, so nothing is debited.
+            self._reject(503, b'{"error": {"message": "proxy closed; dispatch refused"}}')
+            return
         try:
             status, headers, body = self._fetch_upstream(self._build_upstream_request(body_bytes))
         except Exception as exc:
@@ -646,6 +640,8 @@ class AccountingProxyServer(http.server.ThreadingHTTPServer):
         self._inflight_cond = threading.Condition(self.lock)
         self._inflight_requests = 0
         self._phase = PHASE_RUNNING
+        self.dispatches_claimed = 0
+        self.dispatches_claimed_at_close: int | None = None
         self.session_token = session_token
         self.upstream_key = upstream_key
         self.max_requests = max_requests
@@ -684,6 +680,19 @@ class AccountingProxyServer(http.server.ThreadingHTTPServer):
         finally:
             self._decrement_inflight()
 
+    def claim_dispatch(self) -> bool:
+        """Atomically refuse once CLOSED, or claim one upstream dispatch slot.
+
+        The phase check and the claim share the lock that stop_and_drain holds when it sets CLOSED,
+        so every dispatch is ordered strictly before or after the close: a claim made before it may
+        proceed (its I/O never blocks the drain deadline), and no claim can succeed after it.
+        """
+        with self.lock:
+            if self._phase == PHASE_CLOSED:
+                return False
+            self.dispatches_claimed += 1
+            return True
+
     def _decrement_inflight(self) -> None:
         with self.lock:
             self._inflight_requests = max(0, self._inflight_requests - 1)
@@ -703,6 +712,7 @@ class AccountingProxyServer(http.server.ThreadingHTTPServer):
             drained = self._inflight_cond.wait_for(lambda: self._inflight_requests == 0, timeout=timeout_s)
             if not drained:
                 self._phase = PHASE_CLOSED
+                self.dispatches_claimed_at_close = self.dispatches_claimed
             return drained
 
     def set_child_proc(self, proc: subprocess.Popen) -> None:

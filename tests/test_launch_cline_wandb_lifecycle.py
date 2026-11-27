@@ -16,6 +16,7 @@ import sys
 import textwrap
 import threading
 import time
+import urllib.request
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
@@ -51,7 +52,7 @@ class _UpstreamHandler(http.server.BaseHTTPRequestHandler):
                          "headers": {k.lower(): v for k, v in self.headers.items()}})
         if srv.mode == "redirect":
             self.send_response(302)
-            self.send_header("Location", f"{srv.redirect_to}{self.path}")
+            self.send_header("Location", f"{srv.redirect_to}/v1/redirected")  # fixed path, never request data
             self.send_header("Content-Length", "0")
             self.end_headers()
             return
@@ -75,7 +76,7 @@ class _UpstreamHandler(http.server.BaseHTTPRequestHandler):
         srv.release.wait(WAIT_S * 2)
         if srv.mode == "redirect":
             self.send_response(302)
-            self.send_header("Location", f"{srv.redirect_to}{self.path}")
+            self.send_header("Location", f"{srv.redirect_to}/v1/redirected")  # fixed path, never request data
             self.send_header("Content-Length", "0")
             self.end_headers()
         elif srv.mode == "truncated-500":
@@ -100,6 +101,7 @@ class _UpstreamHandler(http.server.BaseHTTPRequestHandler):
         else:
             payload = {"choices": []} if srv.mode == "nousage" else {"choices": [], "usage": {"completion_tokens": srv.tokens}}
             self._send(200, json.dumps(payload).encode())
+            srv.responded.append(srv.mode)
 
 
 class Upstream(http.server.ThreadingHTTPServer):
@@ -112,6 +114,7 @@ class Upstream(http.server.ThreadingHTTPServer):
         self.release, self.arrived = threading.Event(), threading.Event()
         self.arrival_file: Path | None = None
         self.redirect_to = ""
+        self.responded: list[str] = []
         self.release.set()
         threading.Thread(target=self.serve_forever, daemon=True).start()
 
@@ -239,11 +242,12 @@ def test_possibly_billed_statuses_are_debited_in_full_and_fail_closed(rig: RigFa
     assert r.breach_names() == ["unaccounted_dispatch"] and r.proxy.cumulative_output_tokens == 50 and r.child_exited()
 
 
-def test_definitive_rejection_is_relayed_without_breach_or_debit(rig: RigFactory) -> None:
+@pytest.mark.parametrize("status", [400, 401, 403, 404, 405, 413, 415, 422])
+def test_no_4xx_status_is_trusted_as_a_zero_spend_rejection(rig: RigFactory, status: int) -> None:
     r = rig(max_out=50)
-    r.up.status = 400
-    assert r.post()[0] == 400
-    assert not r.proxy.boundary_error and r.proxy.cumulative_output_tokens == 0 and r.child.poll() is None
+    r.up.status = status
+    assert r.post()[0] == status
+    assert r.breach_names() == ["unaccounted_dispatch"] and r.proxy.cumulative_output_tokens == 50 and r.child_exited()
 
 
 @pytest.mark.parametrize("mode", ["truncated-500", "huge"])
@@ -383,12 +387,15 @@ def test_main_waits_for_an_inflight_request_after_the_child_has_exited(
     up.release.clear()
     monkeypatch.setattr(L, "BASE_URL", up.base_url)
     at_wait = threading.Event()
+    inflight_at_wait: list[int] = []
     real_stop_and_drain = L.AccountingProxyServer.stop_and_drain
 
     def observed_stop_and_drain(self, timeout_s: float = 5.0) -> bool:
         real_wait_for = self._inflight_cond.wait_for
 
         def signalling_wait_for(predicate: Callable[[], bool], timeout: float | None = None) -> bool:
+            # Called with the lock held, so this count is exactly what the drain waits on.
+            inflight_at_wait.append(self._inflight_requests)
             at_wait.set()
             return real_wait_for(predicate, timeout)
 
@@ -414,9 +421,13 @@ def test_main_waits_for_an_inflight_request_after_the_child_has_exited(
         up.shutdown()
         up.server_close()
     assert drain_reached == [True], "the drain never reached its condition wait before the upstream was released"
+    assert inflight_at_wait == [1], "the drain must start waiting while the request is still in flight"
     assert arrival.exists() and len(up.hits) == 1
+    assert up.responded == ["nousage"], "the handler must have processed the missing-usage response"
     assert rc == 124
-    assert "unaccounted_dispatch" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    # A 2xx without usage is reported as 502; an upstream timeout would be reported as 504.
+    assert "unaccounted_dispatch" in err and "status=502" in err and "status=504" not in err
 
 
 def test_chat_redirect_is_not_followed_and_the_provider_key_never_reaches_another_origin(rig: RigFactory) -> None:
@@ -456,10 +467,11 @@ def test_response_shorter_than_its_declared_length_fails_closed_with_spend_recor
     assert r.proxy.cumulative_output_tokens == 50 and r.child_exited()
 
 
-def test_complete_definitive_rejection_is_still_relayed_without_a_debit(rig: RigFactory) -> None:
+def test_complete_400_is_debited_in_full_like_any_other_non_2xx(rig: RigFactory) -> None:
     r = rig(max_out=50)
     r.up.status = 400
-    assert r.post()[0] == 400 and r.proxy.cumulative_output_tokens == 0 and not r.proxy.boundary_error
+    assert r.post()[0] == 400 and r.proxy.cumulative_output_tokens == 50
+    assert r.breach_names() == ["unaccounted_dispatch"]
 
 
 def test_malformed_streamed_usage_fails_closed_and_debits_the_whole_reservation(rig: RigFactory) -> None:
@@ -507,3 +519,38 @@ def test_admitted_non_chat_worker_cannot_dispatch_after_the_proxy_is_closed(rig:
         _PausingGetHandler.proceed.set()
         worker.join(WAIT_S)
     assert result == {"s": 503} and not r.up.hits
+
+
+class _PauseAfterClaimHandler(L.AccountingProxyHandler):
+    """Pause after the dispatch claim and before the upstream request is built or sent."""
+
+    claimed = threading.Event()
+    proceed = threading.Event()
+
+    def _build_upstream_request(self, body_bytes: bytes) -> urllib.request.Request:
+        type(self).claimed.set()
+        type(self).proceed.wait(WAIT_S)
+        return super()._build_upstream_request(body_bytes)
+
+
+def test_close_and_dispatch_claim_are_ordered_by_one_lock(rig: RigFactory) -> None:
+    """A worker past the phase check claimed its slot first; CLOSED cannot slip in between."""
+    _PauseAfterClaimHandler.claimed.clear()
+    _PauseAfterClaimHandler.proceed.clear()
+    r = rig(child=False, handler=_PauseAfterClaimHandler)
+    result: dict[str, int] = {}
+    worker = threading.Thread(target=lambda: result.setdefault("s", r.get()[0]))
+    worker.start()
+    try:
+        assert _PauseAfterClaimHandler.claimed.wait(WAIT_S)
+        # The worker is between the phase check and the upstream request. Its claim is already
+        # recorded, so the close is ordered after it and records the count it closed on.
+        assert r.proxy.dispatches_claimed == 1
+        assert r.proxy.stop_and_drain(timeout_s=0.05) is False
+        assert r.proxy.phase == L.PHASE_CLOSED and r.proxy.dispatches_claimed_at_close == 1
+        assert r.proxy.claim_dispatch() is False, "no claim may succeed after CLOSED"
+        assert r.proxy.dispatches_claimed == 1
+    finally:
+        _PauseAfterClaimHandler.proceed.set()
+        worker.join(WAIT_S)
+    assert result == {"s": 200} and len(r.up.hits) == 1

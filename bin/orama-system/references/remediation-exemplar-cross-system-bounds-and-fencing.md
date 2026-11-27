@@ -56,6 +56,12 @@ When remediating process-supervision, spend-boundary, or distributed-state pull 
    `release_claim_with_event` (the L-1r same-agent-reclaim guard). No delivering commit is named
    here because none is pinned; do not describe the fencing above as enforced until the pin is
    moved to a commit that provides it and that commit is named in this card.
+   **Also open after the pin:** Perpetua-Tools `cbc467fb` adds the CLI requirement
+   (`--expected-claimed-at` or an explicit `--unverified-legacy` opt-out), but its Python API
+   `queue_complete` still defaults `expected_claimed_at` to `None`, so a direct caller can complete a
+   same-agent reclaim without a fence. Completion is fenced only on the CLI path, and only unless the
+   legacy opt-out is passed. Closing this needs a Perpetua-Tools change (require the token or an
+   explicit opt-out on the API) and then a pin move; both are tracked as open, not delivered.
 
 ---
 
@@ -91,7 +97,7 @@ When remediating process-supervision, spend-boundary, or distributed-state pull 
 4. **Preserving Distributed Claim Fencing vs. Shallow Test Placating:** When tests failed after
    changing `queue_claim` return type, reverting to `return None` satisfied the legacy
    characterization test but destroyed distributed fencing safety. We argued for the distributed-systems
-   invariant that `queue_claim` should return a monotonic fencing timestamp (`claim_ts: float`);
+   invariant that `queue_claim` should return a monotonic fencing timestamp (`claimed_at: float`);
    that remains proposed at the pinned revision (see invariant 5).
 
 ### B. Differences from Perplexity Design

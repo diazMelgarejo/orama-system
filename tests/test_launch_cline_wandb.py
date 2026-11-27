@@ -924,8 +924,24 @@ def test_delayed_upstream_waits_for_inflight_drain(
     """Delayed upstream where child exits 0 early waits for in-flight handler and exits 124 if bound breached."""
     server, upstream_url = fake_upstream
     server.tokens = 50
-    server.delay_s = 0.2
     server.arrival_file = tmp_path / "arrived.txt"
+    # Hold the upstream response until the production drain is waiting on this in-flight request.
+    server.release_event = threading.Event()
+    inflight_at_wait: list[int] = []
+    real_stop_and_drain = launcher.AccountingProxyServer.stop_and_drain
+
+    def observed_stop_and_drain(self: launcher.AccountingProxyServer, timeout_s: float = 5.0) -> bool:
+        real_wait_for = self._inflight_cond.wait_for
+
+        def signalling_wait_for(predicate: Callable[[], bool], timeout: float | None = None) -> bool:
+            inflight_at_wait.append(self._inflight_requests)
+            server.release_event.set()
+            return real_wait_for(predicate, timeout)
+
+        self._inflight_cond.wait_for = signalling_wait_for  # type: ignore[method-assign]
+        return real_stop_and_drain(self, timeout_s)
+
+    monkeypatch.setattr(launcher.AccountingProxyServer, "stop_and_drain", observed_stop_and_drain)
     bindir = tmp_path / "bin"
     _make_stub_cline(
         bindir,
@@ -935,6 +951,7 @@ import threading
 import time
 import pathlib
 config_dir = sys.argv[sys.argv.index("--config") + 1]
+arrived = False
 with open(f"{config_dir}/data/settings/providers.json") as f:
     cfg = json.load(f)
 settings = cfg["providers"]["openai-compatible"]["settings"]
@@ -961,8 +978,12 @@ if arr:
     p = pathlib.Path(arr)
     for _ in range(500):
         if p.exists():
+            arrived = True
             break
         time.sleep(0.01)
+if not arrived:
+    print("STUB: upstream arrival timed out", file=sys.stderr)
+    os._exit(3)
 os._exit(0)
 """,
     )
@@ -972,8 +993,12 @@ os._exit(0)
     monkeypatch.setattr(launcher, "BASE_URL", upstream_url)
 
     rc = launcher.main(["--max-requests", "5", "--max-total-output", "40", "--", "task"])
-    assert rc == 124
+    server.release_event.set()
     out, err = capsys.readouterr()
+    assert "STUB: upstream arrival timed out" not in err, "the request never reached the upstream"
+    assert server.arrival_file.exists()
+    assert inflight_at_wait == [1], "the drain must start waiting while the request is still in flight"
+    assert rc == 124
     assert "max_total_output exceeded" in err
 
 
@@ -1005,7 +1030,10 @@ def test_accept_to_dispatch_race_closed_by_stop_and_drain(fake_upstream: tuple[o
     # Exercise the production stop_and_drain(): only observe the condition wait it performs, then delegate.
     real_wait_for = proxy._inflight_cond.wait_for
 
+    inflight_at_wait: list[int] = []
+
     def signalling_wait_for(predicate: Callable[[], bool], timeout: float | None = None) -> bool:
+        inflight_at_wait.append(proxy._inflight_requests)
         drain_waiting.set()
         return real_wait_for(predicate, timeout)
 
@@ -1050,6 +1078,7 @@ def test_accept_to_dispatch_race_closed_by_stop_and_drain(fake_upstream: tuple[o
         drain_thread.join(timeout=3.0)
 
         assert drain_result == [True]
+        assert inflight_at_wait == [1], "the production condition wait must start with the worker in flight"
         with proxy.lock:
             assert len(proxy.boundary_error) == 1
             assert proxy.boundary_error[0].bound == "max_total_output"
@@ -1103,7 +1132,7 @@ sys.exit(0)
 
     class MockOpener:
         def open(self, req: urllib.request.Request, timeout: float | None = None) -> object:
-            # 400 is a definitive rejection: if the body read were skipped the 400 would be relayed
+            # Any non-2xx is unaccounted; if the body read were skipped the 400 would be relayed
             # (exit 0). Only the failing body read can turn it into an unaccounted dispatch (exit 124).
             raise urllib.error.HTTPError(
                 url=req.full_url,

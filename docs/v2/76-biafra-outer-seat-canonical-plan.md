@@ -417,23 +417,25 @@ implemented in `launch_cline_wandb.py` via a stdlib loopback HTTP accounting pro
 - Before forwarding each `/chat/completions` request, the proxy clamps `max_tokens` (and
   `max_completion_tokens`, if present) to the remaining output budget and injects
   `stream_options: {"include_usage": true}` for streaming calls.
-- Every forwarded chat request ends in exactly one classified outcome: `ACCOUNTED` (verified
-  `usage.completion_tokens`), `REJECTED` (definitive rejection status code in
-  `{400, 401, 403, 404, 405, 413, 415, 422}` proving 0 output tokens generated), or `UNACCOUNTED`.
-  An `UNACCOUNTED` outcome debits the full clamped reservation, records a boundary breach, terminates
+- Every forwarded chat request ends in exactly one classified outcome: `ACCOUNTED` (a 2xx response
+  with verified `usage.completion_tokens`) or `UNACCOUNTED`. Every non-2xx chat response is
+  `UNACCOUNTED`: neither the provider nor a gateway in front of it guarantees that a 4xx means no
+  billable work, so no status is trusted as a zero-spend rejection. An `UNACCOUNTED` outcome debits the full clamped reservation, records a boundary breach, terminates
   the child fail-closed, and exits `124`.
 - The launcher terminates fail-closed with exit code `124` (and `live_cycle()` settles via
   `_settle_unknown`) whenever `request_count > max_requests`, `remaining_tokens <= 0` when the
   next chat completion arrives, cumulative `usage.completion_tokens > max_total_output`, a chat request
-  results in `UNACCOUNTED` spend (including missing usage, non-definitive upstream errors, or upstream
-  transport/read errors on chat completions), or admitted in-flight handlers fail to drain within the
+  results in `UNACCOUNTED` spend (missing or malformed usage, any non-2xx status, or an upstream
+  transport/read error on a `/chat/completions` request only), or admitted in-flight handlers fail to drain within the
   bounded shutdown window (transport/read errors on non-chat routes return HTTP 502/504 without recording
   a boundary error or triggering exit 124).
 - On shutdown, `stop_and_drain()` moves the proxy lifecycle `RUNNING -> DRAINING` and waits for admitted
   handlers. It has two distinct outcomes: if every admitted handler finishes before the deadline it
   returns `True` and the phase stays `DRAINING` (the normal completion state); only if the deadline
   passes does the phase become `CLOSED` under lock (timeout-only) and the launcher exits `124`. `CLOSED`
-  fences every upstream dispatch, chat and non-chat, so a late worker cannot start a new request.
+  fences every upstream dispatch, chat and non-chat: each dispatch first claims a slot under the same
+  lock (`claim_dispatch()`), so it is ordered strictly before or after the close and no claim succeeds
+  after it, without the drain deadline waiting on upstream I/O.
 - Offline harness tests in `tests/test_launch_cline_wandb.py` and `tests/test_launch_cline_wandb_lifecycle.py`
   verify that exceeding bounds triggers fail-closed termination.
 
