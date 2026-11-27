@@ -24,6 +24,7 @@ import html as _html
 import ipaddress
 import json
 import logging
+import re
 import mimetypes
 import os
 import secrets
@@ -4031,22 +4032,28 @@ async def serve_assets(path: str):
 
 
 
+_LEGACY_SURFACE_LOGGED = False
+_BUILD_SHA = re.compile(r"[0-9a-fA-F]{7,40}")
+
+
 def portal_surface() -> dict[str, str]:
     """Which front end ``/`` serves and which build it is, so a missing or stale ``web/dist`` is never silent.
 
-    The build stamp (``web/dist/build-info.json``, written by the web build) is read at request time; a missing or
-    corrupt stamp reports ``unstamped`` and never breaks the page.
+    The build stamp (``web/dist/build-info.json``, written by the web build) is read at request time. Only a hex
+    commit is accepted (shortened to 12 characters, safe in a header); anything else, or a missing or corrupt
+    stamp, reports ``unstamped`` and never breaks the page. The reason is a constant code, not a sentence.
     """
     if not (_WEB_DIST / "index.html").exists():
-        return {"surface": "legacy", "reason": f"no web/dist build at {_WEB_DIST.name}; build with `pnpm build` in web/"}
+        return {"surface": "legacy", "reason": "no-web-dist"}
     build = "unstamped"
     try:
         stamp = json.loads((_WEB_DIST / "build-info.json").read_text(encoding="utf-8"))
-        if isinstance(stamp, dict) and isinstance(stamp.get("git_sha"), str) and stamp["git_sha"]:
-            build = stamp["git_sha"][:40]
+        sha = stamp.get("git_sha") if isinstance(stamp, dict) else None
+        if isinstance(sha, str) and _BUILD_SHA.fullmatch(sha):
+            build = sha[:12]
     except (OSError, ValueError):
         pass
-    return {"surface": "react", "build": build, "reason": "web/dist build present"}
+    return {"surface": "react", "build": build, "reason": "build-present"}
 
 
 def _surface_headers(surface: dict[str, str]) -> dict[str, str]:
@@ -4065,9 +4072,14 @@ async def index(request: Request):
     surface = portal_surface()
     if surface["surface"] == "react":
         return FileResponse(str(react_index), media_type="text/html", headers=_surface_headers(surface))
-    log.warning(
-        "portal serving the LEGACY page: %s (looked in %s)", surface["reason"], _WEB_DIST
-    )
+    global _LEGACY_SURFACE_LOGGED
+    if not _LEGACY_SURFACE_LOGGED:
+        _LEGACY_SURFACE_LOGGED = True
+        log.warning(
+            "portal serving the LEGACY page (%s): no web/dist build in %s; build with `pnpm build` in web/",
+            surface["reason"],
+            _WEB_DIST,
+        )
     status = await api_status()
     browser_token = _loopback_browser_token(request)
     html = _render_html(status, browser_token=browser_token)
