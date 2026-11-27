@@ -76,15 +76,10 @@ This file holds the bound contract and the run sequence. The rest is in the sibl
 from __future__ import annotations
 
 import importlib.util
-import json
 import os
 import secrets
 import shutil
-import signal
-import subprocess
 import sys
-import tempfile
-import threading
 from typing import Sequence
 
 _PARTS = "cline_wandb_launcher"
@@ -113,16 +108,18 @@ def _bind_parts() -> None:
 _bind_parts()
 
 # Names that callers and tests read from this file stay importable from it.
-from cline_wandb_launcher import process_tree, signal_relay  # noqa: E402
 from cline_wandb_launcher.accounting import BoundaryExceededError, extract_sse_completion_tokens  # noqa: E402,F401
 from cline_wandb_launcher.cli import parse_args  # noqa: E402
-from cline_wandb_launcher.cline_config import build_config, cline_timestamp  # noqa: E402,F401
-from cline_wandb_launcher.cline_process import permission_flags  # noqa: E402
+from cline_wandb_launcher.cline_config import (build_config, cline_timestamp, create_config_dir,  # noqa: E402,F401
+                                               write_config)
+from cline_wandb_launcher.cline_process import ClineChild, cline_command  # noqa: E402
 from cline_wandb_launcher.credentials import read_key  # noqa: E402
 from cline_wandb_launcher.defaults import (BASE_URL, DEFAULT_ENV_FILE, DEFAULT_MODEL, EFFORTS,  # noqa: E402,F401
                                            KEYVAR, LOOPBACK_HOST)
+from cline_wandb_launcher.exit_status import exit_code  # noqa: E402
 from cline_wandb_launcher.proxy_handler import AccountingProxyHandler  # noqa: E402
-from cline_wandb_launcher.proxy_server import PHASE_CLOSED, AccountingProxyServer  # noqa: E402,F401
+from cline_wandb_launcher.proxy_server import (PHASE_CLOSED, AccountingProxyServer, close_proxy,  # noqa: E402,F401
+                                               serve_in_background)
 from cline_wandb_launcher.upstream import hop_by_hop_names  # noqa: E402,F401
 
 # Evidence-backed capability flags, enforced launcher-side via loopback HTTP accounting proxy.
@@ -152,77 +149,24 @@ def main(argv: Sequence[str] | None = None) -> int:
         raise SystemExit(f"ERROR: {boundary_problem}; refusing to start Cline")
     provider_key = read_key()
     session_token = secrets.token_urlsafe(32)
-    config_dir = tempfile.mkdtemp(prefix="clinecfg-")
-    os.chmod(config_dir, 0o700)
+    config_dir = create_config_dir()
     proxy = AccountingProxyServer(
-        (LOOPBACK_HOST, 0),
-        AccountingProxyHandler,
-        max_requests=args.max_requests,
-        max_total_output=args.max_total_output,
-        upstream_base_url=BASE_URL,
-        timeout_ms=args.timeout_ms,
-        session_token=session_token,
-        upstream_key=provider_key,
+        (LOOPBACK_HOST, 0), AccountingProxyHandler,
+        max_requests=args.max_requests, max_total_output=args.max_total_output,
+        upstream_base_url=BASE_URL, timeout_ms=args.timeout_ms,
+        session_token=session_token, upstream_key=provider_key,
     )
-    proxy_thread = threading.Thread(target=proxy.serve_forever, daemon=True)
-    proxy_thread.start()
-    proxy_port = proxy.server_address[1]
-    proxy_base_url = f"http://{LOOPBACK_HOST}:{proxy_port}/v1"
-
-    proc: subprocess.Popen | None = None
-    received: list[int] = []
-    seen_tools: set[int] = set()
-    previous_handlers: dict = {}
+    proxy_base_url = serve_in_background(proxy)
+    child = ClineChild()
     try:
-        settings_dir = os.path.join(config_dir, "data", "settings")
-        os.makedirs(settings_dir)
-        fd = os.open(os.path.join(settings_dir, "providers.json"), os.O_WRONLY | os.O_CREAT, 0o600)
-        with os.fdopen(fd, "w") as handle:
-            json.dump(
-                build_config(session_token, args.model, args.effort, args.timeout_ms, base_url=proxy_base_url),
-                handle,
-            )
-        cline_bin = shutil.which("cline") or "cline"
-        cmd = [
-            cline_bin, "--config", config_dir, "-P", "openai-compatible", "-m", args.model,
-            "--thinking", args.effort, *permission_flags(args.implement, args.allow_tool_approval),
-        ]
-        cmd.extend(args.rest)  # the bounds stay here: Cline has no such options, the proxy enforces them
-
-        child_env = {k: v for k, v in os.environ.items() if k != KEYVAR}
-        own_group = hasattr(os, "killpg")  # POSIX; elsewhere only the direct child can be signalled
-        proc = subprocess.Popen(cmd, env=child_env, stdin=subprocess.DEVNULL, start_new_session=own_group)
-        group = proc.pid if own_group else None
-        if group is not None:
-            previous_handlers = signal_relay.forward_signals(group, received, seen_tools)
-        proxy.set_child_proc(proc, group)
-        rc = proc.wait()
-        drained = proxy.stop_and_drain(timeout_s=5.0)
-        if not drained:
-            sys.stderr.write("ERROR: proxy accounting did not drain within 5.0s; exiting 124 (spend not fully accounted)\n")
-            proxy.terminate_child()
-            return 124
-        if proxy.boundary_error:
-            exc = proxy.boundary_error[0]
-            sys.stderr.write(f"ERROR: {exc}; terminating fail-closed\n")
-            # The handler thread that started the termination dies with this process, so finish it here.
-            proxy.terminate_child()
-            return 124
-        if received:
-            if group is not None:
-                process_tree.terminate_group(proc, group, seen_tools)
-            return 128 + received[0]
-        return rc
+        write_config(config_dir, build_config(
+            session_token, args.model, args.effort, args.timeout_ms, base_url=proxy_base_url))
+        child.start(cline_command(config_dir, args), proxy)
+        child_rc = child.proc.wait()
+        return exit_code(proxy, child, child_rc)
     finally:
-        if proc is not None and proc.poll() is None:
-            proxy.terminate_child()  # an unexpected error must not leave Cline running
-        for signum, handler in previous_handlers.items():
-            signal.signal(signum, handler)
-        try:
-            proxy.shutdown()
-            proxy.server_close()
-        except Exception:
-            pass
+        child.release(proxy)
+        close_proxy(proxy)
         shutil.rmtree(config_dir, ignore_errors=True)
 
 

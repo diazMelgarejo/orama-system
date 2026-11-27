@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from cline_wandb_fixtures import launcher
+from cline_wandb_fixtures import launcher, part
 
 pytestmark = pytest.mark.unit
 
@@ -336,8 +336,9 @@ def test_unverified_client_bounds_refuse_before_key_config_or_process(
     def forbidden(*args: object, **kwargs: object) -> None:
         pytest.fail("an unverified boundary must not touch credentials, config, or Cline")
 
-    monkeypatch.setattr(launcher.tempfile, "mkdtemp", forbidden)
-    monkeypatch.setattr(launcher.subprocess, "run", forbidden)
+    monkeypatch.setattr(part("cline_config").tempfile, "mkdtemp", forbidden)
+    monkeypatch.setattr(part("cline_process").subprocess, "run", forbidden)
+    monkeypatch.setattr(part("cline_process").subprocess, "Popen", forbidden)
     with pytest.raises(SystemExit, match="launcher-output-bound-unsupported"):
         launcher.main(["--max-requests", "1", "--max-total-output", "4096", "--", "task"])
     assert not (stub_cline["record"] / "argv.txt").exists()

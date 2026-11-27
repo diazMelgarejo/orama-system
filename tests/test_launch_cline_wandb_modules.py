@@ -81,7 +81,7 @@ def test_running_as_a_script_from_another_directory_finds_its_parts(tmp_path: Pa
 
 @pytest.mark.parametrize("name", [
     "MAX_RESPONSE_BYTES", "_UPSTREAM_OPENER", "TERMINATE_GRACE_S", "signal_group", "signal_pid",
-    "descendants", "terminate_group", "terminate_proc", "forward_signals",
+    "descendants", "terminate_group", "terminate_proc", "forward_signals", "subprocess", "tempfile",
 ])
 def test_a_patch_aimed_at_a_moved_name_on_the_launcher_fails_loudly(
     monkeypatch: pytest.MonkeyPatch, name: str,
@@ -89,6 +89,26 @@ def test_a_patch_aimed_at_a_moved_name_on_the_launcher_fails_loudly(
     """The launcher does not re-export these, so a stale patch raises instead of changing nothing."""
     with pytest.raises(AttributeError):
         monkeypatch.setattr(launcher, name, None)
+
+
+def test_main_spawns_through_the_cline_process_patch_point_and_still_cleans_up(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A replaced Popen is what main() calls, so no test that replaces it can start a real Cline."""
+    spawned: list[tuple[list[str], dict[str, str]]] = []
+
+    def refuse(cmd: list[str], *, env: dict[str, str], **kwargs: object) -> None:
+        spawned.append((cmd, env))
+        raise OSError("spawn replaced by the test")
+
+    monkeypatch.setenv(launcher.KEYVAR, "provider-key-for-module-tests")
+    monkeypatch.setenv("PATH", str(tmp_path))  # no `cline` to find, even if the patch were lost
+    monkeypatch.setattr(part("cline_process").subprocess, "Popen", refuse)
+    with pytest.raises(OSError, match="spawn replaced by the test"):
+        launcher.main(["--max-requests", "1", "--max-total-output", "1", "--", "task"])
+    ((cmd, env),) = spawned
+    assert cmd[:2] == ["cline", "--config"] and launcher.KEYVAR not in env
+    assert not Path(cmd[2]).exists(), "the throwaway config was left behind"
 
 
 def _forbid_real_signals(monkeypatch: pytest.MonkeyPatch) -> None:

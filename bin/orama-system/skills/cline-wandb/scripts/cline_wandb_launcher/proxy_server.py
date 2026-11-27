@@ -1,4 +1,4 @@
-"""The accounting proxy's state: counters, the drain lifecycle and the child it may stop."""
+"""The accounting proxy server: counters, the drain lifecycle, the child it may stop, start and close."""
 from __future__ import annotations
 
 import http.server
@@ -8,7 +8,7 @@ import threading
 
 from . import process_tree
 from .accounting import BoundaryExceededError
-from .defaults import BASE_URL, DEFAULT_TIMEOUT_MS
+from .defaults import BASE_URL, DEFAULT_TIMEOUT_MS, LOOPBACK_HOST
 
 PHASE_RUNNING, PHASE_DRAINING, PHASE_CLOSED = "running", "draining", "closed"
 
@@ -131,3 +131,18 @@ class AccountingProxyServer(http.server.ThreadingHTTPServer):
     def _terminate_child_locked(self) -> None:
         if self.child_proc is not None:
             process_tree.terminate_proc(self.child_proc, self.child_group)
+
+
+def serve_in_background(proxy: AccountingProxyServer) -> str:
+    """Run the accept loop on a daemon thread; return the base URL the local client must use."""
+    threading.Thread(target=proxy.serve_forever, daemon=True).start()
+    return f"http://{LOOPBACK_HOST}:{proxy.server_address[1]}/v1"
+
+
+def close_proxy(proxy: AccountingProxyServer) -> None:
+    """Stop serving and close the socket. An ordinary error is ignored so that later cleanup still runs."""
+    try:
+        proxy.shutdown()
+        proxy.server_close()
+    except Exception:
+        pass

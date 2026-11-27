@@ -501,3 +501,37 @@ def test_a_reply_labelled_identity_is_accounted_as_usual(rig: RigFactory) -> Non
     r = rig(child=False)
     r.up.mode = "labelled-identity"
     assert r.post()[0] == 200 and r.proxy.cumulative_output_tokens == 5 and not r.proxy.boundary_error
+
+
+def test_main_returns_cline_own_exit_code_when_nothing_else_decides(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    cline = tmp_path / "cline"
+    cline.write_text(f"#!{sys.executable}\nraise SystemExit(7)\n")
+    cline.chmod(cline.stat().st_mode | stat.S_IEXEC)
+    monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv(L.KEYVAR, PROVIDER_KEY)
+    assert L.main(["--max-requests", "2", "--max-total-output", "50", "--", "task"]) == 7
+
+
+def test_main_exits_124_with_its_diagnostic_when_the_drain_times_out(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+) -> None:
+    _install_fake_cline(tmp_path, monkeypatch)
+    up = Upstream()
+    monkeypatch.setattr(L, "BASE_URL", up.base_url)
+    real_stop_and_drain = L.AccountingProxyServer.stop_and_drain
+    deadlines: list[float] = []
+
+    def timed_out(self, timeout_s: float = 5.0) -> bool:
+        deadlines.append(timeout_s)
+        real_stop_and_drain(self, timeout_s)
+        return False
+
+    monkeypatch.setattr(L.AccountingProxyServer, "stop_and_drain", timed_out)
+    try:
+        rc = L.main(["--max-requests", "2", "--max-total-output", "50", "--", "task"])
+    finally:
+        up.shutdown()
+        up.server_close()
+    assert rc == 124 and deadlines == [5.0]
+    assert capsys.readouterr().err == (
+        "ERROR: proxy accounting did not drain within 5.0s; exiting 124 (spend not fully accounted)\n")
