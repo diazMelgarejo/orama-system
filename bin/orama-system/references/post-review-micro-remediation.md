@@ -446,8 +446,9 @@ Skillify pattern:
 ## Related
 
 - [`multi-agent-collaboration-protocol.md`](multi-agent-collaboration-protocol.md) —
-  the nested-branch merge protocol this pattern complements (that doc covers merging
-  concurrent branches; this one covers remediating a single branch after review)
+  nested-branch merge protocol this pattern complements
+- [`remediation-exemplar-cross-system-bounds-and-fencing.md`](remediation-exemplar-cross-system-bounds-and-fencing.md) —
+  advanced code-review exemplar: loopback proxy spend bounds and distributed task fencing
 - [`integrative-merge.md`](../skills/oramasys-method/references/integrative-merge.md) —
   synthesize, never amputate; six resolution modes referenced by Phase 3's
   reset-vs-rebase decision

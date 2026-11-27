@@ -2,9 +2,10 @@
 
 This index tells future skills where to link when they need branch-local, pattern-level review remediation guidance.
 
-Canonical card:
+Canonical cards:
 
 - [`branch-local-pattern-remediation.md`](branch-local-pattern-remediation.md)
+- [`remediation-exemplar-cross-system-bounds-and-fencing.md`](remediation-exemplar-cross-system-bounds-and-fencing.md)
 
 ## Recommended skill cross-reference targets
 
