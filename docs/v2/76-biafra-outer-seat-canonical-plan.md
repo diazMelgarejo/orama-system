@@ -360,24 +360,25 @@ The operator ruled on both gaps on 2026-11-23. These are later decisions: sectio
 Neither earlier record is invalid. The soul card's prohibition binds Wanda, and the lesson
 describes the Biafra route. Wanda's soul card states that scope.
 
-**What runs today.** `live_cycle()` refuses with `launcher-output-bound-unsupported`. The legacy
-`run_program` path refuses with `legacy-live-path-disabled` **only when armed** (`launch_allowed()`
-returns true); when the gate and arm variables are unset, `run_program()` calls `dry_cycle()` and
-sets `called_launcher=False` instead. Neither path launches Cline. The launcher has
-no spend gate of its own, so any Cline caller must go through `bin/agents/spend_guard.py`, as the
-live cycle is designed to. Wanda's W&B calls are made directly with the OpenAI client by
+**What runs today (historical — 2026-11-23, superseded by 2026-11-27 closure below).**
+`live_cycle()` refuses with `launcher-output-bound-unsupported`. The legacy `run_program` path
+refuses with `legacy-live-path-disabled` **only when armed** (`launch_allowed()` returns true);
+when the gate and arm variables are unset, `run_program()` calls `dry_cycle()` and sets
+`called_launcher=False` instead. Neither path launches Cline. The launcher has no spend gate
+of its own, so any Cline caller must go through `bin/agents/spend_guard.py`, as the live cycle
+is designed to. Wanda's W&B calls are made directly with the OpenAI client by
 `bin/orama-system/skills/wanda-wandb/scripts/wanda_chat.py`. That client stays outside the
-spend gate in this change and is not an authorized unattended or paid path. The
-"generic OpenAI route refuses W&B" rule in section 14 belongs to
-Perpetua-Tools' `.agent/harness/llm.py`, a different consumer, so it does not
-conflict with Wanda's path. `tests/test_biafra_designation_docs.py` keeps this wording tied to the
-launcher's refusal. The Perpetua-Tools record is its `DECISIONS.md` entries of 2026-11-23, with a
-correction of the same date.
+spend gate in this change and is not an authorized unattended or paid path. The "generic OpenAI
+route refuses W&B" rule in section 14 belongs to Perpetua-Tools' `.agent/harness/llm.py`, a
+different consumer, so it does not conflict with Wanda's path.
+`tests/test_biafra_designation_docs.py` keeps this wording tied to the launcher's refusal.
+The Perpetua-Tools record is its `DECISIONS.md` entries of 2026-11-23, with a correction of the
+same date.
 
 Nothing here arms a live cycle, enables serving, approves a paid model or authorizes a merge. G1
 and G2 stay dependency-blocked, and arming one bounded live cycle remains a separate operator act.
 
-### 15.1 Bounded-launcher contract checkpoint (2026-11-26)
+### 15.1 Bounded-launcher contract checkpoint (2026-11-26, superseded by 2026-11-27 closure below)
 
 This is an additive Lane 1B status note. The 2026-11-23 ruling and the historical sections stand;
 **implementation is incomplete**, and "bounded-capable" remains an acceptance gate rather than a
@@ -408,10 +409,37 @@ termination, before any spend-gate reservation, followed by client qualification
 No live activation is authorized.
 
 **2026-11-27 Phase 1B BOUND_CONTRACT closure update.** Launcher-side boundary enforcement is
-implemented in `launch_cline_wandb.py` via `run_guarded_cline`: a stream byte/token accountant and
-request monitor supervise child process execution and terminate fail-closed if either
-`max_requests` or `max_total_output` is reached. Offline harness tests in
-`tests/test_launch_cline_wandb.py` verify that exceeding bounds triggers fail-closed termination.
+implemented in `launch_cline_wandb.py` via a stdlib loopback HTTP accounting proxy:
+
+- `POST` requests whose parsed URL path (ignoring query strings) ends in `/chat/completions` are
+  authenticated via a per-launch random session token, serialized, and counted; all other `POST` routes
+  are refused with HTTP `403`.
+- Before forwarding each `/chat/completions` request, the proxy clamps `max_tokens` (and
+  `max_completion_tokens`, if present) to the remaining output budget and injects
+  `stream_options: {"include_usage": true}` for streaming calls.
+- Every forwarded chat request ends in exactly one classified outcome: `ACCOUNTED` (a 2xx response
+  with verified `usage.completion_tokens`) or `UNACCOUNTED`. Every non-2xx chat response is
+  `UNACCOUNTED`: neither the provider nor a gateway in front of it guarantees that a 4xx means no
+  billable work, so no status is trusted as a zero-spend rejection. An `UNACCOUNTED` outcome
+  debits the full clamped reservation, records a boundary breach, terminates the child fail-closed,
+  and exits `124`.
+- The launcher terminates fail-closed with exit code `124` (and `live_cycle()` settles via
+  `_settle_unknown`) whenever `request_count > max_requests`, `remaining_tokens <= 0` when the
+  next chat completion arrives, cumulative `usage.completion_tokens > max_total_output`, a chat request
+  results in `UNACCOUNTED` spend (missing or malformed usage, any non-2xx status, or an upstream
+  transport/read error on a `/chat/completions` request only), or admitted in-flight handlers fail
+  to drain within the bounded shutdown window (transport/read errors on non-chat routes return
+  HTTP 502/504 without recording a boundary error or triggering exit 124).
+- On shutdown, `stop_and_drain()` moves the proxy lifecycle `RUNNING -> DRAINING` and waits for admitted
+  handlers. It has two distinct outcomes: if every admitted handler finishes before the deadline it
+  returns `True` and the phase stays `DRAINING` (the normal completion state); only if the deadline
+  passes does the phase become `CLOSED` under lock (timeout-only) and the launcher exits `124`. `CLOSED`
+  fences every upstream dispatch, chat and non-chat: each dispatch first claims a slot under the same
+  lock (`claim_dispatch()`), so it is ordered strictly before or after the close and no claim succeeds
+  after it, without the drain deadline waiting on upstream I/O.
+- Offline harness tests in `tests/test_launch_cline_wandb.py` and `tests/test_launch_cline_wandb_lifecycle.py`
+  verify that exceeding bounds triggers fail-closed termination.
+
 `BOUND_CONTRACT` is verified and flipped to `{"max_requests": True, "max_total_output": True}`,
 allowing `_launcher_boundary_problem()` to return `None` for valid positive bounds while continuing
 to refuse missing or non-positive bounds with `invalid-launcher-bounds`. The Biafra Cline route is

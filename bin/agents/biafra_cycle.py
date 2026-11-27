@@ -602,10 +602,13 @@ def live_cycle(
         stdout_text = _decode(completed.stdout)
         stderr_text = _decode(completed.stderr)
         out_text = stdout_text + stderr_text
-        extra_spend = _settle(
-            spend_guard, reservation, len(prompt), len(out_text), "ok" if completed.returncode == 0 else "failed",
-            seat, mode,
-        )
+        if completed.returncode == 124:
+            extra_spend = _settle_unknown(spend_guard, reservation, len(prompt), "launcher-boundary", seat, mode)
+        else:
+            extra_spend = _settle(
+                spend_guard, reservation, len(prompt), len(out_text), "ok" if completed.returncode == 0 else "failed",
+                seat, mode,
+            )
         closed = True
     finally:
         if not closed and not sent:

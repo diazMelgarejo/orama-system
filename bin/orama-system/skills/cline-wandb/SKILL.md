@@ -25,7 +25,6 @@ When two routes run side by side, use
 Use the OpenAI client and Weave only if that error remains after the
 metadata is current. Do not send a CoreWeave team/project string. Shell-source the operator W&B env file before reading `DEEPSEEK_V4_FLASH_WANDB`.
 
-
 # Cline wanDB (DeepSeek V4.1-Flash-1017)
 
 ## Purpose
@@ -429,13 +428,9 @@ task prompts or secrets.
 ## References
 
 - [`references/tdd-reference-card.md`](references/tdd-reference-card.md)
-  — harmonized TDD reference card (extends
-  [`docs/TDD.md`](https://github.com/diazMelgarejo/orama-system/blob/main/docs/TDD.md);
-  mandatory for any code-writing dispatch under this skill).
-- Sibling route:
-  [`../clinepass-deepseek-flash/SKILL.md`](../clinepass-deepseek-flash/SKILL.md)
-- Self-review pattern source:
-  [`../code-review/SKILL.md`](../code-review/SKILL.md)
+  — harmonized TDD reference card (extends [`docs/TDD.md`](https://github.com/diazMelgarejo/orama-system/blob/main/docs/TDD.md)).
+- Sibling route: [`../clinepass-deepseek-flash/SKILL.md`](../clinepass-deepseek-flash/SKILL.md)
+- Self-review pattern source: [`../code-review/SKILL.md`](../code-review/SKILL.md)
 
 ## LIVE: qualification on Cline 3.0.74 (2026-11-12)
 
@@ -486,19 +481,19 @@ Rule (operator, 2026-11-12): ask for `medium`, else `high`, else `low`; never `x
 
 ## Launcher (isolated, no shared-slot switching)
 
-`scripts/launch_cline_wandb.py` runs Cline 3.0.74 on this route without touching the operator's
-`~/.cline`: it writes a throwaway config directory with only the W&B entry (a `tokenSource` and
-`updatedAt` that Cline 3.0.74 accepts), calls `cline --config <dir> -P openai-compatible -m <model>
---thinking <effort> --plan --auto-approve false ...` and deletes the directory. Review is the
-default. `--implement` omits `--plan`. `--allow-tool-approval` is the only way to pass
-`--auto-approve true`, and it is not implied by `--implement`. Text after `--` is positional
-only; a second `--config`, `--thinking`, provider, model, or approval flag is refused.
-`DEEPSEEK_V4_FLASH_WANDB` must already be exported. The launcher does not parse the env file,
-because that file needs shell interpretation. The key stays out of argv. Defaults:
-`deepseek-ai/DeepSeek-V4.1-Flash-1017` at `high`; `--model` and `--effort` follow the model and
-effort orders above and refuse `xhigh` and `max`. Prefer it over `switch-cline-provider.sh` when two
-routes run side by side, because a separate config directory is what actually isolates the provider
-slot (a separate working directory does not). Tests: `tests/test_launch_cline_wandb.py`. The live
-review evidence for the 2026-11-12 remediation is in
+`scripts/launch_cline_wandb.py` runs Cline 3.0.74 on this route without touching `~/.cline`:
+it builds a throwaway config directory with only the W&B entry (`tokenSource: manual`,
+valid millisecond-Z `updatedAt`), calls `cline --config <dir> -P openai-compatible -m <model>
+--thinking <effort> --plan --auto-approve false ...` and deletes the directory afterwards.
+Review is default; `--implement` omits `--plan`; `--allow-tool-approval` enables `--auto-approve true`.
+Passthrough after `--` is positional only. `DEEPSEEK_V4_FLASH_WANDB` must already be exported
+(not in argv). Defaults: `deepseek-ai/DeepSeek-V4.1-Flash-1017` at `high`; `--model` and `--effort`
+follow orders above and refuse `xhigh`/`max`. Both `--max-requests` and `--max-total-output`
+are required positive bounds enforced via a stdlib loopback HTTP accounting proxy
+intercepting wire requests, counting requests 1:1, and parsing `usage.completion_tokens` (injecting
+`stream_options: {"include_usage": true}` on SSE). Exceeding bounds or missing usage terminates child
+fail-closed with exit code 124. `--timeout-ms` sets per-request socket timeout (default 30000 ms), not
+a whole-process kill. Prefer it over `switch-cline-provider.sh` when two routes run side by side.
+Tests: `tests/test_launch_cline_wandb*.py` (real binary: `ORAMA_REAL_CLINE_SMOKE=1`). Live evidence:
 [the evidence report](../../../../docs/reference/2026-11-12-wandb-cline-live-review-evidence-report.md).
 

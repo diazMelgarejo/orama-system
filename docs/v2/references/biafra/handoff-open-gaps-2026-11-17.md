@@ -190,12 +190,12 @@ dry with `called_launcher=False`. Wanda's Cline ban remains intact and scoped to
 SHA is pinned by this docs-only checkpoint, and no live cycle is armed.
 
 **2026-11-27 Phase 1B BOUND_CONTRACT closure checkpoint.** This note is additive. Launcher-side
-boundary enforcement is implemented in `launch_cline_wandb.py` via `run_guarded_cline`, enforcing
-fail-closed termination when either `max_requests` or `max_total_output` limit is breached.
+boundary enforcement is implemented in `launch_cline_wandb.py` via a loopback HTTP accounting proxy,
+enforcing fail-closed termination when either `max_requests` or `max_total_output` limit is breached.
 Deterministic offline harness tests in `tests/test_launch_cline_wandb.py` verify termination and
-non-zero exit codes when either limit is exceeded. With boundary enforcement verifiably active,
-`BOUND_CONTRACT` is flipped to `{"max_requests": True, "max_total_output": True}` and
-`_launcher_boundary_problem()` returns `None` for valid positive bounds, lifting
+exit code 124 when either limit is exceeded or usage accounting is missing. With boundary enforcement
+verifiably active, `BOUND_CONTRACT` is flipped to `{"max_requests": True, "max_total_output": True}`
+and `_launcher_boundary_problem()` returns `None` for valid positive bounds, lifting
 `launcher-output-bound-unsupported`. Invalid, missing, or non-positive bounds continue to refuse
 fail-closed with `invalid-launcher-bounds` before any spend-gate reservation. The Biafra Cline
 route is now verified bounded-capable. The legacy path stays fail-closed (`legacy-live-path-disabled`),
@@ -276,9 +276,10 @@ Native macOS Darwin verification completed; Windows receipts tracked:
 - **macOS LibreSSL `-no-CAstore` behavior:** Verified on macOS system `/usr/bin/openssl`
   (LibreSSL 3.3.6) that `-no-CAstore` is an unsupported flag (exits 1 with usage). Confirmed
   via scratch CA pair (`ca1`, `ca2`, `leaf1`) that LibreSSL `verify -CAfile ca1.pem leaf1.pem`
-  succeeds (exit 0) and fails when untrusted (`ca2`, exit 2), proving trust is strictly confined
-  to the explicit `-CAfile` without standard certificate directory leakage. Homebrew OpenSSL
-  3.6.3 was tested side-by-side to verify `-no-CAstore` flag acceptance (exit 0).
+  succeeds (exit 0) and fails when untrusted (`ca2`, exit 2), confirming explicit-CA acceptance
+  and unrelated-`ca2` rejection. Default-directory isolation remains unverified until tested with a
+  default-dir signer control. Homebrew OpenSSL 3.6.3 was tested side-by-side to verify `-no-CAstore`
+  flag acceptance (exit 0).
 - **Native macOS kqueue exit probe & sandbox tests:** Ran `tests/test_sandbox_run.py` natively
   under macOS Darwin: 96 passed, 1 skipped (test for `/proc` descendant inspection, expected
   skip on Darwin). All 18 macOS kernel sandbox tests (`@needs_sandbox` via

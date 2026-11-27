@@ -942,6 +942,9 @@ def test_bounded_cycle_forwards_output_limit_and_keeps_parent_settlement(
 
 def test_unverified_cline_refuses_before_reservation_or_marker(cycle, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """A fully eligible governed attempt cannot launch Cline without a verified boundary."""
+    launcher_mod = cycle._launcher_contract()
+    launcher_mod.BOUND_CONTRACT = {"max_requests": False, "max_total_output": False}
+    monkeypatch.setattr(cycle, "_launcher_contract", lambda: launcher_mod)
     monkeypatch.setenv(cycle.GATE_ENV, "approved")
     monkeypatch.setenv(cycle.ARM_ENV, "1")
     guard = FakeGuard()
