@@ -420,15 +420,16 @@ implemented in `launch_cline_wandb.py` via a stdlib loopback HTTP accounting pro
 - Every forwarded chat request ends in exactly one classified outcome: `ACCOUNTED` (a 2xx response
   with verified `usage.completion_tokens`) or `UNACCOUNTED`. Every non-2xx chat response is
   `UNACCOUNTED`: neither the provider nor a gateway in front of it guarantees that a 4xx means no
-  billable work, so no status is trusted as a zero-spend rejection. An `UNACCOUNTED` outcome debits the full clamped reservation, records a boundary breach, terminates
-  the child fail-closed, and exits `124`.
+  billable work, so no status is trusted as a zero-spend rejection. An `UNACCOUNTED` outcome
+  debits the full clamped reservation, records a boundary breach, terminates the child fail-closed,
+  and exits `124`.
 - The launcher terminates fail-closed with exit code `124` (and `live_cycle()` settles via
   `_settle_unknown`) whenever `request_count > max_requests`, `remaining_tokens <= 0` when the
   next chat completion arrives, cumulative `usage.completion_tokens > max_total_output`, a chat request
   results in `UNACCOUNTED` spend (missing or malformed usage, any non-2xx status, or an upstream
-  transport/read error on a `/chat/completions` request only), or admitted in-flight handlers fail to drain within the
-  bounded shutdown window (transport/read errors on non-chat routes return HTTP 502/504 without recording
-  a boundary error or triggering exit 124).
+  transport/read error on a `/chat/completions` request only), or admitted in-flight handlers fail
+  to drain within the bounded shutdown window (transport/read errors on non-chat routes return
+  HTTP 502/504 without recording a boundary error or triggering exit 124).
 - On shutdown, `stop_and_drain()` moves the proxy lifecycle `RUNNING -> DRAINING` and waits for admitted
   handlers. It has two distinct outcomes: if every admitted handler finishes before the deadline it
   returns `True` and the phase stays `DRAINING` (the normal completion state); only if the deadline
