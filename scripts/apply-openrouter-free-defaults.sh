@@ -4,14 +4,16 @@
 #
 # Idempotently applies the OpenRouter free-model policy from
 # deployments/macbook-pro-head/openclaw/openclaw.model-policy.jsonc to
-# OpenClaw configs:
-#   --apply-live    → patch ~/.openclaw/openclaw.json
-#   --repo-only     → patch repo template files only
-#   --config-only   → skip the OPENROUTER_API_KEY check
+# OpenClaw configs. A DRY RUN unless --write is given:
+#   --apply-live    → also target ~/.openclaw/openclaw.json
+#   --repo-only     → companion template files only
+#   --write         → change the files (a backup of each is kept)
+#   --config-only   → accepted for compatibility; no key is needed any more
 #
 # Preserves: gateway, WhatsApp bindings, wrapper exec, sandbox, cron, tool profiles.
-# Patches only: env.OPENROUTER_API_KEY, agents.defaults.model, agents.defaults.models,
-#               and per-agent model overrides.
+# Patches only: agents.defaults.model, agents.defaults.models, and in templates an
+# env.OPENROUTER_API_KEY placeholder. The key's value is never read or written: OpenClaw
+# imports it from the shell environment.
 #
 # Source spec: OpenClaw/v1/OpenRouter.md §8
 # Adopted into: orama-system/bin/orama-system/mcp-orchestration/SKILL.md §2 Rule 1
@@ -28,7 +30,9 @@ APPLY_LIVE=0
 REPO_ONLY=0
 CONFIG_ONLY=0
 NO_AGENT_OVERRIDES=0
-DRY_RUN=0
+DRY_RUN=1
+WRITE=0
+FORCE_DRY_RUN=0
 
 # Repo templates to patch (always present in orama-system tree)
 REPO_TEMPLATES=()
@@ -52,7 +56,8 @@ while [[ $# -gt 0 ]]; do
     --repo-only)           REPO_ONLY=1; shift ;;
     --config-only)         CONFIG_ONLY=1; shift ;;
     --no-agent-overrides)  NO_AGENT_OVERRIDES=1; shift ;;
-    --dry-run)             DRY_RUN=1; shift ;;
+    --dry-run)             FORCE_DRY_RUN=1; shift ;;
+    --write)               WRITE=1; shift ;;
     --force-primary)       FORCE_PRIMARY=1; shift ;;
     --live-config)         LIVE_CONFIG="$2"; shift 2 ;;
     --policy)              POLICY_FILE="$2"; shift 2 ;;
@@ -67,16 +72,10 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 export FORCE_PRIMARY
+# --dry-run wins over --write, whatever the order.
+if [[ "$WRITE" -eq 1 && "$FORCE_DRY_RUN" -eq 0 ]]; then DRY_RUN=0; fi
 
 # ─── Preflight ────────────────────────────────────────────────────────────────
-if [[ "$CONFIG_ONLY" -eq 0 ]]; then
-  if [[ -z "${OPENROUTER_API_KEY:-}" ]]; then
-    echo "ERROR: OPENROUTER_API_KEY is not set in env." >&2
-    echo "       Either export it or pass --config-only to skip the check." >&2
-    exit 2
-  fi
-fi
-
 if [[ ! -f "$POLICY_FILE" ]]; then
   echo "ERROR: policy file not found: $POLICY_FILE" >&2
   exit 2
@@ -116,14 +115,13 @@ merge_policy_into() {
   fi
 
   if [[ "$DRY_RUN" -eq 1 ]]; then
-    echo "  DRY-RUN: would patch $target"
+    echo "  DRY-RUN: would patch $target (add --write to change it)"
     return 0
   fi
 
   backup_file "$target"
 
   # Smart merge (fallback-only by default — preserves existing primary):
-  #   .env.OPENROUTER_API_KEY                  ← set from env if not already set
   #   .agents.defaults.model.primary           ← PRESERVED (unless --force-primary)
   #   .agents.defaults.model.fallbacks         ← APPEND policy fallbacks_to_merge (dedup)
   #   .agents.defaults.models                  ← MERGE in policy models_to_merge
@@ -139,16 +137,10 @@ merge_policy_into() {
   jq -n \
     --slurpfile target "$target" \
     --argjson policy "$policy_json" \
-    --arg apiKey "${OPENROUTER_API_KEY:-}" \
     --arg forcePrimary "${FORCE_PRIMARY:-0}" \
     --arg noOverrides "$NO_AGENT_OVERRIDES" '
       .target = $target[0] | .policy = $policy |
       .target
-      # 1. env.OPENROUTER_API_KEY — set only if not already present (literal value)
-      | (.env //= {})
-      | if (.env.OPENROUTER_API_KEY // "") == "" and $apiKey != ""
-          then .env.OPENROUTER_API_KEY = $apiKey
-          else . end
       # 2. agents.defaults.model — preserve primary, merge fallbacks
       # Strategy: strip any Gemini entries from existing fallbacks, then concat
       # the policy fallbacks (which keep OpenRouter ahead of Gemini), then dedup
@@ -172,13 +164,10 @@ merge_policy_into() {
           (.agents.defaults.models * ($policy.agents.defaults.models_to_merge // {}))
     ' > "$tmp"
 
-  # Secret-leak guard: if the target is a tracked template (not the live
-  # config under ~/.openclaw/), re-write the OPENROUTER_API_KEY field back
-  # to the literal placeholder so we never commit a resolved key to a repo.
+  # A tracked template names the variable it needs; the live config is left to the shell environment.
   case "$target" in
-    *"/.openclaw/openclaw.json")
-      : # live config — keep the resolved key
-      ;;
+    *"/.openclaw/openclaw.json" | "$LIVE_CONFIG")
+      : ;;
     *)
       tmp2="$(mktemp)"
       jq --arg ph '${OPENROUTER_API_KEY}' \
@@ -218,7 +207,7 @@ if [[ "$APPLY_LIVE" -eq 1 && "$REPO_ONLY" -eq 0 ]]; then
 fi
 
 # Post-apply: openclaw models status
-if command -v openclaw >/dev/null 2>&1; then
+if [[ "$DRY_RUN" -eq 0 ]] && command -v openclaw >/dev/null 2>&1; then
   echo ""
   echo "== openclaw models status =="
   openclaw models status || true

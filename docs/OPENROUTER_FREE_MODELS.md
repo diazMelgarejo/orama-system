@@ -94,11 +94,14 @@ Free models may have provider-specific logging. For lab/RC-1 work:
 ## Apply / verify
 
 ```bash
-# Repo templates only (safe, no live changes)
-scripts/apply-openrouter-free-defaults.sh --repo-only
-
-# Patch live ~/.openclaw/openclaw.json (requires OPENROUTER_API_KEY)
+# Dry run: shows what would change, writes nothing
 scripts/apply-openrouter-free-defaults.sh --apply-live
+
+# Repo templates only
+scripts/apply-openrouter-free-defaults.sh --repo-only --write
+
+# Patch live ~/.openclaw/openclaw.json (the key stays in the shell environment)
+scripts/apply-openrouter-free-defaults.sh --apply-live --write
 
 # Verify the policy is in place and endpoints are reachable
 scripts/verify-openrouter-models.sh

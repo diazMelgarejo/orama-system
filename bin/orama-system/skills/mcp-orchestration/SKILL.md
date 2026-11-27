@@ -254,8 +254,8 @@ openclaw mcp list
 The default OpenClaw model policy points at OpenRouter free fallbacks. Apply with:
 
 ```bash
-scripts/apply-openrouter-free-defaults.sh --repo-only
-scripts/apply-openrouter-free-defaults.sh --apply-live   # patches ~/.openclaw/openclaw.json
+scripts/apply-openrouter-free-defaults.sh --repo-only --write
+scripts/apply-openrouter-free-defaults.sh --apply-live --write   # patches ~/.openclaw/openclaw.json (dry run without --write)
 ```
 
 Full config shape lives in `deployments/macbook-pro-head/openclaw/openclaw.model-policy.jsonc`. See `docs/OPENROUTER_FREE_MODELS.md`.
