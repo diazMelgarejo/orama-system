@@ -7,6 +7,10 @@ vi.mock("@/api/appState", () => ({
   fetchAppState: vi.fn(() => Promise.reject(new Error("unreachable"))),
 }));
 
+vi.mock("@/api/sessionSecrets", () => ({
+  listSessionSecrets: vi.fn(() => Promise.resolve({ names: [], status: {} })),
+}));
+
 vi.mock("@/api/artifacts", () => ({
   listJobArtifacts: vi.fn(() => Promise.resolve({ artifacts: [] })),
 }));
@@ -149,5 +153,15 @@ describe("CommandCenter live data", () => {
       expect(screen.getByRole("alert")).toHaveTextContent(/live data unavailable/i);
     });
     expect(screen.queryByText(/preview-/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("CommandCenter settings page", () => {
+  it("opens the write-only session key form from the Settings entry", async () => {
+    renderCommandCenter();
+    await waitForConsole();
+    clickNav("Settings");
+    expect(screen.getByRole("heading", { name: "Session Keys" })).toBeInTheDocument();
+    expect(screen.queryByText("Swarm Composer")).not.toBeInTheDocument();
   });
 });

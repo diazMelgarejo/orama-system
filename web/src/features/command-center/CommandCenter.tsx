@@ -13,6 +13,7 @@ import { RunsTable } from "./RunsTable";
 import { ArtifactsPanel } from "./ArtifactsPanel";
 import { RoutingView } from "@/features/routing/RoutingView";
 import { KnowledgePortal } from "@/features/knowledge/KnowledgePortal";
+import { KeyEntryForm } from "@/features/settings/KeyEntryForm";
 import {
   resolveDisplayState,
   resolveJobs,
@@ -88,6 +89,9 @@ export function CommandCenter() {
 
       case "docs":
         return <KnowledgePortal />;
+
+      case "settings":
+        return <KeyEntryForm />;
 
       case "composer":
         return (

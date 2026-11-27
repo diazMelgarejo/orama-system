@@ -308,8 +308,10 @@ async def _portal_lifespan(_app: FastAPI):
 
 app = FastAPI(title="orama portal", version=VERSION, lifespan=_portal_lifespan)
 from orama_system.workspace_api import router as workspace_router
+from orama_system.session_secret_routes import router as session_secret_router
 app.include_router(workspace_router)
 app.include_router(knowledge_router)
+app.include_router(session_secret_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_allow_origins(),
