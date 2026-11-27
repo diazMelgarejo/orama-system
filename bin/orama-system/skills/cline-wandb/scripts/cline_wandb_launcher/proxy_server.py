@@ -17,7 +17,7 @@ class AccountingProxyServer(http.server.ThreadingHTTPServer):
     """Threading HTTP server tracking request counts and output tokens.
 
     Lifecycle: RUNNING -> DRAINING (no new connections; admitted work may finish) -> CLOSED (set only
-    when the drain deadline passes; no admitted worker may start a new upstream dispatch).
+    when the drain deadline passes; no further dispatch claim succeeds, see claim_dispatch).
     """
 
     daemon_threads = True

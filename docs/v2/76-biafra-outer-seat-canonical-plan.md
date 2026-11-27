@@ -440,7 +440,8 @@ loopback HTTP accounting proxy:
   passes does the phase become `CLOSED` under lock (timeout-only) and the launcher exits `124`. `CLOSED`
   fences every upstream dispatch, chat and non-chat: each dispatch first claims a slot under the same
   lock (`claim_dispatch()`), so it is ordered strictly before or after the close and no claim succeeds
-  after it, without the drain deadline waiting on upstream I/O.
+  after it, without the drain deadline waiting on upstream I/O. A request claimed before the close may
+  still be sent after it; its handler had not drained, so the run already exits `124`.
 - Offline harness tests in `tests/test_launch_cline_wandb_bounds.py` and
   `tests/test_launch_cline_wandb_lifecycle.py` verify that exceeding bounds triggers fail-closed
   termination.

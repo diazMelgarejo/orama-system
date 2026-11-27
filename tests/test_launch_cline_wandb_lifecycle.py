@@ -311,6 +311,19 @@ def _observe_drain_wait(monkeypatch: pytest.MonkeyPatch) -> tuple[threading.Even
     return at_wait, inflight_at_wait
 
 
+def _observe_settled_replies(monkeypatch: pytest.MonkeyPatch) -> list[int]:
+    """Record the status of every upstream reply the production handler goes on to account for."""
+    settled: list[int] = []
+    real_settle_chat = L.AccountingProxyHandler._settle_chat
+
+    def observed_settle_chat(self, status: int, *args: object) -> bool:
+        settled.append(status)
+        return real_settle_chat(self, status, *args)
+
+    monkeypatch.setattr(L.AccountingProxyHandler, "_settle_chat", observed_settle_chat)
+    return settled
+
+
 @pytest.mark.parametrize(
     ("mode", "tokens", "max_out", "expected"),
     [
@@ -332,6 +345,7 @@ def test_main_waits_for_an_inflight_request_after_the_child_has_exited(
     up.release.clear()
     monkeypatch.setattr(L, "BASE_URL", up.base_url)
     at_wait, inflight_at_wait = _observe_drain_wait(monkeypatch)
+    settled = _observe_settled_replies(monkeypatch)
     drain_reached: list[bool] = []
 
     def release_after_drain_wait() -> None:
@@ -354,7 +368,9 @@ def test_main_waits_for_an_inflight_request_after_the_child_has_exited(
     assert drain_reached == [True], "the drain never reached its condition wait before the upstream was released"
     assert inflight_at_wait == [1], "the drain must start waiting while the request is still in flight"
     assert arrival.exists() and len(up.hits) == 1
-    assert up.responded == [mode], "the handler must have processed the held response"
+    assert up.responded == [mode], "the upstream must have sent the held response"
+    # status=502 is also what a transport error reports, so prove the 2xx reply reached accounting.
+    assert settled == [200], "the handler must have processed the held response"
     assert rc == 124
     assert all(needle in err for needle in expected) and "status=504" not in err, err
 

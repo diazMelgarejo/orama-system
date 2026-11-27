@@ -9,7 +9,7 @@ Usage:
 Defaults (live-verified 2026-11-12, see docs/stale-reference-ledger-2026-11-12.md):
   model   deepseek-ai/DeepSeek-V4.1-Flash-1017
   effort  high   (W&B rejects `medium` on the V4.1 models with HTTP 400; V4-Flash-0731 accepts it)
-  timeout 30000 ms (per-request upstream socket timeout)
+  timeout 30000 ms (per-request upstream socket timeout, not a limit on a request's total duration)
   review  plan mode (`--plan`) with automatic tool approval off (`--auto-approve false`)
 Rule (operator): effort is medium, else high, else low; never xhigh or max. Anything else is refused.
 Model fallback order if one is rejected or missing: V4.1-Flash-1017 -> V4.1-Flash -> V4-Flash-0731
@@ -43,7 +43,8 @@ key stays in launcher memory and is never written to disk. Contract, one rule pe
   - Exit 124 means spend is breached or not fully accounted: callers settle it as unknown spend.
   - Transport errors on non-chat routes return HTTP 502/504 and do not change the exit code.
   - Every upstream dispatch, chat or not, first claims a dispatch slot under the server lock. Once
-    the drain deadline sets CLOSED, no claim succeeds, so no dispatch can start after CLOSED.
+    the drain deadline sets CLOSED, no claim succeeds. A request claimed before that may still be
+    sent after it; its handler had not drained, so the launcher exits 124.
 
 Child process (POSIX): Cline starts with stdin closed, in its own session and process group. The
 bounds are not passed to it. A fail-closed stop ends the group and the processes below it, including
