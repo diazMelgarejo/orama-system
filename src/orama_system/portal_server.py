@@ -543,6 +543,18 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   body[data-theme="night"] .svc-btn{{background:#0f1117;border-color:#374151}}
   body[data-theme="night"] .jobs-table th{{border-color:#374151}}
   body[data-theme="night"] .jobs-table td{{border-color:#1f2937}}
+  /* destructive-action confirmation dialog: one native element, one helper */
+  .confirm-dialog{{background:#1e293b;border:1px solid #475569;border-radius:4px;color:#f8fafc;max-width:34rem;padding:1rem 1.25rem}}
+  .confirm-dialog::backdrop{{background:#0f111799}}
+  .confirm-title{{font-size:.95rem;color:#38bdf8;letter-spacing:.03em;margin-bottom:.5rem}}
+  .confirm-body{{color:#cbd5e1;font-size:.8rem;line-height:1.5;margin-bottom:.9rem;min-height:2.4rem}}
+  .confirm-actions{{display:flex;gap:.5rem;justify-content:flex-end}}
+  .confirm-btn{{background:none;border:1px solid #475569;border-radius:3px;color:#94a3b8;cursor:pointer;font-family:monospace;font-size:.7rem;padding:.35rem .9rem}}
+  .confirm-btn:hover{{border-color:#38bdf8;color:#f8fafc}}
+  .confirm-btn:focus{{outline:2px solid #38bdf8;outline-offset:2px}}
+  .confirm-btn.danger{{background:#dc2626;border-color:#dc2626;color:#f8fafc}}
+  .confirm-btn.danger:hover{{background:#ef4444;border-color:#ef4444}}
+  body[data-theme="night"] .confirm-dialog{{background:#1a1d27;border-color:#2d3748}}
 </style>
 </head>
 <body>
@@ -569,6 +581,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <div id="activity-section">{activity_section}</div>
 {input_section}
 <div class="footer">Auto-refresh every 10s &bull; <span id="last-refresh">{timestamp}</span></div>
+<dialog id="confirm-dialog" class="confirm-dialog" aria-labelledby="confirm-dialog-title" aria-describedby="confirm-dialog-body">
+  <h2 class="confirm-title" id="confirm-dialog-title">Confirm destructive action</h2>
+  <p class="confirm-body" id="confirm-dialog-body"></p>
+  <div class="confirm-actions">
+    <button class="confirm-btn" type="button" id="confirm-dialog-cancel" autofocus>Cancel</button>
+    <button class="confirm-btn danger" type="button" id="confirm-dialog-ok">Confirm</button>
+  </div>
+</dialog>
 <script>
 {cp_fetch_bootstrap}
 async function sendTask() {{
@@ -800,6 +820,65 @@ function _esc(s) {{
 }}
 setInterval(refreshJobs, 8000);
 setTimeout(refreshJobs, 1000);
+// Destructive-action confirmation: ONE helper, driven by data-confirm attributes.
+// A control opts in with data-confirm="<one-line consequence>" plus
+// data-confirm-op="<op id>" and carries no inline handler, so nothing below can
+// run before the operator presses Confirm. Cancel holds focus by default, a
+// dismissed dialog does no I/O, and focus returns to the control that opened it.
+const _CONFIRM_OPS = {{
+  'stop': function () {{ svcAction('stop'); }},
+  'restart-pt': function () {{ svcAction('restart', 'pt'); }},
+  'restart-orama': function () {{ svcAction('restart', 'orama'); }},
+  'restart-portal': function () {{ svcAction('restart', 'portal'); }},
+  'rediscover': function () {{ rediscover(); }}
+}};
+let _confirmTrigger = null;
+function _confirmParts() {{
+  return {{
+    dlg: document.getElementById('confirm-dialog'),
+    body: document.getElementById('confirm-dialog-body'),
+    ok: document.getElementById('confirm-dialog-ok'),
+    cancel: document.getElementById('confirm-dialog-cancel')
+  }};
+}}
+function openConfirm(trigger) {{
+  const p = _confirmParts();
+  if (!p.dlg || !p.dlg.showModal || !p.body || !p.ok) return;
+  _confirmTrigger = trigger;
+  p.body.textContent = trigger.getAttribute('data-confirm') || '';
+  p.ok.setAttribute('data-confirm-op', trigger.getAttribute('data-confirm-op') || '');
+  p.dlg.showModal();
+  if (p.cancel) p.cancel.focus();   // Cancel, not the danger button, gets focus
+}}
+function closeConfirm() {{
+  const p = _confirmParts();
+  if (p.dlg && p.dlg.open) p.dlg.close();
+}}
+function runConfirmed() {{
+  const p = _confirmParts();
+  const op = p.ok ? p.ok.getAttribute('data-confirm-op') : '';
+  closeConfirm();
+  const run = _CONFIRM_OPS[op];
+  if (run) run();
+}}
+document.addEventListener('click', function (e) {{
+  const trigger = e.target && e.target.closest ? e.target.closest('[data-confirm]') : null;
+  if (!trigger) return;
+  e.preventDefault();
+  openConfirm(trigger);
+}});
+(function wireConfirmDialog() {{
+  const p = _confirmParts();
+  if (!p.dlg) return;
+  if (p.ok) p.ok.addEventListener('click', runConfirmed);
+  if (p.cancel) p.cancel.addEventListener('click', closeConfirm);
+  p.dlg.addEventListener('close', function () {{
+    const trigger = _confirmTrigger;
+    _confirmTrigger = null;
+    if (p.ok) p.ok.removeAttribute('data-confirm-op');
+    if (trigger && typeof trigger.focus === 'function') trigger.focus();
+  }});
+}})();
 </script>
 </body>
 </html>"""
@@ -1209,23 +1288,75 @@ def _render_input_section(queue_depth: int) -> str:
     )
 
 
+_DESTRUCTIVE_CONTROLS: tuple[tuple[str, str, str, str], ...] = (
+    (
+        "danger", "stop", "&#9632; Stop All",
+        "Stop All is the emergency override: no approval gate blocks it and it sends "
+        "SIGTERM to PT, orama and this portal, so this dashboard stays dark until "
+        "./start.sh runs again.",
+    ),
+    (
+        "warn", "restart-pt", "&#8635; Restart PT :8000",
+        "Restart PT sends SIGTERM to whatever holds :8000 and relaunches it detached; "
+        "work in flight on that process is lost.",
+    ),
+    (
+        "warn", "restart-orama", "&#8635; Restart orama :8001",
+        "Restart orama sends SIGTERM to whatever holds :8001 and relaunches it "
+        "detached; in-flight requests are dropped.",
+    ),
+    (
+        "warn", "restart-portal", "&#8635; Restart Portal :8002",
+        "Restart Portal kills this page's own process on :8002; the dashboard "
+        "disconnects until the new process answers.",
+    ),
+    (
+        "", "rediscover", "&#8635; Re-discover LAN",
+        "Re-discover LAN re-runs discover.py --force and rewrites the Win lane "
+        "address; a wrong pick cannot be undone from this page.",
+    ),
+)
+
+
+def _confirm_control(*, css_class: str, op: str, consequence: str, label: str) -> str:
+    """Render one destructive control that only opens the page confirm dialog.
+
+    ``data-confirm`` carries the one-line consequence shown to the operator and
+    ``data-confirm-op`` names the action the dialog's Confirm button runs. There
+    is deliberately no inline handler, so no request fires before the operator
+    confirms (see the confirm helper at the end of HTML_TEMPLATE's script).
+    """
+    return (
+        f'<button class="svc-btn {css_class}" type="button"'
+        f' data-confirm-op="{op}" data-confirm="{consequence}">{label}</button>'
+    )
+
+
 def _render_service_control_section() -> str:
-    """Service-control bar: Stop All, per-service Restart, Re-discover LAN, Re-check Policy."""
+    """Service-control bar: Stop All, per-service Restart, Re-discover LAN, Re-check Policy.
+
+    Emergency stop keeps its control but is never one click away: it goes through
+    the page-wide confirm dialog, whose consequence line states that no approval
+    gate blocks it.
+    """
+    destructive = "".join(
+        _confirm_control(css_class=css, op=op, label=label, consequence=why)
+        for css, op, label, why in _DESTRUCTIVE_CONTROLS
+    )
     return (
         '<div class="section">'
         '<div class="section-title">Service Controls</div>'
         '<div class="card">'
-        '<div class="svc-ctrl">'
-        '<button class="svc-btn danger" onclick="svcAction(\'stop\')">&#9632; Stop All</button>'
-        '<button class="svc-btn warn" onclick="svcAction(\'restart\',\'pt\')">&#8635; Restart PT :8000</button>'
-        '<button class="svc-btn warn" onclick="svcAction(\'restart\',\'orama\')">&#8635; Restart orama :8001</button>'
-        '<button class="svc-btn warn" onclick="svcAction(\'restart\',\'portal\')">&#8635; Restart Portal :8002</button>'
-        '<button class="svc-btn" onclick="rediscover()">&#8635; Re-discover LAN</button>'
+        f'<div class="svc-ctrl">{destructive}'
         '<button class="svc-btn" onclick="recheckPolicy()">&#10003; Re-check Policy</button>'
         '</div>'
         '<div class="svc-ctrl-status" id="svc-ctrl-status"></div>'
         '<div style="font-size:.65rem;color:#475569;margin-top:.4rem">'
         'CLI: ./start.sh --stop &bull; ./start.sh --discover &bull; ./start.sh --hardware-policy'
+        '</div>'
+        '<div style="font-size:.65rem;color:#475569;margin-top:.2rem">'
+        'Stop, Restart and Re-discover open a confirmation dialog first: Cancel holds '
+        'focus by default and dismissing the dialog cancels.'
         '</div>'
         '</div>'
         '</div>'
