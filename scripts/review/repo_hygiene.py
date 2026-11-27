@@ -369,6 +369,18 @@ SECRET_PATTERNS: tuple[tuple[str, re.Pattern[str], str], ...] = (
         re.compile(r"-----BEGIN (RSA |EC |OPENSSH |PRIVATE )?PRIVATE KEY-----"),
         "Private key block",
     ),
+    (
+        # A channel-prefixed or +E.164 number, solid or spaced. The reserved fictional 555-01xx range
+        # passes. Bare digits are caught only by the private_phone entries of the local literal registry.
+        "phone_number",
+        re.compile(
+            r"(?:\b(?:whatsapp|tel|sms|signal|imessage):\+?|(?<![\w)\]])\+)"
+            r"(?!1[ .-]?\(?\d{3}\)?[ .-]?555[ .-]?01\d\d(?!\d))"
+            r"(?:\d{10,15}|\d{1,3}[ .-]\(?\d{3}\)?[ .-]\d{3}[ .-]\d{4})(?!\d)",
+            re.IGNORECASE,
+        ),
+        "phone number",
+    ),
 )
 SECRET_PLACEHOLDER_MARKERS = (
     "${env:",
@@ -453,8 +465,11 @@ def scan_private_verboten_literals(root: Path, files: list[str]) -> list[str]:
         for key in ("owner_gmail", "owner_name")
         for token in private_literal_values(root, key)
     ]
+    # private_phone shares this class: never legitimate in any tracked file, exempt ones included.
     attribution_tokens = [
-        token.casefold() for token in private_literal_values(root, "forbidden_attribution")
+        token.casefold()
+        for key in ("forbidden_attribution", "private_phone")
+        for token in private_literal_values(root, key)
     ]
     if not identity_tokens and not attribution_tokens:
         return []

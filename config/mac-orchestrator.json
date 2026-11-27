@@ -108,11 +108,6 @@
       "enabled": true
     }
   },
-  "commands": {
-    "ownerAllowFrom": [
-      "whatsapp:+14159419166"
-    ]
-  },
   "diagnostics": {
     "enabled": true,
     "otel": {

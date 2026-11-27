@@ -125,7 +125,7 @@ else
 
   # Preserved (only check if these existed before — these are sentinel patterns
   # from the user's deployment; absent in default templates):
-  for sentinel in '+14159419166' '"workspaceAccess": "ro"' '"bind": "lan"' '"mode": "token"' '"dmPolicy": "allowlist"'; do
+  for sentinel in '"ownerAllowFrom"' '"workspaceAccess": "ro"' '"bind": "lan"' '"mode": "token"' '"dmPolicy": "allowlist"'; do
     if grep -qF "$sentinel" "$CONFIG"; then
       echo "  ✓ preserved: $sentinel"
     fi
