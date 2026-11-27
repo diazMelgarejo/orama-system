@@ -4030,18 +4030,48 @@ async def serve_assets(path: str):
     return Response(content=body, media_type=media_type)
 
 
+
+def portal_surface() -> dict[str, str]:
+    """Which front end ``/`` serves and which build it is, so a missing or stale ``web/dist`` is never silent.
+
+    The build stamp (``web/dist/build-info.json``, written by the web build) is read at request time; a missing or
+    corrupt stamp reports ``unstamped`` and never breaks the page.
+    """
+    if not (_WEB_DIST / "index.html").exists():
+        return {"surface": "legacy", "reason": f"no web/dist build at {_WEB_DIST.name}; build with `pnpm build` in web/"}
+    build = "unstamped"
+    try:
+        stamp = json.loads((_WEB_DIST / "build-info.json").read_text(encoding="utf-8"))
+        if isinstance(stamp, dict) and isinstance(stamp.get("git_sha"), str) and stamp["git_sha"]:
+            build = stamp["git_sha"][:40]
+    except (OSError, ValueError):
+        pass
+    return {"surface": "react", "build": build, "reason": "web/dist build present"}
+
+
+def _surface_headers(surface: dict[str, str]) -> dict[str, str]:
+    headers = {"X-Portal-Surface": surface["surface"], "X-Portal-Surface-Reason": surface["reason"]}
+    if "build" in surface:
+        headers["X-Portal-Build"] = surface["build"]
+    return headers
+
+
 @app.get("/", response_class=None)
 async def index(request: Request):
     """Serve the portal dashboard page."""
     from fastapi.responses import FileResponse, HTMLResponse
     # Serve React app when web/dist is built; fall back to legacy HTML dashboard.
     react_index = _WEB_DIST / "index.html"
-    if react_index.exists():
-        return FileResponse(str(react_index), media_type="text/html")
+    surface = portal_surface()
+    if surface["surface"] == "react":
+        return FileResponse(str(react_index), media_type="text/html", headers=_surface_headers(surface))
+    log.warning(
+        "portal serving the LEGACY page: %s (looked in %s)", surface["reason"], _WEB_DIST
+    )
     status = await api_status()
     browser_token = _loopback_browser_token(request)
     html = _render_html(status, browser_token=browser_token)
-    return HTMLResponse(content=html)
+    return HTMLResponse(content=html, headers=_surface_headers(surface))
 
 
 if __name__ == "__main__":

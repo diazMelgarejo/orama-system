@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { fileURLToPath, URL } from "node:url";
+import { buildInfoPlugin } from "./src/tooling/buildInfoPlugin";
 
 // Backend (portal_server.py) runs on port 8002 by default (orama-system convention
 // -- orama_system.api_server:app is 8001, portal_server:app is 8002; this proxy must
@@ -10,7 +11,7 @@ import { fileURLToPath, URL } from "node:url";
 const PORTAL_URL = process.env.PORTAL_URL ?? "http://localhost:8002";
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), buildInfoPlugin()],
   resolve: {
     alias: {
       // Mirror the `@/*` → `./src/*` mapping declared in tsconfig.json.
