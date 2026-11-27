@@ -34,7 +34,7 @@ function renderCommandCenter() {
 
 async function waitForConsole() {
   await waitFor(() => {
-    expect(screen.getByText("Command")).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Console sections" })).toBeInTheDocument();
   });
 }
 
@@ -85,7 +85,7 @@ describe("CommandCenter nav smokes", () => {
   it("docs page renders the knowledge portal instead of the swarm composer", async () => {
     renderCommandCenter();
     await waitForConsole();
-    fireEvent.click(within(screen.getByRole("navigation")).getByRole("button", { name: "Docs" }));
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Console sections" })).getByRole("button", { name: "Docs" }));
 
     expect(screen.getByText("Knowledge Portal")).toBeInTheDocument();
     expect(screen.getByLabelText("Search documentation")).toBeInTheDocument();

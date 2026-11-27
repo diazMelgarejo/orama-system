@@ -188,7 +188,7 @@ export function SwarmComposer({ onPreview, onLaunch, previewData, effectsOffReas
         </div>
 
         {/* Task Type + Optimize For segmented controls */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <SegmentedControl
             label="Task type"
             options={TASK_TYPES}
@@ -236,7 +236,7 @@ export function SwarmComposer({ onPreview, onLaunch, previewData, effectsOffReas
         </div>
 
         {/* Action buttons */}
-        <div className="flex items-center gap-2 pt-1">
+        <div className="flex flex-wrap items-center gap-2 pt-1">
           <button
             type="button"
             disabled={!canPreview || previewMutation.isPending}

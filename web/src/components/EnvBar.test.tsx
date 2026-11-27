@@ -42,4 +42,12 @@ describe("EnvBar provenance", () => {
     expect(screen.getByText("Loading")).toBeInTheDocument();
     expect(screen.queryByText("Unavailable")).not.toBeInTheDocument();
   });
+
+  it("wraps on narrow screens and sits below the compact navigation there", () => {
+    const { container } = render(<EnvBar state={mockState} provenance={{ kind: "live" }} />);
+    const header = container.querySelector("header") as HTMLElement;
+    expect(header.className).toMatch(/flex-wrap/);
+    expect(header.className).toMatch(/order-2/);
+    expect(header.className).toMatch(/md:order-1/);
+  });
 });

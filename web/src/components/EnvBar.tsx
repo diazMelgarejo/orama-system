@@ -44,7 +44,7 @@ export function EnvBar({ state, provenance, isFetching = false, onNavigate }: En
     provenance?.kind === "demo" ? "DEMO DATA" : provenance?.kind === "stale" ? "STALE" : null;
 
   return (
-    <header className="flex items-center gap-4 border-b border-line bg-canvas-surface px-4 py-2 text-xs">
+    <header className="order-2 flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-line bg-canvas-surface px-3 py-2 text-xs md:order-1 md:px-4">
       {/* Brand */}
       <div className="flex items-center gap-2">
         <span className="font-mono text-sm font-bold tracking-tight text-accent">orama</span>

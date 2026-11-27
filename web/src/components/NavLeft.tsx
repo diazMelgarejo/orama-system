@@ -66,7 +66,7 @@ function IconDocs() {
   );
 }
 
-const NAV_ITEMS = [
+export const NAV_ITEMS = [
   { id: "command", label: "Command", Icon: IconCommand },
   { id: "composer", label: "Composer", Icon: IconComposer },
   { id: "runs", label: "Runs", Icon: IconRuns },
@@ -74,14 +74,14 @@ const NAV_ITEMS = [
   { id: "artifacts", label: "Artifacts", Icon: IconArtifacts },
 ];
 
-const FOOTER_ITEMS = [
+export const FOOTER_ITEMS = [
   { id: "settings", label: "Settings", Icon: IconSettings },
   { id: "docs", label: "Docs", Icon: IconDocs },
 ];
 
 export function NavLeft({ active = "command", onSelect }: NavLeftProps) {
   return (
-    <nav className="flex h-full w-44 flex-col border-r border-line bg-canvas-surface">
+    <nav aria-label="Console sections" className="hidden h-full w-44 flex-col border-r border-line bg-canvas-surface md:flex">
       {/* Main nav */}
       <ul className="flex flex-1 flex-col pt-2">
         {NAV_ITEMS.map(({ id, label, Icon }) => {
@@ -90,6 +90,7 @@ export function NavLeft({ active = "command", onSelect }: NavLeftProps) {
             <li key={id}>
               <button
                 type="button"
+                aria-current={selected ? "page" : undefined}
                 onClick={() => onSelect?.(id)}
                 className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors ${
                   selected
@@ -111,6 +112,7 @@ export function NavLeft({ active = "command", onSelect }: NavLeftProps) {
           <button
             key={id}
             type="button"
+            aria-current={active === id ? "page" : undefined}
             onClick={() => onSelect?.(id)}
             className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs transition-colors ${
               active === id

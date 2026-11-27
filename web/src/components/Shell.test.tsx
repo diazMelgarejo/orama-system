@@ -13,4 +13,14 @@ describe("Shell", () => {
     expect(screen.getByText("UNKNOWN")).toBeInTheDocument();
     expect(screen.getByText("body")).toBeInTheDocument();
   });
+
+  it("renders the compact navigation with the active section for narrow screens", () => {
+    render(
+      <Shell state={UNAVAILABLE_STATE} provenance={{ kind: "unavailable" }} activePage="artifacts">
+        <p>body</p>
+      </Shell>,
+    );
+    const compact = screen.getByRole("navigation", { name: "Console sections (compact)" });
+    expect(compact).toHaveTextContent("Artifacts");
+  });
 });

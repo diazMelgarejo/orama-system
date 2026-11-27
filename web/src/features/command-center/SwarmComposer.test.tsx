@@ -165,4 +165,13 @@ describe("SwarmComposer effect controls", () => {
     renderComposer(approvedPreview);
     expect(screen.getByRole("status")).toBeEmptyDOMElement();
   });
+
+  it("stacks its option fields and lets the button row wrap on narrow screens", () => {
+    const { container } = renderComposer(approvedPreview);
+    const grid = container.querySelector(".grid") as HTMLElement;
+    expect(grid.className).toMatch(/grid-cols-1/);
+    expect(grid.className).toMatch(/sm:grid-cols-2/);
+    const row = screen.getByRole("button", { name: "Launch Swarm" }).parentElement as HTMLElement;
+    expect(row.className).toMatch(/flex-wrap/);
+  });
 });
