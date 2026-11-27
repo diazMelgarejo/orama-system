@@ -440,8 +440,9 @@ implemented in `launch_cline_wandb.py` via a stdlib loopback HTTP accounting pro
   fences every upstream dispatch, chat and non-chat: each dispatch first claims a slot under the same
   lock (`claim_dispatch()`), so it is ordered strictly before or after the close and no claim succeeds
   after it, without the drain deadline waiting on upstream I/O.
-- Offline harness tests in `tests/test_launch_cline_wandb.py` and `tests/test_launch_cline_wandb_lifecycle.py`
-  verify that exceeding bounds triggers fail-closed termination.
+- Offline harness tests in `tests/test_launch_cline_wandb_bounds.py` and
+  `tests/test_launch_cline_wandb_lifecycle.py` verify that exceeding bounds triggers fail-closed
+  termination.
 
 `BOUND_CONTRACT` is verified and flipped to `{"max_requests": True, "max_total_output": True}`,
 allowing `_launcher_boundary_problem()` to return `None` for valid positive bounds while continuing

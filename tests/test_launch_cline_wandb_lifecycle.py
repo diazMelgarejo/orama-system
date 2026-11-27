@@ -5,10 +5,7 @@ come from the launcher's LOOPBACK_HOST so the private-literal hygiene hook stays
 """
 from __future__ import annotations
 
-import gzip
 import http.client
-import http.server
-import importlib.util
 import json
 import os
 import stat
@@ -23,125 +20,11 @@ from typing import Any, Callable, Iterator
 
 import pytest
 
-SCRIPT = (Path(__file__).resolve().parents[1] / "bin" / "orama-system" / "skills"
-          / "cline-wandb" / "scripts" / "launch_cline_wandb.py")
-_spec = importlib.util.spec_from_file_location("launch_cline_wandb_lifecycle", SCRIPT)
-L = importlib.util.module_from_spec(_spec)
-sys.modules[_spec.name] = L
-_spec.loader.exec_module(L)
+from cline_wandb_fixtures import WAIT_S, Upstream
+from cline_wandb_fixtures import launcher as L
 
 TOKEN = "session-token-for-tests"
 PROVIDER_KEY = "provider-key-for-tests"
-WAIT_S = 5.0
-
-
-class _UpstreamHandler(http.server.BaseHTTPRequestHandler):
-    protocol_version = "HTTP/1.0"
-
-    def log_message(self, *args: object) -> None:
-        pass
-
-    def _send(self, status: int, body: bytes, declared: int | None = None) -> None:
-        self.send_response(status)
-        self.send_header("Content-Length", str(len(body) if declared is None else declared))
-        self.end_headers()
-        self.wfile.write(body)
-
-    def _send_reply(self, body: bytes) -> None:
-        """Send a 2xx chat reply, gzip-encoded or labelled with an encoding when the mode calls for it."""
-        mode = self.server.mode
-        permitted = "gzip" in self.headers.get("Accept-Encoding", "")
-        encoding = None
-        if mode == "gzip-anyway" or (mode == "gzip-if-permitted" and permitted):
-            # Level 0 stores the plaintext inside the gzip stream, where a parser that ignored the
-            # encoding could still read the usage report.
-            body, encoding = gzip.compress(body, compresslevel=self.server.gzip_level), "gzip"
-        elif mode == "labelled-identity":
-            encoding = "identity"
-        self.send_response(200)
-        if encoding:
-            self.send_header("Content-Encoding", encoding)
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
-
-    def do_GET(self) -> None:
-        srv = self.server
-        srv.hits.append({"path": self.path, "body": None, "auth": self.headers.get("Authorization"),
-                         "headers": {k.lower(): v for k, v in self.headers.items()}})
-        if srv.mode == "redirect":
-            self.send_response(302)
-            self.send_header("Location", f"{srv.redirect_to}/v1/redirected")  # fixed path, never request data
-            self.send_header("Content-Length", "0")
-            self.end_headers()
-            return
-        self.send_response(200)
-        self.send_header("Connection", "X-Resp-Hop")
-        self.send_header("X-Resp-Hop", "leak")
-        self.send_header("X-Kept", "yes")
-        self.send_header("Content-Length", "2")
-        self.end_headers()
-        self.wfile.write(b"{}")
-
-    def do_POST(self) -> None:
-        size = int(self.headers.get("Content-Length", 0))
-        body = json.loads(self.rfile.read(size) or b"{}")
-        srv = self.server
-        srv.hits.append({"path": self.path, "body": body, "auth": self.headers.get("Authorization"),
-                         "headers": {k.lower(): v for k, v in self.headers.items()},
-                         "accept_encoding": self.headers.get_all("Accept-Encoding")})
-        srv.arrived.set()
-        if srv.arrival_file is not None:
-            srv.arrival_file.write_text("arrived")
-        srv.release.wait(WAIT_S * 2)
-        if srv.mode == "redirect":
-            self.send_response(302)
-            self.send_header("Location", f"{srv.redirect_to}/v1/redirected")  # fixed path, never request data
-            self.send_header("Content-Length", "0")
-            self.end_headers()
-        elif srv.mode == "truncated-500":
-            self._send(500, b"short", declared=500)
-        elif srv.mode == "truncated-400":
-            self._send(400, b"short", declared=500)
-        elif srv.mode == "truncated-200":
-            ok = json.dumps({"choices": [], "usage": {"completion_tokens": 1}}).encode()
-            self._send(200, ok, declared=len(ok) + 100)
-        elif srv.mode == "sse-malformed-usage" and body.get("stream"):
-            self._send(200, b'data: {"usage": {"completion_tokens": 0}}\n\n'
-                            b'data: {"usage": {"completion_tokens": "bad"}}\n\ndata: [DONE]\n\n')
-        elif srv.mode == "huge":
-            self._send(200, b"x" * 5000)
-        elif srv.status != 200:
-            self._send(srv.status, b'{"error":"upstream"}')
-        elif body.get("stream"):
-            chunks = b'data: {"choices":[{"delta":{"content":"hi"}}]}\n\n'
-            if body.get("stream_options", {}).get("include_usage"):
-                chunks += b'data: {"usage":{"completion_tokens": %d}}\n\n' % srv.tokens
-            self._send_reply(chunks + b"data: [DONE]\n\n")
-        else:
-            payload = {"choices": []} if srv.mode == "nousage" else {"choices": [], "usage": {"completion_tokens": srv.tokens}}
-            self._send_reply(json.dumps(payload).encode())
-            srv.responded.append(srv.mode)
-
-
-class Upstream(http.server.ThreadingHTTPServer):
-    daemon_threads = True
-
-    def __init__(self) -> None:
-        super().__init__((L.LOOPBACK_HOST, 0), _UpstreamHandler)
-        self.hits: list[dict] = []
-        self.mode, self.tokens, self.status = "ok", 5, 200
-        self.release, self.arrived = threading.Event(), threading.Event()
-        self.arrival_file: Path | None = None
-        self.redirect_to = ""
-        self.responded: list[str] = []
-        self.gzip_level = 9
-        self.release.set()
-        threading.Thread(target=self.serve_forever, daemon=True).start()
-
-    @property
-    def base_url(self) -> str:
-        return f"http://{L.LOOPBACK_HOST}:{self.server_address[1]}/v1"
 
 
 class Rig:
@@ -377,8 +260,18 @@ def test_main_exits_124_when_a_response_has_no_usage(tmp_path: Path, monkeypatch
         up.server_close()
 
 
+@pytest.mark.parametrize(
+    ("mode", "tokens", "max_out", "expected"),
+    [
+        # A 2xx without usage is reported as 502; an upstream timeout would be reported as 504.
+        ("nousage", 5, 50, ("unaccounted_dispatch", "status=502")),
+        ("ok", 50, 40, ("max_total_output exceeded",)),
+    ],
+    ids=["no-usage", "over-budget"],
+)
 def test_main_waits_for_an_inflight_request_after_the_child_has_exited(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capfd: pytest.CaptureFixture[str],
+    mode: str, tokens: int, max_out: int, expected: tuple[str, ...],
 ) -> None:
     """The child exits 0 while its request is still held upstream; only the drain can catch the breach."""
     arrival = tmp_path / "arrived"
@@ -399,13 +292,16 @@ def test_main_waits_for_an_inflight_request_after_the_child_has_exited(
         deadline = time.monotonic() + 10
         while not os.path.exists({str(arrival)!r}) and time.monotonic() < deadline:
             time.sleep(0.005)
+        if not os.path.exists({str(arrival)!r}):
+            print("STUB: upstream arrival timed out", file=sys.stderr, flush=True)
+            os._exit(3)
         os._exit(0)
         """))
     cline.chmod(cline.stat().st_mode | stat.S_IEXEC)
     monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setenv(L.KEYVAR, PROVIDER_KEY)
     up = Upstream()
-    up.mode, up.arrival_file = "nousage", arrival
+    up.mode, up.tokens, up.arrival_file = mode, tokens, arrival
     up.release.clear()
     monkeypatch.setattr(L, "BASE_URL", up.base_url)
     at_wait = threading.Event()
@@ -436,20 +332,20 @@ def test_main_waits_for_an_inflight_request_after_the_child_has_exited(
     releaser = threading.Thread(target=release_after_drain_wait)
     releaser.start()
     try:
-        rc = L.main(["--max-requests", "2", "--max-total-output", "50", "--", "task"])
+        rc = L.main(["--max-requests", "2", "--max-total-output", str(max_out), "--", "task"])
     finally:
         up.release.set()
         releaser.join(WAIT_S)
         up.shutdown()
         up.server_close()
+    err = capfd.readouterr().err  # file descriptor capture: the stub child writes its own stderr
+    assert "STUB: upstream arrival timed out" not in err, "the request never reached the upstream"
     assert drain_reached == [True], "the drain never reached its condition wait before the upstream was released"
     assert inflight_at_wait == [1], "the drain must start waiting while the request is still in flight"
     assert arrival.exists() and len(up.hits) == 1
-    assert up.responded == ["nousage"], "the handler must have processed the missing-usage response"
+    assert up.responded == [mode], "the handler must have processed the held response"
     assert rc == 124
-    err = capsys.readouterr().err
-    # A 2xx without usage is reported as 502; an upstream timeout would be reported as 504.
-    assert "unaccounted_dispatch" in err and "status=502" in err and "status=504" not in err
+    assert all(needle in err for needle in expected) and "status=504" not in err, err
 
 
 def test_chat_redirect_is_not_followed_and_the_provider_key_never_reaches_another_origin(rig: RigFactory) -> None:
