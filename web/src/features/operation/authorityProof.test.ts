@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   type AuthorityProof,
   FORBIDDEN_STORAGE_TARGETS,
-  HOST_AUTHENTICATOR_CAPABILITIES,
   INTENT_CONFIRMATION_COPY,
   VALID_PROOF_TYPES,
   assertNoHoldToConfirm,

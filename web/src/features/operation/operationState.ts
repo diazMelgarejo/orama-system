@@ -741,7 +741,7 @@ export function operationReducer(
     }
 
     default: {
-      const _exhaustiveCheck: never = event;
+      void (event satisfies never);
       return state;
     }
   }

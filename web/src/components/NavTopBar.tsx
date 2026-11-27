@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 
-import { FOOTER_ITEMS, NAV_ITEMS } from "./NavLeft";
+import { FOOTER_ITEMS, NAV_ITEMS } from "./consoleNavigation";
 
 interface NavTopBarProps {
   active?: string;

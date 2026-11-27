@@ -262,6 +262,29 @@ class SessionSecrets:
                 else:
                     lines.append(line)
         lines.extend("%s=%s" % (key, _quote(val)) for key, val in sorted(values.items()) if key not in used)
-        # A .env with no filled value may be replaced; a session-env target must be new.
-        _write_private(target, ("\n".join(lines) + "\n").encode("utf-8"), exclusive=kind == "session-env")
+        payload = ("\n".join(lines) + "\n").encode("utf-8")
+        if kind == "env":
+            tmp = target.with_name("%s.tmp-%d" % (target.name, os.getpid()))
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "wb") as handle:
+                handle.write(payload)
+            os.chmod(tmp, 0o600)
+            try:
+                # Re-verify immediately before replacement that target was not concurrently populated
+                target_populated = (
+                    target.is_file() and _has_filled_value(target.read_text(encoding="utf-8"))
+                ) or (target.exists() and not target.is_file())
+                if target_populated:
+                    tmp.unlink(missing_ok=True)
+                    target = target.with_name("%s.%s" % (target.name, self.session_id))
+                    kind = "session-env"
+                    _write_private(target, payload, exclusive=True)
+                else:
+                    os.replace(tmp, target)
+            except Exception:
+                tmp.unlink(missing_ok=True)
+                raise
+        else:
+            # A session-env target must be new and never overwrite an existing file.
+            _write_private(target, payload, exclusive=True)
         return target, kind

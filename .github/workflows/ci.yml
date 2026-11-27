@@ -255,11 +255,13 @@ jobs:
         with:
           version: 10
 
-      - name: Install and test web/
+      - name: Install, lint, test, and build web/
         working-directory: web
         run: |
           pnpm install --frozen-lockfile
+          pnpm lint
           pnpm test
+          pnpm build
 
   build:
     needs: [test, lint, web-test, cidf-typecheck-ts]

@@ -249,6 +249,37 @@ def test_save_never_overwrites_an_existing_target(tmp_path):
     assert (tmp_path / ".env.sess1234abcd").read_text(encoding="utf-8") == "keep\n"
 
 
+def test_save_concurrency_guard_prevents_clobbering_concurrent_env(tmp_path, monkeypatch):
+    import orama_system.session_secrets as session_secrets_mod
+
+    env = tmp_path / ".env"
+    env.write_text("# empty\n", encoding="utf-8")
+    store = _store(tmp_path, "sess1234abcd")
+    store.set("WANDB_API_KEY", SECRET)
+
+    orig_has_filled = session_secrets_mod._has_filled_value
+    call_count = 0
+
+    def concurrent_write_on_second_check(text: str) -> bool:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 2:
+            # Simulate a concurrent writer populating .env between initial check and write
+            env.write_text("CONCURRENT_KEY=super-secret\n", encoding="utf-8")
+            return orig_has_filled(env.read_text(encoding="utf-8"))
+        return orig_has_filled(text)
+
+    monkeypatch.setattr(session_secrets_mod, "_has_filled_value", concurrent_write_on_second_check)
+
+    path, kind = store.save(env, None)
+    assert kind == "session-env"
+    assert path == tmp_path / ".env.sess1234abcd"
+    assert _mode(path) == 0o600
+    assert env.read_text(encoding="utf-8") == "CONCURRENT_KEY=super-secret\n"
+    assert "WANDB_API_KEY=" in path.read_text(encoding="utf-8")
+    assert not list(tmp_path.glob(".env.tmp*"))
+
+
 def test_save_refuses_when_nothing_was_entered(tmp_path):
     with pytest.raises(SessionSecretsError):
         _store(tmp_path).save(tmp_path / ".env", None)
