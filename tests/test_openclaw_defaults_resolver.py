@@ -15,6 +15,9 @@ ROOT = Path(__file__).resolve().parents[1]
 RESOLVER = ROOT / "scripts/lib/openclaw_defaults_resolver.py"
 VENDORED = ROOT / "config/vendored/openclaw-defaults"
 W_AND_B = "wandb/deepseek-ai/DeepSeek-V4.1-Flash-1017"
+# `pt_root=None` means "go and find Perpetua-Tools" (environment, then sibling checkouts), so a test that needs it
+# absent must name a path that does not exist.
+ABSENT_PT = Path("/nonexistent/perpetua-tools")
 
 
 def _load_resolver():
@@ -52,7 +55,7 @@ def _vendored_copy(tmp: Path) -> Path:
 
 
 def test_the_shipped_vendored_bundle_verifies_cleanly() -> None:
-    r = res.resolve(pt_root=None, vendored_dir=VENDORED, now=datetime.now(timezone.utc))
+    r = res.resolve(pt_root=ABSENT_PT, vendored_dir=VENDORED, now=datetime.now(timezone.utc))
     assert r.source == "vendored" and r.warnings == ()
     assert r.module.chain_for(r.data)[0] == W_AND_B
 
@@ -72,21 +75,27 @@ def test_a_vendored_copy_that_differs_from_the_live_file_warns_loudly(tmp_path: 
 
 
 def test_without_pt_the_vendored_copy_is_used(tmp_path: Path) -> None:
-    r = res.resolve(pt_root=None, vendored_dir=_vendored_copy(tmp_path))
+    r = res.resolve(pt_root=ABSENT_PT, vendored_dir=_vendored_copy(tmp_path))
     assert r.source == "vendored"
     assert r.module.__name__ != "perpetua_tools.openclaw_defaults"
+
+
+def test_discovery_finds_the_live_file_through_the_environment(tmp_path: Path) -> None:
+    pt = _fake_pt(tmp_path / "pt")
+    r = res.resolve(vendored_dir=_vendored_copy(tmp_path), env={"PERPETUATOOLSROOT": str(pt)})
+    assert r.source == "live" and r.pt_root == pt
 
 
 def test_it_fails_closed_only_when_there_is_neither_a_live_file_nor_a_vendored_copy(tmp_path: Path) -> None:
     empty = tmp_path / "empty"
     empty.mkdir()
     with pytest.raises(res.DefaultsUnavailable) as err:
-        res.resolve(pt_root=None, vendored_dir=empty)
+        res.resolve(pt_root=ABSENT_PT, vendored_dir=empty)
     assert "fail closed" in str(err.value).lower()
 
 
 def test_an_old_vendored_copy_warns_when_pt_is_unreachable(tmp_path: Path) -> None:
-    r = res.resolve(pt_root=None, vendored_dir=_vendored_copy(tmp_path), now=datetime.now(timezone.utc) + timedelta(days=90))
+    r = res.resolve(pt_root=ABSENT_PT, vendored_dir=_vendored_copy(tmp_path), now=datetime.now(timezone.utc) + timedelta(days=90))
     assert r.source == "vendored"
     assert any("days old" in w and "cannot verify" in w.lower() for w in r.warnings), r.warnings
 
@@ -97,7 +106,7 @@ def test_a_hand_edited_vendored_json_is_refused_and_never_used(tmp_path: Path) -
     obj["chain"]["default"].append("lmstudio-mac/qwen3.5-9b-mlx")
     (vend / "openclaw-defaults.json").write_text(json.dumps(obj), encoding="utf-8")
     with pytest.raises(res.DefaultsUnavailable) as err:
-        res.resolve(pt_root=None, vendored_dir=vend)
+        res.resolve(pt_root=ABSENT_PT, vendored_dir=vend)
     assert "edited by hand" in str(err.value)
 
 
@@ -107,7 +116,7 @@ def test_a_hand_edited_vendored_module_is_never_executed(tmp_path: Path) -> None
     original = (vend / "openclaw_defaults.py").read_text(encoding="utf-8")
     (vend / "openclaw_defaults.py").write_text(f"open({str(sentinel)!r}, 'w').write('x')\n" + original, encoding="utf-8")
     with pytest.raises(res.DefaultsUnavailable):
-        res.resolve(pt_root=None, vendored_dir=vend)
+        res.resolve(pt_root=ABSENT_PT, vendored_dir=vend)
     assert not sentinel.exists(), "an unverified module must not be imported"
 
 
@@ -121,7 +130,7 @@ def test_a_tampered_vendored_copy_only_warns_when_the_live_file_is_available(tmp
 
 
 def test_the_pre_import_fingerprint_equals_the_modules_own_fingerprint() -> None:
-    r = res.resolve(pt_root=None, vendored_dir=VENDORED)
+    r = res.resolve(pt_root=ABSENT_PT, vendored_dir=VENDORED)
     assert res.canonical_fingerprint(r.data) == r.module.fingerprint(r.data)
 
 
