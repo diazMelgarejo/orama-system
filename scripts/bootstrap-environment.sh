@@ -38,35 +38,39 @@ ensure_pt_root_env() {
   log "ensured PERPETUA_TOOLS_ROOT in ~/.zshrc"
 }
 
-# 3) Keep the Mac orchestrator model warm (no cold-start stalls)
+# 3) Warm the Mac orchestrator model, only through the Perpetua-Tools one-model gate. No gate, no load.
 ensure_ollama_warm() {
-  command -v launchctl >/dev/null 2>&1 && launchctl setenv OLLAMA_KEEP_ALIVE 30m 2>/dev/null || true
-  if curl -s -o /dev/null --max-time 30 \
-       -d '{"model":"qwen3.5:9b-mlx","prompt":"","keep_alive":"30m","stream":false}' \
-       http://localhost:11434/api/generate 2>/dev/null; then
-    log "ollama qwen3.5:9b-mlx warmed (keep_alive 30m)"
-  else log "ollama warm skipped (not reachable)"; fi
+  local pt="${PERPETUA_TOOLS_ROOT:-$PT_ROOT}"
+  if [ ! -f "$pt/src/perpetua_tools/local_model_gate.py" ]; then
+    log "one-model gate unavailable; not loading a model"
+    return 0
+  fi
+  PYTHONPATH="$pt/src" python3 -m perpetua_tools.local_model_gate limits --apply >/dev/null 2>&1 \
+    || log "could not set the engine limits"
+  if PYTHONPATH="$pt/src" python3 -m perpetua_tools.local_model_gate ensure ollama qwen3.5:9b-mlx >/dev/null 2>&1; then
+    log "ollama qwen3.5:9b-mlx is the loaded model"
+  else
+    log "gate declined; no model loaded (restart Ollama if the limits were only just set)"
+  fi
 }
 
-# 4) Gateway agent routing — orchestrator ollama-primary; coder keeps a fast fallback
-ensure_gateway_routing() {
+# 4) Gateway agent routing — report only. The routes come from the OpenClaw defaults (live Perpetua-Tools file,
+# else the stamped vendored copy, else fail closed). Start-up never writes openclaw.json: a change is applied
+# deliberately, one reviewed patch at a time, through the staged restore steps.
+report_gateway_routing() {
   local cfg="${HOME}/.openclaw/openclaw.json"
-  [ -f "$cfg" ] || { log "openclaw.json absent — skip routing"; return; }
-  python3 - "$cfg" <<'PY'
-import json,sys
-p=sys.argv[1]; d=json.load(open(p)); ch=False
-for a in d.get("agents",{}).get("list",[]):
-    if not isinstance(a,dict): continue
-    if a.get("id")=="orchestrator" and a.get("model",{}).get("primary")!="ollama/qwen3.5:9b-mlx":
-        a["model"]={"primary":"ollama/qwen3.5:9b-mlx","fallbacks":["lmstudio-mac/qwen3.5-9b-mlx"]}; ch=True
-    if a.get("id")=="coder" and "fallbacks" not in a.get("model",{}):
-        a.setdefault("model",{})["fallbacks"]=["ollama/qwen3.5:9b-mlx","lmstudio-mac/qwen3.5-9b-mlx"]; ch=True
-    # autoresearcher runs on the same Win box / coder model (GPU runner)
-    _coder="lmstudio-win/qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2"
-    if a.get("id")=="autoresearcher" and a.get("model",{}).get("primary")!=_coder:
-        a["model"]={"primary":_coder,"fallbacks":["ollama/qwen3.5:9b-mlx","lmstudio-mac/qwen3.5-9b-mlx"]}; ch=True
-if ch: json.dump(d,open(p,"w"),indent=2); print("[bootstrap-env] gateway routing: orchestrator ollama-primary, coder+autoresearcher routed")
-PY
+  local resolver="$REPO/scripts/lib/openclaw_defaults_resolver.py"
+  [ -f "$cfg" ] || { log "openclaw.json absent — skip routing report"; return; }
+  [ -f "$resolver" ] || { log "defaults resolver missing — skip routing report"; return; }
+  local out rc=0
+  out="$(python3 "$resolver" --check "$cfg" 2>&1)" || rc=$?
+  case "$rc" in
+    0) log "gateway routing matches the OpenClaw defaults" ;;
+    1) log "gateway routing drift (nothing was changed): $(printf '%s\n' "$out" | tail -n 1)"
+       log "review:  python3 scripts/lib/openclaw_defaults_resolver.py --check ~/.openclaw/openclaw.json"
+       log "patch:   python3 scripts/lib/openclaw_defaults_resolver.py --render-patch --shape entries" ;;
+    *) log "routing not checked: $(printf '%s\n' "$out" | tail -n 1)" ;;
+  esac
 }
 
 # 5) Skills — keep .claude/skills as thin wrappers over the bin canonical
@@ -85,7 +89,7 @@ ensure_rag_mcp() {
 install_hygiene_hook
 ensure_pt_root_env
 ensure_ollama_warm
-ensure_gateway_routing
+report_gateway_routing
 ensure_skills_wrappers
 ensure_rag_mcp
 log "done"

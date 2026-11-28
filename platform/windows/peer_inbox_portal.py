@@ -1,6 +1,7 @@
 """Windows lane: /peer-inbox portal — bidirectional queue + server-side markdown."""
 from __future__ import annotations
 
+import asyncio
 from typing import Any, Callable, Mapping
 from urllib.parse import quote
 
@@ -169,7 +170,7 @@ setInterval(refresh, 15000);
 
 
 from utils.endpoint_policy_core import TransportIdentity, parse_transport_identity
-from orama_system.lan_peer_channel import build_peer_transport_url
+from orama_system.lan_peer_channel import peer_http_target
 
 
 async def fetch_remote_peer_api(
@@ -194,7 +195,7 @@ async def fetch_remote_peer_api(
         }
     headers = auth_headers() if callable(auth_headers) else dict(auth_headers)
     try:
-        url = build_peer_transport_url(identity, portal_port, path, websocket=False)
+        url, trust = await asyncio.to_thread(peer_http_target, identity, portal_port, path)
     except Exception as exc:
         return {
             "ok": False,
@@ -204,7 +205,7 @@ async def fetch_remote_peer_api(
         }
 
     try:
-        async with httpx.AsyncClient(timeout=12.0) as client:
+        async with httpx.AsyncClient(timeout=12.0, **trust) as client:
             response = await client.get(url, headers=headers)
         if response.status_code != 200:
             return {

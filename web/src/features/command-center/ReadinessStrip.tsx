@@ -74,7 +74,7 @@ export function ReadinessStrip({ state }: ReadinessStripProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-4">
         {tiles.map((tile) => {
           const tone = statusToTone(tile.status);
           const borderColor =

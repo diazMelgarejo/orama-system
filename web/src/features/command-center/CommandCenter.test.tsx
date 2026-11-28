@@ -1,10 +1,14 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { CommandCenter } from "./CommandCenter";
 
 vi.mock("@/api/appState", () => ({
   fetchAppState: vi.fn(() => Promise.reject(new Error("unreachable"))),
+}));
+
+vi.mock("@/api/sessionSecrets", () => ({
+  listSessionSecrets: vi.fn(() => Promise.resolve({ names: [], status: {} })),
 }));
 
 vi.mock("@/api/artifacts", () => ({
@@ -30,7 +34,7 @@ function renderCommandCenter() {
 
 async function waitForConsole() {
   await waitFor(() => {
-    expect(screen.getByText("Command")).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Console sections" })).toBeInTheDocument();
   });
 }
 
@@ -81,7 +85,7 @@ describe("CommandCenter nav smokes", () => {
   it("docs page renders the knowledge portal instead of the swarm composer", async () => {
     renderCommandCenter();
     await waitForConsole();
-    fireEvent.click(within(screen.getByRole("navigation")).getByRole("button", { name: "Docs" }));
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Console sections" })).getByRole("button", { name: "Docs" }));
 
     expect(screen.getByText("Knowledge Portal")).toBeInTheDocument();
     expect(screen.getByLabelText("Search documentation")).toBeInTheDocument();
@@ -93,5 +97,71 @@ describe("CommandCenter nav smokes", () => {
     await waitFor(() => {
       expect(screen.getByText(/portal_server\.py is running on port 8002/i)).toBeInTheDocument();
     });
+  });
+
+  it("never shows invented production data when the API is unreachable", async () => {
+    renderCommandCenter();
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent(/live data unavailable/i);
+    });
+    expect(screen.queryByText("PRODUCTION")).not.toBeInTheDocument();
+    expect(screen.queryByText("Healthy")).not.toBeInTheDocument();
+    expect(screen.queryByText(/run_01JY/)).not.toBeInTheDocument();
+    expect(screen.queryByText("us-east-1")).not.toBeInTheDocument();
+  });
+
+  it("suppresses the effect controls while live data is unavailable and says why", async () => {
+    renderCommandCenter();
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent(/live data unavailable/i);
+    });
+    expect(screen.getByRole("button", { name: "Launch Swarm" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /preview plan/i })).toBeDisabled();
+    expect(screen.getAllByText(/controls are off until live data returns/i).length).toBeGreaterThan(0);
+  });
+});
+
+describe("CommandCenter demo mode", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("labels the fixtures as a demo, and keeps every effect control inert", async () => {
+    vi.stubEnv("VITE_PORTAL_DEMO", "1");
+    renderCommandCenter();
+    await waitFor(() => {
+      expect(screen.getAllByText(/demo data/i).length).toBeGreaterThan(0);
+    });
+    expect(screen.getByRole("button", { name: "Launch Swarm" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /preview plan/i })).toBeDisabled();
+  });
+});
+
+describe("CommandCenter live data", () => {
+  it("shows live environment and an enabled composer only when the API answered", async () => {
+    const { fetchAppState } = await import("@/api/appState");
+    const { mockState } = await import("@/data/mockState");
+    vi.mocked(fetchAppState).mockResolvedValueOnce(mockState);
+    renderCommandCenter();
+    await waitFor(() => {
+      expect(screen.getByText("PRODUCTION")).toBeInTheDocument();
+    });
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("does not show a preview from before live data was lost", async () => {
+    renderCommandCenter();
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent(/live data unavailable/i);
+    });
+    expect(screen.queryByText(/preview-/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("CommandCenter settings page", () => {
+  it("opens the write-only session key form from the Settings entry", async () => {
+    renderCommandCenter();
+    await waitForConsole();
+    clickNav("Settings");
+    expect(screen.getByRole("heading", { name: "Session Keys" })).toBeInTheDocument();
+    expect(screen.queryByText("Swarm Composer")).not.toBeInTheDocument();
   });
 });

@@ -146,3 +146,32 @@ describe("SwarmComposer launch gate", () => {
     expect(screen.queryByText(/run preview first/i)).not.toBeInTheDocument();
   });
 });
+
+describe("SwarmComposer effect controls", () => {
+  it("turns preview and launch off and shows the reason when effects are off", () => {
+    const client = new QueryClient({ defaultOptions: { mutations: { retry: false }, queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <SwarmComposer previewData={approvedPreview} effectsOffReason="Live data unavailable: controls are off until live data returns." />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByRole("button", { name: "Launch Swarm" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /preview plan/i })).toBeDisabled();
+    expect(screen.getByRole("status")).toHaveTextContent(/controls are off until live data returns/i);
+    expect(screen.getByRole("button", { name: "Launch Swarm" })).toHaveAttribute("aria-describedby", "effects-off-reason");
+  });
+
+  it("keeps the reason region mounted but empty when effects are on, so it is announced when it appears", () => {
+    renderComposer(approvedPreview);
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+  });
+
+  it("stacks its option fields and lets the button row wrap on narrow screens", () => {
+    const { container } = renderComposer(approvedPreview);
+    const grid = container.querySelector(".grid") as HTMLElement;
+    expect(grid.className).toMatch(/grid-cols-1/);
+    expect(grid.className).toMatch(/sm:grid-cols-2/);
+    const row = screen.getByRole("button", { name: "Launch Swarm" }).parentElement as HTMLElement;
+    expect(row.className).toMatch(/flex-wrap/);
+  });
+});

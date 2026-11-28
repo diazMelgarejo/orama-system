@@ -23,7 +23,7 @@ def test_apply_runtime_payload_writes_pt_resolved_config(monkeypatch, tmp_path):
         "role_routing": {"topology": "manager-local_researcher-remote"},
     }
 
-    result = bootstrap.apply_runtime_payload(payload, force=False)
+    result = bootstrap.apply_runtime_payload(payload, force=False, write=True)
 
     written = json.loads((tmp_path / ".openclaw" / "openclaw.json").read_text(encoding="utf-8"))
     assert written["gateway"]["port"] == 18789

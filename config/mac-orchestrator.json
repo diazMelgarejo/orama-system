@@ -110,7 +110,7 @@
   },
   "commands": {
     "ownerAllowFrom": [
-      "whatsapp:+14159419166"
+      "${env:OPENCLAW_OWNER_ID}"
     ]
   },
   "diagnostics": {

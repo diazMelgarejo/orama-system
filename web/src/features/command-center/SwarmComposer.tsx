@@ -14,6 +14,8 @@ interface SwarmComposerProps {
   onPreview?: (preview: SwarmPreview) => void;
   onLaunch?: (result: SwarmLaunchResult) => void;
   previewData?: SwarmPreview;
+  /** When set, preview and launch are off and this reason is shown beside them. */
+  effectsOffReason?: string;
 }
 
 const TASK_TYPES: { value: TaskType; label: string }[] = [
@@ -74,7 +76,7 @@ function SegmentedControl<T extends string>({
   );
 }
 
-export function SwarmComposer({ onPreview, onLaunch, previewData }: SwarmComposerProps) {
+export function SwarmComposer({ onPreview, onLaunch, previewData, effectsOffReason }: SwarmComposerProps) {
   const [objective, setObjective] = useState(
     "Analyze the attached financial report and produce key risk factors, opportunities, and a 1-page executive summary.",
   );
@@ -127,7 +129,8 @@ export function SwarmComposer({ onPreview, onLaunch, previewData }: SwarmCompose
     previewData?.task_type === taskType &&
     previewData?.optimize_for === optimize &&
     previewData?.preferred_device === device;
-  const canPreview = objective.trim().length >= 6;
+  const effectsOff = effectsOffReason !== undefined;
+  const canPreview = !effectsOff && objective.trim().length >= 6;
   const approvalUnused =
     Boolean(previewData?.preview_id) && previewData?.preview_id !== launchedPreviewId;
   const canLaunch = canPreview && hasApproval && hardwareOk && previewMatches && approvalUnused;
@@ -185,7 +188,7 @@ export function SwarmComposer({ onPreview, onLaunch, previewData }: SwarmCompose
         </div>
 
         {/* Task Type + Optimize For segmented controls */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <SegmentedControl
             label="Task type"
             options={TASK_TYPES}
@@ -233,10 +236,11 @@ export function SwarmComposer({ onPreview, onLaunch, previewData }: SwarmCompose
         </div>
 
         {/* Action buttons */}
-        <div className="flex items-center gap-2 pt-1">
+        <div className="flex flex-wrap items-center gap-2 pt-1">
           <button
             type="button"
             disabled={!canPreview || previewMutation.isPending}
+            aria-describedby={effectsOff ? "effects-off-reason" : undefined}
             onClick={() => previewMutation.mutate()}
             className="rounded border border-line bg-canvas-raised px-3 py-1.5 text-xs text-ink transition hover:border-accent hover:text-accent disabled:opacity-40"
           >
@@ -245,12 +249,17 @@ export function SwarmComposer({ onPreview, onLaunch, previewData }: SwarmCompose
           <button
             type="button"
             disabled={!canLaunch || launchMutation.isPending}
+            aria-describedby={effectsOff ? "effects-off-reason" : undefined}
             onClick={() => launchMutation.mutate()}
             className="rounded border border-accent bg-accent/10 px-4 py-1.5 text-xs font-semibold text-accent transition hover:bg-accent/20 disabled:opacity-40"
           >
             Launch Swarm
           </button>
-          {needsPreview && !actionError && (
+          {/* Always mounted so a screen reader announces the reason when it appears. */}
+          <p id="effects-off-reason" role="status" className="ml-auto text-xs text-ink-muted">
+            {effectsOffReason ?? ""}
+          </p>
+          {!effectsOff && needsPreview && !actionError && (
             <p className="ml-auto text-2xs text-ink-muted">
               {hasApproval
                 ? "Run Preview again — inputs changed since the last approval."

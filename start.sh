@@ -1060,6 +1060,16 @@ elif [ "$_OS_NAME" != "Darwin" ]; then
   _info "svc" "Non-macOS host (${_OS_NAME}) — skipping scripts/setup_macos.py"
 fi
 
+# ── OpenClaw defaults: report which source is in use (read-only, non-fatal) ───
+# Live Perpetua-Tools file first, then the stamped vendored copy, then fail closed. A stale, old or hand-edited vendored
+# copy is reported here as WARN. This step only REPORTS: syncing the copy needs a human at a terminal to confirm.
+if [ -f "$SCRIPT_DIR/scripts/lib/openclaw_defaults_resolver.py" ] && command -v python3 >/dev/null 2>&1; then
+  _OCD_ARGS=(--status)
+  [ -n "${PT_DIR:-}" ] && _OCD_ARGS+=(--pt-root "$PT_DIR")
+  python3 -I "$SCRIPT_DIR/scripts/lib/openclaw_defaults_resolver.py" "${_OCD_ARGS[@]}" 2>&1 | sed 's/^/  /' || true
+  unset _OCD_ARGS
+fi
+
 # ── Layer-3 macOS pf egress floor verification (non-blocking) ────────────────
 if [ "$_OS_NAME" = "Darwin" ]; then
   _PF_VERIFY_SCRIPT=""
@@ -1513,12 +1523,55 @@ open_browser() {
   fi
 }
 
+# ── one-model limits ──────────────────────────────────────────────────────────
+# The limits live in the login session and are lost at reboot, so every launch puts them back.
+_ollama_apply_limits() {
+  export OLLAMA_MAX_LOADED_MODELS=1 OLLAMA_NUM_PARALLEL=1 OLLAMA_KEEP_ALIVE=5m
+  command -v launchctl >/dev/null 2>&1 || return 0
+  local setting
+  for setting in OLLAMA_MAX_LOADED_MODELS=1 OLLAMA_NUM_PARALLEL=1 OLLAMA_KEEP_ALIVE=5m; do
+    launchctl setenv "${setting%%=*}" "${setting#*=}" 2>/dev/null || _warn "ollama" "could not set ${setting}"
+  done
+}
+
+# A server that was already running keeps its old limits until it is reopened. Nothing is restarted here.
+_ollama_check_limits() {
+  [ -n "${PT_DIR:-}" ] && [ -f "${PT_DIR}/src/perpetua_tools/local_model_gate.py" ] || return 0
+  local py="${PT_PYTHON:-}"
+  [ -n "$py" ] || py=python3
+  if PYTHONPATH="${PT_DIR}/src" "$py" -m perpetua_tools.local_model_gate status 2>/dev/null \
+    | grep -q "in the running Ollama server"; then
+    _warn "ollama" "the running Ollama does not hold the one-model limit — quit and reopen Ollama"
+  fi
+}
+
+# ── one-model warm-up ─────────────────────────────────────────────────────────
+# A load goes only through the Perpetua-Tools gate (one local model at a time). It refuses unless the host
+# is empty, the engine limits are in force and the model fits. No gate, no load.
+_ollama_warm_via_gate() {
+  local model="$1" py="${PT_PYTHON:-}"
+  if [ -z "${PT_DIR:-}" ] || [ ! -f "${PT_DIR}/src/perpetua_tools/local_model_gate.py" ]; then
+    _warn "ollama" "one-model gate unavailable — not loading ${model}"
+    return 0
+  fi
+  [ -n "$py" ] || py=python3
+  (
+    if PYTHONPATH="${PT_DIR}/src" "$py" -m perpetua_tools.local_model_gate ensure ollama "$model" \
+      >>"${LOG_DIR}/ollama.log" 2>&1; then
+      _info "ollama" "${model} is the loaded model"
+    else
+      _warn "ollama" "gate declined to load ${model} — continuing without it (see ${LOG_DIR}/ollama.log)"
+    fi
+  ) &
+}
+
 # ── ollama idempotent startup ─────────────────────────────────────────────────
-# Ensures ollama server is running and the Mac Orchestrator model is warm.
+# Ensures ollama server is running and asks the one-model gate to warm the Mac Orchestrator model.
 # Non-fatal — failures are logged and execution continues.
 # Env knobs: OLLAMA_AUTO_START=0 to skip; OLLAMA_WARM_MODEL to override model.
 
 _ollama_ensure_ready() {
+  _ollama_apply_limits
   [ "${OLLAMA_AUTO_START:-1}" != "1" ] && return 0
 
   local model="${OLLAMA_WARM_MODEL:-qwen3.5:9b-mlx}"
@@ -1528,7 +1581,7 @@ _ollama_ensure_ready() {
   if ! curl -sf "${endpoint}/api/version" >/dev/null 2>&1; then
     _info "ollama" "server not running — starting ollama serve..."
     mkdir -p "${LOG_DIR}"
-    nohup ollama serve >>"${LOG_DIR}/ollama.log" 2>&1 &
+    OLLAMA_MAX_LOADED_MODELS=1 OLLAMA_NUM_PARALLEL=1 OLLAMA_KEEP_ALIVE=5m nohup ollama serve >>"${LOG_DIR}/ollama.log" 2>&1 &
     local i=0
     while [ $i -lt 12 ]; do
       sleep 1; i=$((i+1))
@@ -1553,28 +1606,12 @@ _ollama_ensure_ready() {
     }
   fi
 
-  # 3. Warm model into GPU memory with indefinite keep-alive (non-blocking)
-  local already_loaded
-  already_loaded=$(curl -sf "${endpoint}/api/ps" 2>/dev/null | \
-    MODEL_NAME="$model" python3 -c "
-import sys,json
-ps=json.load(sys.stdin)
-names=[m.get('name','') for m in ps.get('models',[])]
-model = __import__('os').environ['MODEL_NAME']
-base = model.split(':', 1)[0]
-print('yes' if any(n == model or n.startswith(base + ':') for n in names) else 'no')
-" 2>/dev/null || echo "no")
-
-  if [ "$already_loaded" = "yes" ]; then
-    _info "ollama" "model ${model} already loaded in memory"
-  else
-    _info "ollama" "warming ${model} into GPU memory (keep_alive=-1)..."
-    curl -sf -X POST "${endpoint}/api/generate" \
-      -H "Content-Type: application/json" \
-      -d "{\"model\":\"${model}\",\"keep_alive\":-1}" \
-      >/dev/null 2>&1 &
-    _info "ollama" "warm-up dispatched (non-blocking)"
-  fi
+  # 3. Ask the one-model gate to warm it (non-blocking); it unloads after five idle minutes
+  _ollama_check_limits
+  case "$endpoint" in
+    *localhost*|*//127.*) _ollama_warm_via_gate "$model" ;;
+    *) _info "ollama" "remote endpoint — not loading anything on this host" ;;
+  esac
 }
 
 # ── per-profile openclaw config ───────────────────────────────────────────────

@@ -24,6 +24,7 @@ import html as _html
 import ipaddress
 import json
 import logging
+import re
 import mimetypes
 import os
 import secrets
@@ -49,7 +50,7 @@ from starlette.responses import JSONResponse, StreamingResponse
 
 from orama_system.lan_peer_channel import (
     LanPeerChannel,
-    build_peer_transport_url,
+    peer_http_target,
     local_platform,
     make_envelope,
     read_discovery_peer_identity,
@@ -307,8 +308,10 @@ async def _portal_lifespan(_app: FastAPI):
 
 app = FastAPI(title="orama portal", version=VERSION, lifespan=_portal_lifespan)
 from orama_system.workspace_api import router as workspace_router
+from orama_system.session_secret_routes import router as session_secret_router
 app.include_router(workspace_router)
 app.include_router(knowledge_router)
+app.include_router(session_secret_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_allow_origins(),
@@ -542,6 +545,18 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   body[data-theme="night"] .svc-btn{{background:#0f1117;border-color:#374151}}
   body[data-theme="night"] .jobs-table th{{border-color:#374151}}
   body[data-theme="night"] .jobs-table td{{border-color:#1f2937}}
+  /* destructive-action confirmation dialog: one native element, one helper */
+  .confirm-dialog{{background:#1e293b;border:1px solid #475569;border-radius:4px;color:#f8fafc;max-width:34rem;padding:1rem 1.25rem}}
+  .confirm-dialog::backdrop{{background:#0f111799}}
+  .confirm-title{{font-size:.95rem;color:#38bdf8;letter-spacing:.03em;margin-bottom:.5rem}}
+  .confirm-body{{color:#cbd5e1;font-size:.8rem;line-height:1.5;margin-bottom:.9rem;min-height:2.4rem}}
+  .confirm-actions{{display:flex;gap:.5rem;justify-content:flex-end}}
+  .confirm-btn{{background:none;border:1px solid #475569;border-radius:3px;color:#94a3b8;cursor:pointer;font-family:monospace;font-size:.7rem;padding:.35rem .9rem}}
+  .confirm-btn:hover{{border-color:#38bdf8;color:#f8fafc}}
+  .confirm-btn:focus{{outline:2px solid #38bdf8;outline-offset:2px}}
+  .confirm-btn.danger{{background:#dc2626;border-color:#dc2626;color:#f8fafc}}
+  .confirm-btn.danger:hover{{background:#ef4444;border-color:#ef4444}}
+  body[data-theme="night"] .confirm-dialog{{background:#1a1d27;border-color:#2d3748}}
 </style>
 </head>
 <body>
@@ -568,6 +583,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <div id="activity-section">{activity_section}</div>
 {input_section}
 <div class="footer">Auto-refresh every 10s &bull; <span id="last-refresh">{timestamp}</span></div>
+<dialog id="confirm-dialog" class="confirm-dialog" aria-labelledby="confirm-dialog-title" aria-describedby="confirm-dialog-body">
+  <h2 class="confirm-title" id="confirm-dialog-title">Confirm destructive action</h2>
+  <p class="confirm-body" id="confirm-dialog-body"></p>
+  <div class="confirm-actions">
+    <button class="confirm-btn" type="button" id="confirm-dialog-cancel" autofocus>Cancel</button>
+    <button class="confirm-btn danger" type="button" id="confirm-dialog-ok">Confirm</button>
+  </div>
+</dialog>
 <script>
 {cp_fetch_bootstrap}
 async function sendTask() {{
@@ -799,6 +822,65 @@ function _esc(s) {{
 }}
 setInterval(refreshJobs, 8000);
 setTimeout(refreshJobs, 1000);
+// Destructive-action confirmation: ONE helper, driven by data-confirm attributes.
+// A control opts in with data-confirm="<one-line consequence>" plus
+// data-confirm-op="<op id>" and carries no inline handler, so nothing below can
+// run before the operator presses Confirm. Cancel holds focus by default, a
+// dismissed dialog does no I/O, and focus returns to the control that opened it.
+const _CONFIRM_OPS = {{
+  'stop': function () {{ svcAction('stop'); }},
+  'restart-pt': function () {{ svcAction('restart', 'pt'); }},
+  'restart-orama': function () {{ svcAction('restart', 'orama'); }},
+  'restart-portal': function () {{ svcAction('restart', 'portal'); }},
+  'rediscover': function () {{ rediscover(); }}
+}};
+let _confirmTrigger = null;
+function _confirmParts() {{
+  return {{
+    dlg: document.getElementById('confirm-dialog'),
+    body: document.getElementById('confirm-dialog-body'),
+    ok: document.getElementById('confirm-dialog-ok'),
+    cancel: document.getElementById('confirm-dialog-cancel')
+  }};
+}}
+function openConfirm(trigger) {{
+  const p = _confirmParts();
+  if (!p.dlg || !p.dlg.showModal || !p.body || !p.ok) return;
+  _confirmTrigger = trigger;
+  p.body.textContent = trigger.getAttribute('data-confirm') || '';
+  p.ok.setAttribute('data-confirm-op', trigger.getAttribute('data-confirm-op') || '');
+  p.dlg.showModal();
+  if (p.cancel) p.cancel.focus();   // Cancel, not the danger button, gets focus
+}}
+function closeConfirm() {{
+  const p = _confirmParts();
+  if (p.dlg && p.dlg.open) p.dlg.close();
+}}
+function runConfirmed() {{
+  const p = _confirmParts();
+  const op = p.ok ? p.ok.getAttribute('data-confirm-op') : '';
+  closeConfirm();
+  const run = _CONFIRM_OPS[op];
+  if (run) run();
+}}
+document.addEventListener('click', function (e) {{
+  const trigger = e.target && e.target.closest ? e.target.closest('[data-confirm]') : null;
+  if (!trigger) return;
+  e.preventDefault();
+  openConfirm(trigger);
+}});
+(function wireConfirmDialog() {{
+  const p = _confirmParts();
+  if (!p.dlg) return;
+  if (p.ok) p.ok.addEventListener('click', runConfirmed);
+  if (p.cancel) p.cancel.addEventListener('click', closeConfirm);
+  p.dlg.addEventListener('close', function () {{
+    const trigger = _confirmTrigger;
+    _confirmTrigger = null;
+    if (p.ok) p.ok.removeAttribute('data-confirm-op');
+    if (trigger && typeof trigger.focus === 'function') trigger.focus();
+  }});
+}})();
 </script>
 </body>
 </html>"""
@@ -1208,23 +1290,75 @@ def _render_input_section(queue_depth: int) -> str:
     )
 
 
+_DESTRUCTIVE_CONTROLS: tuple[tuple[str, str, str, str], ...] = (
+    (
+        "danger", "stop", "&#9632; Stop All",
+        "Stop All is the emergency override: no approval gate blocks it and it sends "
+        "SIGTERM to PT, orama and this portal, so this dashboard stays dark until "
+        "./start.sh runs again.",
+    ),
+    (
+        "warn", "restart-pt", "&#8635; Restart PT :8000",
+        "Restart PT sends SIGTERM to whatever holds :8000 and relaunches it detached; "
+        "work in flight on that process is lost.",
+    ),
+    (
+        "warn", "restart-orama", "&#8635; Restart orama :8001",
+        "Restart orama sends SIGTERM to whatever holds :8001 and relaunches it "
+        "detached; in-flight requests are dropped.",
+    ),
+    (
+        "warn", "restart-portal", "&#8635; Restart Portal :8002",
+        "Restart Portal kills this page's own process on :8002; the dashboard "
+        "disconnects until the new process answers.",
+    ),
+    (
+        "", "rediscover", "&#8635; Re-discover LAN",
+        "Re-discover LAN re-runs discover.py --force and rewrites the Win lane "
+        "address; a wrong pick cannot be undone from this page.",
+    ),
+)
+
+
+def _confirm_control(*, css_class: str, op: str, consequence: str, label: str) -> str:
+    """Render one destructive control that only opens the page confirm dialog.
+
+    ``data-confirm`` carries the one-line consequence shown to the operator and
+    ``data-confirm-op`` names the action the dialog's Confirm button runs. There
+    is deliberately no inline handler, so no request fires before the operator
+    confirms (see the confirm helper at the end of HTML_TEMPLATE's script).
+    """
+    return (
+        f'<button class="svc-btn {css_class}" type="button"'
+        f' data-confirm-op="{op}" data-confirm="{consequence}">{label}</button>'
+    )
+
+
 def _render_service_control_section() -> str:
-    """Service-control bar: Stop All, per-service Restart, Re-discover LAN, Re-check Policy."""
+    """Service-control bar: Stop All, per-service Restart, Re-discover LAN, Re-check Policy.
+
+    Emergency stop keeps its control but is never one click away: it goes through
+    the page-wide confirm dialog, whose consequence line states that no approval
+    gate blocks it.
+    """
+    destructive = "".join(
+        _confirm_control(css_class=css, op=op, label=label, consequence=why)
+        for css, op, label, why in _DESTRUCTIVE_CONTROLS
+    )
     return (
         '<div class="section">'
         '<div class="section-title">Service Controls</div>'
         '<div class="card">'
-        '<div class="svc-ctrl">'
-        '<button class="svc-btn danger" onclick="svcAction(\'stop\')">&#9632; Stop All</button>'
-        '<button class="svc-btn warn" onclick="svcAction(\'restart\',\'pt\')">&#8635; Restart PT :8000</button>'
-        '<button class="svc-btn warn" onclick="svcAction(\'restart\',\'orama\')">&#8635; Restart orama :8001</button>'
-        '<button class="svc-btn warn" onclick="svcAction(\'restart\',\'portal\')">&#8635; Restart Portal :8002</button>'
-        '<button class="svc-btn" onclick="rediscover()">&#8635; Re-discover LAN</button>'
+        f'<div class="svc-ctrl">{destructive}'
         '<button class="svc-btn" onclick="recheckPolicy()">&#10003; Re-check Policy</button>'
         '</div>'
         '<div class="svc-ctrl-status" id="svc-ctrl-status"></div>'
         '<div style="font-size:.65rem;color:#475569;margin-top:.4rem">'
         'CLI: ./start.sh --stop &bull; ./start.sh --discover &bull; ./start.sh --hardware-policy'
+        '</div>'
+        '<div style="font-size:.65rem;color:#475569;margin-top:.2rem">'
+        'Stop, Restart and Re-discover open a confirmation dialog first: Cancel holds '
+        'focus by default and dismissing the dialog cancels.'
         '</div>'
         '</div>'
         '</div>'
@@ -1925,17 +2059,12 @@ async def _fetch_peer_inbox_remote() -> tuple[list[dict[str, Any]], str]:
     if not peer_identity:
         return [], "no peer IP in discovery"
     try:
-        url = build_peer_transport_url(
-            peer_identity,
-            PORTAL_PORT,
-            "/api/peer-inbox",
-            websocket=False,
-        )
+        url, trust = await asyncio.to_thread(peer_http_target, peer_identity, PORTAL_PORT, "/api/peer-inbox")
     except Exception as exc:
         return [], str(exc)
 
     try:
-        async with _portal_http_client(timeout=10.0) as client:
+        async with _portal_http_client(timeout=10.0, **trust) as client:
             response = await client.get(url)
             if response.status_code != 200:
                 return [], f"HTTP {response.status_code} from peer inbox"
@@ -2033,17 +2162,14 @@ async def api_co_orchestration_file(filename: str, scope: str = "local"):
     if not peer_identity:
         raise HTTPException(status_code=503, detail="no peer IP in discovery")
     try:
-        url = build_peer_transport_url(
-            peer_identity,
-            PORTAL_PORT,
-            f"/api/peer-inbox/{quote(filename)}",
-            websocket=False,
+        url, trust = await asyncio.to_thread(
+            peer_http_target, peer_identity, PORTAL_PORT, f"/api/peer-inbox/{quote(filename)}"
         )
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     try:
-        async with _portal_http_client(timeout=15.0) as client:
+        async with _portal_http_client(timeout=15.0, **trust) as client:
             response = await client.get(url)
             if response.status_code == 404:
                 raise HTTPException(status_code=404, detail="not found on peer")
@@ -3898,8 +4024,8 @@ async def _get_fleet_topology() -> dict[str, Any]:
     # If we have a peer, try to describe it (will be enhanced when PT Phase 2 spec is available)
     if peer_identity:
         try:
-            url = build_peer_transport_url(peer_identity, 8002, "/api/status", websocket=False)
-            async with _portal_untrusted_http_client(timeout=PROBE_TIMEOUT) as client:
+            url, trust = await asyncio.to_thread(peer_http_target, peer_identity, 8002, "/api/status")
+            async with _portal_untrusted_http_client(timeout=PROBE_TIMEOUT, **trust) as client:
                 # Try to probe the peer's status endpoint
                 r = await client.get(url, timeout=PROBE_TIMEOUT)
                 if r.status_code == 200:
@@ -4030,18 +4156,59 @@ async def serve_assets(path: str):
     return Response(content=body, media_type=media_type)
 
 
+
+_LEGACY_SURFACE_LOGGED = False
+_BUILD_SHA = re.compile(r"[0-9a-fA-F]{7,40}")
+
+
+def portal_surface() -> dict[str, str]:
+    """Which front end ``/`` serves and which build it is, so a missing or stale ``web/dist`` is never silent.
+
+    The build stamp (``web/dist/build-info.json``, written by the web build) is read at request time. Only a hex
+    commit is accepted (shortened to 12 characters, safe in a header); anything else, or a missing or corrupt
+    stamp, reports ``unstamped`` and never breaks the page. The reason is a constant code, not a sentence.
+    """
+    if not (_WEB_DIST / "index.html").exists():
+        return {"surface": "legacy", "reason": "no-web-dist"}
+    build = "unstamped"
+    try:
+        stamp = json.loads((_WEB_DIST / "build-info.json").read_text(encoding="utf-8"))
+        sha = stamp.get("git_sha") if isinstance(stamp, dict) else None
+        if isinstance(sha, str) and _BUILD_SHA.fullmatch(sha):
+            build = sha[:12]
+    except (OSError, ValueError):
+        pass
+    return {"surface": "react", "build": build, "reason": "build-present"}
+
+
+def _surface_headers(surface: dict[str, str]) -> dict[str, str]:
+    headers = {"X-Portal-Surface": surface["surface"], "X-Portal-Surface-Reason": surface["reason"]}
+    if "build" in surface:
+        headers["X-Portal-Build"] = surface["build"]
+    return headers
+
+
 @app.get("/", response_class=None)
 async def index(request: Request):
     """Serve the portal dashboard page."""
     from fastapi.responses import FileResponse, HTMLResponse
     # Serve React app when web/dist is built; fall back to legacy HTML dashboard.
     react_index = _WEB_DIST / "index.html"
-    if react_index.exists():
-        return FileResponse(str(react_index), media_type="text/html")
+    surface = portal_surface()
+    if surface["surface"] == "react":
+        return FileResponse(str(react_index), media_type="text/html", headers=_surface_headers(surface))
+    global _LEGACY_SURFACE_LOGGED
+    if not _LEGACY_SURFACE_LOGGED:
+        _LEGACY_SURFACE_LOGGED = True
+        log.warning(
+            "portal serving the LEGACY page (%s): no web/dist build in %s; build with `pnpm build` in web/",
+            surface["reason"],
+            _WEB_DIST,
+        )
     status = await api_status()
     browser_token = _loopback_browser_token(request)
     html = _render_html(status, browser_token=browser_token)
-    return HTMLResponse(content=html)
+    return HTMLResponse(content=html, headers=_surface_headers(surface))
 
 
 if __name__ == "__main__":

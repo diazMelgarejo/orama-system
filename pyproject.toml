@@ -12,6 +12,7 @@ description = "Orama multi-agent reasoning and orchestration system"
 license = "MIT"
 requires-python = ">=3.10"
 dependencies = [
+    "cryptography~=50.0",  # session key store: AES-256-GCM sealing
     "fastapi>=0.109.0",
     "httpx>=0.26.0",
     "psutil>=5.9.0",

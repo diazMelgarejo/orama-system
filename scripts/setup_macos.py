@@ -14,7 +14,7 @@ What it does:
       OpenClaw if running so config isn't clobbered by shutdown write)
      NOTE: correct field is thinkingDefault (NOT thinkingLevel/modelParameters) per
            openclaw schema — verified from dist/zod-schema.agent-runtime-BPvFXsu0.js
-  5. Install ~/.openclaw/scripts/discover.py (LM Studio auto-discovery hub)
+  5. Report the LM Studio discovery hub (~/.openclaw/scripts/discover.py); --install-discover-hub installs it
   6. Guard /self-discovery skill against version downgrade; announce on startup
   4. Patch ~/.alphaclaw/.../alphaclaw.js — 6 macOS compatibility fixes:
        a) git auth shim dest  → ~/.local/bin/git      (not /usr/local/bin/git)
@@ -56,6 +56,7 @@ KNOWN_ALPHACLAW_VERSION = "0.9.16"
 
 DRY_RUN = "--dry-run" in sys.argv
 QUIET   = "--quiet"   in sys.argv
+INSTALL_DISCOVER_HUB = "--install-discover-hub" in sys.argv
 
 _fixes    : list[str] = []
 _warnings : list[str] = []
@@ -203,7 +204,7 @@ def step_openclaw_json() -> None:
     ]:
         p = providers.get(key)
         if p is None:
-            _warn(f"openclaw.json {key}", "provider entry missing — skipping")
+            _skip(f"openclaw.json {key}", "no such provider here")
             continue
         if isinstance(p.get("models"), list) and len(p["models"]) > 0:
             _skip(f"openclaw.json {key}.models")
@@ -587,7 +588,7 @@ _P_GATEWAY = {
 def step_patch_gateway() -> None:
     """Patch gateway.js so the spawned openclaw process inherits Node v22+ PATH."""
     if not GATEWAY_JS.exists():
-        _warn("gateway.js", f"not found at {GATEWAY_JS} — skipping gateway PATH patch")
+        _skip("gateway.js", f"not installed at {GATEWAY_JS}")
         return
 
     content = GATEWAY_JS.read_text(encoding="utf-8")
@@ -630,7 +631,7 @@ def _version_gte(installed: str, threshold: str) -> bool:
 
 def step_patch_alphaclaw() -> None:
     if not ALPHACLAW_JS.exists():
-        _warn("alphaclaw.js", f"not found at {ALPHACLAW_JS}")
+        _skip("alphaclaw.js", f"not installed at {ALPHACLAW_JS}")
         return
 
     version = _alphaclaw_version()
@@ -690,11 +691,14 @@ def step_patch_alphaclaw() -> None:
 # ── step 5: install discover.py hub ──────────────────────────────────────────
 
 OPENCLAW_SCRIPTS = HOME / ".openclaw" / "scripts"
-DISCOVER_HUB_SRC = Path(__file__).parent / "scripts" / "discover.py"
+DISCOVER_HUB_SRC = Path(__file__).resolve().parent / "discover.py"
 DISCOVER_HUB_DST = OPENCLAW_SCRIPTS / "discover.py"
 
 def step_install_discover_hub() -> None:
-    """Copy scripts/discover.py to ~/.openclaw/scripts/discover.py (idempotent)."""
+    """Report the discovery hub; copy it only with --install-discover-hub, keeping the previous file.
+
+    The live stack runs this file, so a start-up must not replace it on its own.
+    """
     if not DISCOVER_HUB_SRC.exists():
         _warn("discover hub", f"source not found at {DISCOVER_HUB_SRC} — skipping install")
         return
@@ -705,8 +709,16 @@ def step_install_discover_hub() -> None:
     if DRY_RUN:
         print(f"  [dry-run] would install {DISCOVER_HUB_SRC} → {DISCOVER_HUB_DST}", flush=True)
         return
+    if not INSTALL_DISCOVER_HUB:
+        state = "differs from the bundled copy" if DISCOVER_HUB_DST.exists() else "is not installed"
+        _log("i", f"discover hub {state}; nothing changed (run setup_macos.py --install-discover-hub)")
+        return
     import shutil
+    from datetime import datetime, timezone
     OPENCLAW_SCRIPTS.mkdir(parents=True, exist_ok=True)
+    if DISCOVER_HUB_DST.exists():
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        shutil.copy2(DISCOVER_HUB_DST, DISCOVER_HUB_DST.with_name(f"{DISCOVER_HUB_DST.name}.before-setup-{stamp}"))
     shutil.copy2(DISCOVER_HUB_SRC, DISCOVER_HUB_DST)
     DISCOVER_HUB_DST.chmod(0o755)
     _applied("discover hub", f"installed to {DISCOVER_HUB_DST}")
@@ -714,7 +726,8 @@ def step_install_discover_hub() -> None:
 
 # ── step 6: self-discovery skill version guard ────────────────────────────────
 
-SELF_DISC_SKILL = Path(__file__).parent / ".claude" / "skills" / "self-discovery" / "SKILL.md"
+SELF_DISC_SKILL = (Path(__file__).resolve().parent.parent / "bin" / "orama-system" / "skills"
+                   / "self-discovery" / "SKILL.md")
 SELF_DISC_VERSION = "0.9.9.7"
 
 def _skill_version(path: Path) -> tuple:

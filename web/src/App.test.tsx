@@ -32,7 +32,7 @@ describe("App", () => {
   it("renders the operator console and shows mock-state fallback on API error", async () => {
     renderApp();
     fireEvent.click(screen.getByRole("button", { name: "Operator console" }));
-    expect(screen.getByText("Command")).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Console sections" })).toBeInTheDocument();
     await waitFor(() => {
       expect(
         screen.getByText(/\/api\/app\/state unreachable/i),
