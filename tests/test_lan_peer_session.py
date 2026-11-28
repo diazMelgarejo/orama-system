@@ -5,6 +5,7 @@ import importlib.util
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -71,7 +72,7 @@ def test_cli_persists_saveable_session_file(tmp_path):
     }
 
     result = subprocess.run(
-        ["python3", str(SCRIPT), "record-failure", "--error", "offline"],
+        [sys.executable, str(SCRIPT), "record-failure", "--error", "offline"],
         cwd=ROOT,
         env=env,
         text=True,

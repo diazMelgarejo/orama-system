@@ -137,7 +137,7 @@ def _queue(monkeypatch, tmp_path, name, ip=STALE_IP):
     task.write_text("# queued\n", encoding="utf-8")
     subprocess.run(
         [
-            "python3", str(SCRIPT), "drop", "--peer", "--peer-ip", ip, "--portal-port", "8002", "--timeout", "1",
+            sys.executable, str(SCRIPT), "drop", "--peer", "--peer-ip", ip, "--portal-port", "8002", "--timeout", "1",
             "--file", str(task), "--filename", name, "--assignee", "win", "--topic", "smoke",
         ],
         cwd=ROOT, env={**os.environ, "HOME": str(home)}, text=True, capture_output=True, check=False,
