@@ -232,7 +232,9 @@ def test_start_sh_ollama_model_check_is_exact():
     text = START_SH.read_text(encoding="utf-8")
 
     assert "grep -qxF \"${model}\"" in text
-    assert "MODEL_NAME=\"$model\" python3 -c" in text
+    # Whether it is already loaded is the one-model gate's exact-id decision, not a check of its own here.
+    assert "perpetua_tools.local_model_gate ensure ollama \"$model\"" in text
+    assert "already_loaded=" not in text
     assert "model_base=" not in text
 
 

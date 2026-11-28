@@ -35,5 +35,5 @@ def test_the_pattern_reads_each_way_of_setting_the_keep_alive() -> None:
 
 def test_every_tracked_script_lets_the_model_unload_after_five_idle_minutes() -> None:
     found = _settings()
-    assert {"start.sh", "scripts/bootstrap-environment.sh"} <= set(found)
+    assert "start.sh" in found
     assert {name: values for name, values in found.items() if set(values) != {IDLE}} == {}

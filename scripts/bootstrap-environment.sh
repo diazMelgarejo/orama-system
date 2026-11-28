@@ -38,14 +38,20 @@ ensure_pt_root_env() {
   log "ensured PERPETUA_TOOLS_ROOT in ~/.zshrc"
 }
 
-# 3) Warm the Mac orchestrator model; it unloads after five idle minutes
+# 3) Warm the Mac orchestrator model, only through the Perpetua-Tools one-model gate. No gate, no load.
 ensure_ollama_warm() {
-  command -v launchctl >/dev/null 2>&1 && launchctl setenv OLLAMA_KEEP_ALIVE 5m 2>/dev/null || true
-  if curl -s -o /dev/null --max-time 30 \
-       -d '{"model":"qwen3.5:9b-mlx","prompt":"","keep_alive":"5m","stream":false}' \
-       http://localhost:11434/api/generate 2>/dev/null; then
-    log "ollama qwen3.5:9b-mlx warmed (keep_alive 5m)"
-  else log "ollama warm skipped (not reachable)"; fi
+  local pt="${PERPETUA_TOOLS_ROOT:-$PT_ROOT}"
+  if [ ! -f "$pt/src/perpetua_tools/local_model_gate.py" ]; then
+    log "one-model gate unavailable; not loading a model"
+    return 0
+  fi
+  PYTHONPATH="$pt/src" python3 -m perpetua_tools.local_model_gate limits --apply >/dev/null 2>&1 \
+    || log "could not set the engine limits"
+  if PYTHONPATH="$pt/src" python3 -m perpetua_tools.local_model_gate ensure ollama qwen3.5:9b-mlx >/dev/null 2>&1; then
+    log "ollama qwen3.5:9b-mlx is the loaded model"
+  else
+    log "gate declined; no model loaded (restart Ollama if the limits were only just set)"
+  fi
 }
 
 # 4) Gateway agent routing — report only. The routes come from the OpenClaw defaults (live Perpetua-Tools file,

@@ -1985,6 +1985,28 @@ function Test-LmStudioUp([string]$ip) {
     } catch { return $false }
 }
 
+function Set-OllamaOneModelLimits {
+    <#
+    .SYNOPSIS
+        Keeps Ollama to one loaded model on this machine.
+    .DESCRIPTION
+        Sets the limits for this process and for the user account, so they survive a reboot. An Ollama that is
+        already running picks them up only after it is quit and reopened; nothing is restarted here.
+    #>
+    $limits = [ordered]@{ OLLAMA_MAX_LOADED_MODELS = '1'; OLLAMA_NUM_PARALLEL = '1'; OLLAMA_KEEP_ALIVE = '5m' }
+    $changed = $false
+    foreach ($name in $limits.Keys) {
+        [Environment]::SetEnvironmentVariable($name, $limits[$name], 'Process')
+        if ([Environment]::GetEnvironmentVariable($name, 'User') -ne $limits[$name]) {
+            [Environment]::SetEnvironmentVariable($name, $limits[$name], 'User')
+            $changed = $true
+        }
+    }
+    if ($changed -and (Get-Process -Name 'ollama*' -ErrorAction SilentlyContinue)) {
+        Write-Warning 'Ollama is running without the one-model limit: quit and reopen it.'
+    }
+}
+
 function Invoke-DiscoverEndpoints {
     <#
     .SYNOPSIS
@@ -2198,6 +2220,9 @@ Invoke-DiscoverEndpoints
 $MacResolved = Resolve-MacLanIp
 $MacIp    = $MacResolved.Ip
 $IpSource = $MacResolved.Source
+
+# ── One loaded model per machine, restored on every launch ────────────────────
+Set-OllamaOneModelLimits
 
 # ── Export env vars for child processes ───────────────────────────────────────
 if ($MacIp -and $MacIp -notin @('unresolved', 'localhost', $TopoLoopback)) {
