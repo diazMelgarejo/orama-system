@@ -529,7 +529,7 @@ def test_token_resolver_uses_canonical_lane_contract(tmp_path: Path, monkeypatch
 _WORKER = """
 import importlib.util, os, sys, time
 from pathlib import Path
-module_path, state_dir, gate, action, ip = sys.argv[1:6]
+module_path, state_dir, gate, action, ip, ready_path = sys.argv[1:7]
 spec = importlib.util.spec_from_file_location("mesh.discovery_trust", module_path)
 module = importlib.util.module_from_spec(spec)
 sys.modules["mesh.discovery_trust"] = module
@@ -538,7 +538,7 @@ state = Path(state_dir)
 module.LOCAL = state
 for name in ("KNOWN_PEERS", "ARCHIVE", "OPENCLAW_STATE", "SELF_IDENTITY_FILE", "PENDING_HANDSHAKES"):
     setattr(module, name, state / (name + ".json"))
-Path(gate + "." + str(os.getpid()) + ".ready").write_text("ready", encoding="utf-8")
+Path(ready_path).write_text("ready", encoding="utf-8")
 while not Path(gate).exists():
     time.sleep(0.005)
 {"remember": module.remember_peer, "forget": module.forget_peer}[action](ip)
@@ -550,16 +550,16 @@ def _run_in_processes(trust: ModuleType, jobs: list[tuple[str, str]]) -> None:
     state_dir = trust.LOCAL
     gate = state_dir / "start.gate"
     module_path = Path(__file__).resolve().parents[1] / "scripts/mesh/discovery_trust.py"
+    ready = [Path(f"{gate}.{idx}.ready") for idx in range(len(jobs))]
     procs = [
         subprocess.Popen(
-            [sys.executable, "-I", "-c", _WORKER, str(module_path), str(state_dir), str(gate), action, ip],
+            [sys.executable, "-I", "-c", _WORKER, str(module_path), str(state_dir), str(gate), action, ip, str(ready_path)],
             stderr=subprocess.PIPE,
         )
-        for action, ip in jobs
+        for (action, ip), ready_path in zip(jobs, ready)
     ]
     # Release the gate only once every worker has signalled it is waiting, so the
     # workers genuinely overlap instead of running one after another.
-    ready = [Path(f"{gate}.{proc.pid}.ready") for proc in procs]
     deadline = time.monotonic() + 30
     while not all(path.exists() for path in ready):
         if time.monotonic() >= deadline:

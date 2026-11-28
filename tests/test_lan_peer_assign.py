@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -17,7 +18,7 @@ def test_peer_drop_spools_to_local_outbox_on_delivery_failure(tmp_path):
 
     result = subprocess.run(
         [
-            "python3",
+            sys.executable,
             str(SCRIPT),
             "drop",
             "--peer",
@@ -51,7 +52,7 @@ def test_peer_drop_spools_to_local_outbox_on_delivery_failure(tmp_path):
 
 def test_help_lists_flush_outbox_command():
     result = subprocess.run(
-        ["python3", str(SCRIPT), "--help"],
+        [sys.executable, str(SCRIPT), "--help"],
         cwd=ROOT,
         text=True,
         capture_output=True,
@@ -62,7 +63,7 @@ def test_help_lists_flush_outbox_command():
     assert "flush-outbox" in result.stdout
 
     drop_help = subprocess.run(
-        ["python3", str(SCRIPT), "drop", "--help"],
+        [sys.executable, str(SCRIPT), "drop", "--help"],
         cwd=ROOT,
         text=True,
         capture_output=True,
@@ -93,7 +94,7 @@ def test_flush_outbox_delivers_each_item_to_its_own_stored_peer(tmp_path):
     ):
         drop = subprocess.run(
             [
-                "python3", str(SCRIPT), "drop",
+                sys.executable, str(SCRIPT), "drop",
                 "--peer", "--peer-ip", ip, "--portal-port", port,
                 "--file", str(task), "--filename", name,
                 "--assignee", "win", "--topic", "smoke",
@@ -104,7 +105,7 @@ def test_flush_outbox_delivers_each_item_to_its_own_stored_peer(tmp_path):
         assert json.loads(drop.stdout)["queued"] is True
 
     flush = subprocess.run(
-        ["python3", str(SCRIPT), "flush-outbox", "--peer", "--peer-ip", "203.0.113.10", "--timeout", "1"],
+        [sys.executable, str(SCRIPT), "flush-outbox", "--peer", "--peer-ip", "203.0.113.10", "--timeout", "1"],
         cwd=ROOT, env=env, text=True, capture_output=True, check=False,
     )
     payload = json.loads(flush.stdout)
@@ -126,7 +127,7 @@ def test_timeout_flag_controls_peer_request_duration(tmp_path):
 
     result = subprocess.run(
         [
-            "python3",
+            sys.executable,
             str(SCRIPT),
             "drop",
             "--peer",
@@ -171,7 +172,7 @@ def _drop_sidecar_port(tmp_path, env_extra, extra_args=()):
     env = {k: v for k, v in __import__("os").environ.items() if not k.startswith(("PEER_", "PORTAL_"))}
     env.update({"HOME": str(home), "PEER_CA_FILE": str(ca), **env_extra})
     result = subprocess.run(
-        ["python3", str(SCRIPT), "drop", "--peer", "--peer-ip", LOOP, *extra_args,
+        [sys.executable, str(SCRIPT), "drop", "--peer", "--peer-ip", LOOP, *extra_args,
          "--file", str(task), "--filename", "win-port.md", "--assignee", "win", "--topic", "smoke", "--timeout", "2"],
         cwd=ROOT, env=env, text=True, capture_output=True, check=False,
     )
