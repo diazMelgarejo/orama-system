@@ -1,7 +1,11 @@
 <!-- lint-ignore LINT-013 -->
+
 # 17 — Hardware Policy Enforcement (v1 as-built, 2026-05-17/18)
 
-> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
+> **Repository standard:** everything executable lives under `/src`; no root-level
+> `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d,
+> never committed with secrets, personal paths, or SecOps material. Additive — see
+> [`46-repository-standard.md`](46-repository-standard.md).
 > Records the full 4-layer hardware enforcement chain enshrined during the
 > RC-1 post-ship policy audit. These patterns are the **required blueprint**
 > for v2 / agate — the policy surface must be at least this complete, and
@@ -70,6 +74,7 @@ mac-studio:
 ```
 
 **Key corrections made 2026-05-17:**
+
 - `win-rtx3080.lan_ip` was `""` (empty) → corrected to `"192.168.254.103"`
 - `mac-studio.default_backend` was `"mlx"` → corrected to `"ollama"`
 - `mac-studio.secondary_backend` removed (contradicted mirror policy)
@@ -126,6 +131,7 @@ would have allowed dispatch to Mac mirror = double-barrel GPU risk.
 Two mechanisms:
 
 #### `_MIRROR_BACKENDS` frozenset
+
 ```python
 _MIRROR_BACKENDS: frozenset[str] = frozenset({"lmstudio-mac"})
 ```
@@ -135,6 +141,7 @@ adding a backend to the candidate pool. The mirror cannot be returned by
 `select_backend()` regardless of tier, task type, or model hint.
 
 #### `_TIER_HOSTS` — Mac tier excludes lmstudio-mac
+
 ```python
 _TIER_HOSTS = {
     "mac":     {"ollama-local"},    # never lmstudio-mac (mirror only)
@@ -148,6 +155,7 @@ valid Mac-tier dispatch target. This was the code-level reflection of the
 wrong policy in Layer 2.
 
 #### `_TIER_PREF` — Mac tier uses Ollama only
+
 ```python
 _TIER_PREF = {
     ("mac", "coding"):    (BackendKind.OLLAMA,),
@@ -210,7 +218,7 @@ When implementing the v2 `perpetua-core` policy layer and `agate`, these
 patterns must be honored from day one:
 
 | Requirement | Layer | Mechanism |
-|-------------|-------|-----------|
+| ------------- | ------- | ----------- |
 | Mirror backends cannot be dispatch targets | selector | `_MIRROR_BACKENDS` frozenset pattern |
 | Physical hardware ownership is a topology fact, not an endpoint inference | config | `devices.yml` with explicit `lan_ip` per physical machine |
 | `windows_only:` models must raise `HardwareAffinityError` if routed to non-Windows | policy | `HardwarePolicyResolver.check_affinity()` |
@@ -222,7 +230,7 @@ patterns must be honored from day one:
 `model_hardware_policy.yml` must distinguish **three** affinity levels, not two:
 
 | agate verdict | Meaning | v1 equivalent |
-|---------------|---------|---------------|
+| --------------- | --------- | --------------- |
 | `NEVER` (enforced) | Model physically cannot run on this tier. Dispatching = hardware damage risk. | `windows_only:` with `_MIRROR_BACKENDS` |
 | `PREFER` | Works best here; other tiers allowed as fallback. | `shared:` with win-first or mac-first sort order |
 | `ALLOW` | Works here, but not the preferred tier. | `shared:` with secondary sort position |
@@ -237,7 +245,7 @@ explicit in the schema.
 ## Test coverage added (2026-05-17)
 
 | Test | File | What it proves |
-|------|------|----------------|
+| ------ | ------ | ---------------- |
 | `test_selector_excludes_mirror_backend` | `tests/test_selector.py` | `_MIRROR_BACKENDS` filter works end-to-end |
 | `test_selector_mac_tier_never_returns_mirror` | `tests/test_selector.py` | `target_tier="mac"` cannot return `lmstudio-mac` |
 | `test_resolver_picks_lmstudio_win_for_shared_coding` | `tests/test_backend_resolver.py` | Shared coding task routes to Win LM Studio |
@@ -258,3 +266,48 @@ Short form:
 > own them. It is a proxy. Dispatch to it when a Win-native model is needed
 > = double barrel GPU = OOM. Solution: `_MIRROR_BACKENDS` + `windows_only:` +
 > fail-closed TTY guard.
+
+---
+
+## One barrel: the double-barrel rule extended (2026-11-28)
+
+Double barrel forbade one heavy model being driven twice on one GPU through the mirror. The extended
+rule is about the host, whatever the model or engine:
+
+1. A host holds at most one local model, across every engine, embeddings included.
+2. Nothing loads without a person's approval for that model, which expires.
+3. Nothing is unloaded except by a swap that a person confirms in a terminal.
+4. Whatever cannot be determined is a refusal.
+5. No test may reach a model engine.
+
+It was extended after the Mac froze following a test load, and after two further loads made by tests
+with nobody's approval, all on 2026-11-28.
+
+### Where it is enforced (Perpetua-Tools)
+
+| Layer | Where | What it does |
+|-------|-------|--------------|
+| Config | `config/local-model-gate.json` | Fixes the rule; a loosened value makes the gate refuse all |
+| Gate | `src/perpetua_tools/local_model_gate.py` | `ensure`, `approve`, `swap`; locks, checks, verifies |
+| Engine limits | Ollama server environment | One loaded model, one parallel request, idle unload at 5 min |
+| LM Studio | gate config | Manual use only on the Mac; Auto-Evict required |
+| Call sites | every PT sender to a local endpoint | Ask the gate first; a test fails if one does not |
+| Startup | `start.sh`, bootstrap (orama) | Load only through the gate, or not at all |
+| Defaults | `openclaw_defaults.validate` | Routes may name only one local model |
+| Tests | root `conftest.py` in both repos | Engine ports refused; real engines refuse under test |
+
+### When two models are wanted at once
+
+The gate waits five seconds and looks again. If the host is still held, the caller runs without a local
+model (memory search answers from keywords, and the event stays pending for later). A person who wants
+the other model runs `swap` and types the phrase it asks for.
+
+### Not covered
+
+- Programs that call an engine directly, among them the OpenClaw gateway, gbrain and
+  code-review-graph, skip the gate and its approval. The Ollama limit still keeps them to one model
+at a
+  time, by swapping on its own.
+- Windows nodes have no probes yet; the gate reports `not_enforced` there.
+- A process that edits the approval file bypasses the terminal check. The file is a record of a
+  person's choice, not a security boundary.
