@@ -13,6 +13,13 @@ not certificate trust, credentials, firewall rules, or serving activation.
   trying another credential. Migration signing keys remain a separate lane.
 - A `401` followed by `200` measures access behavior, not server possession of a
   secret. Verified TLS authenticates the server.
+- The portal's own peer connection (background WebSocket, stream fallback, inbox
+  mirror and topology probe) follows `PEER_PORTAL_TLS_ENABLED`. When it is on,
+  the portal dials the peer over https on `PEER_PORTAL_TLS_PORT`; without that
+  setting it uses the discovered `portal_port` when it differs from the plain
+  portal port, and otherwise 8443. The certificate is verified with
+  `PEER_CA_FILE` or `PEER_PINNED_FINGERPRINTS`, and a token is never sent when
+  verification fails.
 
 ## Admission and removal
 

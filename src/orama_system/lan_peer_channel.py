@@ -6,12 +6,17 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import importlib.util
 import json
 import logging
+import os
 import platform
 import time
 from collections.abc import AsyncIterator
+from dataclasses import replace
+from functools import lru_cache
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 import httpx
@@ -26,6 +31,11 @@ HEARTBEAT_INTERVAL_S = 15
 WS_OPEN_TIMEOUT_S = 5
 RETRY_WAIT_S = 30
 WS_FAIL_BEFORE_SSE = 2
+DEFAULT_PEER_TLS_PORT = 8443
+# The certificate trust rules the peer scripts already use: one implementation, loaded from where it lives.
+_PEER_TLS_SOURCE = (
+    Path(__file__).resolve().parents[2] / "bin" / "orama-system" / "skills" / "hermes-harness" / "scripts" / "peer_tls.py"
+)
 
 
 def local_platform() -> str:
@@ -38,6 +48,20 @@ def local_platform() -> str:
     return "win" if platform.system().lower() == "windows" else "mac"
 
 
+def _discovered_peer() -> dict[str, Any]:
+    """Return the discovery record for the other host, or an empty dict when there is none."""
+    path = Path.home() / ".openclaw" / "state" / "last_discovery.json"
+    role = local_platform()
+    if not path.is_file():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    endpoints = data.get("endpoints") or {}
+    return endpoints.get("mac" if role == "win" else "win") or {}
+
+
 def read_discovery_peer_identity() -> TransportIdentity | None:
     """Return the validated transport identity for the discovered peer.
 
@@ -45,17 +69,7 @@ def read_discovery_peer_identity() -> TransportIdentity | None:
     preserve its scheme, host, and optional port so the outbound client can
     authorize the backend target before selecting WS or SSE.
     """
-    path = Path.home() / ".openclaw" / "state" / "last_discovery.json"
-    role = local_platform()
-    if not path.is_file():
-        return None
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
-    endpoints = data.get("endpoints") or {}
-    peer = endpoints.get("mac" if role == "win" else "win") or {}
-    raw_ip = str(peer.get("ip") or "").strip()
+    raw_ip = str(_discovered_peer().get("ip") or "").strip()
     if raw_ip in ("", "localhost", "127.0.0.1"):
         return None
     identity = parse_transport_identity(raw_ip)
@@ -90,6 +104,70 @@ def build_peer_transport_url(
 def ws_handshake_headers(token: str) -> dict[str, str] | None:
     """Return the WebSocket handshake headers carrying the bearer, or None when there is no token; the token is never placed in the URL."""
     return {"Authorization": f"Bearer {token}"} if token else None
+
+
+def peer_tls_enabled() -> bool:
+    """True when the operator has switched peer https on (the switch the peer scripts read)."""
+    return os.environ.get("PEER_PORTAL_TLS_ENABLED", "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _tcp_port(value: object) -> int | None:
+    """Return *value* as a TCP port, or None when it is not one."""
+    text = str(value).strip()
+    return int(text) if text.isdecimal() and 1 <= int(text) <= 65535 else None
+
+
+def _secure_peer_port(plain_port: int) -> int:
+    """Return the peer's https port: the explicit setting, else the discovered portal port, else 8443.
+
+    A discovered port equal to the plain portal port is ignored, because that listener cannot serve https.
+    """
+    setting = os.environ.get("PEER_PORTAL_TLS_PORT", "").strip()
+    if setting:
+        port = _tcp_port(setting)
+        if port is None:
+            raise ModelEndpointPolicyError("PEER_PORTAL_TLS_PORT must be a TCP port between 1 and 65535")
+        return port
+    saved = _tcp_port(_discovered_peer().get("portal_port"))
+    return saved if saved and saved != plain_port else DEFAULT_PEER_TLS_PORT
+
+
+def peer_portal_target(identity: TransportIdentity, plain_port: int) -> tuple[TransportIdentity, int]:
+    """Return where to dial the peer portal: unchanged, or its https front end when peer https is on."""
+    if not peer_tls_enabled():
+        return identity, plain_port
+    return replace(identity, scheme="https"), _secure_peer_port(plain_port)
+
+
+@lru_cache(maxsize=1)
+def _peer_trust() -> ModuleType:
+    """Load the shared peer certificate helper (operator CA file or pinned fingerprints)."""
+    spec = importlib.util.spec_from_file_location("orama_peer_tls", _PEER_TLS_SOURCE)
+    if spec is None or spec.loader is None:
+        raise ModelEndpointPolicyError("peer certificate helper is unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def peer_ws_tls_kwargs(url: str) -> dict[str, Any]:
+    """Return the ``ssl=`` setting for a wss peer URL; an OSError means trust failed and nothing may be sent."""
+    if not url.startswith("wss://"):
+        return {}
+    return _peer_trust().websocket_kwargs(url, WS_OPEN_TIMEOUT_S)
+
+
+def peer_http_target(identity: TransportIdentity, plain_port: int, path: str) -> tuple[str, dict[str, Any]]:
+    """Return the peer URL for *path* and the httpx ``verify=`` setting that goes with it.
+
+    May read the CA file or fetch a pinned certificate, so call it off the event loop.
+    """
+    identity, port = peer_portal_target(identity, plain_port)
+    url = build_peer_transport_url(identity, port, path, websocket=False)
+    if not url.startswith("https://"):
+        return url, {}
+    context = _peer_trust().urlopen_kwargs(url, WS_OPEN_TIMEOUT_S).get("context")
+    return url, {"verify": context} if context else {}
 
 
 def make_envelope(msg_type: str, data: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -232,12 +310,14 @@ class LanPeerChannel:
         last_exc: Exception | None = None
         import websockets
 
+        identity, port = peer_portal_target(identity, port)
         endpoint = build_peer_transport_url(
             identity,
             port,
             "/ws/portal-peer",
             websocket=True,
         )
+        trust = await asyncio.to_thread(peer_ws_tls_kwargs, endpoint)
 
         for token in tokens:
             # SECURITY: the bearer travels only in the Authorization header of
@@ -256,6 +336,7 @@ class LanPeerChannel:
                     url,
                     open_timeout=WS_OPEN_TIMEOUT_S,
                     additional_headers=headers,
+                    **trust,
                 ) as ws:
                     self.state = "ws_connected"
                     heartbeat = asyncio.create_task(self._heartbeat_ws(ws))
@@ -292,19 +373,14 @@ class LanPeerChannel:
         """
         from utils.control_plane_auth import auth_headers
 
-        url = build_peer_transport_url(
-            identity,
-            port,
-            "/events/peer-stream",
-            websocket=False,
-        )
+        url, trust = await asyncio.to_thread(peer_http_target, identity, port, "/events/peer-stream")
         headers = auth_headers()
         if headers and not url.startswith("https://"):
             raise ModelEndpointPolicyError(
                 "refusing to send control-plane credentials over unencrypted http://; https:// is required"
             )
         self.state = "sse_connected"
-        async with httpx.AsyncClient(timeout=None, headers=headers) as client:
+        async with httpx.AsyncClient(timeout=None, headers=headers, **trust) as client:
             async with client.stream("GET", url) as resp:
                 resp.raise_for_status()
                 async for line in resp.aiter_lines():
